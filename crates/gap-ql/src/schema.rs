@@ -725,6 +725,7 @@ pub(crate) fn compose_supergraph_from_asts(
 
     let mut inner = valid_schema.into_inner();
     validate_oneof_schema_definitions(&inner)?;
+    crate::cost::validate_join_cycles(&inner)?;
     inject_gap_introspection_fields(&mut inner)?;
     Ok(Valid::assume_valid(inner))
 }
