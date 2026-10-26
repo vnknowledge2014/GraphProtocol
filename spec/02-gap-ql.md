@@ -3,7 +3,7 @@
 Normative IDs `GQL-*`. Rationale: ADR-001, 003, 010, 023. Replaces the 21-undefined-nonterminal EBNF of the earlier draft.
 
 ## 1. Definition: a profile of GraphQL
-- **GQL-001** A GAP-QL request document MUST be a valid GraphQL *executable document* and a GAP schema MUST be valid GraphQL SDL, per the GraphQL specification edition pinned in `docs/evidence/crate-versions.md` (verify at WP-M0-03). GAP adds **only**: (a) the reserved `gap` namespace (§3), (b) introspection extensions `__search`/`__metaGraph` (§4), (c) the directives in §5, (d) request/response `extensions.gap` (§6), (e) limits and error codes (§8–§10).
+- **GQL-001** A GAP-QL request document MUST be a valid GraphQL *executable document* and a GAP schema MUST be valid GraphQL SDL, per the GraphQL specification edition pinned in `docs/evidence/crate-versions.md` (verify at WP-M0-03). GAP adds **only**: (a) the reserved `gap` namespace (§3), (b) introspection extensions `__search`/`__metaGraph` (§4), (c) the directives in §5 (plus `@defer`/`@stream` only when the `incremental` feature is enabled, RUN-062), (d) request/response `extensions.gap` (§6), (e) limits and error codes (§8–§10).
 - **GQL-002** Implementations MUST use a conforming GraphQL parser/validator (reference: `apollo-compiler`) and MUST NOT accept documents that a conforming validator rejects, except where §7 mandates identical-looking errors for hidden elements.
 - **GQL-003** Transport: *GraphQL over HTTP* with `application/graphql-response+json` (and `application/json` fallback); `POST` required, `GET` allowed only for persisted operations; subscriptions via `graphql-sse` (distinct-connections mode) over HTTP/2. WebSocket subscriptions are out of scope (ADR-019).
 - **GQL-004** Field/argument/type names MUST NOT begin with `__` except introspection; branch schemas MUST NOT define the root fields `gap`, `__search`, `__metaGraph`, or the types listed in §3 (composition error `GAP_RESERVED_NAME`).
@@ -23,6 +23,7 @@ directive @oneOf on INPUT_OBJECT
 
 enum Direction        { OUTBOUND INBOUND BOTH }
 enum TraverseStrategy { BFS DFS SHORTEST WEIGHTED }
+enum ContextScope     { PRIVATE TASK GROUP GLOBAL EPHEMERAL }
 enum ElementKind      { OPERATION TYPE FIELD NODE_CATEGORY EXAMPLE }
 enum ResolveOutcome   { CONFIDENT AMBIGUOUS ABSTAINED }
 enum AbstentionReason { NO_MATCH LOW_CONFIDENCE EMPTY_VISIBLE_SET MODEL_UNAVAILABLE }
@@ -87,6 +88,7 @@ input TraverseInput {
   from: NodeRef!  through: EdgeFilter  direction: Direction = OUTBOUND
   maxDepth: Int!                  # 1..16 (GQL-040)
   strategy: TraverseStrategy = BFS  asOf: DateTime  where: Predicate
+  scopes: [ContextScope!]         # narrows visibility only (GQL-043)
   first: Int = 100  after: Cursor
   returnFields: [String!]         # projection of node props (token control)
 }
@@ -98,7 +100,7 @@ input Predicate @oneOf {          # recursive boolean algebra over props/paths
 input Compare     { path: String!  value: JSON! }
 input CompareList { path: String!  values: [JSON!]! }
 type Subgraph { nodes: [GapNode!]!  edges: [GapEdge!]!  pageInfo: PageInfo!  truncated: Boolean!  stats: TraverseStats! }
-type GapNode  { id: ID!  type: String!  label: String!  props: JSON  provenance: Provenance  validFrom: DateTime  validTo: DateTime }
+type GapNode  { id: ID!  type: String!  label: String!  props: JSON  provenance: Provenance  validFrom: DateTime  validTo: DateTime  scope: ContextScope }
 type GapEdge  { id: ID!  type: String!  from: ID!  to: ID!  props: JSON  confidence: Float  resolution: EdgeResolution!  provenance: Provenance }
 enum EdgeResolution { EXACT HEURISTIC }
 type TraverseStats { visited: Int!  returned: Int!  depthReached: Int!  tokensEstimate: Int! }
@@ -236,6 +238,7 @@ Tenant and principal are derived from authentication, never from the body (SEC-0
 - **GQL-040** `traverse.maxDepth` MUST be in 1..16 (hard cap, not configurable above 16); `first` ≤ 1,000; larger values are rejected with `GAP_DEPTH_EXCEEDED` / `GAP_COMPLEXITY_EXCEEDED` before any branch call.
 - **GQL-041** *Cost model:* `cost(F) = w(F) + m(F)·Σ cost(child)` where `w` = `@cost.weight` (default 1), `m(F)` = effective list size = `min(arg first/limit/pageSize if present, @cost.listSize, default_list)` for list-typed fields else 1; join fields add `perKey · expected_keys` where `expected_keys = m(parent)`; `traverse` costs `visited_bound = Σ_{d=1..maxDepth} min(first, branching_cap)^d` truncated by `first`. The planner computes cost before execution (RUN-005); exceeding the budget rejects the whole document.
 - **GQL-042** Cycles in the *schema* are legal. Unbounded *expansion* is prevented by depth and cost limits at run time; the composer additionally rejects joins forming a cycle with no `maxDepth`-bounded entry (error `GAP_CYCLE_UNBOUNDED`) — this replaces the old "Tarjan SCC ⇒ max_depth 16" rule.
+- **GQL-043** *Scopes (ADR-025, D-007).* `TraverseInput.scopes` can only narrow the set of nodes already visible to the caller under ING-065, never widen it; omitted means "every visible scope"; an empty list is a `GAP_VALIDATION_ERROR`. `GapNode.scope` is returned for visible nodes only. `TraverseStrategy.WEIGHTED` semantics are fixed by ING-067; interval temporal queries are not part of 1.0 (only `asOf`).
 
 ## 9. Self-repair hints for LLM callers
 - **GQL-070** Validation errors MUST include `extensions.suggestion` when derivable: `didYouMean: [..]` (edit distance ≤ 2 over *visible* names, then top-3 `__search` hits), `template` (a minimal valid selection for the parent type), `missingArguments: [..]`.

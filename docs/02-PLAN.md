@@ -91,6 +91,9 @@ Lane F  Quality/Ops     M0-04/05/07/09/10 → M3-08 → M7-*
 | Huấn luyện System-1 riêng (R1) | chỉ khi fine-tune Laya thất bại | memo R1-01 = go |
 | Dịch tự động intent đa ngữ | Laya multilingual gần ngẫu nhiên (F-03) | fine-tune đa ngữ đạt gate |
 | SDK sinh mã nâng cao, MySQL | ưu tiên SDK mỏng, Postgres/SQLite | phản hồi người dùng |
+| Truy vấn khoảng thời gian (`@between`, duyệt lịch sử SUPERSEDES) | 1.0 chỉ cần `asOf`; chưa có nhu cầu đo được (ADR-025) | có ≥ 3 yêu cầu phân tích thay đổi theo khoảng thời gian |
+| System-1 tournament nhiều lượt | RTE-030 shortlist một lượt giữ hiệu lực hiệu chỉnh conformal (ADR-025) | sau G-S1 pass và RouteBench cho thấy > 15 nhóm hòa thường xuyên |
+| Chuyển socket lắng nghe khi nâng cấp binary đơn node (`LISTEN_FDS`) | zero-downtime đã có qua active/standby, OPS-003 (ADR-025) | có yêu cầu SLA cho triển khai single-node |
 
 ## 9. Cách chạy lần đầu (khuyến nghị D-004: M0 + M1)
 ```bash

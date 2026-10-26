@@ -4,7 +4,7 @@ Status legend: **Accepted** = binding for agents · **Default** = binding unless
 Changing an Accepted ADR requires: new ADR that supersedes it + spec diff + conformance/test diff, in one change set (ADR-022).
 Normative keywords (MUST, SHOULD, MAY) follow RFC 2119 / RFC 8174.
 
-Index: 001 GraphQL profile · 002 toolchain/deps · 003 three planes · 004 open-jev · 005 System-1 backend · 006 capability groups · 007 RouteBench & adoption gate · 008 split-conformal · 009 snapshot lifecycle · 010 operation-level index · 011 telemetry/LB/breaker · 012 join verification · 013 trust tiers · 014 poisoning/sandbox/SSRF · 015 mutations · 016 tasks · 017 MCP/A2A facade · 018 tenant · 019 deferred scope · 020 ContextStore · 021 measured claims · 022 agent execution protocol · 023 error model · 024 naming/versioning.
+Index: 001 GraphQL profile · 002 toolchain/deps · 003 three planes · 004 open-jev · 005 System-1 backend · 006 capability groups · 007 RouteBench & adoption gate · 008 split-conformal · 009 snapshot lifecycle · 010 operation-level index · 011 telemetry/LB/breaker · 012 join verification · 013 trust tiers · 014 poisoning/sandbox/SSRF · 015 mutations · 016 tasks · 017 MCP/A2A facade · 018 tenant · 019 deferred scope · 020 ContextStore · 021 measured claims · 022 agent execution protocol · 023 error model · 024 naming/versioning · 025 scope/capacity/deferral clarifications.
 
 ---
 
@@ -157,3 +157,13 @@ Authorization is always evaluated by the deterministic policy engine (ADR-014) a
 ## ADR-024 — Naming and versioning
 **Status:** Default (D-001)
 **Decision:** Working name **GAP**; spec version `0.1.0-draft`, wire string `gap/0.1` (the old "v2" was a plan iteration, not a wire version). SemVer for spec and crates; breaking wire changes only on minor bumps before 1.0 with a migration note; after 1.0, N-1 compatibility window. Snapshot on-disk/format version `snapshot_format_version: u32` with an explicit migration trait. Binary `gap`; crates `gap-*` (never `gap-protocol`, `gap`).
+
+## ADR-025 — Scope, capacity-hint and deferral clarifications
+**Status:** Default (D-007, D-008)
+**Context:** The context-bridge review of the original design session (`work/context/session-bridge.md` §E) confirmed six real gaps between ADR-019/ADR-020 and the spec; a seventh finding (`@defer/@stream`) was rejected because RUN-062 already covers it. This ADR supplements ADR-019 and ADR-020; it changes none of their decisions.
+**Decision:**
+1. *Context scopes (D-007).* All five scopes of ADR-020 exist in `ContextStore` with the visibility and lifecycle rules ING-065/ING-066. GAP-QL exposes `GapNode.scope` (read-only) and a `TraverseInput.scopes` filter that can only narrow visibility (GQL-043). There is no built-in `remember` mutation in 1.0: scoped writes use the store API and connector `Mutate` (ADR-015).
+2. *Capacity weight.* No change to `ngc.proto`. `HealthResponse.details["capacity_weight"]` is the canonical per-connector capacity signal (NGC-072); in-process adapters derive it from rate-limit headers (CMP-033), out-of-process connectors report it themselves.
+3. *`WEIGHTED` traversal.* Edge cost, tie-break and the unsupported-branch error are fixed by ING-067.
+4. *Deferred past 1.0 (D-008), supplementing ADR-019:* interval/history temporal walks (`@between`, `[from, to]` over superseded nodes) — only `asOf` ships; multi-pass System-1 tournament — RTE-030's single-pass shortlist is the 1.0 behaviour and review item K-7 records Laya's technique, not a requirement; listener-socket handoff for single-node binary upgrades — zero-downtime upgrades use the active/standby topology of OPS-003. Tracking entries are in `docs/02-PLAN.md` §8.
+**Consequences:** WP-M2-01 and WP-M2-03 implement scopes and `WEIGHTED` without guessing; the `ngc.proto` golden of WP-M0-06 is unaffected; conformance tests for ING-065 (visibility is indistinguishable from absence) and ING-067 (determinism) are required in the `ContextStore` trait suite.

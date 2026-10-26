@@ -52,6 +52,7 @@ A *connector* exposes one branch. GAP's `ConnectorLayer` is the only client. Bin
 ## 8. Health, readiness and limits
 - **NGC-070** `Health` MUST respond within 500 ms; `DEGRADED` signals reduced capacity (GAP reduces the connector's capacity weight by 50% until `SERVING`). `NOT_SERVING` opens the circuit immediately (RTE-083).
 - **NGC-071** Connectors MUST enforce their own `max_in_flight` and respond `RESOURCE_EXHAUSTED` (retryable, with `retry_after_ms`) when saturated.
+- **NGC-072** `HealthResponse.details` MAY carry `capacity_weight`: a number in (0, 1] (default 1.0) that scales the `capacity` of the branch's telemetry slot (`limits.max_in_flight × capacity_weight`, `spec/04-routing.md`) and combines multiplicatively with the `DEGRADED` factor of NGC-070. A missing, non-numeric or out-of-range value MUST be treated as 1.0 and logged. In-process adapters derive it from upstream rate-limit headers (`X-RateLimit-Remaining` ÷ limit, CMP-033); out-of-process connectors report it themselves. 1.0 has no per-response capacity field on the wire (ADR-025).
 
 ## 9. Credentials and identity
 - **NGC-080** GAP resolves branch credentials from the vault (SEC-040) and attaches them as call metadata `authorization` (or mTLS identity) scoped to the connector; the end-user/agent bearer token is **never** forwarded (SEC-011).

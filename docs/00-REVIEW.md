@@ -115,6 +115,8 @@ Scorecard cũ cho "Tính đúng đắn kiến trúc 9,0/10" trong khi các tuyê
 | D-004 | Phạm vi lần chạy đầu tiên | **M0 + M1** (walking skeleton, có MCP facade chạy được với Claude Code/Antigravity) | Có thể gộp M2 nếu muốn thấy số đo token sớm. |
 | D-005 | Cài skill `gap-protocol-architect` vào `~/.config/_skills_/` | **Không** tự cài; bản trong repo `.agent/skills/` | Bạn chạy `omni build-index` nếu muốn global. |
 | D-006 | Cho phép Synthesizer gọi LLM cloud | Mặc định **chỉ provider cục bộ/được cấu hình**; không gửi nội dung nguồn lên cloud nếu chưa bật `allow_cloud_enrichment` | Ảnh hưởng quyền riêng tư dữ liệu nguồn. |
+| D-007 | Phạm vi context (ADR-025, từ review cầu nối 2026-10-26) | Cả 5 scope `Private/Task/Group/Global/Ephemeral` ở tầng `ContextStore`; GAP-QL chỉ đọc `scope` và lọc `scopes`; không có mutation `remember` trong 1.0 | Muốn bớt scope (chỉ Global+Task+Ephemeral) thì đổi trước WP-M2-01. |
+| D-008 | Hoãn có chủ đích (ADR-025) | Hoãn truy vấn khoảng thời gian `@between`, tournament System-1 nhiều lượt, chuyển socket khi nâng cấp binary đơn node | Cần thì bỏ khỏi danh sách hoãn (docs/02-PLAN.md §8) trước M2/M5/M7 tương ứng. |
 
 ## 6. Phụ lục — số liệu và nguồn
 
