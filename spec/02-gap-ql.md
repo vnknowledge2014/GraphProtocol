@@ -228,7 +228,7 @@ Tenant and principal are derived from authentication, never from the body (SEC-0
 | Max aliases per document | 50 | 1–500 | `GAP_COMPLEXITY_EXCEEDED` |
 | Max root fields | 20 | 1–100 | `GAP_COMPLEXITY_EXCEEDED` |
 | Max cost units | 10 000 | 100–1 000 000 | `GAP_COMPLEXITY_EXCEEDED` |
-| Max request body | 1 MiB | 16 KiB–16 MiB | HTTP 413 |
+| Max request body | 1 MiB | 16 KiB–16 MiB | HTTP 413 (`gap-ql` reports `GAP_COMPLEXITY_EXCEEDED`; the transport translates it) |
 | Max response body | 4 MiB | 64 KiB–64 MiB | `GAP_RESPONSE_TOO_LARGE` |
 | Default list size when unspecified | 100 | 1–1 000 | (clamp + warning) |
 | `traverse.maxDepth` | ≤ 16 | 1–16 hard | `GAP_DEPTH_EXCEEDED` (GQL-040) |
@@ -236,7 +236,7 @@ Tenant and principal are derived from authentication, never from the body (SEC-0
 | Request deadline | 30 000 ms | 100–600 000 | `GAP_DEADLINE_EXCEEDED` |
 
 - **GQL-040** `traverse.maxDepth` MUST be in 1..16 (hard cap, not configurable above 16); `first` ≤ 1,000; larger values are rejected with `GAP_DEPTH_EXCEEDED` / `GAP_COMPLEXITY_EXCEEDED` before any branch call.
-- **GQL-041** *Cost model:* `cost(F) = w(F) + m(F)·Σ cost(child)` where `w` = `@cost.weight` (default 1), `m(F)` = effective list size = `min(arg first/limit/pageSize if present, @cost.listSize, default_list)` for list-typed fields else 1; join fields add `perKey · expected_keys` where `expected_keys = m(parent)`; `traverse` costs `visited_bound = Σ_{d=1..maxDepth} min(first, branching_cap)^d` truncated by `first`. The planner computes cost before execution (RUN-005); exceeding the budget rejects the whole document.
+- **GQL-041** *Cost model:* `cost(F) = w(F) + m(F)·Σ cost(child)` where `w` = `@cost.weight` (default 1), `m(F)` = effective list size = `min(arg first/limit/pageSize if present, @cost.listSize, default_list)` for list-typed fields else 1; join fields add `perKey · expected_keys` where `expected_keys = m(parent)`; `traverse` costs `visited_bound = Σ_{d=1..maxDepth} min(first, branching_cap)^d` truncated by `first`. The planner computes cost before execution (RUN-005); exceeding the budget rejects the whole document. `branching_cap` defaults to 8 and MAY be overridden by the planner.
 - **GQL-042** Cycles in the *schema* are legal. Unbounded *expansion* is prevented by depth and cost limits at run time; the composer additionally rejects joins forming a cycle with no `maxDepth`-bounded entry (error `GAP_CYCLE_UNBOUNDED`) — this replaces the old "Tarjan SCC ⇒ max_depth 16" rule.
 - **GQL-043** *Scopes (ADR-025, D-007).* `TraverseInput.scopes` can only narrow the set of nodes already visible to the caller under ING-065, never widen it; omitted means "every visible scope"; an empty list is a `GAP_VALIDATION_ERROR`. `GapNode.scope` is returned for visible nodes only. `TraverseStrategy.WEIGHTED` semantics are fixed by ING-067; interval temporal queries are not part of 1.0 (only `asOf`).
 
@@ -273,7 +273,7 @@ All errors: `{ message, path?, locations?, extensions: { code, retry: { retryabl
   "principal": "agent-readonly",
   "request": { "query": "{ billing { invoce(id:\"1\"){total} } }" },
   "expect": { "status": 200,
-              "errors": [{ "extensions": { "code": "GAP_VALIDATION_ERROR", "suggestion": { "didYouMean": ["invoice"] } } }],
+              "errors": [{ "extensions": { "code": "GAP_UNKNOWN_FIELD", "suggestion": { "didYouMean": ["invoice"] } } }],
               "dataNull": true } }
 ```
 Matching semantics: `expect` is a *subset match* (objects: all listed keys equal; arrays: element-wise subset in order unless `"unordered": true`). The runner reports spec-ID coverage.
