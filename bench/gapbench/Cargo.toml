@@ -1,0 +1,16 @@
+[package]
+name = "gapbench"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+description = "GAP-Bench end-to-end token efficiency and latency benchmark harness (L5)."
+
+[[bin]]
+name = "gapbench"
+path = "src/main.rs"
+
+[dependencies]
+gap-core.workspace = true
+gap-mcp.workspace = true

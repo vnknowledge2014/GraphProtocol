@@ -1,0 +1,37 @@
+[package]
+name = "gap-server"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "GAP gateway server binary wiring execution, discovery, control planes, and protocol facades (L5)."
+
+[[bin]]
+name = "gap-server"
+path = "src/main.rs"
+
+[dependencies]
+gap-a2a.workspace = true
+gap-balance.workspace = true
+gap-core.workspace = true
+gap-exec.workspace = true
+gap-index.workspace = true
+gap-ingest.workspace = true
+gap-mcp.workspace = true
+gap-models.workspace = true
+gap-ngc-cli.workspace = true
+gap-ngc-code.workspace = true
+gap-ngc-graphql.workspace = true
+gap-ngc-grpc.workspace = true
+gap-ngc-openapi.workspace = true
+gap-ngc-sdk.workspace = true
+gap-ngc-sql.workspace = true
+gap-plan.workspace = true
+gap-proto.workspace = true
+gap-ql.workspace = true
+gap-route.workspace = true
+gap-s1.workspace = true
+gap-sec.workspace = true
+gap-snapshot.workspace = true
+gap-store.workspace = true
+gap-transport.workspace = true

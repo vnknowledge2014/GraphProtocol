@@ -1,0 +1,10 @@
+[package]
+name = "gap-index"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "ML-free BM25, flat SIMD, HNSW vector search, and reciprocal rank fusion index (L1)."
+
+[dependencies]
+gap-core.workspace = true

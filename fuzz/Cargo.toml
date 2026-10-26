@@ -1,0 +1,98 @@
+# Standalone cargo-fuzz package for GAP (WP-M0-02, WP-M7-06; excluded from root workspace).
+
+[package]
+name = "gap-fuzz"
+version = "0.1.0"
+publish = false
+edition = "2024"
+rust-version = "1.98.1"
+license = "Apache-2.0"
+autobins = false
+description = "cargo-fuzz harness stubs for GAP parsers, wire decoders, extractors, sanitizer, cursors, and policy inputs."
+
+[package.metadata]
+cargo-fuzz = true
+
+# Standalone workspace so `cd fuzz && cargo fuzz ...` operates independently of root Cargo.lock.
+[workspace]
+
+[dependencies]
+gap-core = { path = "../crates/gap-core" }
+gap-ingest = { path = "../crates/gap-ingest" }
+gap-proto = { path = "../crates/gap-proto" }
+gap-ql = { path = "../crates/gap-ql" }
+gap-route = { path = "../crates/gap-route" }
+gap-sec = { path = "../crates/gap-sec" }
+# Pin from docs/evidence/crate-versions.md (`cargo-fuzz / libfuzzer-sys: 0.13.2 / 0.4.13`);
+# awaits online re-verification by the reviewer.
+libfuzzer-sys = "0.4.13"
+
+[[bin]]
+name = "fuzz_cursor_decode"
+path = "fuzz_targets/fuzz_cursor_decode.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fuzz_extract_graphql"
+path = "fuzz_targets/fuzz_extract_graphql.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fuzz_extract_mcp"
+path = "fuzz_targets/fuzz_extract_mcp.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fuzz_extract_openapi"
+path = "fuzz_targets/fuzz_extract_openapi.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fuzz_extract_proto"
+path = "fuzz_targets/fuzz_extract_proto.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fuzz_extract_sql"
+path = "fuzz_targets/fuzz_extract_sql.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fuzz_gapql_parse"
+path = "fuzz_targets/fuzz_gapql_parse.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fuzz_ngc_decode"
+path = "fuzz_targets/fuzz_ngc_decode.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fuzz_policy_input"
+path = "fuzz_targets/fuzz_policy_input.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fuzz_sanitize"
+path = "fuzz_targets/fuzz_sanitize.rs"
+test = false
+doc = false
+bench = false

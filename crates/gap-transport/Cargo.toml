@@ -1,0 +1,17 @@
+[package]
+name = "gap-transport"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "HTTP/2 GraphQL-over-HTTP, graphql-sse, gRPC, and stdio transport stack with rate limiting and load shedding (L4)."
+
+[dependencies]
+gap-balance.workspace = true
+gap-core.workspace = true
+gap-exec.workspace = true
+gap-plan.workspace = true
+gap-proto.workspace = true
+gap-ql.workspace = true
+gap-sec.workspace = true
+gap-snapshot.workspace = true

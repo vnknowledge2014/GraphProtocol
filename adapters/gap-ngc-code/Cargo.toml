@@ -1,0 +1,13 @@
+[package]
+name = "gap-ngc-code"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Tree-sitter code and documentation AST graph Native Graph Connector adapter (L4)."
+
+[dependencies]
+gap-core.workspace = true
+gap-ngc-sdk.workspace = true
+gap-proto.workspace = true
+gap-store.workspace = true

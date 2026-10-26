@@ -1,0 +1,15 @@
+[package]
+name = "gap-ingest"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Control-plane schema extraction (CISG), optional constrained enrichment, data-driven join verification, and proposal workflow (L2)."
+
+[dependencies]
+gap-core.workspace = true
+gap-index.workspace = true
+gap-proto.workspace = true
+gap-ql.workspace = true
+gap-sec.workspace = true
+gap-store.workspace = true

@@ -1,0 +1,18 @@
+[package]
+name = "gap-mcp"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Inbound 5-tool stateless MCP facade and outbound MCP branch connector for GAP (L4)."
+
+[dependencies]
+gap-core.workspace = true
+gap-ngc-sdk.workspace = true
+gap-proto.workspace = true
+gap-ql.workspace = true
+gap-sec.workspace = true
+
+[dev-dependencies]
+gap-testkit.workspace = true
+gap-transport.workspace = true

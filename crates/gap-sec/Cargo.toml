@@ -1,0 +1,10 @@
+[package]
+name = "gap-sec"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Deterministic authentication, Cedar authorization, trust tiers, egress guard, sandbox, vault, and audit (L1)."
+
+[dependencies]
+gap-core.workspace = true

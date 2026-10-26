@@ -1,0 +1,18 @@
+[package]
+name = "routebench"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+description = "GAP-RouteBench dataset builder, split-conformal evaluator, and Gate G-S1 harness (L5)."
+
+[[bin]]
+name = "routebench"
+path = "src/main.rs"
+
+[dependencies]
+gap-core.workspace = true
+gap-index.workspace = true
+gap-route.workspace = true
+gap-s1.workspace = true

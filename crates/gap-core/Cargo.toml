@@ -1,0 +1,9 @@
+[package]
+name = "gap-core"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Core identifiers, errors, configuration, snapshot types, and shared traits for GAP (L0)."
+
+[dependencies]

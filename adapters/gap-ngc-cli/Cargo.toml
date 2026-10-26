@@ -1,0 +1,13 @@
+[package]
+name = "gap-ngc-cli"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Allow-listed, sandboxed CLI process Native Graph Connector adapter (L4)."
+
+[dependencies]
+gap-core.workspace = true
+gap-ngc-sdk.workspace = true
+gap-proto.workspace = true
+gap-sec.workspace = true

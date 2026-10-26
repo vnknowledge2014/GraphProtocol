@@ -1,0 +1,12 @@
+[package]
+name = "gap-route"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Advisory discovery plane: input hygiene, capability grouping, BaselineRouter, S1 adapter, and split-conformal calibration (L2)."
+
+[dependencies]
+gap-core.workspace = true
+gap-index.workspace = true
+gap-ql.workspace = true

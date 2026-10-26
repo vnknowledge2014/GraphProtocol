@@ -1,0 +1,11 @@
+[package]
+name = "gap-ngc-sdk"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Native Graph Connector (NGC) Rust SDK, server traits, mock harness, and transport helpers (L2)."
+
+[dependencies]
+gap-core.workspace = true
+gap-proto.workspace = true

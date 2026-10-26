@@ -74,3 +74,14 @@ External model/spec versions pinned by this documentation set:
 | A2A | v1.0 (stable 2026-03; hosted by AAIF since 2026-08-17) | linuxfoundation.org press release; aaif.io |
 | GraphQL | latest stable spec edition + GraphQL-over-HTTP (`application/graphql-response+json`) + `graphql-sse` | graphql.org (verify edition at WP-M0-03) |
 | System-1 weights | `convaiinnovations/laya-typed-decisions` (Apache-2.0, 421M, EN) | huggingface.co |
+
+## WP-M0-02 Offline Verification Note (2026-10-26)
+
+- **Offline execution constraint:** `WP-M0-02` ran inside a network-free sandbox where `cargo add --dry-run` and `cargo update --dry-run` could not query crates.io. All 55 third-party library pins in root `Cargo.toml` `[workspace.dependencies]` (and `libfuzzer-sys = "0.4.13"` in standalone `fuzz/Cargo.toml`) were copied verbatim from the verified table above and **await online re-verification by the reviewer**.
+- **Planned crates omitted pending online version verification (no pin in table above):**
+  - `blake3` — listed as `(verify)` above without a version string.
+  - Foundational crates referenced by downstream WPs (`WP-M0-08` onward) that do not yet have entries in the table above: `anyhow`, `bytes`, `clap`, `http`, `hyper`, `im`, `reqwest`, `safetensors`, `schemars`, `serde`, `serde_json`, `thiserror`, `tokio-stream`, `toml`, `unicode-normalization`, `uuid`.
+- **Rows intentionally excluded from `[workspace.dependencies]`:**
+  - `rhai` (`1.27.0`) — deferred out of 1.0 per `ADR-019`.
+  - `a2a-rs` (`0.10.5`) — unused; GAP generates wire types from vendored official `a2a.proto`.
+  - `cargo-nextest`, `cargo-fuzz`, `cargo-deny` — Cargo subcommand binaries rather than library dependencies.

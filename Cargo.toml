@@ -1,0 +1,124 @@
+# GAP (Graph Agent Protocol) workspace manifest (ADR-002, ADR-019, ARC-001, ARC-003).
+
+[workspace]
+resolver = "3"
+members = [
+  "crates/*",
+  "adapters/*",
+  "bench/*",
+]
+exclude = [
+  "fuzz",
+  "bench/results",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.98.1"
+license = "Apache-2.0"
+
+[workspace.dependencies]
+# ---------------------------------------------------------------------------
+# Intra-workspace crates (alphabetically sorted; docs/AGENT-GUIDE.md §6)
+# ---------------------------------------------------------------------------
+gap-a2a = { path = "adapters/gap-a2a" }
+gap-balance = { path = "crates/gap-balance" }
+gap-conformance = { path = "crates/gap-conformance" }
+gap-core = { path = "crates/gap-core" }
+gap-exec = { path = "crates/gap-exec" }
+gap-index = { path = "crates/gap-index" }
+gap-ingest = { path = "crates/gap-ingest" }
+gap-mcp = { path = "adapters/gap-mcp" }
+gap-models = { path = "crates/gap-models" }
+gap-ngc-cli = { path = "adapters/gap-ngc-cli" }
+gap-ngc-code = { path = "adapters/gap-ngc-code" }
+gap-ngc-graphql = { path = "adapters/gap-ngc-graphql" }
+gap-ngc-grpc = { path = "adapters/gap-ngc-grpc" }
+gap-ngc-openapi = { path = "adapters/gap-ngc-openapi" }
+gap-ngc-sdk = { path = "crates/gap-ngc-sdk" }
+gap-ngc-sql = { path = "adapters/gap-ngc-sql" }
+gap-plan = { path = "crates/gap-plan" }
+gap-proto = { path = "crates/gap-proto" }
+gap-ql = { path = "crates/gap-ql" }
+gap-route = { path = "crates/gap-route" }
+gap-s1 = { path = "crates/gap-s1" }
+gap-sec = { path = "crates/gap-sec" }
+gap-snapshot = { path = "crates/gap-snapshot" }
+gap-store = { path = "crates/gap-store" }
+gap-testkit = { path = "crates/gap-testkit" }
+gap-transport = { path = "crates/gap-transport" }
+
+# ---------------------------------------------------------------------------
+# Third-party crate catalogue (ADR-002; docs/evidence/crate-versions.md).
+#
+# NOTE (WP-M0-02 offline sandbox): Every third-party pin below mirrors the
+# exact pin recorded in docs/evidence/crate-versions.md and awaits online
+# re-verification (`cargo add --dry-run` / `cargo update --dry-run`) by the
+# reviewer. No member crate in WP-M0-02 depends on third-party crates yet so
+# the workspace builds and locks completely offline.
+#
+# Omissions per docs/evidence/crate-versions.md & ADR-019:
+# - `blake3`: marked `(verify)` without a version pin in crate-versions.md;
+#   omitted pending online verification (along with unpinned crates needed by
+#   later WPs — see docs/evidence/crate-versions.md and WP-M0-02 handoff).
+# - `rhai`: deferred out of 1.0 (ADR-019).
+# - `a2a-rs`: unused (generated from vendored official `a2a.proto` instead).
+# - `cargo-nextest`, `cargo-fuzz`, `cargo-deny`: CLI subcommand binaries.
+# - `libfuzzer-sys`: pinned at "0.4.13" inside standalone `fuzz/Cargo.toml`.
+# ---------------------------------------------------------------------------
+apollo-compiler = "1.33.1"
+apollo-parser = "0.8.7"
+arc-swap = "1.9.3"
+async-graphql-parser = "7.2.1" # fallback only
+axum = "0.8.9"
+candle-core = "0.11.0"
+candle-nn = "0.11.0"
+candle-transformers = "0.11.0"
+cedar-policy = "4.14.0"
+criterion = "0.8.2"
+crossbeam-utils = "0.8.23"
+dashmap = "6.2.1" # non-hot-path only (INV-02)
+divan = "0.1.21"
+ed25519-dalek = "3.0.0"
+fastembed = "7.5.0"
+governor = "0.10.4"
+hdrhistogram = "7.6.0"
+hnsw_rs = "0.3.5"
+jsonschema = "0.60.1"
+jsonwebtoken = "11.1.0"
+llguidance = "1.9.1"
+loom = "0.7.2"
+metrics = "0.24.6"
+moka = "0.12.16"
+openapiv3 = "2.2.0"
+opentelemetry = "0.33.1"
+ort = "=2.0.0-rc.15" # pre-release exact pin, feature-gated (ADR-002)
+petgraph = "0.8.3"
+proptest = "1.12.0"
+prost = "0.14.4"
+protox = "0.10.0"
+redb = "4.4.0"
+rmcp = "3.7.0"
+rusqlite = "0.41.0"
+rustls = "0.23.46"
+secrecy = "0.10.3"
+sha2 = "0.11.1"
+shuttle = "0.9.8"
+simsimd = "6.5.16"
+sqlite-vec = "0.1.9"
+sqlparser = "0.63.0"
+surrealdb = "3.3.4" # BSL-1.1: permitted ONLY under feature `store-surreal` (ADR-002, ADR-020)
+tokenizers = "0.23.2"
+tokio = "1.54"
+tonic = "0.14.6"
+tonic-prost = "0.14.6"
+tonic-prost-build = "0.14.6"
+tonic-reflection = "0.14.6"
+tower = "0.5.3"
+tower-http = "0.7.1"
+tracing = "0.1.44"
+tracing-opentelemetry = "0.34.0"
+tree-sitter = "0.27.1"
+usearch = "2.26.6"
+zeroize = "1.9.1"

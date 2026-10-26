@@ -1,0 +1,13 @@
+[package]
+name = "gap-snapshot"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Supergraph composition, ArcSwap snapshot publisher, off-thread reclamation, and attribution-aware rollback (L3)."
+
+[dependencies]
+gap-core.workspace = true
+gap-index.workspace = true
+gap-plan.workspace = true
+gap-ql.workspace = true

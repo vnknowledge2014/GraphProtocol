@@ -1,0 +1,20 @@
+[package]
+name = "gap-cli"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Command-line interface (`gap`) for serving, proposals, calibration, audit verification, and diagnostics (L5)."
+
+[[bin]]
+name = "gap"
+path = "src/main.rs"
+
+[dependencies]
+gap-core.workspace = true
+gap-ingest.workspace = true
+gap-models.workspace = true
+gap-route.workspace = true
+gap-sec.workspace = true
+gap-snapshot.workspace = true
+gap-store.workspace = true

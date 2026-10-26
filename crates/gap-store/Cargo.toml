@@ -1,0 +1,13 @@
+[package]
+name = "gap-store"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "ContextStore, TaskStore, AuditLog, and IdempotencyStore traits and SQLite/SurrealDB backends (L1)."
+
+[features]
+store-surreal = []
+
+[dependencies]
+gap-core.workspace = true

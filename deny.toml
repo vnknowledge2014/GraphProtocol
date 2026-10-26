@@ -1,0 +1,58 @@
+# cargo-deny configuration for GAP (ADR-002, ADR-004, ADR-020, SEC-100).
+# Schema targets cargo-deny >= 0.16 (pinned tool version 0.20.2 in docs/evidence/crate-versions.md).
+
+[graph]
+# Default checks exclude optional features so `store-surreal` (BSL-1.1) is never
+# active in standard builds (ADR-002, ADR-020).
+all-features = false
+no-default-features = false
+
+[advisories]
+# Security vulnerabilities (RUSTSEC) are unconditionally denied by cargo-deny >= 0.16.
+yanked = "deny"
+ignore = []
+
+[licenses]
+confidence-threshold = 0.8
+# Exclusive SPDX allow-list per ADR-002. Any license absent from this list —
+# including GPL-*, AGPL-*, and BSL-1.1 — is denied automatically.
+allow = [
+  "Apache-2.0",
+  "Apache-2.0 WITH LLVM-exception",
+  "MIT",
+  "BSD-2-Clause",
+  "BSD-3-Clause",
+  "0BSD",
+  "ISC",
+  "Unicode-3.0",
+  "Zlib",
+  "MPL-2.0",
+]
+exceptions = [
+  # BSL-1.1 is permitted ONLY when building `gap-store` with `--features store-surreal`
+  # (WP-M7-11, ADR-002, ADR-020). Kept empty while `surrealdb` is absent from Cargo.lock
+  # so `cargo deny check` emits zero unmatched-license-exception warnings; WP-M7-11
+  # enables `{ crate = "surrealdb", allow = ["BSL-1.1"] }` strictly for that feature job.
+]
+
+[bans]
+# ADR-002: workspace MUST resolve to a single version of `axum`, `hyper`, `prost`,
+# and `tower`. Duplicate versions are denied workspace-wide; `axum`, `hyper`,
+# `prost`, and `tower` MUST NEVER be added to `skip` or `skip-tree`.
+multiple-versions = "deny"
+wildcards = "deny"
+highlight = "all"
+
+deny = [
+  { crate = "openjev", reason = "ADR-004: unrelated reserved crate; open-jev is out of the critical path" },
+  { crate = "surrealdb", reason = "ADR-002, ADR-020: BSL-1.1 SurrealDB is forbidden outside gap-store feature `store-surreal` (WP-M7-11 scopes wrappers = [\"gap-store\"])" },
+]
+
+skip = []
+skip-tree = []
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+allow-git = []

@@ -1,0 +1,13 @@
+[package]
+name = "gap-proto"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Generated Protobuf/gRPC wire types for NGC, GAP Gateway, and A2A (L1)."
+
+[features]
+a2a = []
+
+[dependencies]
+gap-core.workspace = true

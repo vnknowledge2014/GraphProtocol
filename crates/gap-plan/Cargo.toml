@@ -1,0 +1,11 @@
+[package]
+name = "gap-plan"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Deterministic ML-free query planner, predicate pushdown, foreach join planning, and plan cache keys (L2)."
+
+[dependencies]
+gap-core.workspace = true
+gap-ql.workspace = true

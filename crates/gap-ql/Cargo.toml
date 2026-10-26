@@ -1,0 +1,10 @@
+[package]
+name = "gap-ql"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "GAP-QL GraphQL profile parser, validator, directives, and complexity cost model (L1)."
+
+[dependencies]
+gap-core.workspace = true
