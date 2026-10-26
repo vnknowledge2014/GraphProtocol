@@ -33,7 +33,7 @@
       "depends_on": [
         1
       ],
-      "system_prompt": "Read AGENTS.md and docs/AGENT-GUIDE.md first. Work ONLY inside these paths: crates/gap-exec/src/connector_layer/**. Spec refs: RTE-073, RTE-074, RTE-081, RTE-083, RTE-090, RUN-030, RUN-031, INV-12. Expand this work package into 2-5 minute steps before coding."
+      "system_prompt": "Read AGENTS.md and docs/AGENT-GUIDE.md first. Work ONLY inside these paths: crates/gap-exec/src/connector_layer/**. Spec refs: RTE-073, RTE-074, RTE-081, RTE-083, RTE-090, RUN-030, RUN-031, INV-12, NGC-072. Expand this work package into 2-5 minute steps before coding."
     },
     {
       "id": 5,

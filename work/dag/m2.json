@@ -8,7 +8,7 @@
       "title": "WP-M2-01 gap-store: ContextStore trait, SQLite implementation, TenantScope. Deliverables: ContextStore (nodes, typed edges, temporal validity, provenance, scopes Private|Task|Group|Global|Ephemeral, bounded traversal) + TaskStore/AuditLog/IdempotencyStore trait declarations; TenantScope token type (no API without it); rusqlite implementation: WAL, FTS5, recursive-CTE traversal with depth/visited caps, migrations (format_version), backup/restore helpers; trait conformance test-suite reusable by other backends; cross-tenant property tests. Acceptance (must pass): cargo nextest run -p gap-store && cargo clippy -p gap-store --all-targets -- -D warnings",
       "role": "coder",
       "depends_on": [],
-      "system_prompt": "Read AGENTS.md and docs/AGENT-GUIDE.md first. Work ONLY inside these paths: crates/gap-store/**. Spec refs: ADR-020, INV-19, INV-09, ING-064. Expand this work package into 2-5 minute steps before coding."
+      "system_prompt": "Read AGENTS.md and docs/AGENT-GUIDE.md first. Work ONLY inside these paths: crates/gap-store/**. Spec refs: ADR-020, ADR-025, INV-19, INV-09, ING-064, ING-065, ING-066. Expand this work package into 2-5 minute steps before coding."
     },
     {
       "id": 2,
@@ -26,7 +26,7 @@
       "depends_on": [
         1
       ],
-      "system_prompt": "Read AGENTS.md and docs/AGENT-GUIDE.md first. Work ONLY inside these paths: crates/gap-exec/src/traverse/**, crates/gap-plan/src/traverse/**, crates/gap-core/src/cursor/**. Spec refs: GQL-010, GQL-040, GQL-041, ING-064, RUN-025. Expand this work package into 2-5 minute steps before coding."
+      "system_prompt": "Read AGENTS.md and docs/AGENT-GUIDE.md first. Work ONLY inside these paths: crates/gap-exec/src/traverse/**, crates/gap-plan/src/traverse/**, crates/gap-core/src/cursor/**. Spec refs: GQL-010, GQL-040, GQL-041, GQL-043, ING-064, ING-065, ING-067, RUN-025. Expand this work package into 2-5 minute steps before coding."
     },
     {
       "id": 4,

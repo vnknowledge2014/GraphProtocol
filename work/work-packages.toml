@@ -17,7 +17,7 @@ owns = [".gitignore", ".editorconfig", "LICENSE", "NOTICE", "rust-toolchain.toml
 spec_refs = ["ADR-002", "ADR-022", "ARC-003"]
 deliverables = [
   "git repository initialised (GitButler workspace per user rules); first commit contains the docs/spec/work/tools already present; .gitignore covers target/, node_modules/, __pycache__/, .ruff_cache/, .DS_Store, model weights and local state (work/steps is NOT ignored)",
-  "rust-toolchain.toml pinned to 1.98.1 with rustfmt+clippy components; rustfmt.toml; clippy.toml (disallowed-methods: unwrap/expect outside tests)",
+  "rust-toolchain.toml pinned to 1.98.1 with rustfmt+clippy components; rustfmt.toml; clippy.toml (allow-{unwrap,expect,panic}-in-tests = true; non-test unwrap/expect/panic are denied by the crate-level `#![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic)]` required by ARC-003 — `disallowed-methods` cannot exempt test code, verified with clippy 0.1.98 on 2026-10-26)",
   "Apache-2.0 LICENSE, NOTICE, CONTRIBUTING (Conventional Commits, WP workflow), SECURITY.md (reporting policy), CHANGELOG.md skeleton",
 ]
 acceptance = ["git status --porcelain | head -1 >/dev/null", "rustc --version | grep -q 1.98", "cargo fmt --version", "cargo clippy --version"]
@@ -343,7 +343,7 @@ role = "coder"
 size = "L"
 depends_on = ["WP-M1-03"]
 owns = ["adapters/gap-ngc-openapi/**", "tests/fixtures/openapi/**"]
-spec_refs = ["CMP-030", "CMP-031", "CMP-032", "CMP-033", "NGC-020", "NGC-026"]
+spec_refs = ["CMP-030", "CMP-031", "CMP-032", "CMP-033", "NGC-020", "NGC-026", "NGC-072"]
 deliverables = [
   "OpenAPI 3.x -> Describe (operations, JSON Schema, SDL) via a minimal local-only $ref resolver; request builder that cannot escape its parameter slots; bearer/apiKey auth from vault stub",
   "foreach via native batch extension or bounded fan-out (batch=emulated) with honest upstream_calls; retries only for idempotent reads",
@@ -392,7 +392,7 @@ role = "coder"
 size = "L"
 depends_on = ["WP-M0-08"]
 owns = ["crates/gap-store/**"]
-spec_refs = ["ADR-020", "INV-19", "INV-09", "ING-064"]
+spec_refs = ["ADR-020", "ADR-025", "INV-19", "INV-09", "ING-064", "ING-065", "ING-066"]
 deliverables = [
   "ContextStore (nodes, typed edges, temporal validity, provenance, scopes Private|Task|Group|Global|Ephemeral, bounded traversal) + TaskStore/AuditLog/IdempotencyStore trait declarations; TenantScope token type (no API without it)",
   "rusqlite implementation: WAL, FTS5, recursive-CTE traversal with depth/visited caps, migrations (format_version), backup/restore helpers",
@@ -424,7 +424,7 @@ role = "coder"
 size = "M"
 depends_on = ["WP-M2-01", "WP-M1-07"]
 owns = ["crates/gap-exec/src/traverse/**", "crates/gap-plan/src/traverse/**", "crates/gap-core/src/cursor/**"]
-spec_refs = ["GQL-010", "GQL-040", "GQL-041", "ING-064", "RUN-025"]
+spec_refs = ["GQL-010", "GQL-040", "GQL-041", "GQL-043", "ING-064", "ING-065", "ING-067", "RUN-025"]
 deliverables = [
   "gap.traverse / gap.node planning+execution over native-traverse branches; bounds (maxDepth<=16, first<=1000, visited cap); strategies BFS/DFS/SHORTEST (WEIGHTED optional)",
   "signed opaque cursors (tamper tests), asOf handling, returnFields projection, TraverseStats with tokensEstimate",
@@ -580,7 +580,7 @@ role = "coder"
 size = "M"
 depends_on = ["WP-M3-01", "WP-M1-07"]
 owns = ["crates/gap-exec/src/connector_layer/**"]
-spec_refs = ["RTE-073", "RTE-074", "RTE-081", "RTE-083", "RTE-090", "RUN-030", "RUN-031", "INV-12"]
+spec_refs = ["RTE-073", "RTE-074", "RTE-081", "RTE-083", "RTE-090", "RUN-030", "RUN-031", "INV-12", "NGC-072"]
 deliverables = [
   "tower layer per branch composing gap-balance (P2C within capability group), breaker rejection (GAP_BRANCH_UNAVAILABLE with afterMs), retries for idempotent reads only with budget and jittered backoff, Health polling every 5 s (jittered), deadline margin rule",
   "metrics: gap_branch_*, gap_breaker_state, gap_retry_*",
@@ -1196,6 +1196,7 @@ spec_refs = ["OPS-001", "CMP-009", "OPS-040"]
 deliverables = [
   "concepts, 5-minute quickstart with an MCP host, connector authoring guide, security hardening guide, operations guide, migration guide, host guides (Claude Code, Antigravity, Cursor)",
   "all code blocks tested (mdbook test, GraphQL snippets validated against reference schema)",
+  "re-verify every host snippet drafted by WP-M0-10: the Claude Code command is specified by CMP-009 and the Antigravity CLI form `agy mcp add gap http://127.0.0.1:8080/mcp` was checked against `agy mcp add --help` on 2026-10-26, but the Antigravity `mcpServers.gap.serverUrl` JSON and the Cursor `mcpServers.gap.url` JSON in docs/hosts/ are NOT specified by CMP-009 and are UNVERIFIED until tested against the real hosts",
 ]
 acceptance = ["mdbook build book", "mdbook test book"]
 

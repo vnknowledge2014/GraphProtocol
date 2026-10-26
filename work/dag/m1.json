@@ -98,7 +98,7 @@
       "depends_on": [
         3
       ],
-      "system_prompt": "Read AGENTS.md and docs/AGENT-GUIDE.md first. Work ONLY inside these paths: adapters/gap-ngc-openapi/**, tests/fixtures/openapi/**. Spec refs: CMP-030, CMP-031, CMP-032, CMP-033, NGC-020, NGC-026. Expand this work package into 2-5 minute steps before coding."
+      "system_prompt": "Read AGENTS.md and docs/AGENT-GUIDE.md first. Work ONLY inside these paths: adapters/gap-ngc-openapi/**, tests/fixtures/openapi/**. Spec refs: CMP-030, CMP-031, CMP-032, CMP-033, NGC-020, NGC-026, NGC-072. Expand this work package into 2-5 minute steps before coding."
     },
     {
       "id": 12,

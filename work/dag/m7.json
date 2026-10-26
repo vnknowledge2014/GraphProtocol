@@ -19,7 +19,7 @@
     },
     {
       "id": 3,
-      "title": "WP-M7-03 Documentation site content and doc tests. Deliverables: concepts, 5-minute quickstart with an MCP host, connector authoring guide, security hardening guide, operations guide, migration guide, host guides (Claude Code, Antigravity, Cursor); all code blocks tested (mdbook test, GraphQL snippets validated against reference schema). Acceptance (must pass): mdbook build book && mdbook test book",
+      "title": "WP-M7-03 Documentation site content and doc tests. Deliverables: concepts, 5-minute quickstart with an MCP host, connector authoring guide, security hardening guide, operations guide, migration guide, host guides (Claude Code, Antigravity, Cursor); all code blocks tested (mdbook test, GraphQL snippets validated against reference schema); re-verify every host snippet drafted by WP-M0-10: the Claude Code command is specified by CMP-009 and the Antigravity CLI form `agy mcp add gap http://127.0.0.1:8080/mcp` was checked against `agy mcp add --help` on 2026-10-26, but the Antigravity `mcpServers.gap.serverUrl` JSON and the Cursor `mcpServers.gap.url` JSON in docs/hosts/ are NOT specified by CMP-009 and are UNVERIFIED until tested against the real hosts. Acceptance (must pass): mdbook build book && mdbook test book",
       "role": "coder",
       "depends_on": [],
       "system_prompt": "Read AGENTS.md and docs/AGENT-GUIDE.md first. Work ONLY inside these paths: book/**, docs/hosts/**, docs/guides/**. Spec refs: OPS-001, CMP-009, OPS-040. Expand this work package into 2-5 minute steps before coding."
