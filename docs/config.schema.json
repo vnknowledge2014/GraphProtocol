@@ -1,0 +1,476 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "GapConfig",
+  "description": "Root `gap.toml` configuration (`spec/00-conventions.md` §8).",
+  "type": "object",
+  "properties": {
+    "auth": {
+      "description": "Authentication settings.",
+      "$ref": "#/$defs/AuthConfig",
+      "default": {
+        "allow_anonymous": false,
+        "clock_skew_secs": 60
+      }
+    },
+    "gateway": {
+      "description": "Gateway routing, tenant, and facade posture.",
+      "$ref": "#/$defs/GatewayConfig",
+      "default": {
+        "default_tenant": "default",
+        "facade_spotlight": true,
+        "max_hops": 4
+      }
+    },
+    "limits": {
+      "description": "Complexity, depth, payload, and deadline limits.",
+      "$ref": "#/$defs/LimitsConfig",
+      "default": {
+        "default_list_size": 100,
+        "max_aliases": 50,
+        "max_branches": 1000,
+        "max_cost_units": 10000,
+        "max_request_body_bytes": 1048576,
+        "max_response_body_bytes": 4194304,
+        "max_root_fields": 20,
+        "max_selection_depth": 12,
+        "max_variables": 100,
+        "request_deadline_ms": 30000,
+        "traverse_max_depth": 16
+      }
+    },
+    "profile": {
+      "description": "Active deployment profile (`dev` or `prod`).",
+      "$ref": "#/$defs/Profile",
+      "default": "prod"
+    },
+    "security": {
+      "description": "Policy, approval, and sandbox settings.",
+      "$ref": "#/$defs/SecurityConfig",
+      "default": {
+        "allow_unsandboxed": false,
+        "four_eyes_approval": true,
+        "policy_dir": "policies"
+      }
+    },
+    "server": {
+      "description": "Listener and shutdown configuration.",
+      "$ref": "#/$defs/ServerConfig",
+      "default": {
+        "admin_listen": "127.0.0.1:9090",
+        "grpc_listen": "127.0.0.1:8081",
+        "listen": "127.0.0.1:8080",
+        "shutdown_grace_ms": 30000
+      }
+    },
+    "storage": {
+      "description": "Persistence and bounded blocking pool settings.",
+      "$ref": "#/$defs/StorageConfig",
+      "default": {
+        "blob_dir": ".gap/blobs",
+        "blocking_pool_threads": 4,
+        "blocking_queue_capacity": 128,
+        "sqlite_path": ".gap/state.db"
+      }
+    },
+    "telemetry": {
+      "description": "Structured logging and OpenTelemetry settings.",
+      "$ref": "#/$defs/TelemetryConfig",
+      "default": {
+        "head_sample_ratio": 0.1,
+        "log_json": true,
+        "log_level": "info",
+        "service_name": "gap-server",
+        "slow_ms": 500
+      }
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "AuthConfig": {
+      "description": "`[auth]` OAuth 2.1 / mTLS / API-key settings (`SEC-001`, `SEC-002`, `INV-15`).",
+      "type": "object",
+      "properties": {
+        "allow_anonymous": {
+          "description": "Allow unauthenticated callers (`SEC-002`: permitted ONLY when `profile = \"dev\"`).",
+          "type": "boolean",
+          "default": false
+        },
+        "audience": {
+          "description": "Expected resource indicator / audience (`aud`, RFC 8707).",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "clock_skew_secs": {
+          "description": "Allowed JWT clock skew in seconds (`0..=60`, default `60`, `SEC-001`).",
+          "type": "integer",
+          "format": "uint32",
+          "default": 60,
+          "minimum": 0
+        },
+        "introspection_client_secret": {
+          "description": "Optional RFC 7662 introspection client secret reference (`INV-15`).",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SecretRef"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "issuer": {
+          "description": "Expected OAuth 2.1 token issuer (`iss`).",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "jwks_uri": {
+          "description": "Remote JWKS endpoint URL.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "GatewayConfig": {
+      "description": "`[gateway]` tenant, operation-mode, and facade settings (`ADR-018`, `GQL-060`, `INV-20`, `SEC-083`).",
+      "type": "object",
+      "properties": {
+        "default_tenant": {
+          "description": "Default tenant slug when running single-tenant (`ADR-018`).",
+          "$ref": "#/$defs/TenantId",
+          "default": "default"
+        },
+        "facade_spotlight": {
+          "description": "Wrap `T2` branch results in `<gap:untrusted>` spotlighting tags (`SEC-083`, default `true`).",
+          "type": "boolean",
+          "default": true
+        },
+        "max_hops": {
+          "description": "Maximum peer-to-peer forwarding hops (`INV-20`, default `4`, range `1..=16`).",
+          "type": "integer",
+          "format": "uint8",
+          "default": 4,
+          "maximum": 255,
+          "minimum": 0
+        },
+        "operation_mode": {
+          "description": "Explicit operation mode override; defaults to `open` (`dev`) or `hybrid` (`prod`) (`GQL-060`).",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/OperationMode"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "LimitsConfig": {
+      "description": "`[limits]` query complexity, depth, size, and deadline caps (`spec/02-gap-ql.md` §8, `OPS-020`).",
+      "type": "object",
+      "properties": {
+        "default_list_size": {
+          "description": "Default list multiplier when caller omits `first`/`limit` (`1..=1_000`, default `100`).",
+          "type": "integer",
+          "format": "uint32",
+          "default": 100,
+          "minimum": 0
+        },
+        "max_aliases": {
+          "description": "Max aliases per document (`1..=500`, default `50`).",
+          "type": "integer",
+          "format": "uint32",
+          "default": 50,
+          "minimum": 0
+        },
+        "max_branches": {
+          "description": "Max registered branches for bounded metric cardinality (`1..=10_000`, default `1_000`, `OPS-020`).",
+          "type": "integer",
+          "format": "uint32",
+          "default": 1000,
+          "minimum": 0
+        },
+        "max_cost_units": {
+          "description": "Max planned cost units (`100..=1_000_000`, default `10_000`).",
+          "type": "integer",
+          "format": "uint32",
+          "default": 10000,
+          "minimum": 0
+        },
+        "max_request_body_bytes": {
+          "description": "Max HTTP/gRPC request body in bytes (`16_384..=16_777_216`, default `1_048_576`).",
+          "type": "integer",
+          "format": "uint64",
+          "default": 1048576,
+          "minimum": 0
+        },
+        "max_response_body_bytes": {
+          "description": "Max serialized response body in bytes (`65_536..=67_108_864`, default `4_194_304`).",
+          "type": "integer",
+          "format": "uint64",
+          "default": 4194304,
+          "minimum": 0
+        },
+        "max_root_fields": {
+          "description": "Max root fields (`1..=100`, default `20`).",
+          "type": "integer",
+          "format": "uint32",
+          "default": 20,
+          "minimum": 0
+        },
+        "max_selection_depth": {
+          "description": "Max selection depth (`1..=32`, default `12`).",
+          "type": "integer",
+          "format": "uint32",
+          "default": 12,
+          "minimum": 0
+        },
+        "max_variables": {
+          "description": "Max variables per document (`1..=1_000`, default `100`).",
+          "type": "integer",
+          "format": "uint32",
+          "default": 100,
+          "minimum": 0
+        },
+        "request_deadline_ms": {
+          "description": "Max request deadline in milliseconds (`100..=600_000`, default `30_000`).",
+          "type": "integer",
+          "format": "uint64",
+          "default": 30000,
+          "minimum": 0
+        },
+        "traverse_max_depth": {
+          "description": "Hard cap on `traverse.maxDepth` (`1..=16`, default `16`, `GQL-040`).",
+          "type": "integer",
+          "format": "uint8",
+          "default": 16,
+          "maximum": 255,
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false
+    },
+    "OperationMode": {
+      "description": "Gateway document allow-listing mode (`GQL-060`).",
+      "oneOf": [
+        {
+          "description": "Arbitrary queries and mutations permitted (default in `dev`).",
+          "type": "string",
+          "const": "open"
+        },
+        {
+          "description": "Arbitrary read queries permitted; mutations/tasks require persisted operations (default in `prod`).",
+          "type": "string",
+          "const": "hybrid"
+        },
+        {
+          "description": "Only registered persisted operations permitted.",
+          "type": "string",
+          "const": "safelist"
+        }
+      ]
+    },
+    "Profile": {
+      "description": "Deployment profile (`OPS-001`).",
+      "oneOf": [
+        {
+          "description": "Local development profile (`operation_mode` defaults to `open`, anonymous allowed if enabled).",
+          "type": "string",
+          "const": "dev"
+        },
+        {
+          "description": "Production profile (`operation_mode` defaults to `hybrid`, anonymous forbidden, `OPS-001`).",
+          "type": "string",
+          "const": "prod"
+        }
+      ]
+    },
+    "SecretRef": {
+      "description": "External secret reference (`secret://<vault>/<name>`, `env://<VAR>`, or `file:///<abs-path>`). Inline secrets are forbidden (INV-15).",
+      "type": "string",
+      "pattern": "^(secret://[A-Za-z0-9._-]+/[^\\s]+|env://[A-Z_][A-Z0-9_]*|file:///[^\\s]+)$"
+    },
+    "SecurityConfig": {
+      "description": "`[security]` Cedar policy, four-eyes approval, and process-sandbox settings (`SEC-020`, `SEC-071`, `RUN-071`).",
+      "type": "object",
+      "properties": {
+        "allow_unsandboxed": {
+          "description": "Permit `T1` process connectors when OS sandbox is unavailable (`SEC-071`; `T2` always fails closed).",
+          "type": "boolean",
+          "default": false
+        },
+        "approval_signing_key_secret": {
+          "description": "Gateway signing key reference for `ApprovalProof` (`NGC-032`, `INV-15`).",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SecretRef"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "four_eyes_approval": {
+          "description": "Require approver principal != requester principal (`RUN-071`).",
+          "type": "boolean",
+          "default": true
+        },
+        "policy_dir": {
+          "description": "Directory containing `*.cedar` policies and `schema.cedarschema` (`SEC-020`).",
+          "type": "string",
+          "default": "policies"
+        }
+      },
+      "additionalProperties": false
+    },
+    "ServerConfig": {
+      "description": "`[server]` listener and graceful-shutdown settings (`OPS-002`, `RUN-090`).",
+      "type": "object",
+      "properties": {
+        "admin_listen": {
+          "description": "Separate authenticated `/admin/*` listener (`OPS-002`).",
+          "type": "string",
+          "default": "127.0.0.1:9090"
+        },
+        "grpc_listen": {
+          "description": "Dedicated gRPC Gateway listener (`OPS-002`).",
+          "type": "string",
+          "default": "127.0.0.1:8081"
+        },
+        "listen": {
+          "description": "Primary HTTP/2 GraphQL, SSE, MCP, and A2A bind address (`OPS-002`).",
+          "type": "string",
+          "default": "127.0.0.1:8080"
+        },
+        "shutdown_grace_ms": {
+          "description": "Graceful drain window on `SIGTERM` in milliseconds (`RUN-090`, default `30_000`).",
+          "type": "integer",
+          "format": "uint64",
+          "default": 30000,
+          "minimum": 0
+        },
+        "tls_cert_secret": {
+          "description": "Optional TLS certificate reference (`file:///...` or `secret://...`).",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SecretRef"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "tls_key_secret": {
+          "description": "Optional TLS private key reference (`file:///...` or `secret://...`, `INV-15`).",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SecretRef"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "StorageConfig": {
+      "description": "`[storage]` state store, blob store, and bounded blocking-pool settings (`OPS-003`, `ARC-010`, `ARC-011`).",
+      "type": "object",
+      "properties": {
+        "blob_dir": {
+          "description": "Local artifact blob directory (`RUN-086`).",
+          "type": "string",
+          "default": ".gap/blobs"
+        },
+        "blocking_pool_threads": {
+          "description": "Worker thread count for dedicated CPU/blocking pool (`1..=256`, default `4`, `ARC-010`).",
+          "type": "integer",
+          "format": "uint",
+          "default": 4,
+          "minimum": 0
+        },
+        "blocking_queue_capacity": {
+          "description": "Bounded blocking-pool queue capacity (`1..=65_536`, default `128`, `ARC-010`, `ARC-011`).",
+          "type": "integer",
+          "format": "uint",
+          "default": 128,
+          "minimum": 0
+        },
+        "sqlite_path": {
+          "description": "Local SQLite database path (`OPS-003`).",
+          "type": "string",
+          "default": ".gap/state.db"
+        }
+      },
+      "additionalProperties": false
+    },
+    "TelemetryConfig": {
+      "description": "`[telemetry]` structured logging and OpenTelemetry settings (`OPS-010`, `spec/08-operations.md` §§2, 4).",
+      "type": "object",
+      "properties": {
+        "head_sample_ratio": {
+          "description": "Parent-based head sampling ratio (`0.0..=1.0`, default `0.10`, `OPS-010`).",
+          "type": "number",
+          "format": "double",
+          "default": 0.1
+        },
+        "log_json": {
+          "description": "Emit structured JSON logs (`true` by default, `spec/08-operations.md` §4).",
+          "type": "boolean",
+          "default": true
+        },
+        "log_level": {
+          "description": "`tracing-subscriber` `EnvFilter` directive string (default `\"info\"`).",
+          "type": "string",
+          "default": "info"
+        },
+        "otlp_auth_header_secret": {
+          "description": "Optional OTLP authorization header secret reference (`INV-15`).",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SecretRef"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "otlp_endpoint": {
+          "description": "Optional OTLP gRPC collector endpoint (e.g. `\"http://127.0.0.1:4317\"`).",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "service_name": {
+          "description": "OpenTelemetry `service.name` resource attribute.",
+          "type": "string",
+          "default": "gap-server"
+        },
+        "slow_ms": {
+          "description": "Slow-request threshold in milliseconds (`OPS-010`, default `500`).",
+          "type": "integer",
+          "format": "uint64",
+          "default": 500,
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false
+    },
+    "TenantId": {
+      "type": "string",
+      "maxLength": 63,
+      "minLength": 2,
+      "pattern": "^[a-z][a-z0-9_-]{1,62}$"
+    }
+  }
+}

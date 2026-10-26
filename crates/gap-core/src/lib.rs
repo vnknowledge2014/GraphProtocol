@@ -10,6 +10,7 @@
 )]
 
 pub mod clock;
+pub mod config;
 pub mod context;
 pub mod cursor;
 pub mod error;
