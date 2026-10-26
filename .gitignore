@@ -1,0 +1,65 @@
+# GAP repository ignore rules (WP-M0-01; ADR-002, ADR-005, ADR-022)
+
+# Rust / Cargo / Fuzz / Coverage
+/target/
+**/target/
+fuzz/corpus/
+fuzz/artifacts/
+*.profraw
+*.profdata
+lcov.info
+mutants.out*/
+
+# JavaScript / TypeScript SDKs & docs tooling
+node_modules/
+dist/
+
+# Python tooling
+__pycache__/
+*.py[cod]
+.ruff_cache/
+.pytest_cache/
+.mypy_cache/
+.venv/
+
+# OS & editor files
+.DS_Store
+*.swp
+*~
+.idea/
+.vscode/
+
+# Model weights & local model caches (manifest stays tracked: models/manifest.toml)
+*.safetensors
+*.onnx
+*.gguf
+*.pt
+*.pth
+models/cache/
+models/weights/
+models/**/*.bin
+!models/manifest.toml
+
+# Local runtime, database, and agent state
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+*.bak
+.env
+.env.*
+!.env.example
+.omni/
+.licenses/
+.agent/memory/
+.agent/spill/
+.agent/bg/
+.agent/fallback_data/
+.agent/security/
+
+# Audit trail for work packages is tracked (ADR-022): work/steps is NOT ignored
+!work/steps/
+!work/steps/**
+!work/handoffs/
+!work/handoffs/**

@@ -1,0 +1,17 @@
+# GAP Clippy configuration (spec: ARC-003; ADR-002).
+msrv = "1.98.1"
+
+# Crates carry `#![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic,
+# clippy::todo, clippy::unimplemented)]` per ARC-003. Allowing unwrap/expect/panic
+# inside test targets enforces "no unwrap/expect outside tests" while keeping
+# `cargo clippy --workspace --all-targets -- -D warnings` green on unit/integration tests.
+allow-unwrap-in-tests = true
+allow-expect-in-tests = true
+allow-panic-in-tests = true
+allow-dbg-in-tests = true
+allow-print-in-tests = true
+
+# Methods banned unconditionally across all targets (Clippy 0.1.98 applies
+# `disallowed-methods` to tests as well, so unwrap/expect outside tests are enforced
+# via `unwrap_used` / `expect_used` + `allow-*-in-tests` above).
+disallowed-methods = []
