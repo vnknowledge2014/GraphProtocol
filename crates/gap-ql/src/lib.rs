@@ -11,4 +11,6 @@
 pub mod cost;
 pub mod limits;
 pub mod schema;
+pub mod suggest;
 pub mod validate;
+pub mod visibility;

@@ -712,20 +712,19 @@ fn validate_selection_set_input_rules(
     }
 }
 
-/// Parses, validates, selects an operation, coerces variables, and enforces GAP-QL semantic
-/// profile rules (`GQL-001`, `GQL-002`, `GQL-004`, `@oneOf`, `GQL-043`) against `schema`.
-pub fn validate_document(
-    schema: &Valid<Schema>,
+pub(crate) fn validate_against_projected_schema(
+    projected_schema: &Valid<Schema>,
     query: &str,
     operation_name: Option<&str>,
     variables: &serde_json::Map<String, serde_json::Value>,
+    visibility: &dyn crate::visibility::Visibility,
 ) -> Result<ValidatedOperation, Vec<GapError>> {
     let ast_doc = parse_executable_ast(query, "request.graphql")?;
     validate_executable_reserved_names(&ast_doc)?;
 
     let non_empty_spans = non_empty_ast_field_spans(&ast_doc);
     let valid_doc = ast_doc
-        .to_executable_validate(schema)
+        .to_executable_validate(projected_schema)
         .map_err(|with_errs| {
             let mut errs = Vec::new();
             for diag in with_errs.errors.iter() {
@@ -740,13 +739,25 @@ pub fn validate_document(
                 }
                 let json_err = diag.to_json();
                 let code = classify_diagnostic(&diag, &json_err.message);
-                errs.push(graphql_error_to_gap(code, json_err));
+                let gap_err = graphql_error_to_gap(code, json_err);
+                errs.push(crate::suggest::attach_validation_suggestion(
+                    gap_err,
+                    projected_schema,
+                    Some(&ast_doc),
+                    visibility,
+                ));
             }
             if errs.is_empty() {
                 for diag in with_errs.errors.iter() {
                     let json_err = diag.to_json();
                     let code = classify_diagnostic(&diag, &json_err.message);
-                    errs.push(graphql_error_to_gap(code, json_err));
+                    let gap_err = graphql_error_to_gap(code, json_err);
+                    errs.push(crate::suggest::attach_validation_suggestion(
+                        gap_err,
+                        projected_schema,
+                        Some(&ast_doc),
+                        visibility,
+                    ));
                 }
             }
             if errs.is_empty() {
@@ -765,16 +776,17 @@ pub fn validate_document(
     let selected_op_name = op.name.as_ref().map(|n| n.as_str().to_owned());
 
     let raw_vars = serde_to_apollo_json_map(variables);
-    let coerced_variables = coerce_variable_values(schema, op, &raw_vars).map_err(|req_err| {
-        let gql_err = req_err.to_graphql_error(&valid_doc.sources);
-        vec![graphql_error_to_gap(ErrorCode::TypeMismatch, gql_err)]
-    })?;
+    let coerced_variables =
+        coerce_variable_values(projected_schema, op, &raw_vars).map_err(|req_err| {
+            let gql_err = req_err.to_graphql_error(&valid_doc.sources);
+            vec![graphql_error_to_gap(ErrorCode::TypeMismatch, gql_err)]
+        })?;
 
     let mut semantic_errors = Vec::new();
     for var_def in &op.variables {
         if let Some(json_val) = coerced_variables.get(var_def.name.as_str()) {
             validate_json_input_rules(
-                schema,
+                projected_schema,
                 &var_def.ty,
                 json_val,
                 var_def.location(),
@@ -785,7 +797,7 @@ pub fn validate_document(
     }
     let mut visited_fragments = HashSet::new();
     validate_selection_set_input_rules(
-        schema,
+        projected_schema,
         &valid_doc,
         &op.selection_set,
         &coerced_variables,
@@ -802,6 +814,57 @@ pub fn validate_document(
         operation_name: selected_op_name,
         coerced_variables,
     })
+}
+
+/// Parses, projects `schema` through `visibility` (`GQL-062`), validates `query`, coerces
+/// `variables`, enforces `@oneOf` and `GQL-043`, and attaches visibility-safe self-repair
+/// suggestions (`GQL-070`, `GQL-072`).
+pub fn validate_document_with_visibility(
+    schema: &Valid<Schema>,
+    query: &str,
+    operation_name: Option<&str>,
+    variables: &serde_json::Map<String, serde_json::Value>,
+    visibility: &dyn crate::visibility::Visibility,
+) -> Result<ValidatedOperation, Vec<GapError>> {
+    let projected = crate::visibility::project_visible_schema(schema, visibility);
+    validate_against_projected_schema(&projected, query, operation_name, variables, visibility)
+}
+
+/// Convenience wrapper validating an anonymous or single-operation query with no variables under
+/// caller `visibility` (`GQL-062`, `GQL-070`).
+pub fn validate_query_with_visibility(
+    schema: &Valid<Schema>,
+    query: &str,
+    visibility: &dyn crate::visibility::Visibility,
+) -> GapResult<ValidatedOperation> {
+    let empty_vars = serde_json::Map::new();
+    validate_document_with_visibility(schema, query, None, &empty_vars, visibility).map_err(
+        |mut errs| {
+            if errs.is_empty() {
+                GapError::new(ErrorCode::ValidationError, "validation failed")
+            } else {
+                errs.swap_remove(0)
+            }
+        },
+    )
+}
+
+/// Parses, validates, selects an operation, coerces variables, and enforces GAP-QL semantic
+/// profile rules (`GQL-001`, `GQL-002`, `GQL-004`, `@oneOf`, `GQL-043`) against `schema` with
+/// permissive visibility.
+pub fn validate_document(
+    schema: &Valid<Schema>,
+    query: &str,
+    operation_name: Option<&str>,
+    variables: &serde_json::Map<String, serde_json::Value>,
+) -> Result<ValidatedOperation, Vec<GapError>> {
+    validate_document_with_visibility(
+        schema,
+        query,
+        operation_name,
+        variables,
+        &crate::visibility::AllowAllVisibility::default(),
+    )
 }
 
 /// Convenience wrapper validating an anonymous or single-operation query with no variables and
