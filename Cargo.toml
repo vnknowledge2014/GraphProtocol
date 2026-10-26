@@ -22,46 +22,45 @@ license = "Apache-2.0"
 # ---------------------------------------------------------------------------
 # Intra-workspace crates (alphabetically sorted; docs/AGENT-GUIDE.md §6)
 # ---------------------------------------------------------------------------
-gap-a2a = { path = "adapters/gap-a2a" }
-gap-balance = { path = "crates/gap-balance" }
-gap-conformance = { path = "crates/gap-conformance" }
-gap-core = { path = "crates/gap-core" }
-gap-exec = { path = "crates/gap-exec" }
-gap-index = { path = "crates/gap-index" }
-gap-ingest = { path = "crates/gap-ingest" }
-gap-mcp = { path = "adapters/gap-mcp" }
-gap-models = { path = "crates/gap-models" }
-gap-ngc-cli = { path = "adapters/gap-ngc-cli" }
-gap-ngc-code = { path = "adapters/gap-ngc-code" }
-gap-ngc-graphql = { path = "adapters/gap-ngc-graphql" }
-gap-ngc-grpc = { path = "adapters/gap-ngc-grpc" }
-gap-ngc-openapi = { path = "adapters/gap-ngc-openapi" }
-gap-ngc-sdk = { path = "crates/gap-ngc-sdk" }
-gap-ngc-sql = { path = "adapters/gap-ngc-sql" }
-gap-plan = { path = "crates/gap-plan" }
-gap-proto = { path = "crates/gap-proto" }
-gap-ql = { path = "crates/gap-ql" }
-gap-route = { path = "crates/gap-route" }
-gap-s1 = { path = "crates/gap-s1" }
-gap-sec = { path = "crates/gap-sec" }
-gap-snapshot = { path = "crates/gap-snapshot" }
-gap-store = { path = "crates/gap-store" }
-gap-testkit = { path = "crates/gap-testkit" }
-gap-transport = { path = "crates/gap-transport" }
+# Each entry carries `version` (same as [workspace.package]) so cargo-deny does not
+# treat the path dependency as a wildcard and the crates stay publishable.
+gap-a2a = { path = "adapters/gap-a2a", version = "0.1.0" }
+gap-balance = { path = "crates/gap-balance", version = "0.1.0" }
+gap-conformance = { path = "crates/gap-conformance", version = "0.1.0" }
+gap-core = { path = "crates/gap-core", version = "0.1.0" }
+gap-exec = { path = "crates/gap-exec", version = "0.1.0" }
+gap-index = { path = "crates/gap-index", version = "0.1.0" }
+gap-ingest = { path = "crates/gap-ingest", version = "0.1.0" }
+gap-mcp = { path = "adapters/gap-mcp", version = "0.1.0" }
+gap-models = { path = "crates/gap-models", version = "0.1.0" }
+gap-ngc-cli = { path = "adapters/gap-ngc-cli", version = "0.1.0" }
+gap-ngc-code = { path = "adapters/gap-ngc-code", version = "0.1.0" }
+gap-ngc-graphql = { path = "adapters/gap-ngc-graphql", version = "0.1.0" }
+gap-ngc-grpc = { path = "adapters/gap-ngc-grpc", version = "0.1.0" }
+gap-ngc-openapi = { path = "adapters/gap-ngc-openapi", version = "0.1.0" }
+gap-ngc-sdk = { path = "crates/gap-ngc-sdk", version = "0.1.0" }
+gap-ngc-sql = { path = "adapters/gap-ngc-sql", version = "0.1.0" }
+gap-plan = { path = "crates/gap-plan", version = "0.1.0" }
+gap-proto = { path = "crates/gap-proto", version = "0.1.0" }
+gap-ql = { path = "crates/gap-ql", version = "0.1.0" }
+gap-route = { path = "crates/gap-route", version = "0.1.0" }
+gap-s1 = { path = "crates/gap-s1", version = "0.1.0" }
+gap-sec = { path = "crates/gap-sec", version = "0.1.0" }
+gap-snapshot = { path = "crates/gap-snapshot", version = "0.1.0" }
+gap-store = { path = "crates/gap-store", version = "0.1.0" }
+gap-testkit = { path = "crates/gap-testkit", version = "0.1.0" }
+gap-transport = { path = "crates/gap-transport", version = "0.1.0" }
 
 # ---------------------------------------------------------------------------
 # Third-party crate catalogue (ADR-002; docs/evidence/crate-versions.md).
 #
-# NOTE (WP-M0-02 offline sandbox): Every third-party pin below mirrors the
-# exact pin recorded in docs/evidence/crate-versions.md and awaits online
-# re-verification (`cargo add --dry-run` / `cargo update --dry-run`) by the
-# reviewer. No member crate in WP-M0-02 depends on third-party crates yet so
-# the workspace builds and locks completely offline.
+# NOTE (WP-M0-02): the pins below mirror docs/evidence/crate-versions.md. The
+# reviewer re-verified them online on 2026-10-26: all pins plus the crates added
+# at the end of this table resolve together (829 packages) with exactly one
+# version each of axum, hyper, prost and tower (ADR-002). No member crate depends
+# on third-party crates yet, so the workspace builds and locks completely offline.
 #
 # Omissions per docs/evidence/crate-versions.md & ADR-019:
-# - `blake3`: marked `(verify)` without a version pin in crate-versions.md;
-#   omitted pending online verification (along with unpinned crates needed by
-#   later WPs — see docs/evidence/crate-versions.md and WP-M0-02 handoff).
 # - `rhai`: deferred out of 1.0 (ADR-019).
 # - `a2a-rs`: unused (generated from vendored official `a2a.proto` instead).
 # - `cargo-nextest`, `cargo-fuzz`, `cargo-deny`: CLI subcommand binaries.
@@ -122,3 +121,24 @@ tracing-opentelemetry = "0.34.0"
 tree-sitter = "0.27.1"
 usearch = "2.26.6"
 zeroize = "1.9.1"
+
+# Added by the WP-M0-02 review (2026-10-26): crates needed by later WPs that had no
+# pin in docs/evidence/crate-versions.md. Versions are the latest that resolve
+# together with the pins above; features are chosen by the consuming WPs.
+anyhow = "1.0.104"
+blake3 = "1.8.7"
+bytes = "1.12.1"
+clap = "4.6.7"
+http = "1.5.0"
+hyper = "1.12.0"
+im = "15.1.0"
+reqwest = "0.13.5"
+safetensors = "0.8.0"
+schemars = "1.2.3"
+serde = "1.0.229"
+serde_json = "1.0.154"
+thiserror = "2.0.21"
+tokio-stream = "0.1.19"
+toml = "1.1.8"
+unicode-normalization = "0.1.26"
+uuid = "1.29.0"

@@ -36,14 +36,21 @@ exceptions = [
 ]
 
 [bans]
-# ADR-002: workspace MUST resolve to a single version of `axum`, `hyper`, `prost`,
-# and `tower`. Duplicate versions are denied workspace-wide; `axum`, `hyper`,
-# `prost`, and `tower` MUST NEVER be added to `skip` or `skip-tree`.
-multiple-versions = "deny"
+# ADR-002: the workspace MUST resolve to a single version of `axum`, `hyper`,
+# `prost` and `tower`. Those four are denied per crate in `deny` below and MUST
+# NEVER be added to `skip` or `skip-tree`. Duplicates of other crates are only
+# reported: a full graph of ~750 crates always contains some (60 names when all
+# pinned crates were resolved on 2026-10-26), so a global deny would fail every
+# build as soon as real dependencies exist.
+multiple-versions = "warn"
 wildcards = "deny"
 highlight = "all"
 
 deny = [
+  { crate = "axum", deny-multiple-versions = true },
+  { crate = "hyper", deny-multiple-versions = true },
+  { crate = "prost", deny-multiple-versions = true },
+  { crate = "tower", deny-multiple-versions = true },
   { crate = "openjev", reason = "ADR-004: unrelated reserved crate; open-jev is out of the critical path" },
   { crate = "surrealdb", reason = "ADR-002, ADR-020: BSL-1.1 SurrealDB is forbidden outside gap-store feature `store-surreal` (WP-M7-11 scopes wrappers = [\"gap-store\"])" },
 ]
