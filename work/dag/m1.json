@@ -1,0 +1,127 @@
+{
+  "project_root": "/Users/mike/Documents/GraphProtocol",
+  "tdd": true,
+  "auto_commit": false,
+  "tasks": [
+    {
+      "id": 1,
+      "title": "WP-M1-01 gap-ql: GraphQL-profile front end, built-in schema, limits, cost model, error mapping. Deliverables: parse+validate via apollo-compiler against a supergraph Schema; generated built-in SDL (spec/02 §3) injected by the composer; reserved-name checks; limits (depth, aliases, root fields, variables, body size) and the cost model (GQL-041) returning GapError codes; visibility-aware validation errors with didYouMean over visible names (GQL-062/070), identical shape for hidden vs unknown fields; directive handling (GQL-030/031/032) and persisted-operation ids + operation_mode check (GQL-060/061). Acceptance (must pass): cargo nextest run -p gap-ql && cargo clippy -p gap-ql --all-targets -- -D warnings",
+      "role": "coder",
+      "depends_on": [],
+      "system_prompt": "Read AGENTS.md and docs/AGENT-GUIDE.md first. Work ONLY inside these paths: crates/gap-ql/**. Spec refs: GQL-001, GQL-002, GQL-004, GQL-010, GQL-030, GQL-041, GQL-042, GQL-062, GQL-070. Expand this work package into 2-5 minute steps before coding."
+    },
+    {
+      "id": 2,
+      "title": "WP-M1-02 GAP-QL conformance corpus, differential test vs graphql-js, parser fuzz target. Deliverables: conformance/gql fixtures covering every GQL-* MUST (valid/invalid documents, limits, cost, errors, hidden-vs-unknown); differential harness: same corpus validated by graphql-js (node, pinned) and gap-ql; disagreements fail except an allow-list documenting intentional deviations (§7); fuzz_gapql_parse target (no panics, bounded time/memory); 10-minute smoke run in CI. Acceptance (must pass): cargo nextest run -p gap-ql -E 'test(conformance)' && cargo run -p gap-conformance -- --class Core --offline conformance/gql && cd fuzz && cargo fuzz run fuzz_gapql_parse -- -max_total_time=60",
+      "role": "tester",
+      "depends_on": [
+        1
+      ],
+      "system_prompt": "Read AGENTS.md and docs/AGENT-GUIDE.md first. Work ONLY inside these paths: conformance/gql/**, tests/differential/**, fuzz/fuzz_targets/fuzz_gapql_parse.rs. Spec refs: GQL-002, GQL-062, GQL-070, GQL-041. Expand this work package into 2-5 minute steps before coding."
+    },
+    {
+      "id": 3,
+      "title": "WP-M1-03 gap-ngc-sdk: Connector trait, gRPC/HTTP/stdio servers, foreach helper, mock. Deliverables: async Connector trait (Describe, Query stream, Mutate, Subscribe, Task*, Sketch, Health, Explain) with default UNIMPLEMENTED for optional RPCs; gRPC server+client adapters (tonic 0.14), HTTP/JSON+NDJSON mapping (axum), stdio JSON-RPC adapter; deadline/cancellation helpers; foreach helper: dedupe keys, chunk, bounded concurrency, order/independence preserved, honest upstream_calls accounting. Acceptance (must pass): cargo nextest run -p gap-ngc-sdk && cargo clippy -p gap-ngc-sdk --all-targets -- -D warnings",
+      "role": "coder",
+      "depends_on": [],
+      "system_prompt": "Read AGENTS.md and docs/AGENT-GUIDE.md first. Work ONLY inside these paths: crates/gap-ngc-sdk/**. Spec refs: NGC-001, NGC-002, NGC-003, NGC-020, NGC-025, NGC-026, NGC-090. Expand this work package into 2-5 minute steps before coding."
+    },
+    {
+      "id": 4,
+      "title": "WP-M1-04 NGC connector conformance kit. Deliverables: connector test kit: Describe validity, foreach correctness/partial failure, N+1 audit via Complete.upstream_calls, deadline+cancel, idempotency replay, dry-run, pagination stability, error mapping, size limits (capability-gated); the SDK mock connector passes the kit; a deliberately broken mock fails each check (kit self-test). Acceptance (must pass): cargo nextest run -p gap-conformance -E 'test(ngc_kit)'",
+      "role": "tester",
+      "depends_on": [
+        3
+      ],
+      "system_prompt": "Read AGENTS.md and docs/AGENT-GUIDE.md first. Work ONLY inside these paths: conformance/ngc/**, crates/gap-conformance/src/ngc_kit/**. Spec refs: NGC-010, NGC-020, NGC-021, NGC-025, NGC-026, NGC-030, NGC-031, NGC-091. Expand this work package into 2-5 minute steps before coding."
+    },
+    {
+      "id": 5,
+      "title": "WP-M1-05 gap-snapshot v0: composition from static config, SnapshotHandle, reserved-name and ownership checks. Deliverables: composer: branch Describe results (SDL + operations) -> supergraph Schema with namespacing, GAP built-ins, ownership map; errors GAP_RESERVED_NAME / GAP_AMBIGUOUS_FIELD; SnapshotHandle (ArcSwap, pin()), minimal publish() (no prewarm yet), generation counter; branch_set_hash; tests: inv_01_request_pins_single_generation, inv_02_no_lock_on_read_path (static check + loom-free stress), composition negative cases. Acceptance (must pass): cargo nextest run -p gap-snapshot -E 'test(inv_01) or test(inv_02) or test(compose)' && cargo clippy -p gap-snapshot --all-targets -- -D warnings",
+      "role": "coder",
+      "depends_on": [
+        1,
+        3
+      ],
+      "system_prompt": "Read AGENTS.md and docs/AGENT-GUIDE.md first. Work ONLY inside these paths: crates/gap-snapshot/**, crates/gap-core/src/snapshot/**. Spec refs: ARC-005, RUN-003, RUN-011, GQL-004, INV-01, INV-02, INV-16. Expand this work package into 2-5 minute steps before coding."
+    },
+    {
+      "id": 6,
+      "title": "WP-M1-06 gap-plan v0: single-branch planner, plan cache, plan_hash, explain. Deliverables: Plan IR (Fetch, Parallel, Sequence, Flatten; Join/Traverse/Mutate/Gate declared but unimplemented), field ownership resolution, projection/limit pushdown per capabilities; moka plan cache with ADR-009 §6 key; deterministic ordering; PlanExplanation; cost computed before execution; determinism test: 1,000 repeated plannings and across process restarts yield identical plan_hash. Acceptance (must pass): cargo nextest run -p gap-plan && cargo clippy -p gap-plan --all-targets -- -D warnings",
+      "role": "coder",
+      "depends_on": [
+        5
+      ],
+      "system_prompt": "Read AGENTS.md and docs/AGENT-GUIDE.md first. Work ONLY inside these paths: crates/gap-plan/**. Spec refs: RUN-005, RUN-010, RUN-011, RUN-013, RUN-014. Expand this work package into 2-5 minute steps before coding."
+    },
+    {
+      "id": 7,
+      "title": "WP-M1-07 gap-exec v0 and ConnectorLayer v0: execute fetch plans, assemble responses, errors. Deliverables: ExecLayer executing Fetch/Parallel/Sequence with NGC clients (pooling), deadline propagation and cancellation to connectors, GraphQL error propagation and partial=true semantics; response assembly with incremental size limit (RUN-060), extensions.gap.{generation,cost,partial}; tests: deadline reaches connector, cancel within 50 ms, error path/null propagation matrix. Acceptance (must pass): cargo nextest run -p gap-exec && cargo clippy -p gap-exec --all-targets -- -D warnings",
+      "role": "coder",
+      "depends_on": [
+        3,
+        6
+      ],
+      "system_prompt": "Read AGENTS.md and docs/AGENT-GUIDE.md first. Work ONLY inside these paths: crates/gap-exec/**. Spec refs: RUN-001, RUN-015, RUN-030, RUN-031, RUN-060, GQL-051, INV-12. Expand this work package into 2-5 minute steps before coding."
+    },
+    {
+      "id": 8,
+      "title": "WP-M1-08 gap-transport v0: HTTP GraphQL endpoint, gateway layers, health/ready/metrics. Deliverables: axum 0.8 server: POST /graphql (application/graphql-response+json), GET persisted, /healthz,/readyz,/metrics; tower stack TransportMux->Gateway->Operation->Authz(stub allow in dev)->Plan->Exec; request limits, request ids, OTel spans per OPS-010 names; dev-profile anonymous principal and API-key auth (Argon2id verify stub); SSE subscription plumbing (graphql-sse) with bounded channels. Acceptance (must pass): cargo nextest run -p gap-transport && cargo clippy -p gap-transport --all-targets -- -D warnings",
+      "role": "coder",
+      "depends_on": [
+        7
+      ],
+      "system_prompt": "Read AGENTS.md and docs/AGENT-GUIDE.md first. Work ONLY inside these paths: crates/gap-transport/**. Spec refs: GQL-003, GQL-050, OPS-002, RUN-001, RUN-002, SEC-010. Expand this work package into 2-5 minute steps before coding."
+    },
+    {
+      "id": 9,
+      "title": "WP-M1-09 gap-mcp outbound connector (MCP server as branch). Deliverables: evaluate rmcp 3.7 against MCP 2026-07-28 (stateless, _meta); use it if conformant else a thin JSON-RPC client (record the decision in an ADR addendum); tools/list->OperationDescriptors (annotations untrusted), resources->node category, structuredContent/text result mapping, cancellation, timeouts, bounded-concurrency foreach emulation with honest upstream_calls; stdio transport launches only via an allow-list entry (sandbox integration arrives in WP-M6-09; until then refuse non-dev profiles). Acceptance (must pass): cargo nextest run -p gap-mcp -E 'test(outbound)' && cargo clippy -p gap-mcp --all-targets -- -D warnings",
+      "role": "coder",
+      "depends_on": [
+        3
+      ],
+      "system_prompt": "Read AGENTS.md and docs/AGENT-GUIDE.md first. Work ONLY inside these paths: adapters/gap-mcp/src/outbound/**, adapters/gap-mcp/tests/outbound/**. Spec refs: CMP-010, CMP-011, CMP-012, CMP-013, CMP-014, CMP-015, ADR-015. Expand this work package into 2-5 minute steps before coding."
+    },
+    {
+      "id": 10,
+      "title": "WP-M1-10 gap-mcp inbound facade: five static tools, resources, stateless handling, size gate. Deliverables: Streamable HTTP + stdio MCP server exposing gap_search, gap_describe, gap_query, gap_mutate, gap_task with exact schemas/annotations from spec/09 §1; resources gap://meta, schema/{type}, operations, task/{id}; stateless semantics per MCP 2026-07-28 (no initialize/session; _meta handling), result mapping (content+structuredContent+isError), budget truncation hints, spotlighting wrapper; tests: tools/list token size <= 1,200 (two tokenizers) for N=5..1000 branches (Gate G-F1), interleaved stateless requests, read-only enforcement of gap_query. Acceptance (must pass): cargo nextest run -p gap-mcp -E 'test(inbound) or test(facade_tools_list_size)' && cargo run -p gap-conformance -- --class Facade-MCP --offline conformance/mcp",
+      "role": "coder",
+      "depends_on": [
+        8
+      ],
+      "system_prompt": "Read AGENTS.md and docs/AGENT-GUIDE.md first. Work ONLY inside these paths: adapters/gap-mcp/src/inbound/**, adapters/gap-mcp/tests/inbound/**, conformance/mcp/**. Spec refs: CMP-001, CMP-002, CMP-003, CMP-004, CMP-005, CMP-007, CMP-008, SEC-083. Expand this work package into 2-5 minute steps before coding."
+    },
+    {
+      "id": 11,
+      "title": "WP-M1-11 gap-ngc-openapi v0: read operations, auth, mock REST fixture. Deliverables: OpenAPI 3.x -> Describe (operations, JSON Schema, SDL) via a minimal local-only $ref resolver; request builder that cannot escape its parameter slots; bearer/apiKey auth from vault stub; foreach via native batch extension or bounded fan-out (batch=emulated) with honest upstream_calls; retries only for idempotent reads; fixture REST service (axum) with 3 resources + rate-limit headers used by the walking skeleton and later benches. Acceptance (must pass): cargo nextest run -p gap-ngc-openapi && cargo run -p gap-conformance -- --connector-kit --spawn fixtures openapi",
+      "role": "coder",
+      "depends_on": [
+        3
+      ],
+      "system_prompt": "Read AGENTS.md and docs/AGENT-GUIDE.md first. Work ONLY inside these paths: adapters/gap-ngc-openapi/**, tests/fixtures/openapi/**. Spec refs: CMP-030, CMP-031, CMP-032, CMP-033, NGC-020, NGC-026. Expand this work package into 2-5 minute steps before coding."
+    },
+    {
+      "id": 12,
+      "title": "WP-M1-12 gap-server and gap-cli v0: wiring, config, serve/init/doctor. Deliverables: gap-server binary assembling snapshot (from gap.toml branches), exec, transport, MCP facade; graceful shutdown (RUN-090); gap CLI: serve, init (writes sample gap.toml + example branches), doctor (toolchain/sandbox/model checks as available), config schema/check; declares module stubs for later WPs: src/proposals/, src/calibrate/, src/commands/ (cli) and src/wiring_s1.rs (server); examples/walking-skeleton: REST fixture + an MCP branch + gap.toml + README that works end to end. Acceptance (must pass): cargo build -p gap-server -p gap-cli --release && cargo run -p gap-cli -- config check examples/walking-skeleton/gap.toml && python3 tools/check_layers.py",
+      "role": "coder",
+      "depends_on": [
+        8,
+        9,
+        10,
+        11
+      ],
+      "system_prompt": "Read AGENTS.md and docs/AGENT-GUIDE.md first. Work ONLY inside these paths: crates/gap-server/**, crates/gap-cli/**, examples/walking-skeleton/**. Spec refs: OPS-001, OPS-002, OPS-044, ARC-002. Expand this work package into 2-5 minute steps before coding."
+    },
+    {
+      "id": 13,
+      "title": "WP-M1-13 Walking-skeleton E2E, real-host smoke, invariants, M1 gate. Deliverables: E2E: scripted MCP host runs gap_describe -> gap_search -> gap_query across the REST branch and the MCP branch; typed-path overhead measured with 1 ms mocks; real-host smoke: MCP Inspector (CI) and Claude Code (documented manual script) against examples/walking-skeleton; docs/gates/M1.md: gate record (G-F1 tools/list size, Core conformance subset, determinism, INV-01/02/03/12 tests, typed overhead p99, spec_trace --strict for ids owned by M1). Acceptance (must pass): cargo nextest run --workspace && cargo run -p gap-conformance -- --class Core --spawn examples/walking-skeleton && python3 tools/spec_trace.py --strict --milestone M1 && python3 tools/check_layers.py",
+      "role": "reviewer",
+      "depends_on": [
+        2,
+        4,
+        12
+      ],
+      "system_prompt": "Read AGENTS.md and docs/AGENT-GUIDE.md first. Work ONLY inside these paths: tests/e2e/**, docs/gates/M1.md. Spec refs: CMP-008, CMP-009, INV-01, INV-03, INV-12, RUN-013. Expand this work package into 2-5 minute steps before coding."
+    }
+  ]
+}

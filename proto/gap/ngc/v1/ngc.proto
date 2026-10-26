@@ -1,0 +1,319 @@
+// GAP Native Graph Connector (NGC) contract — spec/03-ngc.md is normative; this file is its wire form.
+// Package version tracks the wire string "gap/0.1". Field numbers are never reused; removed fields are `reserved`.
+syntax = "proto3";
+
+package gap.ngc.v1;
+
+import "google/protobuf/struct.proto";
+import "google/protobuf/timestamp.proto";
+
+service Connector {
+  // Capabilities + schema + semantic docs in one call (replaces GetCapabilities/GetMetaGraph/schema of the earlier draft).
+  rpc Describe(DescribeRequest) returns (DescribeResponse);
+  // Read path. Server-streaming so large row sets are chunked; `foreach` batches many variable sets in ONE call.
+  rpc Query(QueryRequest) returns (stream QueryResponse);
+  // Side-effecting path. Idempotent per ctx.idempotency_key.
+  rpc Mutate(MutateRequest) returns (MutateResponse);
+  rpc Subscribe(SubscribeRequest) returns (stream Event);
+  // Long-running, A2A-style tasks (only if capabilities.tasks).
+  rpc StartTask(StartTaskRequest) returns (TaskStatus);
+  rpc GetTask(GetTaskRequest) returns (TaskStatus);
+  rpc CancelTask(CancelTaskRequest) returns (TaskStatus);
+  rpc WatchTask(WatchTaskRequest) returns (stream TaskStatus);
+  // Privacy-preserving column statistics for join verification (ADR-012). Optional.
+  rpc Sketch(SketchRequest) returns (SketchResponse);
+  rpc Health(HealthRequest) returns (HealthResponse);
+  // Returns the native query that Query would run (debug/audit). Optional.
+  rpc Explain(QueryRequest) returns (ExplainResponse);
+}
+
+// ---------------------------------------------------------------- common
+
+enum Protocol {
+  PROTOCOL_UNSPECIFIED = 0;
+  SQL = 1; REST = 2; GRPC = 3; GRAPHQL = 4; MCP = 5; A2A = 6; CLI = 7; CODE_GRAPH = 8; CUSTOM = 9;
+}
+
+enum OpKind { OP_KIND_UNSPECIFIED = 0; QUERY = 1; MUTATION = 2; SUBSCRIPTION = 3; TASK = 4; }
+
+enum SideEffectHint { SIDE_EFFECT_UNSPECIFIED = 0; SE_NONE = 1; SE_REVERSIBLE = 2; SE_IRREVERSIBLE = 3; }  // hints are UNTRUSTED (ADR-015)
+
+enum PaginationKind { PAGINATION_NONE = 0; PAGINATION_CURSOR = 1; PAGINATION_OFFSET = 2; }
+
+enum PredicateOp {
+  PREDICATE_OP_UNSPECIFIED = 0;
+  P_EQ = 1; P_NE = 2; P_GT = 3; P_GTE = 4; P_LT = 5; P_LTE = 6; P_IN = 7; P_CONTAINS = 8; P_STARTS_WITH = 9; P_EXISTS = 10;
+  P_AND = 11; P_OR = 12; P_NOT = 13;
+}
+
+enum ErrorCode {
+  ERROR_CODE_UNSPECIFIED = 0;
+  INVALID_ARGUMENT = 1; NOT_FOUND = 2; PERMISSION_DENIED = 3; UNAUTHENTICATED = 4; RESOURCE_EXHAUSTED = 5;
+  FAILED_PRECONDITION = 6; DEADLINE_EXCEEDED = 7; CANCELLED = 8; UNAVAILABLE = 9; UNIMPLEMENTED = 10;
+  INTERNAL = 11; CONFLICT = 12; UPSTREAM_ERROR = 13;
+}
+
+message NgcError {
+  ErrorCode code = 1;
+  string message = 2;            // <= 300 chars, no secrets (INV-15)
+  bool retryable = 3;
+  uint32 retry_after_ms = 4;
+  google.protobuf.Struct details = 5;
+}
+
+enum PrincipalKind { PRINCIPAL_KIND_UNSPECIFIED = 0; HUMAN = 1; AGENT = 2; SERVICE = 3; }
+
+// Identity passed to connectors. NEVER contains the client's bearer token (no token passthrough, SEC-011).
+message Principal {
+  string id = 1;
+  PrincipalKind kind = 2;
+  repeated string delegation_chain = 3;   // outermost first
+  repeated string scopes = 4;
+  map<string, string> attributes = 5;
+}
+
+message CallContext {
+  string tenant_id = 1;
+  string request_id = 2;
+  string traceparent = 3;                 // W3C Trace Context
+  int64 deadline_unix_ms = 4;             // absolute; connectors MUST stop work after this (INV-12)
+  uint32 remaining_cost_units = 5;
+  Principal principal = 6;
+  uint32 hop_count = 7;
+  repeated string trace_path = 8;         // node ids already traversed (loop detection, INV-20)
+  string idempotency_key = 9;
+  uint64 snapshot_generation = 10;        // informational
+}
+
+// ---------------------------------------------------------------- Describe
+
+message DescribeRequest {
+  string known_spec_hash = 1;             // if equal to current, server MAY return not_modified
+}
+
+message DescribeResponse {
+  bool not_modified = 1;
+  ConnectorDescription description = 2;
+}
+
+message ConnectorDescription {
+  string connector_id = 1;
+  string connector_version = 2;
+  string ngc_version = 3;                 // "gap/0.1"
+  Protocol protocol = 4;
+  string spec_hash = 5;                   // connector's hash of its source spec; GAP computes its own desc_hash (never trusts this)
+  Capabilities capabilities = 6;
+  Limits limits = 7;
+  string schema_sdl = 8;                  // GraphQL SDL for this branch's namespace (types + fields), no GAP built-ins
+  repeated OperationDescriptor operations = 9;
+  MetaSummary meta = 10;
+  AuthRequirements auth = 11;
+}
+
+message Capabilities {
+  bool foreach_batch = 1;
+  repeated PredicateOp predicate_ops = 2;
+  bool order_by = 3;
+  PaginationKind pagination = 4;
+  bool native_traverse = 5;
+  bool subscribe = 6;
+  bool tasks = 7;
+  bool dry_run = 8;
+  bool idempotency = 9;
+  bool sketch = 10;
+  bool explain = 11;
+  bool as_of = 12;
+}
+
+message Limits {
+  uint32 max_batch_size = 1;              // max |foreach| per Query; 0 = connector does not support foreach
+  uint32 max_in_flight = 2;
+  uint32 max_page_size = 3;
+  uint32 default_timeout_ms = 4;
+  uint64 max_response_bytes = 5;
+}
+
+message OperationDescriptor {
+  string name = 1;                        // [A-Za-z_][A-Za-z0-9_]*
+  OpKind kind = 2;
+  string description = 3;                 // untrusted text; sanitized by GAP (ADR-014)
+  google.protobuf.Struct input_schema = 4;   // JSON Schema
+  google.protobuf.Struct output_schema = 5;
+  SideEffectHint side_effect_hint = 6;
+  bool idempotent_hint = 7;
+  bool supports_dry_run = 8;
+  string compensation_operation = 9;      // name of operation that undoes this one (hint)
+  repeated Example examples = 10;
+  uint32 cost_weight = 11;
+  PaginationKind pagination = 12;
+  repeated string key_fields = 13;        // fields usable as join keys (unique where declared)
+  map<string, string> annotations = 14;   // untrusted hints (e.g. MCP annotations)
+}
+
+message Example {
+  string intent = 1;                      // natural-language request this operation serves (or must NOT serve if negative)
+  string gapql = 2;
+  bool negative = 3;
+}
+
+message MetaSummary {
+  repeated string node_categories = 1;
+  repeated string edge_predicates = 2;
+  string synopsis_hint = 3;               // optional <= 24-token hint; GAP may rewrite
+}
+
+message AuthRequirements {
+  repeated string scopes = 1;
+  bool needs_end_user_delegation = 2;     // token exchange (RFC 8693) required for this branch
+  string resource_indicator = 3;          // RFC 8707 audience
+}
+
+// ---------------------------------------------------------------- Query
+
+message QueryRequest {
+  CallContext ctx = 1;
+  string operation = 2;
+  google.protobuf.Struct arguments = 3;
+  Selection selection = 4;
+  Expr predicate = 5;                     // pushdown predicate (only ops in capabilities.predicate_ops)
+  repeated OrderBy order_by = 6;
+  Page page = 7;
+  repeated VariableSet foreach = 8;       // empty = single execution; else one result stream per index
+  string as_of = 9;                       // RFC 3339, only if capabilities.as_of
+}
+
+message Selection { repeated SelectionField fields = 1; }
+message SelectionField { string name = 1; string alias = 2; google.protobuf.Struct args = 3; Selection children = 4; }
+
+message Expr {
+  oneof node { ExprList and = 1; ExprList or = 2; Expr not = 3; Cmp cmp = 4; string exists = 5; }
+}
+message ExprList { repeated Expr exprs = 1; }
+message Cmp { string path = 1; PredicateOp op = 2; google.protobuf.Value value = 3; }
+message OrderBy { string path = 1; bool descending = 2; }
+message Page { uint32 limit = 1; string cursor = 2; uint32 offset = 3; }
+message VariableSet { uint32 index = 1; google.protobuf.Struct values = 2; }
+
+message QueryResponse {
+  oneof chunk { RowSetChunk rows = 1; Complete complete = 2; }
+}
+
+// One or more chunks per foreach index; `last_for_index` closes an index. `error` set => that index failed (others unaffected).
+message RowSetChunk {
+  uint32 foreach_index = 1;
+  repeated google.protobuf.Struct rows = 2;
+  bool last_for_index = 3;
+  NgcError error = 4;
+}
+
+message Complete {
+  string next_cursor = 1;
+  bool truncated = 2;
+  uint64 rows_total = 3;
+  uint32 upstream_calls = 4;              // for N+1 auditing (INV-18)
+  uint32 latency_us = 5;
+}
+
+message ExplainResponse { string native_query = 1; google.protobuf.Struct details = 2; }
+
+// ---------------------------------------------------------------- Mutate / Subscribe
+
+message MutateRequest {
+  CallContext ctx = 1;
+  string operation = 2;
+  google.protobuf.Struct arguments = 3;
+  Selection selection = 4;
+  bool dry_run = 5;
+  ApprovalProof approval = 6;             // present when policy required approval
+}
+
+message ApprovalProof {
+  string approval_id = 1;
+  string decided_by = 2;
+  google.protobuf.Timestamp decided_at = 3;
+  string signature = 4;                   // gateway Ed25519 signature over (approval_id, operation, arguments hash, idempotency_key)
+}
+
+enum MutationOutcome { MUTATION_OUTCOME_UNSPECIFIED = 0; OUTCOME_APPLIED = 1; OUTCOME_DRY_RUN = 2; OUTCOME_REJECTED = 3; }
+
+message MutateResponse {
+  google.protobuf.Struct result = 1;
+  MutationOutcome outcome = 2;
+  bool was_replayed = 3;                  // true when idempotency_key matched a prior execution
+  string compensation_token = 4;
+  NgcError error = 5;
+  google.protobuf.Struct dry_run_report = 6;
+}
+
+message SubscribeRequest {
+  CallContext ctx = 1;
+  string operation = 2;
+  google.protobuf.Struct arguments = 3;
+  Selection selection = 4;
+  string resume_token = 5;
+}
+
+message Event {
+  string id = 1;
+  google.protobuf.Timestamp at = 2;
+  google.protobuf.Struct payload = 3;
+  string resume_token = 4;
+}
+
+// ---------------------------------------------------------------- Tasks (A2A v1.0-compatible state set)
+
+enum TaskState {
+  TASK_STATE_UNSPECIFIED = 0;
+  SUBMITTED = 1; WORKING = 2; INPUT_REQUIRED = 3; AUTH_REQUIRED = 4;
+  COMPLETED = 5; FAILED = 6; CANCELED = 7; REJECTED = 8;
+}
+
+message Artifact { string id = 1; string name = 2; string media_type = 3; google.protobuf.Struct data = 4; string uri = 5; string sha256 = 6; }
+
+message StartTaskRequest {
+  CallContext ctx = 1;
+  string operation = 2;
+  google.protobuf.Struct message = 3;
+  string context_id = 4;
+  repeated string expect_artifacts = 5;
+}
+message GetTaskRequest { CallContext ctx = 1; string task_id = 2; }
+message CancelTaskRequest { CallContext ctx = 1; string task_id = 2; string reason = 3; }
+message WatchTaskRequest { CallContext ctx = 1; string task_id = 2; uint64 from_seq = 3; }
+
+message TaskStatus {
+  string task_id = 1;
+  TaskState state = 2;
+  string message = 3;
+  repeated Artifact artifacts = 4;
+  string input_request = 5;               // when INPUT_REQUIRED / AUTH_REQUIRED: human-readable request
+  google.protobuf.Timestamp updated_at = 6;
+  uint64 seq = 7;                         // strictly increasing per task
+  NgcError error = 8;
+}
+
+// ---------------------------------------------------------------- Sketch / Health
+
+message SketchRequest {
+  CallContext ctx = 1;
+  string operation = 2;                   // a read operation exposing the column
+  string field_path = 3;
+  google.protobuf.Struct arguments = 4;
+  uint32 sample_size = 5;                 // rows to inspect (<= limits)
+  bytes salt = 6;                         // tenant-scoped; values are hashed as blake3(salt || canonical_value)
+  uint32 bottom_k = 7;                    // default 1024
+}
+
+message SketchResponse {
+  uint64 distinct_estimate = 1;
+  double null_ratio = 2;
+  double uniqueness_ratio = 3;            // distinct / non-null in sample
+  repeated fixed64 bottom_k_hashes = 4;   // the k smallest 64-bit hashes (ascending)
+  uint32 sample_count = 5;
+  string value_kind = 6;                  // "string" | "integer" | "uuid" | "other"
+  bool exact = 7;                         // true when whole domain scanned
+}
+
+message HealthRequest {}
+enum ServingStatus { SERVING_STATUS_UNSPECIFIED = 0; SERVING = 1; DEGRADED = 2; NOT_SERVING = 3; }
+message HealthResponse { ServingStatus status = 1; string version = 2; google.protobuf.Struct details = 3; }

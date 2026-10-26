@@ -1,0 +1,129 @@
+{
+  "project_root": "/Users/mike/Documents/GraphProtocol",
+  "tdd": true,
+  "auto_commit": false,
+  "tasks": [
+    {
+      "id": 1,
+      "title": "WP-M6-01 gap-sec authn: JWT/JWKS, introspection, API keys, mTLS, PRM, token exchange client. Deliverables: JWT validation (alg allow-list, iss/aud/exp/nbf, JWKS cache+rotation), opaque-token introspection, Argon2id API keys, mTLS/SPIFFE principal mapping, RFC 9728 metadata endpoint, RFC 8693 exchange client; Principal with delegation chain; module stubs for authz/, vault/, egress/, sandbox/, audit/, quota/ in lib.rs; tests: token confusion, alg=none, wrong audience, expired/nbf, JWKS rotation, constant-shape failures, tenant derivation ignores body/headers (SEC-010). Acceptance (must pass): cargo nextest run -p gap-sec -E 'test(authn)'",
+      "role": "coder",
+      "depends_on": [],
+      "system_prompt": "Read AGENTS.md and docs/AGENT-GUIDE.md first. Work ONLY inside these paths: crates/gap-sec/src/authn/**, crates/gap-sec/src/lib.rs. Spec refs: SEC-001, SEC-002, SEC-003, SEC-004, SEC-010, SEC-011, SEC-012, NGC-081. Expand this work package into 2-5 minute steps before coding."
+    },
+    {
+      "id": 2,
+      "title": "WP-M6-02 Task API core: TaskStore, FSM, events, leases, recovery, strategies, cancellation. Deliverables: durable TaskStore (SQLite WAL), FSM with exhaustive transition tests, strictly increasing seq events + replay, lease/heartbeat, crash recovery before readiness, PARALLEL/SEQUENTIAL/DAG strategies, cancellation propagation, hop/trace loop detection; gap.submitTask/task/tasks/cancelTask resolvers and gapTaskEvents subscription (SSE Last-Event-ID). Acceptance (must pass): cargo nextest run -p gap-exec -p gap-store -E 'test(task)' && cargo test -p gap-exec --test task_crash_recovery",
+      "role": "coder",
+      "depends_on": [],
+      "system_prompt": "Read AGENTS.md and docs/AGENT-GUIDE.md first. Work ONLY inside these paths: crates/gap-exec/src/tasks/**, crates/gap-store/src/tasks/**. Spec refs: RUN-080, RUN-081, RUN-082, RUN-083, RUN-084, RUN-085, RUN-086, INV-13, INV-20, ADR-016. Expand this work package into 2-5 minute steps before coding."
+    },
+    {
+      "id": 3,
+      "title": "WP-M6-03 gap-a2a: A2A v1.0 inbound binding and outbound connector. Deliverables: AgentCard generation (deterministic, no T2), SendMessage/SendStreamingMessage/GetTask/ListTasks/CancelTask mapping incl. text-only -> resolve artifact, data-part gapql -> task; state mapping verified against vendored spec (recorded in SPEC-NOTES.md); outbound A2A agents as TASK operations with polling/streaming; two-GAP-node loop-detection fixture. Acceptance (must pass): cargo nextest run -p gap-a2a && cargo run -p gap-conformance -- --class Facade-A2A --offline conformance/a2a",
+      "role": "coder",
+      "depends_on": [
+        2
+      ],
+      "system_prompt": "Read AGENTS.md and docs/AGENT-GUIDE.md first. Work ONLY inside these paths: adapters/gap-a2a/**, conformance/a2a/**. Spec refs: CMP-020, CMP-021, CMP-022, CMP-023, ADR-016, ADR-017. Expand this work package into 2-5 minute steps before coding."
+    },
+    {
+      "id": 4,
+      "title": "WP-M6-04 Mutation pipeline: side-effect policy, approval gate, ApprovalProof, idempotency, dry-run, saga. Deliverables: pipeline authz->side-effect policy->approval gate (task INPUT_REQUIRED, deterministic summary, four-eyes option)->idempotency->dry-run->connector->audit; signed ApprovalProof (Ed25519) bound to args hash; replay/forgery rejected; IdempotencyStore semantics (conflict, in-progress wait, replay); saga mode with reverse compensation ledger and needs_manual_intervention alert; tests: every RUN-07x MUST incl. approval expiry and concurrent duplicate keys. Acceptance (must pass): cargo nextest run -p gap-exec -p gap-store -E 'test(mutate) or test(saga) or test(idempotency)'",
+      "role": "coder",
+      "depends_on": [
+        2,
+        5
+      ],
+      "system_prompt": "Read AGENTS.md and docs/AGENT-GUIDE.md first. Work ONLY inside these paths: crates/gap-exec/src/mutate/**, crates/gap-exec/src/saga/**, crates/gap-store/src/idempotency/**. Spec refs: RUN-070, RUN-071, RUN-072, RUN-073, RUN-074, RUN-075, NGC-030, NGC-031, NGC-032, NGC-033, INV-11. Expand this work package into 2-5 minute steps before coding."
+    },
+    {
+      "id": 5,
+      "title": "WP-M6-05 Cedar authorization: schema, loader, evaluation points, decision log, hot reload. Deliverables: Cedar schema + policy set loader (validate, atomic swap, policy_version=blake3), evaluation API for Discover/Execute/Traverse/Mutate/SubmitTask/DecideApproval/ProposeSource/DecideProposal/Admin*; AuthzLayer integration (all touched fields incl. joined RHS), visibility bitset provider for discovery, redaction plan, delegation intersection semantics, decision log; tests: authorization-by-join (TM-21), default deny, stale-policy cache invalidation (TM-22), policy reload failure keeps previous set. Acceptance (must pass): cargo nextest run -p gap-sec -p gap-plan -E 'test(authz) or test(policy)'",
+      "role": "coder",
+      "depends_on": [
+        1
+      ],
+      "system_prompt": "Read AGENTS.md and docs/AGENT-GUIDE.md first. Work ONLY inside these paths: crates/gap-sec/src/authz/**, policies/**. Spec refs: SEC-020, SEC-021, SEC-022, SEC-023, SEC-024, SEC-012, INV-04, INV-05, RTE-010. Expand this work package into 2-5 minute steps before coding."
+    },
+    {
+      "id": 6,
+      "title": "WP-M6-06 Tenant isolation enforcement and cross-tenant fuzz. Deliverables: property/fuzz tests over store, plan cache, telemetry, audit, idempotency, feedback, task APIs with random tenant pairs; compile-fail tests proving no store API is callable without TenantScope; fixes (if any) delivered as follow-up commits within the owning crates after coordination. Acceptance (must pass): cargo nextest run --test tenant_isolation",
+      "role": "tester",
+      "depends_on": [
+        5
+      ],
+      "system_prompt": "Read AGENTS.md and docs/AGENT-GUIDE.md first. Work ONLY inside these paths: tests/security/tenant/**. Spec refs: INV-09, INV-19, ADR-018, SEC-010, TM-09. Expand this work package into 2-5 minute steps before coding."
+    },
+    {
+      "id": 7,
+      "title": "WP-M6-07 Vault, secret types, redaction layer, canary-secret tests. Deliverables: Vault trait with env/file(0600)/OS keychain providers (+ external behind features), rotation without restart, secrecy+zeroize, redactor for logs/traces/errors/metrics/model inputs; canary-secret end-to-end test through every sink and input path. Acceptance (must pass): cargo nextest run -p gap-sec -E 'test(vault) or test(redact)' && cargo nextest run --test secret_canary",
+      "role": "coder",
+      "depends_on": [
+        1
+      ],
+      "system_prompt": "Read AGENTS.md and docs/AGENT-GUIDE.md first. Work ONLY inside these paths: crates/gap-sec/src/vault/**, tests/security/secrets/**. Spec refs: SEC-040, SEC-041, INV-15, TM-18. Expand this work package into 2-5 minute steps before coding."
+    },
+    {
+      "id": 8,
+      "title": "WP-M6-08 EgressGuard (SSRF) and integration into fetcher, connectors, enricher. Deliverables: EgressGuard: resolve-check-pin-connect, private/metadata ranges incl. IPv4-mapped IPv6 and odd encodings, redirect re-check, scheme rules, allow-list; reqwest/hyper connector adapters; table-driven SSRF tests incl. DNS rebinding simulation; wiring into SourceFetcher, openapi/graphql/mcp connectors and HttpSidecar. Acceptance (must pass): cargo nextest run -p gap-sec -E 'test(egress)'",
+      "role": "coder",
+      "depends_on": [
+        1
+      ],
+      "system_prompt": "Read AGENTS.md and docs/AGENT-GUIDE.md first. Work ONLY inside these paths: crates/gap-sec/src/egress/**, tests/security/ssrf/**. Spec refs: SEC-075, SEC-076, TM-06. Expand this work package into 2-5 minute steps before coding."
+    },
+    {
+      "id": 9,
+      "title": "WP-M6-09 Sandbox launcher, exec allow-list, trust tiers, manifest signatures, CLI connector, malicious-server scenarios. Deliverables: macOS seatbelt + Linux bwrap sandbox profiles with rlimits, no network, scrubbed env, output caps; fail-closed rules; `gap doctor` checks; Ed25519 manifest verification, T0/T1/T2 handling, exec allow-list with sha256 re-check at every launch; CLI connector (argv templates, no shell); MCP stdio launch routed through sandbox; scenario tests: rug-pull MCP server (ING-054), malicious server with oversized/hostile output, sandbox-escape smoke. Acceptance (must pass): cargo nextest run -p gap-sec -p gap-ngc-cli -E 'test(sandbox) or test(manifest)' && cargo nextest run --test rug_pull",
+      "role": "coder",
+      "depends_on": [
+        1
+      ],
+      "system_prompt": "Read AGENTS.md and docs/AGENT-GUIDE.md first. Work ONLY inside these paths: crates/gap-sec/src/sandbox/**, crates/gap-sec/src/manifest/**, adapters/gap-ngc-cli/**, tests/security/sandbox/**, tests/security/rugpull/**. Spec refs: SEC-060, SEC-061, SEC-062, SEC-070, SEC-071, SEC-072, ING-054, CMP-060, TM-02, TM-07. Expand this work package into 2-5 minute steps before coding."
+    },
+    {
+      "id": 10,
+      "title": "WP-M6-10 Injection linter, spotlighting, Rule-of-Two session policy, poisoned-description corpus. Deliverables: heuristic+classifier linter (documented false-positive rate on benign corpus), integration into G7 and S1/Enricher input filters, spotlight wrapping, per-session A/B/C flags feeding Cedar riskScore; poisoned-description corpus (>=50 payloads incl. Unicode tricks) with assertions per SEC §15 items 1 and 5. Acceptance (must pass): cargo nextest run -p gap-ingest -p gap-sec -E 'test(lint) or test(session_risk)' && cargo nextest run --test injection_corpus",
+      "role": "coder",
+      "depends_on": [
+        5
+      ],
+      "system_prompt": "Read AGENTS.md and docs/AGENT-GUIDE.md first. Work ONLY inside these paths: crates/gap-ingest/src/lint/**, crates/gap-sec/src/session_risk/**, tests/security/injection/**. Spec refs: SEC-080, SEC-081, SEC-082, SEC-083, SEC-084, SEC-085, TM-01, TM-05. Expand this work package into 2-5 minute steps before coding."
+    },
+    {
+      "id": 11,
+      "title": "WP-M6-11 Audit hash chain, anchoring, verification, PROV-O export. Deliverables: append-only per-tenant+system chains, synchronous writes for privileged events, signed anchors to file/S3/syslog sinks, `gap audit verify|export`, startup/nightly verification; tamper tests (modify/delete/reorder) pinpoint first inconsistency. Acceptance (must pass): cargo nextest run -p gap-sec -p gap-store -E 'test(audit)'",
+      "role": "coder",
+      "depends_on": [
+        1
+      ],
+      "system_prompt": "Read AGENTS.md and docs/AGENT-GUIDE.md first. Work ONLY inside these paths: crates/gap-sec/src/audit/**, crates/gap-store/src/audit/**. Spec refs: SEC-090, SEC-091, SEC-092, SEC-093, INV-14, TM-17. Expand this work package into 2-5 minute steps before coding."
+    },
+    {
+      "id": 12,
+      "title": "WP-M6-12 Quotas and cost-based limits. Deliverables: per (tenant, principal) rate and cost-unit quotas, per (tenant, branch) concurrency share, per-tenant ingestion/storage/S1 budgets with metrics and GAP_RATE_LIMITED mapping. Acceptance (must pass): cargo nextest run -p gap-sec -E 'test(quota)'",
+      "role": "coder",
+      "depends_on": [
+        1
+      ],
+      "system_prompt": "Read AGENTS.md and docs/AGENT-GUIDE.md first. Work ONLY inside these paths: crates/gap-sec/src/quota/**. Spec refs: SEC-050, RUN-050. Expand this work package into 2-5 minute steps before coding."
+    },
+    {
+      "id": 13,
+      "title": "WP-M6-13 Security review gate and M6 record. Deliverables: execute the full SEC §15 matrix (17 scenarios) and record pass/fail; update threat model; cargo deny/audit clean; spec_trace strict for M6 ids; list of residual risks with owners. Acceptance (must pass): cargo nextest run --workspace && cargo deny check && python3 tools/spec_trace.py --strict --milestone M6 && test -f docs/security/threat-model-review.md",
+      "role": "reviewer",
+      "depends_on": [
+        3,
+        4,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12
+      ],
+      "system_prompt": "Read AGENTS.md and docs/AGENT-GUIDE.md first. Work ONLY inside these paths: docs/gates/M6.md, docs/security/threat-model-review.md. Spec refs: SEC-100, SEC-101, SEC-103, TM-22. Expand this work package into 2-5 minute steps before coding."
+    }
+  ]
+}

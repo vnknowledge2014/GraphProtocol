@@ -1,0 +1,97 @@
+{
+  "project_root": "/Users/mike/Documents/GraphProtocol",
+  "tdd": true,
+  "auto_commit": false,
+  "tasks": [
+    {
+      "id": 1,
+      "title": "WP-M4-01 gap-ingest foundations: CISG, Extractor trait, worker process framework. Deliverables: CISG types + canonical JSON; Extractor trait with ExtractLimits; module stubs for extractors/, enrich/, gates/, proposals/, drift/ (declared in lib.rs); worker process pool with rlimits, timeouts, crash isolation, resource metrics; SourceFetcher interface (deny-all by default until EgressGuard lands in WP-M6-08); UntrustedText type (text, sanitized, lint, hash). Acceptance (must pass): cargo nextest run -p gap-ingest -E 'test(cisg) or test(worker)'",
+      "role": "coder",
+      "depends_on": [],
+      "system_prompt": "Read AGENTS.md and docs/AGENT-GUIDE.md first. Work ONLY inside these paths: crates/gap-ingest/src/cisg/**, crates/gap-ingest/src/worker/**, crates/gap-ingest/src/lib.rs, crates/gap-ingest/src/fetch/**. Spec refs: ING-010, ING-011, ING-012, ING-020, ING-070, ING-071. Expand this work package into 2-5 minute steps before coding."
+    },
+    {
+      "id": 2,
+      "title": "WP-M4-02 Extractors: OpenAPI, gRPC, GraphQL, SQL (deterministic, fuzzed). Deliverables: four extractors per spec/05 §2 (decide openapiv3 vs oas3 by a 200-spec public corpus test; record in ADR addendum), deterministic CISG (byte-identical on rerun), side-effect derivation rules, pagination detection; hostile-spec corpus (deep nesting, huge $ref chains, external refs, giant files) with time/memory bounds; 4 fuzz targets, 10-min smoke each in CI. Acceptance (must pass): cargo nextest run -p gap-ingest -E 'test(extractor)' && cd fuzz && for t in fuzz_extract_openapi fuzz_extract_proto fuzz_extract_graphql fuzz_extract_sql; do cargo fuzz run $t -- -max_total_time=30 || exit 1; done",
+      "role": "coder",
+      "depends_on": [
+        1
+      ],
+      "system_prompt": "Read AGENTS.md and docs/AGENT-GUIDE.md first. Work ONLY inside these paths: crates/gap-ingest/src/extractors/openapi/**, crates/gap-ingest/src/extractors/grpc/**, crates/gap-ingest/src/extractors/graphql/**, crates/gap-ingest/src/extractors/sql/**, fuzz/fuzz_targets/fuzz_extract_openapi.rs, fuzz/fuzz_targets/fuzz_extract_proto.rs, fuzz/fuzz_targets/fuzz_extract_graphql.rs, fuzz/fuzz_targets/fuzz_extract_sql.rs, tests/fixtures/specs/**. Spec refs: ING-010, ING-012, ING-020, ING-021, ADR-015. Expand this work package into 2-5 minute steps before coding."
+    },
+    {
+      "id": 3,
+      "title": "WP-M4-03 Extractors: MCP server and A2A AgentCard. Deliverables: MCP tools/resources/prompts -> CISG (untrusted text handling; annotations as hints only); AgentCard -> CISG with signature verification when present; fuzz_extract_mcp target; determinism tests. Acceptance (must pass): cargo nextest run -p gap-ingest -E 'test(extractor_mcp) or test(extractor_a2a)'",
+      "role": "coder",
+      "depends_on": [
+        1
+      ],
+      "system_prompt": "Read AGENTS.md and docs/AGENT-GUIDE.md first. Work ONLY inside these paths: crates/gap-ingest/src/extractors/mcp/**, crates/gap-ingest/src/extractors/a2a/**, fuzz/fuzz_targets/fuzz_extract_mcp.rs. Spec refs: ING-010, ING-012, CMP-011, CMP-014, CMP-020. Expand this work package into 2-5 minute steps before coding."
+    },
+    {
+      "id": 4,
+      "title": "WP-M4-04 Enricher: NullEnricher, constrained LlmEnricher, caching, golden set (Gate G-E1). Deliverables: Enricher trait; NullEnricher (heuristics); LlmEnricher with provider abstraction (local Ollama/llama.cpp, OpenAI-compatible, Anthropic) and llguidance-constrained outputs that cannot set trust/side-effect/auth/endpoints; cache keyed by (source_hash, enricher_id, prompt_version, model_id); redaction pass; degraded fallback; prompt-template versioning; bench/enrichment golden set (>=30 public specs with hand-checked joins/synopses) + runner; gate G-E1 results recorded. Acceptance (must pass): cargo nextest run -p gap-ingest -E 'test(enrich)' && cargo run -p enrichment-bench -- --offline-fixtures --check-gate",
+      "role": "coder",
+      "depends_on": [
+        2
+      ],
+      "system_prompt": "Read AGENTS.md and docs/AGENT-GUIDE.md first. Work ONLY inside these paths: crates/gap-ingest/src/enrich/**, bench/enrichment/**. Spec refs: ING-030, ING-031, ING-032, ING-033, ING-034, ING-035, SEC-042. Expand this work package into 2-5 minute steps before coding."
+    },
+    {
+      "id": 5,
+      "title": "WP-M4-05 Verification gates G1-G3, G6, G7(stub), G9 and report format. Deliverables: gate framework (hard/soft, admin ack with reason, audited), G1 schema validity, G2 coercion table, G3 key lookup, G6 boundedness, G7 security lint hook (real linter in WP-M6-10), G9 resource budget; JSON report schema; table-driven tests for the coercion matrix and boundedness rules. Acceptance (must pass): cargo nextest run -p gap-ingest -E 'test(gate)'",
+      "role": "coder",
+      "depends_on": [
+        2
+      ],
+      "system_prompt": "Read AGENTS.md and docs/AGENT-GUIDE.md first. Work ONLY inside these paths: crates/gap-ingest/src/gates/**. Spec refs: ING-001, ING-040, GQL-004, GQL-042. Expand this work package into 2-5 minute steps before coding."
+    },
+    {
+      "id": 6,
+      "title": "WP-M4-06 Data-driven join verification (G4), shadow canary and regression replay (G8). Deliverables: containment/uniqueness/null/cardinality verification from NGC Sketch bottom-k sketches with tenant salt; thresholds from ADR-012; PROPOSED->VERIFIED->ACTIVE lifecycle; shadow executor (plan+execute on sampled traffic, results discarded, compared with sketch expectations) and revert-on-divergence; G8 replay of top-N plans and conformance fixtures on the shadow snapshot; adversarial fixtures: same-type-different-entity keys (must be rejected), partial overlap, skewed duplicates, empty domains. Acceptance (must pass): cargo nextest run -p gap-ingest -E 'test(join_verify) or test(canary) or test(replay)'",
+      "role": "coder",
+      "depends_on": [
+        5
+      ],
+      "system_prompt": "Read AGENTS.md and docs/AGENT-GUIDE.md first. Work ONLY inside these paths: crates/gap-ingest/src/gates/join_verify/**, crates/gap-ingest/src/gates/replay/**, crates/gap-exec/src/shadow/**, tests/fixtures/joins/**. Spec refs: ING-040, ING-041, NGC-050, NGC-051, NGC-052, INV-06. Expand this work package into 2-5 minute steps before coding."
+    },
+    {
+      "id": 7,
+      "title": "WP-M4-07 Proposal workflow, persistence, DiscoveryWorker, admin API and CLI. Deliverables: Proposal FSM persisted in gap-store with transitions audited; idempotent on (tenant, location, kind); approval policy hook (Cedar arrives in M6; interim: config rules); UnmappedDomainEvent intake (singleflight, rate limit, redaction) and DiscoveryWorker over allow-listed registries; never activates; GraphQL admin ops (proposeSource, decideProposal, proposals) and `gap proposals list|show|approve|deny`. Acceptance (must pass): cargo nextest run -p gap-ingest -E 'test(proposal) or test(discovery_worker)' && cargo nextest run -p gap-cli -E 'test(proposals)'",
+      "role": "coder",
+      "depends_on": [
+        5
+      ],
+      "system_prompt": "Read AGENTS.md and docs/AGENT-GUIDE.md first. Work ONLY inside these paths: crates/gap-ingest/src/proposals/**, crates/gap-cli/src/proposals/**. Spec refs: ING-001, ING-002, ING-003, ING-050, ING-051, RTE-100, RTE-101, RTE-102, RTE-103. Expand this work package into 2-5 minute steps before coding."
+    },
+    {
+      "id": 8,
+      "title": "WP-M4-08 Publisher actor: prewarm, swap, reclaimer, ring, rollback attribution, swap stress. Deliverables: Publisher actor (serialised publishes), prewarm of top-100 plans with 95% gate and breaking_change_ack, reclaimer thread, 5-generation ring with structural sharing, 60 s watch + attribution-aware rollback (once, mark bad); swap_stress: 1,000 concurrent request tasks x 100 swaps => zero errors/torn reads; p99 swap <= 250 us at 256 busy readers; shuttle model of publisher/reclaimer/rollback state machine; RSS growth check: <= +15% for a 1-branch change with 5 generations retained. Acceptance (must pass): cargo nextest run -p gap-snapshot -E 'test(publisher) or test(rollback)' && cargo test -p gap-snapshot --test swap_stress --release",
+      "role": "coder",
+      "depends_on": [],
+      "system_prompt": "Read AGENTS.md and docs/AGENT-GUIDE.md first. Work ONLY inside these paths: crates/gap-snapshot/src/publisher/**, crates/gap-snapshot/src/rollback/**, tests/swap_stress/**. Spec refs: RUN-003, RUN-004, RUN-006, RUN-007, RUN-008, INV-16, ING-050. Expand this work package into 2-5 minute steps before coding."
+    },
+    {
+      "id": 9,
+      "title": "WP-M4-09 Drift detection, classification, pinned serving, incremental composition, snapshot diff. Deliverables: periodic Describe(known_spec_hash) polling with jitter; COSMETIC/SCHEMA_COMPATIBLE/SCHEMA_BREAKING/DESCRIPTION_CHANGE classification; DRIFT status with pinned descriptions served and signature probes; structural-sharing incremental composition (im::OrdMap, per-branch Arc reuse, pool reuse); `gap snapshot diff` output; branch removal grace period behaviour. Acceptance (must pass): cargo nextest run -p gap-ingest -p gap-snapshot -E 'test(drift) or test(incremental) or test(diff)'",
+      "role": "coder",
+      "depends_on": [
+        3,
+        7,
+        8
+      ],
+      "system_prompt": "Read AGENTS.md and docs/AGENT-GUIDE.md first. Work ONLY inside these paths: crates/gap-ingest/src/drift/**, crates/gap-snapshot/src/diff/**, crates/gap-snapshot/src/incremental/**. Spec refs: ING-052, ING-053, ING-055, ADR-009, SEC-082, INV-08. Expand this work package into 2-5 minute steps before coding."
+    },
+    {
+      "id": 10,
+      "title": "WP-M4-10 M4 gate review. Deliverables: docs/gates/M4.md: G-E1 results, swap stress SLO evidence, join-verification adversarial results, drift matrix, extractor fuzz summary; spec_trace strict for M4 ids. Acceptance (must pass): python3 tools/spec_trace.py --strict --milestone M4 && cargo nextest run --workspace",
+      "role": "reviewer",
+      "depends_on": [
+        4,
+        6,
+        9
+      ],
+      "system_prompt": "Read AGENTS.md and docs/AGENT-GUIDE.md first. Work ONLY inside these paths: docs/gates/M4.md. Spec refs: ING-034, RUN-008, ING-041, INV-06, INV-08. Expand this work package into 2-5 minute steps before coding."
+    }
+  ]
+}

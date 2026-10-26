@@ -1,0 +1,82 @@
+{
+  "project_root": "/Users/mike/Documents/GraphProtocol",
+  "tdd": true,
+  "auto_commit": false,
+  "tasks": [
+    {
+      "id": 1,
+      "title": "WP-M3-01 gap-balance: telemetry slots, decayed EWMA, in-flight guard, breaker, retry budget, P2C. Deliverables: TelemetrySlot/Registry (dense slab, ArcSwap), DecayedEwma (packed CAS), InFlightGuard (RAII), Breaker FSM with 10x3 s bucket window, RetryBudget, P2C selection, Health-driven capacity weight; tests: 64-thread lost-update test, cancel 10,000 futures => in_flight==0, FSM table-driven + shuttle interleavings, herding simulation (no share swing > 20%), retry-budget exhaustion; criterion benches: selection <= 20 us p99, update <= 1 us p99. Acceptance (must pass): cargo nextest run -p gap-balance && cargo bench -p gap-balance -- --quick && cargo clippy -p gap-balance --all-targets -- -D warnings",
+      "role": "coder",
+      "depends_on": [],
+      "system_prompt": "Read AGENTS.md and docs/AGENT-GUIDE.md first. Work ONLY inside these paths: crates/gap-balance/**. Spec refs: RTE-070, RTE-071, RTE-072, RTE-073, RTE-074, RTE-075, RTE-080, RTE-081, RTE-082, RTE-083, RTE-090, RTE-091, INV-10. Expand this work package into 2-5 minute steps before coding."
+    },
+    {
+      "id": 2,
+      "title": "WP-M3-02 Planner v1: joins, join graph, remote predicates, pushdown, cardinality rules. Deliverables: JoinGraph from ACTIVE joins only; Join plan nodes (FOREACH_BATCH, REMOTE_PREDICATE); composition error GAP_JOIN_NOT_BATCHABLE; cycle boundedness check (GAP_CYCLE_UNBOUNDED); pushdown capability negotiation with fallback warnings; property test: planning is deterministic and never plans a non-ACTIVE join. Acceptance (must pass): cargo nextest run -p gap-plan -E 'test(join) or test(pushdown) or test(determinism)'",
+      "role": "coder",
+      "depends_on": [],
+      "system_prompt": "Read AGENTS.md and docs/AGENT-GUIDE.md first. Work ONLY inside these paths: crates/gap-plan/src/join/**, crates/gap-plan/src/pushdown/**, crates/gap-core/src/joingraph/**. Spec refs: RUN-010, RUN-012, RUN-013, RUN-021, RUN-023, RUN-027, GQL-031, GQL-042, INV-06, INV-18. Expand this work package into 2-5 minute steps before coding."
+    },
+    {
+      "id": 3,
+      "title": "WP-M3-03 Executor v1: foreach joins, stitching, limits, partial failure, pagination, bulkheads. Deliverables: foreach batching exactly per RUN-020 (null skip, canonical dedupe, chunking, bounded chunk concurrency, order-preserving hash stitch); limits, cardinality errors, remote-predicate execution with fallback, partial-failure matrix incl. failFast, per-branch bulkheads; tests: N+1 guard with 1k LHS rows + duplicates + nulls asserting upstream_calls <= ceil(unique/chunk); property tests for stitching. Acceptance (must pass): cargo nextest run -p gap-exec -E 'test(join) or test(bulkhead) or test(inv_18)'",
+      "role": "coder",
+      "depends_on": [
+        2
+      ],
+      "system_prompt": "Read AGENTS.md and docs/AGENT-GUIDE.md first. Work ONLY inside these paths: crates/gap-exec/src/join/**, crates/gap-exec/src/bulkhead/**. Spec refs: RUN-020, RUN-021, RUN-022, RUN-023, RUN-024, RUN-025, RUN-026, RUN-032, INV-18. Expand this work package into 2-5 minute steps before coding."
+    },
+    {
+      "id": 4,
+      "title": "WP-M3-04 ConnectorLayer v1: replica choice, breaker, retries, health polling, deadlines. Deliverables: tower layer per branch composing gap-balance (P2C within capability group), breaker rejection (GAP_BRANCH_UNAVAILABLE with afterMs), retries for idempotent reads only with budget and jittered backoff, Health polling every 5 s (jittered), deadline margin rule; metrics: gap_branch_*, gap_breaker_state, gap_retry_*. Acceptance (must pass): cargo nextest run -p gap-exec -E 'test(connector_layer)'",
+      "role": "coder",
+      "depends_on": [
+        1
+      ],
+      "system_prompt": "Read AGENTS.md and docs/AGENT-GUIDE.md first. Work ONLY inside these paths: crates/gap-exec/src/connector_layer/**. Spec refs: RTE-073, RTE-074, RTE-081, RTE-083, RTE-090, RUN-030, RUN-031, INV-12. Expand this work package into 2-5 minute steps before coding."
+    },
+    {
+      "id": 5,
+      "title": "WP-M3-05 gap-ngc-sql: PostgreSQL and SQLite read-only connector (templates, foreach IN). Deliverables: introspection -> operations (get_by_key, list with filter/order/page), parameterized statements only, identifier allow-list, statement timeout, row caps, foreach via ANY/IN batches; Sketch RPC implementation (bottom-k blake3 with salt) for later join verification; SQL-injection adversarial tests (hostile arguments never change statement structure). Acceptance (must pass): cargo nextest run -p gap-ngc-sql && cargo run -p gap-conformance -- --connector-kit --spawn fixtures sql",
+      "role": "coder",
+      "depends_on": [],
+      "system_prompt": "Read AGENTS.md and docs/AGENT-GUIDE.md first. Work ONLY inside these paths: adapters/gap-ngc-sql/**, tests/fixtures/sql/**. Spec refs: CMP-050, CMP-051, CMP-052, NGC-020, NGC-026, NGC-050. Expand this work package into 2-5 minute steps before coding."
+    },
+    {
+      "id": 6,
+      "title": "WP-M3-06 gap-ngc-grpc and gap-ngc-graphql connectors. Deliverables: gRPC: reflection/descriptor-set driven operations, unary->QUERY/MUTATION(UNKNOWN), server streaming->SUBSCRIPTION, deadlines, metadata credentials; GraphQL upstream: selection rewriting with namespacing, Relay connection detection, foreach emulation via aliases/_entities where supported. Acceptance (must pass): cargo nextest run -p gap-ngc-grpc -p gap-ngc-graphql",
+      "role": "coder",
+      "depends_on": [],
+      "system_prompt": "Read AGENTS.md and docs/AGENT-GUIDE.md first. Work ONLY inside these paths: adapters/gap-ngc-grpc/**, adapters/gap-ngc-graphql/**, tests/fixtures/grpc/**, tests/fixtures/graphql/**. Spec refs: CMP-050, NGC-020, NGC-026. Expand this work package into 2-5 minute steps before coding."
+    },
+    {
+      "id": 7,
+      "title": "WP-M3-07 Adaptive concurrency limiter, load shedding, rate limits. Deliverables: gradient/AIMD limiter (initial 256, min 16, max 8192), priority classes, GAP_OVERLOADED/503+Retry-After, per-(tenant,principal) token bucket and cost-unit limiter (governor), streaming stall protection; load tests asserting interactive p99 stays within 2x unloaded under 3x overload with batch traffic shed first. Acceptance (must pass): cargo nextest run -p gap-transport -E 'test(shed) or test(ratelimit)'",
+      "role": "coder",
+      "depends_on": [],
+      "system_prompt": "Read AGENTS.md and docs/AGENT-GUIDE.md first. Work ONLY inside these paths: crates/gap-transport/src/shed/**, crates/gap-transport/src/ratelimit/**. Spec refs: RUN-040, RUN-050, RUN-051, ARC-011. Expand this work package into 2-5 minute steps before coding."
+    },
+    {
+      "id": 8,
+      "title": "WP-M3-08 Chaos and fault-injection harness; federation scenarios. Deliverables: in-process fault injector (latency, error rate, hang, half-open, mid-stream crash) for mock connectors; scenarios from spec/08 §7 that apply at M3 (latency shift, 100% errors, crash mid-stream, partition); assertions: breaker opens within 30 s, traffic shifts without oscillation, no request leaks, deadlines honoured. Acceptance (must pass): cargo nextest run --test chaos",
+      "role": "tester",
+      "depends_on": [
+        3,
+        4
+      ],
+      "system_prompt": "Read AGENTS.md and docs/AGENT-GUIDE.md first. Work ONLY inside these paths: tests/chaos/**, crates/gap-testkit/src/chaos/**. Spec refs: RTE-074, RTE-080, RTE-081, RUN-024, RUN-030, OPS-030. Expand this work package into 2-5 minute steps before coding."
+    },
+    {
+      "id": 9,
+      "title": "WP-M3-09 Performance baseline and M3 gate. Deliverables: criterion benches (planner, executor, typed-path overhead), load test (>=10k rps mixed read/join, 5 min) with zero unexplained errors, cold start measurement; docs/gates/M3.md: typed overhead SLO, N+1 guarantee evidence, chaos results, memory baseline; spec_trace strict for M3 ids. Acceptance (must pass): cargo bench --workspace -- --quick && python3 tools/spec_trace.py --strict --milestone M3 && cargo nextest run --workspace",
+      "role": "reviewer",
+      "depends_on": [
+        5,
+        6,
+        7,
+        8
+      ],
+      "system_prompt": "Read AGENTS.md and docs/AGENT-GUIDE.md first. Work ONLY inside these paths: bench/results/perf/**, docs/gates/M3.md. Spec refs: ARC-011, RUN-020, RUN-040, INV-18, OPS-030. Expand this work package into 2-5 minute steps before coding."
+    }
+  ]
+}

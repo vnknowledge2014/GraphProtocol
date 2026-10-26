@@ -1,0 +1,89 @@
+{
+  "project_root": "/Users/mike/Documents/GraphProtocol",
+  "tdd": true,
+  "auto_commit": false,
+  "tasks": [
+    {
+      "id": 1,
+      "title": "WP-M5-01 Laya weights manifest, conversion check, licence and provenance memo. Deliverables: manifest entries for laya-typed-decisions (and base/multilingual for experiments) with sha256, size, licence, source commit, training_data_note='unstated by authors' and the legal-review checklist result; tools/laya_golden.py (uv script) generating >=200 golden (state, question, options)->logits fixtures from the PyTorch reference; fixtures committed (small) + instructions to regenerate; docs/decisions/laya-provenance.md: what is known/unknown about training data and labels, risk assessment, mitigation (fine-tune on own data). Acceptance (must pass): python3 -c \"import tomllib;m=tomllib.load(open('models/manifest.toml','rb'));assert any(x['id'].endswith('typed-decisions') for x in m['model'])\" && test -f tests/fixtures/laya_golden/cases.json",
+      "role": "analyzer",
+      "depends_on": [],
+      "system_prompt": "Read AGENTS.md and docs/AGENT-GUIDE.md first. Work ONLY inside these paths: models/manifest.toml, docs/decisions/laya-provenance.md, tools/laya_golden.py. Spec refs: SEC-102, ADR-005, RTE-042. Expand this work package into 2-5 minute steps before coding."
+    },
+    {
+      "id": 2,
+      "title": "WP-M5-02 gap-s1: LayaCandle backend (tokenizer, sequence builder, ModernBERT forward, head), golden parity. Deliverables: sequence builder with per-option [MASK] markers and sanitised inputs; tokenizer integration; candle ModernBERT forward + 2-layer transformer head + marker gather + scorer MLP; f16/f32; safetensors mmap (unsafe isolated and documented in docs/UNSAFE.md); golden parity vs PyTorch fixtures: max |dlogit| <= 5e-2 (f16) / 1e-3 (f32), argmax equal on >= 99.5%; module stubs for ort/, sidecar/ declared in lib.rs. Acceptance (must pass): cargo nextest run -p gap-s1 --release -E 'test(golden)' && cargo clippy -p gap-s1 --all-targets -- -D warnings",
+      "role": "coder",
+      "depends_on": [
+        1
+      ],
+      "system_prompt": "Read AGENTS.md and docs/AGENT-GUIDE.md first. Work ONLY inside these paths: crates/gap-s1/src/candle/**, crates/gap-s1/src/lib.rs, crates/gap-s1/tests/golden/**, docs/UNSAFE.md. Spec refs: RTE-041, RTE-042, ADR-002, ADR-005, RTE-020. Expand this work package into 2-5 minute steps before coding."
+    },
+    {
+      "id": 3,
+      "title": "WP-M5-03 S1 integration: canonical state/options format, group-aware ranking, cache, concurrency limit, fallback. Deliverables: RoutingModel adapter feeding RTE-042 format (options keyed g0.., fixed sink text, JCS state, token-budgeted option text), result cache, semaphore concurrency, timeout and rolling-failure fallback to baseline with GAP_DISCOVERY_DEGRADED; tests: replica-addition invariance with S1 (using fixture logits), S1-down/weights-missing/timeout fallbacks keep all non-discovery features green (inv_17). Acceptance (must pass): cargo nextest run -p gap-route -p gap-server -E 'test(s1_adapter) or test(inv_17)'",
+      "role": "coder",
+      "depends_on": [
+        2
+      ],
+      "system_prompt": "Read AGENTS.md and docs/AGENT-GUIDE.md first. Work ONLY inside these paths: crates/gap-route/src/s1_adapter/**, crates/gap-server/src/wiring_s1.rs. Spec refs: RTE-042, RTE-044, RTE-045, RTE-046, RTE-030, INV-17, ADR-006. Expand this work package into 2-5 minute steps before coding."
+    },
+    {
+      "id": 4,
+      "title": "WP-M5-04 Calibration pipeline CLI, conformal coverage tests, online ECE job. Deliverables: `gap calibrate --dataset --out` producing CalibrationTable + report (reliability diagrams, ECE before/after, coverage, set sizes); installs via snapshot publish; synthetic-distribution tests proving empirical coverage >= 1-alpha-0.02; invalidation on model/embedding change; scheduled job + online ECE gauge. Acceptance (must pass): cargo nextest run -p gap-route -p gap-cli -E 'test(calibrat) or test(coverage)'",
+      "role": "coder",
+      "depends_on": [
+        3
+      ],
+      "system_prompt": "Read AGENTS.md and docs/AGENT-GUIDE.md first. Work ONLY inside these paths: crates/gap-cli/src/calibrate/**, crates/gap-route/src/calibration_job/**. Spec refs: RTE-062, RTE-064, RTE-065, RTE-066, RTE-067, RTE-068, RTE-111. Expand this work package into 2-5 minute steps before coding."
+    },
+    {
+      "id": 5,
+      "title": "WP-M5-05 Feedback store and online routing metrics. Deliverables: routing_feedback persistence derived only from server-observed executions (5-min trace/session window), admin USER_LABEL path audited; PII-minimised; retention/purge; metrics gap_discovery_decisions_total, gap_discovery_set_size, gap_router_fallback_total, gap_s1_online_ece. Acceptance (must pass): cargo nextest run -p gap-route -p gap-store -E 'test(feedback)'",
+      "role": "coder",
+      "depends_on": [
+        3
+      ],
+      "system_prompt": "Read AGENTS.md and docs/AGENT-GUIDE.md first. Work ONLY inside these paths: crates/gap-route/src/feedback/**, crates/gap-store/src/feedback/**. Spec refs: RTE-110, RTE-111, RTE-112, SEC-110, TM-14. Expand this work package into 2-5 minute steps before coding."
+    },
+    {
+      "id": 6,
+      "title": "WP-M5-06 Alternative S1 backends: HttpSidecar (/v1/systemone, omni decide compatible) and LayaOrt. Deliverables: HttpSidecar speaking /v1/systemone (single+batch) with timeouts and egress-guard hook; usable as golden oracle in tests and with `omni decide --endpoint`; LayaOrt behind feature s1-ort (exact-pinned ort rc) with parity tests and a CoreML/CPU latency comparison table in docs/decisions/. Acceptance (must pass): cargo nextest run -p gap-s1 -E 'test(sidecar)' && cargo check -p gap-s1 --features s1-ort",
+      "role": "coder",
+      "depends_on": [
+        2
+      ],
+      "system_prompt": "Read AGENTS.md and docs/AGENT-GUIDE.md first. Work ONLY inside these paths: crates/gap-s1/src/sidecar/**, crates/gap-s1/src/ort/**. Spec refs: ADR-005, RTE-041, RTE-044. Expand this work package into 2-5 minute steps before coding."
+    },
+    {
+      "id": 7,
+      "title": "WP-M5-07 Debias option and hard-negative mining loop. Deliverables: permutation-averaging debias (forward+reverse) behind s1.debias; RouteBench measurement of gain and latency cost; default decided by data (RTE-043 threshold); hard-negative mining from RouteBench failures feeding the next dataset version. Acceptance (must pass): cargo nextest run -p gap-route -p routebench -E 'test(debias) or test(mining)'",
+      "role": "coder",
+      "depends_on": [
+        3
+      ],
+      "system_prompt": "Read AGENTS.md and docs/AGENT-GUIDE.md first. Work ONLY inside these paths: crates/gap-route/src/debias/**, bench/routebench/src/mining/**. Spec refs: RTE-043, RTE-060, ADR-007. Expand this work package into 2-5 minute steps before coding."
+    },
+    {
+      "id": 8,
+      "title": "WP-M5-08 Evaluation of S1 vs baseline and gate G-S1 decision record. Deliverables: full RouteBench run (baseline vs S1 base vs S1 calibrated [vs fine-tuned if available]) with CIs on test + held-out-branch splits; latency/memory measurements on CPU and Metal/GPU where present; docs/decisions/G-S1.md: pass/fail per criterion; if fail -> routing.model='baseline' default and WP-M5-09/R1 triggers; if pass -> enable default with feature flag and rollback instructions. Acceptance (must pass): test -f docs/decisions/G-S1.md && python3 tools/spec_trace.py --strict --milestone M5",
+      "role": "reviewer",
+      "depends_on": [
+        4,
+        5,
+        6,
+        7
+      ],
+      "system_prompt": "Read AGENTS.md and docs/AGENT-GUIDE.md first. Work ONLY inside these paths: docs/gates/M5.md, docs/decisions/G-S1.md, bench/results/routebench/**. Spec refs: RTE-069, RTE-061, ADR-007, ADR-008. Expand this work package into 2-5 minute steps before coding."
+    },
+    {
+      "id": 9,
+      "title": "WP-M5-09 Optional: fine-tune pipeline for Laya on RouteBench train split (incl. multilingual evaluation). Deliverables: reproducible fine-tune scripts (uv + PyTorch) from laya-typed-decisions on RouteBench train split with held-out evaluation; export to safetensors; manifest entry; model card with data provenance; evaluation notes on Vietnamese/multilingual intents and recommendation (translate-at-edge vs multilingual fine-tune). Acceptance (must pass): test -f docs/decisions/finetune.md && python3 -c \"import ast,sys;[ast.parse(open(f).read()) for f in __import__('glob').glob('tools/finetune/*.py')]\"",
+      "role": "coder",
+      "depends_on": [
+        8
+      ],
+      "system_prompt": "Read AGENTS.md and docs/AGENT-GUIDE.md first. Work ONLY inside these paths: tools/finetune/**, docs/decisions/finetune.md. Spec refs: ADR-005, ADR-004, ADR-007. Expand this work package into 2-5 minute steps before coding."
+    }
+  ]
+}

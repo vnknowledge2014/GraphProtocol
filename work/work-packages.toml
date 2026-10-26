@@ -1,0 +1,1329 @@
+# GAP work packages (ADR-022). Validate with: python3 tools/wp.py validate
+# size: S<=0.5 agent-day, M<=2, L<=5 (XL forbidden: split first). role -> omni DAG role.
+# `owns`: globs this WP may modify. WPs that can run concurrently MUST have disjoint `owns` (enforced).
+# Shared-file rules (docs/AGENT-GUIDE.md §6): crate Cargo.toml deps are sorted & merged by union; Cargo.lock is regenerated after merge.
+# Module-stub rule: WP-M0-02 generates empty module stubs for every top-level module implied by the `owns` globs (python3 tools/wp.py modules), so no later WP edits lib.rs/main.rs.
+# Acceptance commands run from the repo root; `cargo` commands imply `--locked` once Cargo.lock exists.
+
+# ============================================================== M0 Foundations
+[[wp]]
+id = "WP-M0-01"
+title = "Repository bootstrap"
+milestone = "M0"
+role = "coder"
+size = "S"
+depends_on = []
+owns = [".gitignore", ".editorconfig", "LICENSE", "NOTICE", "rust-toolchain.toml", "rustfmt.toml", "clippy.toml", "CHANGELOG.md", "CONTRIBUTING.md", "SECURITY.md"]
+spec_refs = ["ADR-002", "ADR-022", "ARC-003"]
+deliverables = [
+  "git repository initialised (GitButler workspace per user rules); first commit contains the docs/spec/work/tools already present; .gitignore covers target/, node_modules/, __pycache__/, .ruff_cache/, .DS_Store, model weights and local state (work/steps is NOT ignored)",
+  "rust-toolchain.toml pinned to 1.98.1 with rustfmt+clippy components; rustfmt.toml; clippy.toml (disallowed-methods: unwrap/expect outside tests)",
+  "Apache-2.0 LICENSE, NOTICE, CONTRIBUTING (Conventional Commits, WP workflow), SECURITY.md (reporting policy), CHANGELOG.md skeleton",
+]
+acceptance = ["git status --porcelain | head -1 >/dev/null", "rustc --version | grep -q 1.98", "cargo fmt --version", "cargo clippy --version"]
+
+[[wp]]
+id = "WP-M0-02"
+title = "Workspace, pinned dependencies, cargo-deny, crate skeletons"
+milestone = "M0"
+role = "coder"
+size = "M"
+depends_on = ["WP-M0-01"]
+owns = ["Cargo.toml", "Cargo.lock", "deny.toml", "crates/*/Cargo.toml", "crates/*/src/lib.rs", "adapters/*/Cargo.toml", "adapters/*/src/lib.rs", "bench/*/Cargo.toml", "bench/*/src/main.rs", "fuzz/Cargo.toml", "fuzz/fuzz_targets/*.rs", "docs/evidence/crate-versions.md"]
+spec_refs = ["ADR-002", "ADR-019", "ARC-001", "ARC-003"]
+deliverables = [
+  "root Cargo.toml: workspace members = crates/*, adapters/*, bench/*; [workspace.dependencies] pins EVERY third-party crate planned in docs/evidence/crate-versions.md (re-verified with cargo add --dry-run; deviations appended to the evidence file)",
+  "one skeleton crate per entry of tools/layers.toml (lib.rs with crate docs + #![forbid(unsafe_code)] (except gap-s1) + #![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::todo, clippy::unimplemented)]); gap-testkit as dev-only crate; bench/routebench, bench/gapbench and bench/enrichment (package enrichment-bench) as bin stubs; gap-server/gap-cli as bin crates",
+  "module stubs: run `python3 tools/wp.py modules` and create every listed module as an empty file/dir with its `mod` declaration in the crate's lib.rs/main.rs, so no later WP ever edits lib.rs (AGENT-GUIDE §6)",
+  "deny.toml (licenses allow-list, advisories deny, bans: duplicate axum/hyper/prost/tower, crate openjev; BSL only under feature store-surreal)",
+  "fuzz/ cargo-fuzz project with autobins=false and one stub target per planned fuzz target (fuzz_gapql_parse, fuzz_ngc_decode, fuzz_extract_openapi, fuzz_extract_proto, fuzz_extract_graphql, fuzz_extract_sql, fuzz_extract_mcp, fuzz_sanitize, fuzz_cursor_decode, fuzz_policy_input)",
+]
+acceptance = [
+  "cargo build --workspace --locked",
+  "cargo tree -d --workspace | python3 -c \"import sys,re; t=sys.stdin.read(); bad=[n for n in ('axum','hyper','prost','tower') if len(set(re.findall(r'^'+n+r' v(\\S+)',t,re.M)))>1]; sys.exit(1 if bad else 0)\"",
+  "cargo deny check",
+  "cargo clippy --workspace --all-targets -- -D warnings",
+]
+
+[[wp]]
+id = "WP-M0-03"
+title = "Pin external specifications (MCP, A2A, GraphQL, GraphQL-over-HTTP)"
+milestone = "M0"
+role = "analyzer"
+size = "S"
+depends_on = ["WP-M0-01", "WP-M0-02"]
+owns = ["third_party/**", "docs/evidence/crate-versions.md"]
+spec_refs = ["CMP-001", "CMP-020", "GQL-001", "ADR-017"]
+deliverables = [
+  "third_party/MANIFEST.toml with url, retrieved_at, sha256, license for: MCP spec 2026-07-28 (+2025-11-25 for outbound compat), A2A v1.0 a2a.proto + spec text, GraphQL spec edition used, GraphQL-over-HTTP spec, graphql-sse protocol",
+  "third_party/specs/*: vendored copies (or checksummed excerpts where licensing forbids copying) and a SPEC-NOTES.md listing every place spec/09 says 'verify against upstream' with the verified answer (MCP _meta keys, MRTR/input-required shape, A2A task state names)",
+  "docs/evidence/crate-versions.md updated with the GraphQL edition and any contradictions found",
+]
+acceptance = ["python3 -c \"import tomllib;m=tomllib.load(open('third_party/MANIFEST.toml','rb'));assert len(m['spec'])>=5\"", "test -f third_party/specs/SPEC-NOTES.md"]
+
+[[wp]]
+id = "WP-M0-04"
+title = "CI pipeline and developer commands"
+milestone = "M0"
+role = "coder"
+size = "M"
+depends_on = ["WP-M0-02"]
+owns = [".github/**", "justfile"]
+spec_refs = ["ADR-022", "OPS-040", "SEC-100"]
+deliverables = [
+  "GitHub Actions: build+nextest+clippy+fmt+doc on macOS and Linux; cargo-deny/audit; python tools checks (wp validate, check_layers, spec_trace); nightly workflow stubs (fuzz, bench, soak, routebench-smoke)",
+  "justfile recipes: verify (everything in CI locally), test, lint, fmt, docs, layers, wp-validate, spec-trace",
+  "dependabot/renovate config limited to patch updates of workspace deps",
+]
+acceptance = ["python3 -c \"import yaml\" 2>/dev/null || true", "test -f .github/workflows/ci.yml", "just --list | grep -q verify"]
+
+[[wp]]
+id = "WP-M0-05"
+title = "Wire planning/architecture tools into CI with tests"
+milestone = "M0"
+role = "tester"
+size = "S"
+depends_on = ["WP-M0-02"]
+owns = ["tools/test_wp.py", "tools/test_check_layers.py", "tools/test_check_refs.py", "tools/layers.toml", "tools/wp.py", "tools/check_layers.py", "tools/check_refs.py"]
+spec_refs = ["ARC-001", "ARC-002", "ADR-022"]
+deliverables = [
+  "pytest-free unit tests (unittest) for tools/wp.py (cycle, overlap, unknown ref, bad size) and tools/check_layers.py (violation fixtures using a temp cargo workspace)",
+  "tools/layers.toml completed for every crate created in WP-M0-02 (including bench harnesses at layer 5)",
+]
+acceptance = ["python3 -m unittest discover -s tools -p 'test_*.py'", "python3 tools/wp.py validate", "python3 tools/check_layers.py", "python3 tools/check_refs.py"]
+
+[[wp]]
+id = "WP-M0-06"
+title = "Protobuf pipeline and gap-proto crate"
+milestone = "M0"
+role = "coder"
+size = "M"
+depends_on = ["WP-M0-02", "WP-M0-03"]
+owns = ["crates/gap-proto/**", "proto/**"]
+spec_refs = ["NGC-001", "NGC-004", "ADR-002"]
+deliverables = [
+  "build.rs using protox + tonic-prost-build compiling proto/gap/ngc/v1/ngc.proto and proto/gap/gateway/v1/gateway.proto (no system protoc required); vendored A2A proto compiled behind feature a2a",
+  "descriptor golden test: SHA-256 of the FileDescriptorSet committed; changing a field number or name fails the test unless the golden is updated in the same commit with a CHANGELOG entry",
+  "wire-compat test: encode/decode round-trip for every message with proptest-generated values",
+]
+acceptance = ["cargo nextest run -p gap-proto", "cargo clippy -p gap-proto --all-targets -- -D warnings"]
+
+[[wp]]
+id = "WP-M0-07"
+title = "Spec traceability tool"
+milestone = "M0"
+role = "coder"
+size = "S"
+depends_on = ["WP-M0-01"]
+owns = ["tools/spec_trace.py", "tools/test_spec_trace.py"]
+spec_refs = ["ARC-004", "ADR-022"]
+deliverables = [
+  "tools/spec_trace.py: extracts requirement ids from spec/*.md (bold **XXX-nnn** bullets, plus table-defined INV-nn and TM-nn ids; a requirement is a MUST if its text contains MUST/MUST NOT); scans crates/**, adapters/**, tests/**, conformance/** for 'spec: <ID>' markers; reports MUSTs without tests, tests with unknown ids; modes --warn (default until M1 exit), --strict, --milestone Mx (limits to ids referenced by that milestone's WPs)",
+  "unit tests with fixtures",
+]
+acceptance = ["python3 -m unittest tools.test_spec_trace", "python3 tools/spec_trace.py --warn | tail -3"]
+
+[[wp]]
+id = "WP-M0-08"
+title = "gap-core foundations: ids, errors, clock, secrets, config, context"
+milestone = "M0"
+role = "coder"
+size = "L"
+depends_on = ["WP-M0-02"]
+owns = ["crates/gap-core/**"]
+spec_refs = ["ARC-005", "ARC-006", "ARC-010", "ADR-018", "ADR-023", "INV-09", "INV-15", "GQL-004"]
+deliverables = [
+  "id newtypes (TenantId, BranchId, BranchUid, OperationId, GroupId, TaskId, ProposalId) with validation + serde + proptest",
+  "GapError + ErrorCode enum covering spec/02 §10 exactly (serialize as extensions.code), retry metadata, suggestion payloads; conversion to/from NgcError",
+  "Clock trait (system + manual test clock), Secret<T> (Debug/Display redacted, zeroize), tracing/OTel init helper, RequestContext, Budget, TraceCtx",
+  "Snapshot data model per spec/01 §4 (types only; Arc<apollo_compiler::Schema>) and the shared traits declared here: ElementSearch, Embedder, DiscoveryService, GraphqlEngine, HttpModule (so higher layers can be wired without upward dependencies, ARC-007)",
+  "Config: gap.toml schema (serde + schemars -> docs/config.schema.json), env override GAP_*__*, unknown keys rejected, secret:// references",
+]
+acceptance = [
+  "cargo nextest run -p gap-core",
+  "cargo clippy -p gap-core --all-targets -- -D warnings",
+  "RUSTDOCFLAGS='-D warnings' cargo doc -p gap-core --no-deps",
+]
+
+[[wp]]
+id = "WP-M0-09"
+title = "Conformance runner skeleton and testkit"
+milestone = "M0"
+role = "coder"
+size = "M"
+depends_on = ["WP-M0-02", "WP-M0-07"]
+owns = ["crates/gap-conformance/**", "crates/gap-testkit/**", "conformance/README.md"]
+spec_refs = ["ARC-001", "GQL-002", "INV-15"]
+deliverables = [
+  "gap-conformance: fixture loader (JSON), subset matcher (spec/02 §11 semantics incl. unordered), HTTP/gRPC/stdio drivers (HTTP now, others stubbed), class filter, report listing covered spec ids",
+  "gap-testkit (dev-only): manual clock, mock NGC connector (programmable latency/errors/foreach), snapshot builders, tracing capture, canary-secret sink asserting INV-15, port allocator",
+]
+acceptance = ["cargo nextest run -p gap-conformance -p gap-testkit", "cargo run -p gap-conformance -- --help"]
+
+[[wp]]
+id = "WP-M0-10"
+title = "Documentation skeleton and agent-facing rules"
+milestone = "M0"
+role = "coder"
+size = "S"
+depends_on = ["WP-M0-01"]
+owns = ["book/**", "docs/RELEASE.md", "docs/UNSAFE.md", "docs/hosts/**", "docs/runbooks/README.md"]
+spec_refs = ["OPS-040", "CMP-009", "ADR-002"]
+deliverables = [
+  "mdBook skeleton (book/book.toml, SUMMARY linking spec/ and docs/), docs/RELEASE.md (error-budget policy, release train), docs/UNSAFE.md (empty ledger), docs/hosts/ placeholders, docs/runbooks/README.md index",
+]
+acceptance = ["test -f book/book.toml", "test -f docs/UNSAFE.md"]
+
+# ============================================================== M1 Walking skeleton
+[[wp]]
+id = "WP-M1-01"
+title = "gap-ql: GraphQL-profile front end, built-in schema, limits, cost model, error mapping"
+milestone = "M1"
+role = "coder"
+size = "L"
+depends_on = ["WP-M0-08"]
+owns = ["crates/gap-ql/**"]
+spec_refs = ["GQL-001", "GQL-002", "GQL-004", "GQL-010", "GQL-030", "GQL-041", "GQL-042", "GQL-062", "GQL-070"]
+deliverables = [
+  "parse+validate via apollo-compiler against a supergraph Schema; generated built-in SDL (spec/02 §3) injected by the composer; reserved-name checks",
+  "limits (depth, aliases, root fields, variables, body size) and the cost model (GQL-041) returning GapError codes",
+  "visibility-aware validation errors with didYouMean over visible names (GQL-062/070), identical shape for hidden vs unknown fields",
+  "directive handling (GQL-030/031/032) and persisted-operation ids + operation_mode check (GQL-060/061)",
+]
+acceptance = ["cargo nextest run -p gap-ql", "cargo clippy -p gap-ql --all-targets -- -D warnings"]
+
+[[wp]]
+id = "WP-M1-02"
+title = "GAP-QL conformance corpus, differential test vs graphql-js, parser fuzz target"
+milestone = "M1"
+role = "tester"
+size = "M"
+depends_on = ["WP-M1-01", "WP-M0-09"]
+owns = ["conformance/gql/**", "tests/differential/**", "fuzz/fuzz_targets/fuzz_gapql_parse.rs"]
+spec_refs = ["GQL-002", "GQL-062", "GQL-070", "GQL-041"]
+deliverables = [
+  "conformance/gql fixtures covering every GQL-* MUST (valid/invalid documents, limits, cost, errors, hidden-vs-unknown)",
+  "differential harness: same corpus validated by graphql-js (node, pinned) and gap-ql; disagreements fail except an allow-list documenting intentional deviations (§7)",
+  "fuzz_gapql_parse target (no panics, bounded time/memory); 10-minute smoke run in CI",
+]
+acceptance = ["cargo nextest run -p gap-ql -E 'test(conformance)'", "cargo run -p gap-conformance -- --class Core --offline conformance/gql", "cd fuzz && cargo fuzz run fuzz_gapql_parse -- -max_total_time=60"]
+
+[[wp]]
+id = "WP-M1-03"
+title = "gap-ngc-sdk: Connector trait, gRPC/HTTP/stdio servers, foreach helper, mock"
+milestone = "M1"
+role = "coder"
+size = "L"
+depends_on = ["WP-M0-06", "WP-M0-08"]
+owns = ["crates/gap-ngc-sdk/**"]
+spec_refs = ["NGC-001", "NGC-002", "NGC-003", "NGC-020", "NGC-025", "NGC-026", "NGC-090"]
+deliverables = [
+  "async Connector trait (Describe, Query stream, Mutate, Subscribe, Task*, Sketch, Health, Explain) with default UNIMPLEMENTED for optional RPCs",
+  "gRPC server+client adapters (tonic 0.14), HTTP/JSON+NDJSON mapping (axum), stdio JSON-RPC adapter; deadline/cancellation helpers",
+  "foreach helper: dedupe keys, chunk, bounded concurrency, order/independence preserved, honest upstream_calls accounting",
+]
+acceptance = ["cargo nextest run -p gap-ngc-sdk", "cargo clippy -p gap-ngc-sdk --all-targets -- -D warnings"]
+
+[[wp]]
+id = "WP-M1-04"
+title = "NGC connector conformance kit"
+milestone = "M1"
+role = "tester"
+size = "M"
+depends_on = ["WP-M1-03", "WP-M0-09"]
+owns = ["conformance/ngc/**", "crates/gap-conformance/src/ngc_kit/**"]
+spec_refs = ["NGC-010", "NGC-020", "NGC-021", "NGC-025", "NGC-026", "NGC-030", "NGC-031", "NGC-091"]
+deliverables = [
+  "connector test kit: Describe validity, foreach correctness/partial failure, N+1 audit via Complete.upstream_calls, deadline+cancel, idempotency replay, dry-run, pagination stability, error mapping, size limits (capability-gated)",
+  "the SDK mock connector passes the kit; a deliberately broken mock fails each check (kit self-test)",
+]
+acceptance = ["cargo nextest run -p gap-conformance -E 'test(ngc_kit)'"]
+
+[[wp]]
+id = "WP-M1-05"
+title = "gap-snapshot v0: composition from static config, SnapshotHandle, reserved-name and ownership checks"
+milestone = "M1"
+role = "coder"
+size = "L"
+depends_on = ["WP-M1-01", "WP-M1-03"]
+owns = ["crates/gap-snapshot/**", "crates/gap-core/src/snapshot/**"]
+spec_refs = ["ARC-005", "RUN-003", "RUN-011", "GQL-004", "INV-01", "INV-02", "INV-16"]
+deliverables = [
+  "composer: branch Describe results (SDL + operations) -> supergraph Schema with namespacing, GAP built-ins, ownership map; errors GAP_RESERVED_NAME / GAP_AMBIGUOUS_FIELD",
+  "SnapshotHandle (ArcSwap, pin()), minimal publish() (no prewarm yet), generation counter; branch_set_hash",
+  "tests: inv_01_request_pins_single_generation, inv_02_no_lock_on_read_path (static check + loom-free stress), composition negative cases",
+]
+acceptance = ["cargo nextest run -p gap-snapshot -E 'test(inv_01) or test(inv_02) or test(compose)'", "cargo clippy -p gap-snapshot --all-targets -- -D warnings"]
+
+[[wp]]
+id = "WP-M1-06"
+title = "gap-plan v0: single-branch planner, plan cache, plan_hash, explain"
+milestone = "M1"
+role = "coder"
+size = "L"
+depends_on = ["WP-M1-05"]
+owns = ["crates/gap-plan/**"]
+spec_refs = ["RUN-005", "RUN-010", "RUN-011", "RUN-013", "RUN-014"]
+deliverables = [
+  "Plan IR (Fetch, Parallel, Sequence, Flatten; Join/Traverse/Mutate/Gate declared but unimplemented), field ownership resolution, projection/limit pushdown per capabilities",
+  "moka plan cache with ADR-009 §6 key; deterministic ordering; PlanExplanation; cost computed before execution",
+  "determinism test: 1,000 repeated plannings and across process restarts yield identical plan_hash",
+]
+acceptance = ["cargo nextest run -p gap-plan", "cargo clippy -p gap-plan --all-targets -- -D warnings"]
+
+[[wp]]
+id = "WP-M1-07"
+title = "gap-exec v0 and ConnectorLayer v0: execute fetch plans, assemble responses, errors"
+milestone = "M1"
+role = "coder"
+size = "L"
+depends_on = ["WP-M1-06", "WP-M1-03"]
+owns = ["crates/gap-exec/**"]
+spec_refs = ["RUN-001", "RUN-015", "RUN-030", "RUN-031", "RUN-060", "GQL-051", "INV-12"]
+deliverables = [
+  "ExecLayer executing Fetch/Parallel/Sequence with NGC clients (pooling), deadline propagation and cancellation to connectors, GraphQL error propagation and partial=true semantics",
+  "response assembly with incremental size limit (RUN-060), extensions.gap.{generation,cost,partial}",
+  "tests: deadline reaches connector, cancel within 50 ms, error path/null propagation matrix",
+]
+acceptance = ["cargo nextest run -p gap-exec", "cargo clippy -p gap-exec --all-targets -- -D warnings"]
+
+[[wp]]
+id = "WP-M1-08"
+title = "gap-transport v0: HTTP GraphQL endpoint, gateway layers, health/ready/metrics"
+milestone = "M1"
+role = "coder"
+size = "L"
+depends_on = ["WP-M1-07"]
+owns = ["crates/gap-transport/**"]
+spec_refs = ["GQL-003", "GQL-050", "OPS-002", "RUN-001", "RUN-002", "SEC-010"]
+deliverables = [
+  "axum 0.8 server: POST /graphql (application/graphql-response+json), GET persisted, /healthz,/readyz,/metrics; tower stack TransportMux->Gateway->Operation->Authz(stub allow in dev)->Plan->Exec",
+  "request limits, request ids, OTel spans per OPS-010 names; dev-profile anonymous principal and API-key auth (Argon2id verify stub)",
+  "SSE subscription plumbing (graphql-sse) with bounded channels",
+]
+acceptance = ["cargo nextest run -p gap-transport", "cargo clippy -p gap-transport --all-targets -- -D warnings"]
+
+[[wp]]
+id = "WP-M1-09"
+title = "gap-mcp outbound connector (MCP server as branch)"
+milestone = "M1"
+role = "coder"
+size = "L"
+depends_on = ["WP-M1-03", "WP-M0-03"]
+owns = ["adapters/gap-mcp/src/outbound/**", "adapters/gap-mcp/tests/outbound/**"]
+spec_refs = ["CMP-010", "CMP-011", "CMP-012", "CMP-013", "CMP-014", "CMP-015", "ADR-015"]
+deliverables = [
+  "evaluate rmcp 3.7 against MCP 2026-07-28 (stateless, _meta); use it if conformant else a thin JSON-RPC client (record the decision in an ADR addendum)",
+  "tools/list->OperationDescriptors (annotations untrusted), resources->node category, structuredContent/text result mapping, cancellation, timeouts, bounded-concurrency foreach emulation with honest upstream_calls",
+  "stdio transport launches only via an allow-list entry (sandbox integration arrives in WP-M6-09; until then refuse non-dev profiles)",
+]
+acceptance = ["cargo nextest run -p gap-mcp -E 'test(outbound)'", "cargo clippy -p gap-mcp --all-targets -- -D warnings"]
+
+[[wp]]
+id = "WP-M1-10"
+title = "gap-mcp inbound facade: five static tools, resources, stateless handling, size gate"
+milestone = "M1"
+role = "coder"
+size = "L"
+depends_on = ["WP-M1-08", "WP-M0-03"]
+owns = ["adapters/gap-mcp/src/inbound/**", "adapters/gap-mcp/tests/inbound/**", "conformance/mcp/**"]
+spec_refs = ["CMP-001", "CMP-002", "CMP-003", "CMP-004", "CMP-005", "CMP-007", "CMP-008", "SEC-083"]
+deliverables = [
+  "Streamable HTTP + stdio MCP server exposing gap_search, gap_describe, gap_query, gap_mutate, gap_task with exact schemas/annotations from spec/09 §1; resources gap://meta, schema/{type}, operations, task/{id}",
+  "stateless semantics per MCP 2026-07-28 (no initialize/session; _meta handling), result mapping (content+structuredContent+isError), budget truncation hints, spotlighting wrapper",
+  "tests: tools/list token size <= 1,200 (two tokenizers) for N=5..1000 branches (Gate G-F1), interleaved stateless requests, read-only enforcement of gap_query",
+]
+acceptance = ["cargo nextest run -p gap-mcp -E 'test(inbound) or test(facade_tools_list_size)'", "cargo run -p gap-conformance -- --class Facade-MCP --offline conformance/mcp"]
+
+[[wp]]
+id = "WP-M1-11"
+title = "gap-ngc-openapi v0: read operations, auth, mock REST fixture"
+milestone = "M1"
+role = "coder"
+size = "L"
+depends_on = ["WP-M1-03"]
+owns = ["adapters/gap-ngc-openapi/**", "tests/fixtures/openapi/**"]
+spec_refs = ["CMP-030", "CMP-031", "CMP-032", "CMP-033", "NGC-020", "NGC-026"]
+deliverables = [
+  "OpenAPI 3.x -> Describe (operations, JSON Schema, SDL) via a minimal local-only $ref resolver; request builder that cannot escape its parameter slots; bearer/apiKey auth from vault stub",
+  "foreach via native batch extension or bounded fan-out (batch=emulated) with honest upstream_calls; retries only for idempotent reads",
+  "fixture REST service (axum) with 3 resources + rate-limit headers used by the walking skeleton and later benches",
+]
+acceptance = ["cargo nextest run -p gap-ngc-openapi", "cargo run -p gap-conformance -- --connector-kit --spawn fixtures openapi"]
+
+[[wp]]
+id = "WP-M1-12"
+title = "gap-server and gap-cli v0: wiring, config, serve/init/doctor"
+milestone = "M1"
+role = "coder"
+size = "M"
+depends_on = ["WP-M1-08", "WP-M1-10", "WP-M1-11", "WP-M1-09"]
+owns = ["crates/gap-server/**", "crates/gap-cli/**", "examples/walking-skeleton/**"]
+spec_refs = ["OPS-001", "OPS-002", "OPS-044", "ARC-002"]
+deliverables = [
+  "gap-server binary assembling snapshot (from gap.toml branches), exec, transport, MCP facade; graceful shutdown (RUN-090)",
+  "gap CLI: serve, init (writes sample gap.toml + example branches), doctor (toolchain/sandbox/model checks as available), config schema/check; declares module stubs for later WPs: src/proposals/, src/calibrate/, src/commands/ (cli) and src/wiring_s1.rs (server)",
+  "examples/walking-skeleton: REST fixture + an MCP branch + gap.toml + README that works end to end",
+]
+acceptance = ["cargo build -p gap-server -p gap-cli --release", "cargo run -p gap-cli -- config check examples/walking-skeleton/gap.toml", "python3 tools/check_layers.py"]
+
+[[wp]]
+id = "WP-M1-13"
+title = "Walking-skeleton E2E, real-host smoke, invariants, M1 gate"
+milestone = "M1"
+role = "reviewer"
+size = "M"
+depends_on = ["WP-M1-12", "WP-M1-02", "WP-M1-04"]
+owns = ["tests/e2e/**", "docs/gates/M1.md"]
+spec_refs = ["CMP-008", "CMP-009", "INV-01", "INV-03", "INV-12", "RUN-013"]
+deliverables = [
+  "E2E: scripted MCP host runs gap_describe -> gap_search -> gap_query across the REST branch and the MCP branch; typed-path overhead measured with 1 ms mocks",
+  "real-host smoke: MCP Inspector (CI) and Claude Code (documented manual script) against examples/walking-skeleton",
+  "docs/gates/M1.md: gate record (G-F1 tools/list size, Core conformance subset, determinism, INV-01/02/03/12 tests, typed overhead p99, spec_trace --strict for ids owned by M1)",
+]
+acceptance = ["cargo nextest run --workspace", "cargo run -p gap-conformance -- --class Core --spawn examples/walking-skeleton", "python3 tools/spec_trace.py --strict --milestone M1", "python3 tools/check_layers.py"]
+
+# ============================================================== M2 Context graph + discovery + measurement
+[[wp]]
+id = "WP-M2-01"
+title = "gap-store: ContextStore trait, SQLite implementation, TenantScope"
+milestone = "M2"
+role = "coder"
+size = "L"
+depends_on = ["WP-M0-08"]
+owns = ["crates/gap-store/**"]
+spec_refs = ["ADR-020", "INV-19", "INV-09", "ING-064"]
+deliverables = [
+  "ContextStore (nodes, typed edges, temporal validity, provenance, scopes Private|Task|Group|Global|Ephemeral, bounded traversal) + TaskStore/AuditLog/IdempotencyStore trait declarations; TenantScope token type (no API without it)",
+  "rusqlite implementation: WAL, FTS5, recursive-CTE traversal with depth/visited caps, migrations (format_version), backup/restore helpers",
+  "trait conformance test-suite reusable by other backends; cross-tenant property tests",
+]
+acceptance = ["cargo nextest run -p gap-store", "cargo clippy -p gap-store --all-targets -- -D warnings"]
+
+[[wp]]
+id = "WP-M2-02"
+title = "gap-ngc-code: tree-sitter code/doc graph indexer"
+milestone = "M2"
+role = "coder"
+size = "L"
+depends_on = ["WP-M2-01", "WP-M1-03"]
+owns = ["adapters/gap-ngc-code/**", "tests/fixtures/repos/**"]
+spec_refs = ["ING-060", "ING-061", "ING-062", "ING-063", "ING-064"]
+deliverables = [
+  "extractors for Rust, TypeScript/JavaScript, Python, Go, Java, Markdown -> nodes/edges with resolution EXACT|HEURISTIC and confidence; incremental by content hash; tombstones with valid_to",
+  "NGC connector with native_traverse; summaries (deterministic first-sentence/signature)",
+  "fixture repositories (small, committed) + golden graph snapshots; parse-failure isolation test",
+]
+acceptance = ["cargo nextest run -p gap-ngc-code", "cargo clippy -p gap-ngc-code --all-targets -- -D warnings"]
+
+[[wp]]
+id = "WP-M2-03"
+title = "traverse resolver, cursors, temporal asOf, node(ref)"
+milestone = "M2"
+role = "coder"
+size = "M"
+depends_on = ["WP-M2-01", "WP-M1-07"]
+owns = ["crates/gap-exec/src/traverse/**", "crates/gap-plan/src/traverse/**", "crates/gap-core/src/cursor/**"]
+spec_refs = ["GQL-010", "GQL-040", "GQL-041", "ING-064", "RUN-025"]
+deliverables = [
+  "gap.traverse / gap.node planning+execution over native-traverse branches; bounds (maxDepth<=16, first<=1000, visited cap); strategies BFS/DFS/SHORTEST (WEIGHTED optional)",
+  "signed opaque cursors (tamper tests), asOf handling, returnFields projection, TraverseStats with tokensEstimate",
+]
+acceptance = ["cargo nextest run -p gap-exec -p gap-plan -p gap-core -E 'test(traverse) or test(cursor)'"]
+
+[[wp]]
+id = "WP-M2-04"
+title = "gap-index and gap-models: hybrid index, embedding backend, model manager"
+milestone = "M2"
+role = "coder"
+size = "L"
+depends_on = ["WP-M0-08"]
+owns = ["crates/gap-index/**", "crates/gap-models/**", "models/manifest.toml"]
+spec_refs = ["RTE-001", "RTE-002", "RTE-003", "RTE-004", "RTE-005", "RTE-006", "RTE-010", "SEC-102", "ADR-010"]
+deliverables = [
+  "gap-index: BM25 (identifier-aware tokenizer), flat SIMD vector search, HNSW above 20k (recall@10 >= 0.99 vs exact), RRF fusion, visibility bitset filtering during search, deterministic build (index_hash)",
+  "gap-models: model manager (pull/verify/cache, sha256 pin, offline fail-closed), EmbeddingModel trait with candle BERT backend (bge-small-en-v1.5), query-embedding cache",
+  "tests: recall vs exact, deterministic build, hidden items never returned (INV-05), corrupt/missing model behaviour",
+]
+acceptance = ["cargo nextest run -p gap-index -p gap-models", "cargo bench -p gap-index -- --quick"]
+
+[[wp]]
+id = "WP-M2-05"
+title = "gap-route baseline: sanitizer, resolve pipeline, grouping, skeletons, calibration and conformal math, __search/__metaGraph"
+milestone = "M2"
+role = "coder"
+size = "L"
+depends_on = ["WP-M2-04", "WP-M1-05", "WP-M1-08"]
+owns = ["crates/gap-route/**"]
+spec_refs = ["RTE-020", "RTE-021", "RTE-030", "RTE-031", "RTE-032", "RTE-034", "RTE-062", "RTE-064", "RTE-065", "RTE-067", "GQL-020", "GQL-021", "GQL-023", "INV-05"]
+deliverables = [
+  "sanitize() with property tests/fuzz_sanitize target; RoutingModel and DecisionBackend traits (the latter implemented later in gap-s1); BaselineRouter; groups (K<=15 + sink); deterministic skeleton generation validated against the snapshot",
+  "temperature fitting (golden-section on log T, clamp 0.5..5), split-conformal table builder (LAC) and decision logic with fallback thresholds; CalibrationTable versioning/invalidation",
+  "DiscoveryService implementation behind the gap-core trait; __search, __metaGraph, gap.resolve resolvers registered by gap-server",
+]
+acceptance = ["cargo nextest run -p gap-route", "cd fuzz && cargo fuzz run fuzz_sanitize -- -max_total_time=60", "cargo clippy -p gap-route --all-targets -- -D warnings"]
+
+[[wp]]
+id = "WP-M2-06"
+title = "RouteBench v1: dataset builder, splits, metrics, reports"
+milestone = "M2"
+role = "coder"
+size = "L"
+depends_on = ["WP-M2-05"]
+owns = ["bench/routebench/**"]
+spec_refs = ["RTE-060", "RTE-061", "ADR-007"]
+deliverables = [
+  "routebench bin: builds examples from OperationDescriptor examples + pluggable LLM paraphrase/hard-negative generator (deterministic seed, cached) + OOD negatives; splits by operation id and held-out branches",
+  "metrics (top-1/3, MRR, ECE15, Brier, NLL, selective accuracy, AUROC, coverage, set size) with bootstrap CIs; JSON + markdown report; CI smoke split (<2 min)",
+  "datasets for fixtures: walking-skeleton branches + 3 public OpenAPI specs (checked-in under bench/routebench/data with licenses)",
+]
+acceptance = ["cargo run -p routebench -- --smoke --out target/routebench-smoke", "cargo nextest run -p routebench"]
+
+[[wp]]
+id = "WP-M2-07"
+title = "GAP-Bench v1: direct-MCP vs GAP-facade harness and baseline results"
+milestone = "M2"
+role = "coder"
+size = "L"
+depends_on = ["WP-M1-13", "WP-M2-05"]
+owns = ["bench/gapbench/**", "bench/results/gapbench/**"]
+spec_refs = ["ADR-021", "CMP-008", "RTE-034"]
+deliverables = [
+  "gapbench bin: N-sweep (10,50,200,1000 tools) synthetic branches; measures prompt tokens before first useful call, tokens/success, success rate, round trips, latency; with and without prompt-cache accounting; scripted agent + optional LLM agent (provider-agnostic)",
+  "task suites: (a) API lookup, (b) cross-branch join, (c) code-graph questions (what calls X / impact of change)",
+  "baseline results committed with raw data, commit hash, environment; docs/gates content for M2",
+]
+acceptance = ["cargo run -p gapbench -- --suite all --n 10,50 --scripted --out target/gapbench-smoke", "test -f bench/results/gapbench/README.md"]
+
+[[wp]]
+id = "WP-M2-08"
+title = "Capability groups in composition and discovery"
+milestone = "M2"
+role = "coder"
+size = "M"
+depends_on = ["WP-M1-05", "WP-M2-05"]
+owns = ["crates/gap-snapshot/src/groups/**", "crates/gap-route/src/groups/**"]
+spec_refs = ["RTE-030", "RTE-033", "RUN-011", "ADR-006"]
+deliverables = [
+  "group assignment from config (replica_of) and signature equality; group text union; group id stability; separate groups for unverified candidates",
+  "tests: replica invariance of ranking (adding a healthy replica never lowers group score or causes abstention)",
+]
+acceptance = ["cargo nextest run -p gap-snapshot -p gap-route -E 'test(group)'"]
+
+[[wp]]
+id = "WP-M2-09"
+title = "M2 gate review"
+milestone = "M2"
+role = "reviewer"
+size = "S"
+depends_on = ["WP-M2-02", "WP-M2-03", "WP-M2-06", "WP-M2-07", "WP-M2-08"]
+owns = ["docs/gates/M2.md"]
+spec_refs = ["RTE-005", "RTE-064", "ING-063", "ADR-021"]
+deliverables = [
+  "docs/gates/M2.md recording: G-C1 (code-graph token efficiency <=15% of file-scan baseline at >= equal accuracy), retrieval recall@10 >= 0.95, __search p95 <= 40 ms, conformal coverage test on baseline, GAP-Bench baseline table, __metaGraph token size measurement",
+]
+acceptance = ["python3 tools/spec_trace.py --strict --milestone M2", "cargo nextest run --workspace"]
+
+# ============================================================== M3 Federation execution
+[[wp]]
+id = "WP-M3-01"
+title = "gap-balance: telemetry slots, decayed EWMA, in-flight guard, breaker, retry budget, P2C"
+milestone = "M3"
+role = "coder"
+size = "L"
+depends_on = ["WP-M0-08"]
+owns = ["crates/gap-balance/**"]
+spec_refs = ["RTE-070", "RTE-071", "RTE-072", "RTE-073", "RTE-074", "RTE-075", "RTE-080", "RTE-081", "RTE-082", "RTE-083", "RTE-090", "RTE-091", "INV-10"]
+deliverables = [
+  "TelemetrySlot/Registry (dense slab, ArcSwap), DecayedEwma (packed CAS), InFlightGuard (RAII), Breaker FSM with 10x3 s bucket window, RetryBudget, P2C selection, Health-driven capacity weight",
+  "tests: 64-thread lost-update test, cancel 10,000 futures => in_flight==0, FSM table-driven + shuttle interleavings, herding simulation (no share swing > 20%), retry-budget exhaustion",
+  "criterion benches: selection <= 20 us p99, update <= 1 us p99",
+]
+acceptance = ["cargo nextest run -p gap-balance", "cargo bench -p gap-balance -- --quick", "cargo clippy -p gap-balance --all-targets -- -D warnings"]
+
+[[wp]]
+id = "WP-M3-02"
+title = "Planner v1: joins, join graph, remote predicates, pushdown, cardinality rules"
+milestone = "M3"
+role = "coder"
+size = "L"
+depends_on = ["WP-M1-06"]
+owns = ["crates/gap-plan/src/join/**", "crates/gap-plan/src/pushdown/**", "crates/gap-core/src/joingraph/**"]
+spec_refs = ["RUN-010", "RUN-012", "RUN-013", "RUN-021", "RUN-023", "RUN-027", "GQL-031", "GQL-042", "INV-06", "INV-18"]
+deliverables = [
+  "JoinGraph from ACTIVE joins only; Join plan nodes (FOREACH_BATCH, REMOTE_PREDICATE); composition error GAP_JOIN_NOT_BATCHABLE; cycle boundedness check (GAP_CYCLE_UNBOUNDED)",
+  "pushdown capability negotiation with fallback warnings; property test: planning is deterministic and never plans a non-ACTIVE join",
+]
+acceptance = ["cargo nextest run -p gap-plan -E 'test(join) or test(pushdown) or test(determinism)'"]
+
+[[wp]]
+id = "WP-M3-03"
+title = "Executor v1: foreach joins, stitching, limits, partial failure, pagination, bulkheads"
+milestone = "M3"
+role = "coder"
+size = "L"
+depends_on = ["WP-M3-02", "WP-M1-07"]
+owns = ["crates/gap-exec/src/join/**", "crates/gap-exec/src/bulkhead/**"]
+spec_refs = ["RUN-020", "RUN-021", "RUN-022", "RUN-023", "RUN-024", "RUN-025", "RUN-026", "RUN-032", "INV-18"]
+deliverables = [
+  "foreach batching exactly per RUN-020 (null skip, canonical dedupe, chunking, bounded chunk concurrency, order-preserving hash stitch)",
+  "limits, cardinality errors, remote-predicate execution with fallback, partial-failure matrix incl. failFast, per-branch bulkheads",
+  "tests: N+1 guard with 1k LHS rows + duplicates + nulls asserting upstream_calls <= ceil(unique/chunk); property tests for stitching",
+]
+acceptance = ["cargo nextest run -p gap-exec -E 'test(join) or test(bulkhead) or test(inv_18)'"]
+
+[[wp]]
+id = "WP-M3-04"
+title = "ConnectorLayer v1: replica choice, breaker, retries, health polling, deadlines"
+milestone = "M3"
+role = "coder"
+size = "M"
+depends_on = ["WP-M3-01", "WP-M1-07"]
+owns = ["crates/gap-exec/src/connector_layer/**"]
+spec_refs = ["RTE-073", "RTE-074", "RTE-081", "RTE-083", "RTE-090", "RUN-030", "RUN-031", "INV-12"]
+deliverables = [
+  "tower layer per branch composing gap-balance (P2C within capability group), breaker rejection (GAP_BRANCH_UNAVAILABLE with afterMs), retries for idempotent reads only with budget and jittered backoff, Health polling every 5 s (jittered), deadline margin rule",
+  "metrics: gap_branch_*, gap_breaker_state, gap_retry_*",
+]
+acceptance = ["cargo nextest run -p gap-exec -E 'test(connector_layer)'"]
+
+[[wp]]
+id = "WP-M3-05"
+title = "gap-ngc-sql: PostgreSQL and SQLite read-only connector (templates, foreach IN)"
+milestone = "M3"
+role = "coder"
+size = "L"
+depends_on = ["WP-M1-03"]
+owns = ["adapters/gap-ngc-sql/**", "tests/fixtures/sql/**"]
+spec_refs = ["CMP-050", "CMP-051", "CMP-052", "NGC-020", "NGC-026", "NGC-050"]
+deliverables = [
+  "introspection -> operations (get_by_key, list with filter/order/page), parameterized statements only, identifier allow-list, statement timeout, row caps, foreach via ANY/IN batches",
+  "Sketch RPC implementation (bottom-k blake3 with salt) for later join verification",
+  "SQL-injection adversarial tests (hostile arguments never change statement structure)",
+]
+acceptance = ["cargo nextest run -p gap-ngc-sql", "cargo run -p gap-conformance -- --connector-kit --spawn fixtures sql"]
+
+[[wp]]
+id = "WP-M3-06"
+title = "gap-ngc-grpc and gap-ngc-graphql connectors"
+milestone = "M3"
+role = "coder"
+size = "L"
+depends_on = ["WP-M1-03"]
+owns = ["adapters/gap-ngc-grpc/**", "adapters/gap-ngc-graphql/**", "tests/fixtures/grpc/**", "tests/fixtures/graphql/**"]
+spec_refs = ["CMP-050", "NGC-020", "NGC-026"]
+deliverables = [
+  "gRPC: reflection/descriptor-set driven operations, unary->QUERY/MUTATION(UNKNOWN), server streaming->SUBSCRIPTION, deadlines, metadata credentials",
+  "GraphQL upstream: selection rewriting with namespacing, Relay connection detection, foreach emulation via aliases/_entities where supported",
+]
+acceptance = ["cargo nextest run -p gap-ngc-grpc -p gap-ngc-graphql"]
+
+[[wp]]
+id = "WP-M3-07"
+title = "Adaptive concurrency limiter, load shedding, rate limits"
+milestone = "M3"
+role = "coder"
+size = "M"
+depends_on = ["WP-M1-08"]
+owns = ["crates/gap-transport/src/shed/**", "crates/gap-transport/src/ratelimit/**"]
+spec_refs = ["RUN-040", "RUN-050", "RUN-051", "ARC-011"]
+deliverables = [
+  "gradient/AIMD limiter (initial 256, min 16, max 8192), priority classes, GAP_OVERLOADED/503+Retry-After, per-(tenant,principal) token bucket and cost-unit limiter (governor), streaming stall protection",
+  "load tests asserting interactive p99 stays within 2x unloaded under 3x overload with batch traffic shed first",
+]
+acceptance = ["cargo nextest run -p gap-transport -E 'test(shed) or test(ratelimit)'"]
+
+[[wp]]
+id = "WP-M3-08"
+title = "Chaos and fault-injection harness; federation scenarios"
+milestone = "M3"
+role = "tester"
+size = "M"
+depends_on = ["WP-M3-03", "WP-M3-04", "WP-M0-09"]
+owns = ["tests/chaos/**", "crates/gap-testkit/src/chaos/**"]
+spec_refs = ["RTE-074", "RTE-080", "RTE-081", "RUN-024", "RUN-030", "OPS-030"]
+deliverables = [
+  "in-process fault injector (latency, error rate, hang, half-open, mid-stream crash) for mock connectors; scenarios from spec/08 §7 that apply at M3 (latency shift, 100% errors, crash mid-stream, partition)",
+  "assertions: breaker opens within 30 s, traffic shifts without oscillation, no request leaks, deadlines honoured",
+]
+acceptance = ["cargo nextest run --test chaos"]
+
+[[wp]]
+id = "WP-M3-09"
+title = "Performance baseline and M3 gate"
+milestone = "M3"
+role = "reviewer"
+size = "M"
+depends_on = ["WP-M3-05", "WP-M3-06", "WP-M3-07", "WP-M3-08"]
+owns = ["bench/results/perf/**", "docs/gates/M3.md"]
+spec_refs = ["ARC-011", "RUN-020", "RUN-040", "INV-18", "OPS-030"]
+deliverables = [
+  "criterion benches (planner, executor, typed-path overhead), load test (>=10k rps mixed read/join, 5 min) with zero unexplained errors, cold start measurement",
+  "docs/gates/M3.md: typed overhead SLO, N+1 guarantee evidence, chaos results, memory baseline; spec_trace strict for M3 ids",
+]
+acceptance = ["cargo bench --workspace -- --quick", "python3 tools/spec_trace.py --strict --milestone M3", "cargo nextest run --workspace"]
+
+# ============================================================== M4 Evolution: ingestion and snapshot lifecycle
+[[wp]]
+id = "WP-M4-01"
+title = "gap-ingest foundations: CISG, Extractor trait, worker process framework"
+milestone = "M4"
+role = "coder"
+size = "L"
+depends_on = ["WP-M1-05", "WP-M0-08"]
+owns = ["crates/gap-ingest/src/cisg/**", "crates/gap-ingest/src/worker/**", "crates/gap-ingest/src/lib.rs", "crates/gap-ingest/src/fetch/**"]
+spec_refs = ["ING-010", "ING-011", "ING-012", "ING-020", "ING-070", "ING-071"]
+deliverables = [
+  "CISG types + canonical JSON; Extractor trait with ExtractLimits; module stubs for extractors/, enrich/, gates/, proposals/, drift/ (declared in lib.rs)",
+  "worker process pool with rlimits, timeouts, crash isolation, resource metrics; SourceFetcher interface (deny-all by default until EgressGuard lands in WP-M6-08)",
+  "UntrustedText type (text, sanitized, lint, hash)",
+]
+acceptance = ["cargo nextest run -p gap-ingest -E 'test(cisg) or test(worker)'"]
+
+[[wp]]
+id = "WP-M4-02"
+title = "Extractors: OpenAPI, gRPC, GraphQL, SQL (deterministic, fuzzed)"
+milestone = "M4"
+role = "coder"
+size = "L"
+depends_on = ["WP-M4-01", "WP-M1-11"]
+owns = ["crates/gap-ingest/src/extractors/openapi/**", "crates/gap-ingest/src/extractors/grpc/**", "crates/gap-ingest/src/extractors/graphql/**", "crates/gap-ingest/src/extractors/sql/**", "fuzz/fuzz_targets/fuzz_extract_openapi.rs", "fuzz/fuzz_targets/fuzz_extract_proto.rs", "fuzz/fuzz_targets/fuzz_extract_graphql.rs", "fuzz/fuzz_targets/fuzz_extract_sql.rs", "tests/fixtures/specs/**"]
+spec_refs = ["ING-010", "ING-012", "ING-020", "ING-021", "ADR-015"]
+deliverables = [
+  "four extractors per spec/05 §2 (decide openapiv3 vs oas3 by a 200-spec public corpus test; record in ADR addendum), deterministic CISG (byte-identical on rerun), side-effect derivation rules, pagination detection",
+  "hostile-spec corpus (deep nesting, huge $ref chains, external refs, giant files) with time/memory bounds; 4 fuzz targets, 10-min smoke each in CI",
+]
+acceptance = ["cargo nextest run -p gap-ingest -E 'test(extractor)'", "cd fuzz && for t in fuzz_extract_openapi fuzz_extract_proto fuzz_extract_graphql fuzz_extract_sql; do cargo fuzz run $t -- -max_total_time=30 || exit 1; done"]
+
+[[wp]]
+id = "WP-M4-03"
+title = "Extractors: MCP server and A2A AgentCard"
+milestone = "M4"
+role = "coder"
+size = "M"
+depends_on = ["WP-M4-01", "WP-M1-09"]
+owns = ["crates/gap-ingest/src/extractors/mcp/**", "crates/gap-ingest/src/extractors/a2a/**", "fuzz/fuzz_targets/fuzz_extract_mcp.rs"]
+spec_refs = ["ING-010", "ING-012", "CMP-011", "CMP-014", "CMP-020"]
+deliverables = [
+  "MCP tools/resources/prompts -> CISG (untrusted text handling; annotations as hints only); AgentCard -> CISG with signature verification when present",
+  "fuzz_extract_mcp target; determinism tests",
+]
+acceptance = ["cargo nextest run -p gap-ingest -E 'test(extractor_mcp) or test(extractor_a2a)'"]
+
+[[wp]]
+id = "WP-M4-04"
+title = "Enricher: NullEnricher, constrained LlmEnricher, caching, golden set (Gate G-E1)"
+milestone = "M4"
+role = "coder"
+size = "L"
+depends_on = ["WP-M4-02"]
+owns = ["crates/gap-ingest/src/enrich/**", "bench/enrichment/**"]
+spec_refs = ["ING-030", "ING-031", "ING-032", "ING-033", "ING-034", "ING-035", "SEC-042"]
+deliverables = [
+  "Enricher trait; NullEnricher (heuristics); LlmEnricher with provider abstraction (local Ollama/llama.cpp, OpenAI-compatible, Anthropic) and llguidance-constrained outputs that cannot set trust/side-effect/auth/endpoints",
+  "cache keyed by (source_hash, enricher_id, prompt_version, model_id); redaction pass; degraded fallback; prompt-template versioning",
+  "bench/enrichment golden set (>=30 public specs with hand-checked joins/synopses) + runner; gate G-E1 results recorded",
+]
+acceptance = ["cargo nextest run -p gap-ingest -E 'test(enrich)'", "cargo run -p enrichment-bench -- --offline-fixtures --check-gate"]
+
+[[wp]]
+id = "WP-M4-05"
+title = "Verification gates G1-G3, G6, G7(stub), G9 and report format"
+milestone = "M4"
+role = "coder"
+size = "M"
+depends_on = ["WP-M4-02", "WP-M3-02"]
+owns = ["crates/gap-ingest/src/gates/**"]
+spec_refs = ["ING-001", "ING-040", "GQL-004", "GQL-042"]
+deliverables = [
+  "gate framework (hard/soft, admin ack with reason, audited), G1 schema validity, G2 coercion table, G3 key lookup, G6 boundedness, G7 security lint hook (real linter in WP-M6-10), G9 resource budget; JSON report schema",
+  "table-driven tests for the coercion matrix and boundedness rules",
+]
+acceptance = ["cargo nextest run -p gap-ingest -E 'test(gate)'"]
+
+[[wp]]
+id = "WP-M4-06"
+title = "Data-driven join verification (G4), shadow canary and regression replay (G8)"
+milestone = "M4"
+role = "coder"
+size = "L"
+depends_on = ["WP-M4-05", "WP-M3-05", "WP-M3-03"]
+owns = ["crates/gap-ingest/src/gates/join_verify/**", "crates/gap-ingest/src/gates/replay/**", "crates/gap-exec/src/shadow/**", "tests/fixtures/joins/**"]
+spec_refs = ["ING-040", "ING-041", "NGC-050", "NGC-051", "NGC-052", "INV-06"]
+deliverables = [
+  "containment/uniqueness/null/cardinality verification from NGC Sketch bottom-k sketches with tenant salt; thresholds from ADR-012; PROPOSED->VERIFIED->ACTIVE lifecycle",
+  "shadow executor (plan+execute on sampled traffic, results discarded, compared with sketch expectations) and revert-on-divergence; G8 replay of top-N plans and conformance fixtures on the shadow snapshot",
+  "adversarial fixtures: same-type-different-entity keys (must be rejected), partial overlap, skewed duplicates, empty domains",
+]
+acceptance = ["cargo nextest run -p gap-ingest -E 'test(join_verify) or test(canary) or test(replay)'"]
+
+[[wp]]
+id = "WP-M4-07"
+title = "Proposal workflow, persistence, DiscoveryWorker, admin API and CLI"
+milestone = "M4"
+role = "coder"
+size = "L"
+depends_on = ["WP-M4-05", "WP-M2-01", "WP-M2-05", "WP-M1-12"]
+owns = ["crates/gap-ingest/src/proposals/**", "crates/gap-cli/src/proposals/**"]
+spec_refs = ["ING-001", "ING-002", "ING-003", "ING-050", "ING-051", "RTE-100", "RTE-101", "RTE-102", "RTE-103"]
+deliverables = [
+  "Proposal FSM persisted in gap-store with transitions audited; idempotent on (tenant, location, kind); approval policy hook (Cedar arrives in M6; interim: config rules)",
+  "UnmappedDomainEvent intake (singleflight, rate limit, redaction) and DiscoveryWorker over allow-listed registries; never activates",
+  "GraphQL admin ops (proposeSource, decideProposal, proposals) and `gap proposals list|show|approve|deny`",
+]
+acceptance = ["cargo nextest run -p gap-ingest -E 'test(proposal) or test(discovery_worker)'", "cargo nextest run -p gap-cli -E 'test(proposals)'"]
+
+[[wp]]
+id = "WP-M4-08"
+title = "Publisher actor: prewarm, swap, reclaimer, ring, rollback attribution, swap stress"
+milestone = "M4"
+role = "coder"
+size = "L"
+depends_on = ["WP-M1-05", "WP-M3-02", "WP-M1-06"]
+owns = ["crates/gap-snapshot/src/publisher/**", "crates/gap-snapshot/src/rollback/**", "tests/swap_stress/**"]
+spec_refs = ["RUN-003", "RUN-004", "RUN-006", "RUN-007", "RUN-008", "INV-16", "ING-050"]
+deliverables = [
+  "Publisher actor (serialised publishes), prewarm of top-100 plans with 95% gate and breaking_change_ack, reclaimer thread, 5-generation ring with structural sharing, 60 s watch + attribution-aware rollback (once, mark bad)",
+  "swap_stress: 1,000 concurrent request tasks x 100 swaps => zero errors/torn reads; p99 swap <= 250 us at 256 busy readers; shuttle model of publisher/reclaimer/rollback state machine",
+  "RSS growth check: <= +15% for a 1-branch change with 5 generations retained",
+]
+acceptance = ["cargo nextest run -p gap-snapshot -E 'test(publisher) or test(rollback)'", "cargo test -p gap-snapshot --test swap_stress --release"]
+
+[[wp]]
+id = "WP-M4-09"
+title = "Drift detection, classification, pinned serving, incremental composition, snapshot diff"
+milestone = "M4"
+role = "coder"
+size = "L"
+depends_on = ["WP-M4-08", "WP-M4-03", "WP-M4-07"]
+owns = ["crates/gap-ingest/src/drift/**", "crates/gap-snapshot/src/diff/**", "crates/gap-snapshot/src/incremental/**"]
+spec_refs = ["ING-052", "ING-053", "ING-055", "ADR-009", "SEC-082", "INV-08"]
+deliverables = [
+  "periodic Describe(known_spec_hash) polling with jitter; COSMETIC/SCHEMA_COMPATIBLE/SCHEMA_BREAKING/DESCRIPTION_CHANGE classification; DRIFT status with pinned descriptions served and signature probes",
+  "structural-sharing incremental composition (im::OrdMap, per-branch Arc reuse, pool reuse); `gap snapshot diff` output",
+  "branch removal grace period behaviour",
+]
+acceptance = ["cargo nextest run -p gap-ingest -p gap-snapshot -E 'test(drift) or test(incremental) or test(diff)'"]
+
+[[wp]]
+id = "WP-M4-10"
+title = "M4 gate review"
+milestone = "M4"
+role = "reviewer"
+size = "S"
+depends_on = ["WP-M4-04", "WP-M4-06", "WP-M4-09"]
+owns = ["docs/gates/M4.md"]
+spec_refs = ["ING-034", "RUN-008", "ING-041", "INV-06", "INV-08"]
+deliverables = [
+  "docs/gates/M4.md: G-E1 results, swap stress SLO evidence, join-verification adversarial results, drift matrix, extractor fuzz summary; spec_trace strict for M4 ids",
+]
+acceptance = ["python3 tools/spec_trace.py --strict --milestone M4", "cargo nextest run --workspace"]
+
+# ============================================================== M5 Intelligence (System-1)
+[[wp]]
+id = "WP-M5-01"
+title = "Laya weights manifest, conversion check, licence and provenance memo"
+milestone = "M5"
+role = "analyzer"
+size = "M"
+depends_on = ["WP-M2-04"]
+owns = ["models/manifest.toml", "docs/decisions/laya-provenance.md", "tools/laya_golden.py"]
+spec_refs = ["SEC-102", "ADR-005", "RTE-042"]
+deliverables = [
+  "manifest entries for laya-typed-decisions (and base/multilingual for experiments) with sha256, size, licence, source commit, training_data_note='unstated by authors' and the legal-review checklist result",
+  "tools/laya_golden.py (uv script) generating >=200 golden (state, question, options)->logits fixtures from the PyTorch reference; fixtures committed (small) + instructions to regenerate",
+  "docs/decisions/laya-provenance.md: what is known/unknown about training data and labels, risk assessment, mitigation (fine-tune on own data)",
+]
+acceptance = ["python3 -c \"import tomllib;m=tomllib.load(open('models/manifest.toml','rb'));assert any(x['id'].endswith('typed-decisions') for x in m['model'])\"", "test -f tests/fixtures/laya_golden/cases.json"]
+
+[[wp]]
+id = "WP-M5-02"
+title = "gap-s1: LayaCandle backend (tokenizer, sequence builder, ModernBERT forward, head), golden parity"
+milestone = "M5"
+role = "coder"
+size = "L"
+depends_on = ["WP-M5-01", "WP-M2-05", "WP-M0-10"]
+owns = ["crates/gap-s1/src/candle/**", "crates/gap-s1/src/lib.rs", "crates/gap-s1/tests/golden/**", "docs/UNSAFE.md"]
+spec_refs = ["RTE-041", "RTE-042", "ADR-002", "ADR-005", "RTE-020"]
+deliverables = [
+  "sequence builder with per-option [MASK] markers and sanitised inputs; tokenizer integration; candle ModernBERT forward + 2-layer transformer head + marker gather + scorer MLP; f16/f32; safetensors mmap (unsafe isolated and documented in docs/UNSAFE.md)",
+  "golden parity vs PyTorch fixtures: max |dlogit| <= 5e-2 (f16) / 1e-3 (f32), argmax equal on >= 99.5%",
+  "module stubs for ort/, sidecar/ declared in lib.rs",
+]
+acceptance = ["cargo nextest run -p gap-s1 --release -E 'test(golden)'", "cargo clippy -p gap-s1 --all-targets -- -D warnings"]
+
+[[wp]]
+id = "WP-M5-03"
+title = "S1 integration: canonical state/options format, group-aware ranking, cache, concurrency limit, fallback"
+milestone = "M5"
+role = "coder"
+size = "M"
+depends_on = ["WP-M5-02", "WP-M2-08", "WP-M1-12"]
+owns = ["crates/gap-route/src/s1_adapter/**", "crates/gap-server/src/wiring_s1.rs"]
+spec_refs = ["RTE-042", "RTE-044", "RTE-045", "RTE-046", "RTE-030", "INV-17", "ADR-006"]
+deliverables = [
+  "RoutingModel adapter feeding RTE-042 format (options keyed g0.., fixed sink text, JCS state, token-budgeted option text), result cache, semaphore concurrency, timeout and rolling-failure fallback to baseline with GAP_DISCOVERY_DEGRADED",
+  "tests: replica-addition invariance with S1 (using fixture logits), S1-down/weights-missing/timeout fallbacks keep all non-discovery features green (inv_17)",
+]
+acceptance = ["cargo nextest run -p gap-route -p gap-server -E 'test(s1_adapter) or test(inv_17)'"]
+
+[[wp]]
+id = "WP-M5-04"
+title = "Calibration pipeline CLI, conformal coverage tests, online ECE job"
+milestone = "M5"
+role = "coder"
+size = "M"
+depends_on = ["WP-M2-06", "WP-M5-03"]
+owns = ["crates/gap-cli/src/calibrate/**", "crates/gap-route/src/calibration_job/**"]
+spec_refs = ["RTE-062", "RTE-064", "RTE-065", "RTE-066", "RTE-067", "RTE-068", "RTE-111"]
+deliverables = [
+  "`gap calibrate --dataset --out` producing CalibrationTable + report (reliability diagrams, ECE before/after, coverage, set sizes); installs via snapshot publish",
+  "synthetic-distribution tests proving empirical coverage >= 1-alpha-0.02; invalidation on model/embedding change; scheduled job + online ECE gauge",
+]
+acceptance = ["cargo nextest run -p gap-route -p gap-cli -E 'test(calibrat) or test(coverage)'"]
+
+[[wp]]
+id = "WP-M5-05"
+title = "Feedback store and online routing metrics"
+milestone = "M5"
+role = "coder"
+size = "M"
+depends_on = ["WP-M2-01", "WP-M5-03"]
+owns = ["crates/gap-route/src/feedback/**", "crates/gap-store/src/feedback/**"]
+spec_refs = ["RTE-110", "RTE-111", "RTE-112", "SEC-110", "TM-14"]
+deliverables = [
+  "routing_feedback persistence derived only from server-observed executions (5-min trace/session window), admin USER_LABEL path audited; PII-minimised; retention/purge",
+  "metrics gap_discovery_decisions_total, gap_discovery_set_size, gap_router_fallback_total, gap_s1_online_ece",
+]
+acceptance = ["cargo nextest run -p gap-route -p gap-store -E 'test(feedback)'"]
+
+[[wp]]
+id = "WP-M5-06"
+title = "Alternative S1 backends: HttpSidecar (/v1/systemone, omni decide compatible) and LayaOrt"
+milestone = "M5"
+role = "coder"
+size = "M"
+depends_on = ["WP-M5-02"]
+owns = ["crates/gap-s1/src/sidecar/**", "crates/gap-s1/src/ort/**"]
+spec_refs = ["ADR-005", "RTE-041", "RTE-044"]
+deliverables = [
+  "HttpSidecar speaking /v1/systemone (single+batch) with timeouts and egress-guard hook; usable as golden oracle in tests and with `omni decide --endpoint`",
+  "LayaOrt behind feature s1-ort (exact-pinned ort rc) with parity tests and a CoreML/CPU latency comparison table in docs/decisions/",
+]
+acceptance = ["cargo nextest run -p gap-s1 -E 'test(sidecar)'", "cargo check -p gap-s1 --features s1-ort"]
+
+[[wp]]
+id = "WP-M5-07"
+title = "Debias option and hard-negative mining loop"
+milestone = "M5"
+role = "coder"
+size = "M"
+depends_on = ["WP-M5-03", "WP-M2-06"]
+owns = ["crates/gap-route/src/debias/**", "bench/routebench/src/mining/**"]
+spec_refs = ["RTE-043", "RTE-060", "ADR-007"]
+deliverables = [
+  "permutation-averaging debias (forward+reverse) behind s1.debias; RouteBench measurement of gain and latency cost; default decided by data (RTE-043 threshold)",
+  "hard-negative mining from RouteBench failures feeding the next dataset version",
+]
+acceptance = ["cargo nextest run -p gap-route -p routebench -E 'test(debias) or test(mining)'"]
+
+[[wp]]
+id = "WP-M5-08"
+title = "Evaluation of S1 vs baseline and gate G-S1 decision record"
+milestone = "M5"
+role = "reviewer"
+size = "M"
+depends_on = ["WP-M5-04", "WP-M5-05", "WP-M5-06", "WP-M5-07"]
+owns = ["docs/gates/M5.md", "docs/decisions/G-S1.md", "bench/results/routebench/**"]
+spec_refs = ["RTE-069", "RTE-061", "ADR-007", "ADR-008"]
+deliverables = [
+  "full RouteBench run (baseline vs S1 base vs S1 calibrated [vs fine-tuned if available]) with CIs on test + held-out-branch splits; latency/memory measurements on CPU and Metal/GPU where present",
+  "docs/decisions/G-S1.md: pass/fail per criterion; if fail -> routing.model='baseline' default and WP-M5-09/R1 triggers; if pass -> enable default with feature flag and rollback instructions",
+]
+acceptance = ["test -f docs/decisions/G-S1.md", "python3 tools/spec_trace.py --strict --milestone M5"]
+
+[[wp]]
+id = "WP-M5-09"
+title = "Optional: fine-tune pipeline for Laya on RouteBench train split (incl. multilingual evaluation)"
+milestone = "M5"
+role = "coder"
+size = "L"
+depends_on = ["WP-M5-08"]
+owns = ["tools/finetune/**", "docs/decisions/finetune.md"]
+spec_refs = ["ADR-005", "ADR-004", "ADR-007"]
+deliverables = [
+  "reproducible fine-tune scripts (uv + PyTorch) from laya-typed-decisions on RouteBench train split with held-out evaluation; export to safetensors; manifest entry; model card with data provenance",
+  "evaluation notes on Vietnamese/multilingual intents and recommendation (translate-at-edge vs multilingual fine-tune)",
+]
+acceptance = ["test -f docs/decisions/finetune.md", "python3 -c \"import ast,sys;[ast.parse(open(f).read()) for f in __import__('glob').glob('tools/finetune/*.py')]\""]
+
+# ============================================================== M6 Tasks, A2A, mutations, security
+[[wp]]
+id = "WP-M6-01"
+title = "gap-sec authn: JWT/JWKS, introspection, API keys, mTLS, PRM, token exchange client"
+milestone = "M6"
+role = "coder"
+size = "L"
+depends_on = ["WP-M1-08", "WP-M0-08"]
+owns = ["crates/gap-sec/src/authn/**", "crates/gap-sec/src/lib.rs"]
+spec_refs = ["SEC-001", "SEC-002", "SEC-003", "SEC-004", "SEC-010", "SEC-011", "SEC-012", "NGC-081"]
+deliverables = [
+  "JWT validation (alg allow-list, iss/aud/exp/nbf, JWKS cache+rotation), opaque-token introspection, Argon2id API keys, mTLS/SPIFFE principal mapping, RFC 9728 metadata endpoint, RFC 8693 exchange client; Principal with delegation chain; module stubs for authz/, vault/, egress/, sandbox/, audit/, quota/ in lib.rs",
+  "tests: token confusion, alg=none, wrong audience, expired/nbf, JWKS rotation, constant-shape failures, tenant derivation ignores body/headers (SEC-010)",
+]
+acceptance = ["cargo nextest run -p gap-sec -E 'test(authn)'"]
+
+[[wp]]
+id = "WP-M6-02"
+title = "Task API core: TaskStore, FSM, events, leases, recovery, strategies, cancellation"
+milestone = "M6"
+role = "coder"
+size = "L"
+depends_on = ["WP-M2-01", "WP-M3-04", "WP-M3-03"]
+owns = ["crates/gap-exec/src/tasks/**", "crates/gap-store/src/tasks/**"]
+spec_refs = ["RUN-080", "RUN-081", "RUN-082", "RUN-083", "RUN-084", "RUN-085", "RUN-086", "INV-13", "INV-20", "ADR-016"]
+deliverables = [
+  "durable TaskStore (SQLite WAL), FSM with exhaustive transition tests, strictly increasing seq events + replay, lease/heartbeat, crash recovery before readiness, PARALLEL/SEQUENTIAL/DAG strategies, cancellation propagation, hop/trace loop detection",
+  "gap.submitTask/task/tasks/cancelTask resolvers and gapTaskEvents subscription (SSE Last-Event-ID)",
+]
+acceptance = ["cargo nextest run -p gap-exec -p gap-store -E 'test(task)'", "cargo test -p gap-exec --test task_crash_recovery"]
+
+[[wp]]
+id = "WP-M6-03"
+title = "gap-a2a: A2A v1.0 inbound binding and outbound connector"
+milestone = "M6"
+role = "coder"
+size = "L"
+depends_on = ["WP-M6-02", "WP-M0-03", "WP-M1-08"]
+owns = ["adapters/gap-a2a/**", "conformance/a2a/**"]
+spec_refs = ["CMP-020", "CMP-021", "CMP-022", "CMP-023", "ADR-016", "ADR-017"]
+deliverables = [
+  "AgentCard generation (deterministic, no T2), SendMessage/SendStreamingMessage/GetTask/ListTasks/CancelTask mapping incl. text-only -> resolve artifact, data-part gapql -> task; state mapping verified against vendored spec (recorded in SPEC-NOTES.md)",
+  "outbound A2A agents as TASK operations with polling/streaming; two-GAP-node loop-detection fixture",
+]
+acceptance = ["cargo nextest run -p gap-a2a", "cargo run -p gap-conformance -- --class Facade-A2A --offline conformance/a2a"]
+
+[[wp]]
+id = "WP-M6-04"
+title = "Mutation pipeline: side-effect policy, approval gate, ApprovalProof, idempotency, dry-run, saga"
+milestone = "M6"
+role = "coder"
+size = "L"
+depends_on = ["WP-M6-02", "WP-M6-05"]
+owns = ["crates/gap-exec/src/mutate/**", "crates/gap-exec/src/saga/**", "crates/gap-store/src/idempotency/**"]
+spec_refs = ["RUN-070", "RUN-071", "RUN-072", "RUN-073", "RUN-074", "RUN-075", "NGC-030", "NGC-031", "NGC-032", "NGC-033", "INV-11"]
+deliverables = [
+  "pipeline authz->side-effect policy->approval gate (task INPUT_REQUIRED, deterministic summary, four-eyes option)->idempotency->dry-run->connector->audit; signed ApprovalProof (Ed25519) bound to args hash; replay/forgery rejected",
+  "IdempotencyStore semantics (conflict, in-progress wait, replay); saga mode with reverse compensation ledger and needs_manual_intervention alert",
+  "tests: every RUN-07x MUST incl. approval expiry and concurrent duplicate keys",
+]
+acceptance = ["cargo nextest run -p gap-exec -p gap-store -E 'test(mutate) or test(saga) or test(idempotency)'"]
+
+[[wp]]
+id = "WP-M6-05"
+title = "Cedar authorization: schema, loader, evaluation points, decision log, hot reload"
+milestone = "M6"
+role = "coder"
+size = "L"
+depends_on = ["WP-M6-01", "WP-M1-06"]
+owns = ["crates/gap-sec/src/authz/**", "policies/**"]
+spec_refs = ["SEC-020", "SEC-021", "SEC-022", "SEC-023", "SEC-024", "SEC-012", "INV-04", "INV-05", "RTE-010"]
+deliverables = [
+  "Cedar schema + policy set loader (validate, atomic swap, policy_version=blake3), evaluation API for Discover/Execute/Traverse/Mutate/SubmitTask/DecideApproval/ProposeSource/DecideProposal/Admin*",
+  "AuthzLayer integration (all touched fields incl. joined RHS), visibility bitset provider for discovery, redaction plan, delegation intersection semantics, decision log",
+  "tests: authorization-by-join (TM-21), default deny, stale-policy cache invalidation (TM-22), policy reload failure keeps previous set",
+]
+acceptance = ["cargo nextest run -p gap-sec -p gap-plan -E 'test(authz) or test(policy)'"]
+
+[[wp]]
+id = "WP-M6-06"
+title = "Tenant isolation enforcement and cross-tenant fuzz"
+milestone = "M6"
+role = "tester"
+size = "M"
+depends_on = ["WP-M6-05", "WP-M2-01"]
+owns = ["tests/security/tenant/**"]
+spec_refs = ["INV-09", "INV-19", "ADR-018", "SEC-010", "TM-09"]
+deliverables = [
+  "property/fuzz tests over store, plan cache, telemetry, audit, idempotency, feedback, task APIs with random tenant pairs; compile-fail tests proving no store API is callable without TenantScope",
+  "fixes (if any) delivered as follow-up commits within the owning crates after coordination",
+]
+acceptance = ["cargo nextest run --test tenant_isolation"]
+
+[[wp]]
+id = "WP-M6-07"
+title = "Vault, secret types, redaction layer, canary-secret tests"
+milestone = "M6"
+role = "coder"
+size = "M"
+depends_on = ["WP-M6-01"]
+owns = ["crates/gap-sec/src/vault/**", "tests/security/secrets/**"]
+spec_refs = ["SEC-040", "SEC-041", "INV-15", "TM-18"]
+deliverables = [
+  "Vault trait with env/file(0600)/OS keychain providers (+ external behind features), rotation without restart, secrecy+zeroize, redactor for logs/traces/errors/metrics/model inputs",
+  "canary-secret end-to-end test through every sink and input path",
+]
+acceptance = ["cargo nextest run -p gap-sec -E 'test(vault) or test(redact)'", "cargo nextest run --test secret_canary"]
+
+[[wp]]
+id = "WP-M6-08"
+title = "EgressGuard (SSRF) and integration into fetcher, connectors, enricher"
+milestone = "M6"
+role = "coder"
+size = "M"
+depends_on = ["WP-M6-01", "WP-M4-01"]
+owns = ["crates/gap-sec/src/egress/**", "tests/security/ssrf/**"]
+spec_refs = ["SEC-075", "SEC-076", "TM-06"]
+deliverables = [
+  "EgressGuard: resolve-check-pin-connect, private/metadata ranges incl. IPv4-mapped IPv6 and odd encodings, redirect re-check, scheme rules, allow-list; reqwest/hyper connector adapters",
+  "table-driven SSRF tests incl. DNS rebinding simulation; wiring into SourceFetcher, openapi/graphql/mcp connectors and HttpSidecar",
+]
+acceptance = ["cargo nextest run -p gap-sec -E 'test(egress)'"]
+
+[[wp]]
+id = "WP-M6-09"
+title = "Sandbox launcher, exec allow-list, trust tiers, manifest signatures, CLI connector, malicious-server scenarios"
+milestone = "M6"
+role = "coder"
+size = "L"
+depends_on = ["WP-M6-01", "WP-M4-07", "WP-M4-09", "WP-M1-09"]
+owns = ["crates/gap-sec/src/sandbox/**", "crates/gap-sec/src/manifest/**", "adapters/gap-ngc-cli/**", "tests/security/sandbox/**", "tests/security/rugpull/**"]
+spec_refs = ["SEC-060", "SEC-061", "SEC-062", "SEC-070", "SEC-071", "SEC-072", "ING-054", "CMP-060", "TM-02", "TM-07"]
+deliverables = [
+  "macOS seatbelt + Linux bwrap sandbox profiles with rlimits, no network, scrubbed env, output caps; fail-closed rules; `gap doctor` checks",
+  "Ed25519 manifest verification, T0/T1/T2 handling, exec allow-list with sha256 re-check at every launch; CLI connector (argv templates, no shell); MCP stdio launch routed through sandbox",
+  "scenario tests: rug-pull MCP server (ING-054), malicious server with oversized/hostile output, sandbox-escape smoke",
+]
+acceptance = ["cargo nextest run -p gap-sec -p gap-ngc-cli -E 'test(sandbox) or test(manifest)'", "cargo nextest run --test rug_pull"]
+
+[[wp]]
+id = "WP-M6-10"
+title = "Injection linter, spotlighting, Rule-of-Two session policy, poisoned-description corpus"
+milestone = "M6"
+role = "coder"
+size = "M"
+depends_on = ["WP-M4-05", "WP-M1-10", "WP-M6-05"]
+owns = ["crates/gap-ingest/src/lint/**", "crates/gap-sec/src/session_risk/**", "tests/security/injection/**"]
+spec_refs = ["SEC-080", "SEC-081", "SEC-082", "SEC-083", "SEC-084", "SEC-085", "TM-01", "TM-05"]
+deliverables = [
+  "heuristic+classifier linter (documented false-positive rate on benign corpus), integration into G7 and S1/Enricher input filters, spotlight wrapping, per-session A/B/C flags feeding Cedar riskScore",
+  "poisoned-description corpus (>=50 payloads incl. Unicode tricks) with assertions per SEC §15 items 1 and 5",
+]
+acceptance = ["cargo nextest run -p gap-ingest -p gap-sec -E 'test(lint) or test(session_risk)'", "cargo nextest run --test injection_corpus"]
+
+[[wp]]
+id = "WP-M6-11"
+title = "Audit hash chain, anchoring, verification, PROV-O export"
+milestone = "M6"
+role = "coder"
+size = "M"
+depends_on = ["WP-M2-01", "WP-M6-01"]
+owns = ["crates/gap-sec/src/audit/**", "crates/gap-store/src/audit/**"]
+spec_refs = ["SEC-090", "SEC-091", "SEC-092", "SEC-093", "INV-14", "TM-17"]
+deliverables = [
+  "append-only per-tenant+system chains, synchronous writes for privileged events, signed anchors to file/S3/syslog sinks, `gap audit verify|export`, startup/nightly verification",
+  "tamper tests (modify/delete/reorder) pinpoint first inconsistency",
+]
+acceptance = ["cargo nextest run -p gap-sec -p gap-store -E 'test(audit)'"]
+
+[[wp]]
+id = "WP-M6-12"
+title = "Quotas and cost-based limits"
+milestone = "M6"
+role = "coder"
+size = "S"
+depends_on = ["WP-M3-07", "WP-M6-01"]
+owns = ["crates/gap-sec/src/quota/**"]
+spec_refs = ["SEC-050", "RUN-050"]
+deliverables = [
+  "per (tenant, principal) rate and cost-unit quotas, per (tenant, branch) concurrency share, per-tenant ingestion/storage/S1 budgets with metrics and GAP_RATE_LIMITED mapping",
+]
+acceptance = ["cargo nextest run -p gap-sec -E 'test(quota)'"]
+
+[[wp]]
+id = "WP-M6-13"
+title = "Security review gate and M6 record"
+milestone = "M6"
+role = "reviewer"
+size = "M"
+depends_on = ["WP-M6-03", "WP-M6-04", "WP-M6-06", "WP-M6-07", "WP-M6-08", "WP-M6-09", "WP-M6-10", "WP-M6-11", "WP-M6-12"]
+owns = ["docs/gates/M6.md", "docs/security/threat-model-review.md"]
+spec_refs = ["SEC-100", "SEC-101", "SEC-103", "TM-22"]
+deliverables = [
+  "execute the full SEC §15 matrix (17 scenarios) and record pass/fail; update threat model; cargo deny/audit clean; spec_trace strict for M6 ids; list of residual risks with owners",
+]
+acceptance = ["cargo nextest run --workspace", "cargo deny check", "python3 tools/spec_trace.py --strict --milestone M6", "test -f docs/security/threat-model-review.md"]
+
+# ============================================================== M7 Productization and 1.0-RC
+[[wp]]
+id = "WP-M7-01"
+title = "gap CLI completion and doctor"
+milestone = "M7"
+role = "coder"
+size = "M"
+depends_on = ["WP-M6-13"]
+owns = ["crates/gap-cli/src/commands/**"]
+spec_refs = ["OPS-044", "SEC-072", "SEC-062"]
+deliverables = [
+  "all commands in OPS-044 with --json output, shell completions, exit codes documented, `gap doctor` full report",
+]
+acceptance = ["cargo nextest run -p gap-cli", "cargo run -p gap-cli -- --help"]
+
+[[wp]]
+id = "WP-M7-02"
+title = "TypeScript and Python SDKs (thin) with generated types"
+milestone = "M7"
+role = "coder"
+size = "L"
+depends_on = ["WP-M6-13"]
+owns = ["sdks/typescript/**", "sdks/python/**"]
+spec_refs = ["GQL-003", "GQL-060", "CMP-002"]
+deliverables = [
+  "TS and Python clients: execute, discovery helpers (search/describe/resolve), task polling/streaming, persisted-operation registration, adapters exposing GAP as tools for popular agent frameworks; types generated from the supergraph SDL",
+  "integration tests against a live gap-server in CI",
+]
+acceptance = ["cd sdks/typescript && npm ci && npm test", "cd sdks/python && uv run pytest"]
+
+[[wp]]
+id = "WP-M7-03"
+title = "Documentation site content and doc tests"
+milestone = "M7"
+role = "coder"
+size = "L"
+depends_on = ["WP-M6-13", "WP-M0-10"]
+owns = ["book/**", "docs/hosts/**", "docs/guides/**"]
+spec_refs = ["OPS-001", "CMP-009", "OPS-040"]
+deliverables = [
+  "concepts, 5-minute quickstart with an MCP host, connector authoring guide, security hardening guide, operations guide, migration guide, host guides (Claude Code, Antigravity, Cursor)",
+  "all code blocks tested (mdbook test, GraphQL snippets validated against reference schema)",
+]
+acceptance = ["mdbook build book", "mdbook test book"]
+
+[[wp]]
+id = "WP-M7-04"
+title = "Operational assets: dashboards, alerts, runbooks, collector config"
+milestone = "M7"
+role = "coder"
+size = "M"
+depends_on = ["WP-M6-13", "WP-M0-10"]
+owns = ["ops/**", "docs/runbooks/**"]
+spec_refs = ["OPS-010", "OPS-020", "OPS-030"]
+deliverables = [
+  "Grafana dashboards JSON, Prometheus alert rules for every alert in spec/08 §6, OTel collector config with tail sampling, one runbook per alert",
+]
+acceptance = ["promtool check rules ops/prometheus/alerts.yml", "python3 -c \"import json,glob;[json.load(open(f)) for f in glob.glob('ops/grafana/*.json')]\""]
+
+[[wp]]
+id = "WP-M7-05"
+title = "Benchmarks publication: GAP-Bench full, RouteBench final, performance report"
+milestone = "M7"
+role = "reviewer"
+size = "L"
+depends_on = ["WP-M5-08", "WP-M6-13", "WP-M2-07"]
+owns = ["bench/results/gapbench/**", "bench/results/routebench/**", "docs/benchmarks/**"]
+spec_refs = ["ADR-021", "CMP-008", "RTE-069"]
+deliverables = [
+  "full GAP-Bench N-sweep x 3 suites x {cache on/off} with raw data and reproduction script; comparison of GAP via MCP facade vs direct MCP; honest reporting of where GAP does not win",
+  "final RouteBench and performance report; the 'replacement' adoption criterion (ADR-017) evaluated and recorded",
+]
+acceptance = ["test -f docs/benchmarks/REPORT.md", "cargo run -p gapbench -- --verify-results bench/results/gapbench"]
+
+[[wp]]
+id = "WP-M7-06"
+title = "Fuzz campaign, sanitizer builds, miri on pure crates, pen-test scope"
+milestone = "M7"
+role = "tester"
+size = "L"
+depends_on = ["WP-M6-13"]
+owns = ["fuzz/corpus/**", "docs/security/pentest-scope.md", "docs/security/fuzz-report.md"]
+spec_refs = ["ING-012", "GQL-002", "RTE-021", "SEC-100"]
+deliverables = [
+  "24 h per fuzz target (parser, NGC decode, extractors, sanitize, cursor, policy input) with corpus minimisation; ASan/TSan runs of the test-suite; miri on gap-core/gap-ql/gap-balance pure paths; findings triaged and fixed",
+  "pen-test scope + checklist (SEC §15) ready for an external reviewer",
+]
+acceptance = ["test -f docs/security/fuzz-report.md", "test -f docs/security/pentest-scope.md"]
+
+[[wp]]
+id = "WP-M7-07"
+title = "Soak (72 h), full chaos suite, upgrade and backup/restore tests"
+milestone = "M7"
+role = "tester"
+size = "L"
+depends_on = ["WP-M6-13", "WP-M3-08"]
+owns = ["tests/soak/**", "tests/upgrade/**", "docs/gates/soak.md"]
+spec_refs = ["OPS-030", "OPS-041", "OPS-043", "RUN-091"]
+deliverables = [
+  "72 h soak with periodic swaps/drift/chaos meeting OPS-030 gates; spec/08 §7 chaos set; N-1 -> N upgrade tests for snapshots, stores, config with fixtures from every released version; backup/restore drill",
+]
+acceptance = ["test -f docs/gates/soak.md", "cargo nextest run --test upgrade"]
+
+[[wp]]
+id = "WP-M7-08"
+title = "Packaging and signed release pipeline"
+milestone = "M7"
+role = "coder"
+size = "M"
+depends_on = ["WP-M6-13", "WP-M0-04"]
+owns = ["dist/**", ".github/workflows/release.yml", "Dockerfile"]
+spec_refs = ["SEC-101", "SEC-102", "OPS-041"]
+deliverables = [
+  "reproducible release builds (--locked, SOURCE_DATE_EPOCH), distroless container, CycloneDX SBOM, cosign signatures, SLSA provenance, cargo-dist installers, model-pull instructions",
+]
+acceptance = ["docker build -t gap:ci . ", "test -f .github/workflows/release.yml"]
+
+[[wp]]
+id = "WP-M7-09"
+title = "Conditional: columnar list extension (X-1)"
+milestone = "M7"
+role = "coder"
+size = "M"
+depends_on = ["WP-M7-05"]
+owns = ["crates/gap-exec/src/columnar/**", "docs/decisions/x1-columnar.md"]
+spec_refs = ["GQL-003", "ADR-021"]
+deliverables = [
+  "only if GAP-Bench shows >= 20% token reduction on the large-list suite: @format(as: COLUMNAR) implementation + SDK expansion + conformance fixtures; otherwise a decision record closing the extension",
+]
+acceptance = ["test -f docs/decisions/x1-columnar.md"]
+
+[[wp]]
+id = "WP-M7-10"
+title = "1.0-RC readiness review"
+milestone = "M7"
+role = "reviewer"
+size = "M"
+depends_on = ["WP-M7-01", "WP-M7-02", "WP-M7-03", "WP-M7-04", "WP-M7-05", "WP-M7-06", "WP-M7-07", "WP-M7-08", "WP-M7-09"]
+owns = ["docs/gates/RC.md", "CHANGELOG.md"]
+spec_refs = ["OPS-040", "OPS-041", "SEC-100"]
+deliverables = [
+  "docs/gates/RC.md executing docs/03-VERIFICATION.md §9 checklist line by line with evidence links; open-issue triage; version tagging plan; known-limitations list",
+]
+acceptance = ["test -f docs/gates/RC.md", "python3 tools/spec_trace.py --strict", "python3 tools/check_layers.py", "cargo deny check"]
+
+[[wp]]
+id = "WP-M7-11"
+title = "Optional: SurrealDB ContextStore backend behind feature store-surreal"
+milestone = "M7"
+role = "coder"
+size = "M"
+depends_on = ["WP-M6-13"]
+owns = ["crates/gap-store/src/surreal/**"]
+spec_refs = ["ADR-020", "ADR-002"]
+deliverables = [
+  "ContextStore/TaskStore implementation on SurrealDB 3.x passing the shared trait conformance suite; licence note (BSL) in docs and feature docs",
+]
+acceptance = ["cargo nextest run -p gap-store --features store-surreal"]
+
+# ============================================================== Research track R1 (conditional)
+[[wp]]
+id = "WP-R1-01"
+title = "R1 go/no-go memo: custom System-1 training (RLCD-style) - only if G-S1 fails after fine-tuning"
+milestone = "R1"
+role = "analyzer"
+size = "M"
+depends_on = ["WP-M5-08"]
+owns = ["docs/decisions/r1-custom-s1.md"]
+spec_refs = ["ADR-004", "ADR-007"]
+deliverables = [
+  "memo: data needs, compute, expected gain vs cost, licensing of base models, evaluation plan, stop criteria; recommendation (go/no-go) with explicit budget",
+]
+acceptance = ["test -f docs/decisions/r1-custom-s1.md"]

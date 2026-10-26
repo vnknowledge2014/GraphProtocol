@@ -1,0 +1,98 @@
+{
+  "project_root": "/Users/mike/Documents/GraphProtocol",
+  "tdd": true,
+  "auto_commit": false,
+  "tasks": [
+    {
+      "id": 1,
+      "title": "WP-M0-01 Repository bootstrap. Deliverables: git repository initialised (GitButler workspace per user rules); first commit contains the docs/spec/work/tools already present; rust-toolchain.toml pinned to 1.98.1 with rustfmt+clippy components; rustfmt.toml; clippy.toml (disallowed-methods: unwrap/expect outside tests); Apache-2.0 LICENSE, NOTICE, CONTRIBUTING (Conventional Commits, WP workflow), SECURITY.md (reporting policy), CHANGELOG.md skeleton. Acceptance (must pass): git status --porcelain | head -1 >/dev/null && rustc --version | grep -q 1.98 && cargo fmt --version && cargo clippy --version",
+      "role": "coder",
+      "depends_on": [],
+      "system_prompt": "Read AGENTS.md and docs/AGENT-GUIDE.md first. Work ONLY inside these paths: .gitignore, .editorconfig, LICENSE, NOTICE, rust-toolchain.toml, rustfmt.toml, clippy.toml, CHANGELOG.md, CONTRIBUTING.md, SECURITY.md. Spec refs: ADR-002, ADR-022, ARC-003. Expand this work package into 2-5 minute steps before coding."
+    },
+    {
+      "id": 2,
+      "title": "WP-M0-02 Workspace, pinned dependencies, cargo-deny, crate skeletons. Deliverables: root Cargo.toml: workspace members = crates/*, adapters/*, bench/*; [workspace.dependencies] pins EVERY third-party crate planned in docs/evidence/crate-versions.md (re-verified with cargo add --dry-run; deviations appended to the evidence file); one skeleton crate per entry of tools/layers.toml (lib.rs with crate docs + #![forbid(unsafe_code)] (except gap-s1) + #![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::todo, clippy::unimplemented)]); gap-testkit as dev-only crate; bench/routebench, bench/gapbench and bench/enrichment (package enrichment-bench) as bin stubs; gap-server/gap-cli as bin crates; module stubs: run `python3 tools/wp.py modules` and create every listed module as an empty file/dir with its `mod` declaration in the crate's lib.rs/main.rs, so no later WP ever edits lib.rs (AGENT-GUIDE §6); deny.toml (licenses allow-list, advisories deny, bans: duplicate axum/hyper/prost/tower, crate openjev; BSL only under feature store-surreal); fuzz/ cargo-fuzz project with autobins=false and one stub target per planned fuzz target (fuzz_gapql_parse, fuzz_ngc_decode, fuzz_extract_openapi, fuzz_extract_proto, fuzz_extract_graphql, fuzz_extract_sql, fuzz_extract_mcp, fuzz_sanitize, fuzz_cursor_decode, fuzz_policy_input). Acceptance (must pass): cargo build --workspace --locked && cargo tree -d --workspace | python3 -c \"import sys,re; t=sys.stdin.read(); bad=[n for n in ('axum','hyper','prost','tower') if len(set(re.findall(r'^'+n+r' v(\\S+)',t,re.M)))>1]; sys.exit(1 if bad else 0)\" && cargo deny check && cargo clippy --workspace --all-targets -- -D warnings",
+      "role": "coder",
+      "depends_on": [
+        1
+      ],
+      "system_prompt": "Read AGENTS.md and docs/AGENT-GUIDE.md first. Work ONLY inside these paths: Cargo.toml, Cargo.lock, deny.toml, crates/*/Cargo.toml, crates/*/src/lib.rs, adapters/*/Cargo.toml, adapters/*/src/lib.rs, bench/*/Cargo.toml, bench/*/src/main.rs, fuzz/Cargo.toml, fuzz/fuzz_targets/*.rs, docs/evidence/crate-versions.md. Spec refs: ADR-002, ADR-019, ARC-001, ARC-003. Expand this work package into 2-5 minute steps before coding."
+    },
+    {
+      "id": 3,
+      "title": "WP-M0-03 Pin external specifications (MCP, A2A, GraphQL, GraphQL-over-HTTP). Deliverables: third_party/MANIFEST.toml with url, retrieved_at, sha256, license for: MCP spec 2026-07-28 (+2025-11-25 for outbound compat), A2A v1.0 a2a.proto + spec text, GraphQL spec edition used, GraphQL-over-HTTP spec, graphql-sse protocol; third_party/specs/*: vendored copies (or checksummed excerpts where licensing forbids copying) and a SPEC-NOTES.md listing every place spec/09 says 'verify against upstream' with the verified answer (MCP _meta keys, MRTR/input-required shape, A2A task state names); docs/evidence/crate-versions.md updated with the GraphQL edition and any contradictions found. Acceptance (must pass): python3 -c \"import tomllib;m=tomllib.load(open('third_party/MANIFEST.toml','rb'));assert len(m['spec'])>=5\" && test -f third_party/specs/SPEC-NOTES.md",
+      "role": "analyzer",
+      "depends_on": [
+        1,
+        2
+      ],
+      "system_prompt": "Read AGENTS.md and docs/AGENT-GUIDE.md first. Work ONLY inside these paths: third_party/**, docs/evidence/crate-versions.md. Spec refs: CMP-001, CMP-020, GQL-001, ADR-017. Expand this work package into 2-5 minute steps before coding."
+    },
+    {
+      "id": 4,
+      "title": "WP-M0-04 CI pipeline and developer commands. Deliverables: GitHub Actions: build+nextest+clippy+fmt+doc on macOS and Linux; cargo-deny/audit; python tools checks (wp validate, check_layers, spec_trace); nightly workflow stubs (fuzz, bench, soak, routebench-smoke); justfile recipes: verify (everything in CI locally), test, lint, fmt, docs, layers, wp-validate, spec-trace; dependabot/renovate config limited to patch updates of workspace deps. Acceptance (must pass): python3 -c \"import yaml\" 2>/dev/null || true && test -f .github/workflows/ci.yml && just --list | grep -q verify",
+      "role": "coder",
+      "depends_on": [
+        2
+      ],
+      "system_prompt": "Read AGENTS.md and docs/AGENT-GUIDE.md first. Work ONLY inside these paths: .github/**, justfile. Spec refs: ADR-022, OPS-040, SEC-100. Expand this work package into 2-5 minute steps before coding."
+    },
+    {
+      "id": 5,
+      "title": "WP-M0-05 Wire planning/architecture tools into CI with tests. Deliverables: pytest-free unit tests (unittest) for tools/wp.py (cycle, overlap, unknown ref, bad size) and tools/check_layers.py (violation fixtures using a temp cargo workspace); tools/layers.toml completed for every crate created in WP-M0-02 (including bench harnesses at layer 5). Acceptance (must pass): python3 -m unittest discover -s tools -p 'test_*.py' && python3 tools/wp.py validate && python3 tools/check_layers.py && python3 tools/check_refs.py",
+      "role": "tester",
+      "depends_on": [
+        2
+      ],
+      "system_prompt": "Read AGENTS.md and docs/AGENT-GUIDE.md first. Work ONLY inside these paths: tools/test_wp.py, tools/test_check_layers.py, tools/test_check_refs.py, tools/layers.toml, tools/wp.py, tools/check_layers.py, tools/check_refs.py. Spec refs: ARC-001, ARC-002, ADR-022. Expand this work package into 2-5 minute steps before coding."
+    },
+    {
+      "id": 6,
+      "title": "WP-M0-06 Protobuf pipeline and gap-proto crate. Deliverables: build.rs using protox + tonic-prost-build compiling proto/gap/ngc/v1/ngc.proto and proto/gap/gateway/v1/gateway.proto (no system protoc required); vendored A2A proto compiled behind feature a2a; descriptor golden test: SHA-256 of the FileDescriptorSet committed; changing a field number or name fails the test unless the golden is updated in the same commit with a CHANGELOG entry; wire-compat test: encode/decode round-trip for every message with proptest-generated values. Acceptance (must pass): cargo nextest run -p gap-proto && cargo clippy -p gap-proto --all-targets -- -D warnings",
+      "role": "coder",
+      "depends_on": [
+        2,
+        3
+      ],
+      "system_prompt": "Read AGENTS.md and docs/AGENT-GUIDE.md first. Work ONLY inside these paths: crates/gap-proto/**, proto/**. Spec refs: NGC-001, NGC-004, ADR-002. Expand this work package into 2-5 minute steps before coding."
+    },
+    {
+      "id": 7,
+      "title": "WP-M0-07 Spec traceability tool. Deliverables: tools/spec_trace.py: extracts requirement ids from spec/*.md (bold **XXX-nnn** bullets, plus table-defined INV-nn and TM-nn ids; a requirement is a MUST if its text contains MUST/MUST NOT); scans crates/**, adapters/**, tests/**, conformance/** for 'spec: <ID>' markers; reports MUSTs without tests, tests with unknown ids; modes --warn (default until M1 exit), --strict, --milestone Mx (limits to ids referenced by that milestone's WPs); unit tests with fixtures. Acceptance (must pass): python3 -m unittest tools.test_spec_trace && python3 tools/spec_trace.py --warn | tail -3",
+      "role": "coder",
+      "depends_on": [
+        1
+      ],
+      "system_prompt": "Read AGENTS.md and docs/AGENT-GUIDE.md first. Work ONLY inside these paths: tools/spec_trace.py, tools/test_spec_trace.py. Spec refs: ARC-004, ADR-022. Expand this work package into 2-5 minute steps before coding."
+    },
+    {
+      "id": 8,
+      "title": "WP-M0-08 gap-core foundations: ids, errors, clock, secrets, config, context. Deliverables: id newtypes (TenantId, BranchId, BranchUid, OperationId, GroupId, TaskId, ProposalId) with validation + serde + proptest; GapError + ErrorCode enum covering spec/02 §10 exactly (serialize as extensions.code), retry metadata, suggestion payloads; conversion to/from NgcError; Clock trait (system + manual test clock), Secret<T> (Debug/Display redacted, zeroize), tracing/OTel init helper, RequestContext, Budget, TraceCtx; Snapshot data model per spec/01 §4 (types only; Arc<apollo_compiler::Schema>) and the shared traits declared here: ElementSearch, Embedder, DiscoveryService, GraphqlEngine, HttpModule (so higher layers can be wired without upward dependencies, ARC-007); Config: gap.toml schema (serde + schemars -> docs/config.schema.json), env override GAP_*__*, unknown keys rejected, secret:// references. Acceptance (must pass): cargo nextest run -p gap-core && cargo clippy -p gap-core --all-targets -- -D warnings && RUSTDOCFLAGS='-D warnings' cargo doc -p gap-core --no-deps",
+      "role": "coder",
+      "depends_on": [
+        2
+      ],
+      "system_prompt": "Read AGENTS.md and docs/AGENT-GUIDE.md first. Work ONLY inside these paths: crates/gap-core/**. Spec refs: ARC-005, ARC-006, ARC-010, ADR-018, ADR-023, INV-09, INV-15, GQL-004. Expand this work package into 2-5 minute steps before coding."
+    },
+    {
+      "id": 9,
+      "title": "WP-M0-09 Conformance runner skeleton and testkit. Deliverables: gap-conformance: fixture loader (JSON), subset matcher (spec/02 §11 semantics incl. unordered), HTTP/gRPC/stdio drivers (HTTP now, others stubbed), class filter, report listing covered spec ids; gap-testkit (dev-only): manual clock, mock NGC connector (programmable latency/errors/foreach), snapshot builders, tracing capture, canary-secret sink asserting INV-15, port allocator. Acceptance (must pass): cargo nextest run -p gap-conformance -p gap-testkit && cargo run -p gap-conformance -- --help",
+      "role": "coder",
+      "depends_on": [
+        2,
+        7
+      ],
+      "system_prompt": "Read AGENTS.md and docs/AGENT-GUIDE.md first. Work ONLY inside these paths: crates/gap-conformance/**, crates/gap-testkit/**, conformance/README.md. Spec refs: ARC-001, GQL-002, INV-15. Expand this work package into 2-5 minute steps before coding."
+    },
+    {
+      "id": 10,
+      "title": "WP-M0-10 Documentation skeleton and agent-facing rules. Deliverables: mdBook skeleton (book/book.toml, SUMMARY linking spec/ and docs/), docs/RELEASE.md (error-budget policy, release train), docs/UNSAFE.md (empty ledger), docs/hosts/ placeholders, docs/runbooks/README.md index. Acceptance (must pass): test -f book/book.toml && test -f docs/UNSAFE.md",
+      "role": "coder",
+      "depends_on": [
+        1
+      ],
+      "system_prompt": "Read AGENTS.md and docs/AGENT-GUIDE.md first. Work ONLY inside these paths: book/**, docs/RELEASE.md, docs/UNSAFE.md, docs/hosts/**, docs/runbooks/README.md. Spec refs: OPS-040, CMP-009, ADR-002. Expand this work package into 2-5 minute steps before coding."
+    }
+  ]
+}

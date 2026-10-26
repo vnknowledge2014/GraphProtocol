@@ -1,0 +1,40 @@
+# Crate layering for tools/check_layers.py (spec/01-architecture.md §3). A crate may depend only on lower layers.
+[layers]
+gap-core = 0
+gap-proto = 1
+gap-ql = 1
+gap-index = 1        # data structures only (BM25, flat/HNSW vectors, fusion): NO ML crates
+gap-store = 1
+gap-sec = 1
+gap-balance = 1      # telemetry slots, EWMA, breaker, retry budget, P2C: deterministic, NO ML
+gap-models = 1       # model manager + embedding backends (ML allowed here)
+gap-route = 2        # discovery plane; talks to models only through traits
+gap-plan = 2
+gap-ingest = 2
+gap-ngc-sdk = 2
+gap-snapshot = 3
+gap-exec = 3
+gap-s1 = 3           # Laya backends (only crate allowed `unsafe`, ADR-002)
+gap-transport = 4
+gap-mcp = 4
+gap-a2a = 4
+gap-ngc-openapi = 4
+gap-ngc-grpc = 4
+gap-ngc-graphql = 4
+gap-ngc-sql = 4
+gap-ngc-cli = 4
+gap-ngc-code = 4
+gap-server = 5
+gap-cli = 5
+gap-conformance = 5
+routebench = 5       # bench/routebench
+gapbench = 5         # bench/gapbench
+enrichment-bench = 5 # bench/enrichment
+
+[exempt_dev]
+crates = ["gap-testkit"]
+
+[forbidden]
+# Execution-plane crates must not reach discovery/ML code (ARC-002).
+no_ml = ["gap-exec", "gap-plan", "gap-transport", "gap-snapshot", "gap-balance"]
+ml_crates = ["gap-s1", "gap-route", "gap-models", "candle-core", "candle-nn", "candle-transformers", "ort", "tokenizers", "fastembed"]

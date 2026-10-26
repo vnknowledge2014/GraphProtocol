@@ -1,0 +1,96 @@
+{
+  "project_root": "/Users/mike/Documents/GraphProtocol",
+  "tdd": true,
+  "auto_commit": false,
+  "tasks": [
+    {
+      "id": 1,
+      "title": "WP-M7-01 gap CLI completion and doctor. Deliverables: all commands in OPS-044 with --json output, shell completions, exit codes documented, `gap doctor` full report. Acceptance (must pass): cargo nextest run -p gap-cli && cargo run -p gap-cli -- --help",
+      "role": "coder",
+      "depends_on": [],
+      "system_prompt": "Read AGENTS.md and docs/AGENT-GUIDE.md first. Work ONLY inside these paths: crates/gap-cli/src/commands/**. Spec refs: OPS-044, SEC-072, SEC-062. Expand this work package into 2-5 minute steps before coding."
+    },
+    {
+      "id": 2,
+      "title": "WP-M7-02 TypeScript and Python SDKs (thin) with generated types. Deliverables: TS and Python clients: execute, discovery helpers (search/describe/resolve), task polling/streaming, persisted-operation registration, adapters exposing GAP as tools for popular agent frameworks; types generated from the supergraph SDL; integration tests against a live gap-server in CI. Acceptance (must pass): cd sdks/typescript && npm ci && npm test && cd sdks/python && uv run pytest",
+      "role": "coder",
+      "depends_on": [],
+      "system_prompt": "Read AGENTS.md and docs/AGENT-GUIDE.md first. Work ONLY inside these paths: sdks/typescript/**, sdks/python/**. Spec refs: GQL-003, GQL-060, CMP-002. Expand this work package into 2-5 minute steps before coding."
+    },
+    {
+      "id": 3,
+      "title": "WP-M7-03 Documentation site content and doc tests. Deliverables: concepts, 5-minute quickstart with an MCP host, connector authoring guide, security hardening guide, operations guide, migration guide, host guides (Claude Code, Antigravity, Cursor); all code blocks tested (mdbook test, GraphQL snippets validated against reference schema). Acceptance (must pass): mdbook build book && mdbook test book",
+      "role": "coder",
+      "depends_on": [],
+      "system_prompt": "Read AGENTS.md and docs/AGENT-GUIDE.md first. Work ONLY inside these paths: book/**, docs/hosts/**, docs/guides/**. Spec refs: OPS-001, CMP-009, OPS-040. Expand this work package into 2-5 minute steps before coding."
+    },
+    {
+      "id": 4,
+      "title": "WP-M7-04 Operational assets: dashboards, alerts, runbooks, collector config. Deliverables: Grafana dashboards JSON, Prometheus alert rules for every alert in spec/08 §6, OTel collector config with tail sampling, one runbook per alert. Acceptance (must pass): promtool check rules ops/prometheus/alerts.yml && python3 -c \"import json,glob;[json.load(open(f)) for f in glob.glob('ops/grafana/*.json')]\"",
+      "role": "coder",
+      "depends_on": [],
+      "system_prompt": "Read AGENTS.md and docs/AGENT-GUIDE.md first. Work ONLY inside these paths: ops/**, docs/runbooks/**. Spec refs: OPS-010, OPS-020, OPS-030. Expand this work package into 2-5 minute steps before coding."
+    },
+    {
+      "id": 5,
+      "title": "WP-M7-05 Benchmarks publication: GAP-Bench full, RouteBench final, performance report. Deliverables: full GAP-Bench N-sweep x 3 suites x {cache on/off} with raw data and reproduction script; comparison of GAP via MCP facade vs direct MCP; honest reporting of where GAP does not win; final RouteBench and performance report; the 'replacement' adoption criterion (ADR-017) evaluated and recorded. Acceptance (must pass): test -f docs/benchmarks/REPORT.md && cargo run -p gapbench -- --verify-results bench/results/gapbench",
+      "role": "reviewer",
+      "depends_on": [],
+      "system_prompt": "Read AGENTS.md and docs/AGENT-GUIDE.md first. Work ONLY inside these paths: bench/results/gapbench/**, bench/results/routebench/**, docs/benchmarks/**. Spec refs: ADR-021, CMP-008, RTE-069. Expand this work package into 2-5 minute steps before coding."
+    },
+    {
+      "id": 6,
+      "title": "WP-M7-06 Fuzz campaign, sanitizer builds, miri on pure crates, pen-test scope. Deliverables: 24 h per fuzz target (parser, NGC decode, extractors, sanitize, cursor, policy input) with corpus minimisation; ASan/TSan runs of the test-suite; miri on gap-core/gap-ql/gap-balance pure paths; findings triaged and fixed; pen-test scope + checklist (SEC §15) ready for an external reviewer. Acceptance (must pass): test -f docs/security/fuzz-report.md && test -f docs/security/pentest-scope.md",
+      "role": "tester",
+      "depends_on": [],
+      "system_prompt": "Read AGENTS.md and docs/AGENT-GUIDE.md first. Work ONLY inside these paths: fuzz/corpus/**, docs/security/pentest-scope.md, docs/security/fuzz-report.md. Spec refs: ING-012, GQL-002, RTE-021, SEC-100. Expand this work package into 2-5 minute steps before coding."
+    },
+    {
+      "id": 7,
+      "title": "WP-M7-07 Soak (72 h), full chaos suite, upgrade and backup/restore tests. Deliverables: 72 h soak with periodic swaps/drift/chaos meeting OPS-030 gates; spec/08 §7 chaos set; N-1 -> N upgrade tests for snapshots, stores, config with fixtures from every released version; backup/restore drill. Acceptance (must pass): test -f docs/gates/soak.md && cargo nextest run --test upgrade",
+      "role": "tester",
+      "depends_on": [],
+      "system_prompt": "Read AGENTS.md and docs/AGENT-GUIDE.md first. Work ONLY inside these paths: tests/soak/**, tests/upgrade/**, docs/gates/soak.md. Spec refs: OPS-030, OPS-041, OPS-043, RUN-091. Expand this work package into 2-5 minute steps before coding."
+    },
+    {
+      "id": 8,
+      "title": "WP-M7-08 Packaging and signed release pipeline. Deliverables: reproducible release builds (--locked, SOURCE_DATE_EPOCH), distroless container, CycloneDX SBOM, cosign signatures, SLSA provenance, cargo-dist installers, model-pull instructions. Acceptance (must pass): docker build -t gap:ci .  && test -f .github/workflows/release.yml",
+      "role": "coder",
+      "depends_on": [],
+      "system_prompt": "Read AGENTS.md and docs/AGENT-GUIDE.md first. Work ONLY inside these paths: dist/**, .github/workflows/release.yml, Dockerfile. Spec refs: SEC-101, SEC-102, OPS-041. Expand this work package into 2-5 minute steps before coding."
+    },
+    {
+      "id": 9,
+      "title": "WP-M7-09 Conditional: columnar list extension (X-1). Deliverables: only if GAP-Bench shows >= 20% token reduction on the large-list suite: @format(as: COLUMNAR) implementation + SDK expansion + conformance fixtures; otherwise a decision record closing the extension. Acceptance (must pass): test -f docs/decisions/x1-columnar.md",
+      "role": "coder",
+      "depends_on": [
+        5
+      ],
+      "system_prompt": "Read AGENTS.md and docs/AGENT-GUIDE.md first. Work ONLY inside these paths: crates/gap-exec/src/columnar/**, docs/decisions/x1-columnar.md. Spec refs: GQL-003, ADR-021. Expand this work package into 2-5 minute steps before coding."
+    },
+    {
+      "id": 10,
+      "title": "WP-M7-10 1.0-RC readiness review. Deliverables: docs/gates/RC.md executing docs/03-VERIFICATION.md §9 checklist line by line with evidence links; open-issue triage; version tagging plan; known-limitations list. Acceptance (must pass): test -f docs/gates/RC.md && python3 tools/spec_trace.py --strict && python3 tools/check_layers.py && cargo deny check",
+      "role": "reviewer",
+      "depends_on": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9
+      ],
+      "system_prompt": "Read AGENTS.md and docs/AGENT-GUIDE.md first. Work ONLY inside these paths: docs/gates/RC.md, CHANGELOG.md. Spec refs: OPS-040, OPS-041, SEC-100. Expand this work package into 2-5 minute steps before coding."
+    },
+    {
+      "id": 11,
+      "title": "WP-M7-11 Optional: SurrealDB ContextStore backend behind feature store-surreal. Deliverables: ContextStore/TaskStore implementation on SurrealDB 3.x passing the shared trait conformance suite; licence note (BSL) in docs and feature docs. Acceptance (must pass): cargo nextest run -p gap-store --features store-surreal",
+      "role": "coder",
+      "depends_on": [],
+      "system_prompt": "Read AGENTS.md and docs/AGENT-GUIDE.md first. Work ONLY inside these paths: crates/gap-store/src/surreal/**. Spec refs: ADR-020, ADR-002. Expand this work package into 2-5 minute steps before coding."
+    }
+  ]
+}
