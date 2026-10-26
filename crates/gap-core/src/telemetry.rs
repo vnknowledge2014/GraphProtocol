@@ -247,8 +247,8 @@ where
     }
 }
 
-/// Builds a boxed [`Subscriber`] wired to a caller-supplied OpenTelemetry [`SpanExporter`] using
-/// `SimpleSpanProcessor` (`--features otel`).
+/// Builds a boxed [`Subscriber`] wired to a caller-supplied OpenTelemetry
+/// [`opentelemetry_sdk::trace::SpanExporter`] using `SimpleSpanProcessor` (`--features otel`).
 ///
 /// # Errors
 ///
