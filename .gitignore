@@ -58,6 +58,11 @@ models/**/*.bin
 .agent/fallback_data/
 .agent/security/
 
+# Local-only offline build support (never committed): vendored crates and the
+# cargo source-replacement config that points to them.
+/.local/
+/.cargo/
+
 # Audit trail for work packages is tracked (ADR-022): work/steps is NOT ignored
 !work/steps/
 !work/steps/**

@@ -130,7 +130,7 @@ milestone = "M0"
 role = "coder"
 size = "L"
 depends_on = ["WP-M0-02"]
-owns = ["crates/gap-core/**"]
+owns = ["crates/gap-core/**", "docs/config.schema.json"]
 spec_refs = ["ARC-005", "ARC-006", "ARC-010", "ADR-018", "ADR-023", "INV-09", "INV-15", "GQL-004"]
 deliverables = [
   "id newtypes (TenantId, BranchId, BranchUid, OperationId, GroupId, TaskId, ProposalId) with validation + serde + proptest",

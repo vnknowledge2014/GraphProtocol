@@ -73,7 +73,7 @@
       "depends_on": [
         2
       ],
-      "system_prompt": "Read AGENTS.md and docs/AGENT-GUIDE.md first. Work ONLY inside these paths: crates/gap-core/**. Spec refs: ARC-005, ARC-006, ARC-010, ADR-018, ADR-023, INV-09, INV-15, GQL-004. Expand this work package into 2-5 minute steps before coding."
+      "system_prompt": "Read AGENTS.md and docs/AGENT-GUIDE.md first. Work ONLY inside these paths: crates/gap-core/**, docs/config.schema.json. Spec refs: ARC-005, ARC-006, ARC-010, ADR-018, ADR-023, INV-09, INV-15, GQL-004. Expand this work package into 2-5 minute steps before coding."
     },
     {
       "id": 9,
