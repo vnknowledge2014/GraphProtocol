@@ -1,3 +1,5 @@
 # Progress ledger (one table per WP). Edit via: python3 tools/wp.py set <ID> <state>
 ["WP-M0-01"]
 state = "done"
+["WP-M0-07"]
+state = "doing"
