@@ -721,8 +721,25 @@ pub(crate) fn validate_against_projected_schema(
 ) -> Result<ValidatedOperation, Vec<GapError>> {
     let ast_doc = parse_executable_ast(query, "request.graphql")?;
     validate_executable_reserved_names(&ast_doc)?;
+    crate::directives::check_executable_incremental_directives(&ast_doc, false)
+        .map_err(|err| vec![err])?;
+    validate_parsed_ast_against_projected_schema(
+        projected_schema,
+        &ast_doc,
+        operation_name,
+        variables,
+        visibility,
+    )
+}
 
-    let non_empty_spans = non_empty_ast_field_spans(&ast_doc);
+pub(crate) fn validate_parsed_ast_against_projected_schema(
+    projected_schema: &Valid<Schema>,
+    ast_doc: &ast::Document,
+    operation_name: Option<&str>,
+    variables: &serde_json::Map<String, serde_json::Value>,
+    visibility: &dyn crate::visibility::Visibility,
+) -> Result<ValidatedOperation, Vec<GapError>> {
+    let non_empty_spans = non_empty_ast_field_spans(ast_doc);
     let valid_doc = ast_doc
         .to_executable_validate(projected_schema)
         .map_err(|with_errs| {
@@ -743,7 +760,7 @@ pub(crate) fn validate_against_projected_schema(
                 errs.push(crate::suggest::attach_validation_suggestion(
                     gap_err,
                     projected_schema,
-                    Some(&ast_doc),
+                    Some(ast_doc),
                     visibility,
                 ));
             }
@@ -755,7 +772,7 @@ pub(crate) fn validate_against_projected_schema(
                     errs.push(crate::suggest::attach_validation_suggestion(
                         gap_err,
                         projected_schema,
-                        Some(&ast_doc),
+                        Some(ast_doc),
                         visibility,
                     ));
                 }
