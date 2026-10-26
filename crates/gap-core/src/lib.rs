@@ -10,5 +10,6 @@
 )]
 
 pub mod cursor;
+pub mod ids;
 pub mod joingraph;
 pub mod snapshot;
