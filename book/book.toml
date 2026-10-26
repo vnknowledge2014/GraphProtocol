@@ -1,0 +1,10 @@
+[book]
+title = "GAP — Graph Agent Protocol"
+description = "Normative specification, architecture decision records, and operational documentation for the Graph Agent Protocol (GAP)"
+authors = ["GAP Contributors"]
+language = "en"
+src = "src"
+
+[build]
+build-dir = "../target/book"
+create-missing = false
