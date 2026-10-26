@@ -18,4 +18,5 @@ pub mod ids;
 pub mod joingraph;
 pub mod secret;
 pub mod snapshot;
+pub mod telemetry;
 pub mod traits;
