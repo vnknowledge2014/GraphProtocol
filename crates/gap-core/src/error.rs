@@ -527,7 +527,7 @@ pub struct ErrorExtensions {
     pub retry: RetryInfo,
     /// Optional LLM self-repair suggestion (`GQL-070`, `GQL-071`).
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub suggestion: Option<Suggestion>,
+    pub suggestion: Option<Box<Suggestion>>,
     /// Request correlation identifier (`correlationId`).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub correlation_id: Option<String>,
@@ -546,8 +546,8 @@ pub struct GapError {
     /// Optional GraphQL response path where the error occurred.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub path: Option<Vec<PathSegment>>,
-    /// Structured GAP error extensions.
-    pub extensions: ErrorExtensions,
+    /// Structured GAP error extensions (boxed to keep `GapResult<T>` stack-compact).
+    pub extensions: Box<ErrorExtensions>,
 }
 
 /// Convenience alias for `Result<T, GapError>`.
@@ -562,7 +562,7 @@ impl GapError {
             message: clamp_error_message(message),
             locations: None,
             path: None,
-            extensions: ErrorExtensions {
+            extensions: Box::new(ErrorExtensions {
                 code,
                 retry: RetryInfo {
                     retryable: code.default_retryable(),
@@ -570,7 +570,7 @@ impl GapError {
                 },
                 suggestion: None,
                 correlation_id: None,
-            },
+            }),
         }
     }
 
@@ -600,8 +600,8 @@ impl GapError {
 
     /// Optional self-repair suggestion in `extensions.suggestion`.
     #[must_use]
-    pub const fn suggestion(&self) -> Option<&Suggestion> {
-        self.extensions.suggestion.as_ref()
+    pub fn suggestion(&self) -> Option<&Suggestion> {
+        self.extensions.suggestion.as_deref()
     }
 
     /// Optional request correlation identifier in `extensions.correlationId`.
@@ -623,7 +623,7 @@ impl GapError {
     /// Attaches `extensions.suggestion`.
     #[must_use]
     pub fn with_suggestion(mut self, suggestion: Suggestion) -> Self {
-        self.extensions.suggestion = Some(suggestion);
+        self.extensions.suggestion = Some(Box::new(suggestion));
         self
     }
 

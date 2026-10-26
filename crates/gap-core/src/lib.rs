@@ -9,8 +9,11 @@
     clippy::unimplemented
 )]
 
+pub mod clock;
+pub mod context;
 pub mod cursor;
 pub mod error;
 pub mod ids;
 pub mod joingraph;
+pub mod secret;
 pub mod snapshot;
