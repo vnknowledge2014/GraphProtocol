@@ -7,3 +7,5 @@
     clippy::todo,
     clippy::unimplemented
 )]
+
+pub mod schema;

@@ -1,0 +1,130 @@
+scalar DateTime            # RFC 3339 UTC
+scalar JSON                # any JSON value; used only for open-ended node properties
+scalar Cursor              # opaque, base64url, server-signed (tamper-evident)
+
+directive @oneOf on INPUT_OBJECT
+
+enum Direction        { OUTBOUND INBOUND BOTH }
+enum TraverseStrategy { BFS DFS SHORTEST WEIGHTED }
+enum ContextScope     { PRIVATE TASK GROUP GLOBAL EPHEMERAL }
+enum ElementKind      { OPERATION TYPE FIELD NODE_CATEGORY EXAMPLE }
+enum ResolveOutcome   { CONFIDENT AMBIGUOUS ABSTAINED }
+enum AbstentionReason { NO_MATCH LOW_CONFIDENCE EMPTY_VISIBLE_SET MODEL_UNAVAILABLE }
+enum SideEffectLevel  { NONE REVERSIBLE IRREVERSIBLE UNKNOWN }
+enum TrustTier        { T0 T1 T2 }
+enum BranchStatus     { ACTIVE DRIFT QUARANTINED DISABLED }
+enum Protocol         { SQL REST GRPC GRAPHQL MCP A2A CLI CODE_GRAPH CUSTOM }
+enum TaskState        { SUBMITTED WORKING INPUT_REQUIRED AUTH_REQUIRED COMPLETED FAILED CANCELED REJECTED }
+enum TaskStrategy     { SINGLE PARALLEL SEQUENTIAL DAG }
+enum ApprovalDecision { APPROVE DENY }
+
+type Query        { gap: GapQuery! }
+type Mutation     { gap: GapMutation! }
+type Subscription { gapTaskEvents(taskId: ID!, fromSeq: Int = 0): TaskEvent! }
+
+type GapQuery {
+  "Intent -> ranked capability groups with executable skeletons, or an explicit abstention. Never executes."
+  resolve(intent: String!, constraints: ResolveConstraints): Resolution!
+  "Multi-hop walk over graph branches (code/doc/context graphs). Bounded by maxDepth and budget."
+  traverse(input: TraverseInput!): Subgraph!
+  node(ref: NodeRef!): GapNode
+  task(id: ID!): Task
+  tasks(filter: TaskFilter, first: Int = 20, after: Cursor): TaskConnection!
+  "Same data as __metaGraph, for clients that cannot send introspection-style fields."
+  metaGraph: MetaGraph!
+  "Plan explanation for a document (no execution). Subject to authorization."
+  explain(document: String!, variables: JSON): PlanExplanation!
+  proposals(status: [ProposalStatus!], first: Int = 20, after: Cursor): ProposalConnection!
+}
+
+type GapMutation {
+  submitTask(input: SubmitTaskInput!): Task!
+  cancelTask(id: ID!, reason: String): Task!
+  decideApproval(taskId: ID!, approvalId: ID!, decision: ApprovalDecision!, note: String): Task!
+  "Ingestion is propose-only (ADR-013)."
+  proposeSource(input: ProposeSourceInput!): Proposal!
+  decideProposal(id: ID!, decision: ApprovalDecision!, note: String, breakingChangeAck: Boolean = false): Proposal!
+}
+
+# ---------- discovery ----------
+input ResolveConstraints { branches: [ID!], maxSideEffect: SideEffectLevel = NONE, maxCandidates: Int = 5, budgetTokens: Int }
+type Resolution {
+  outcome: ResolveOutcome!
+  candidates: [Candidate!]!          # empty iff ABSTAINED
+  abstentionReason: AbstentionReason
+  calibrationId: String              # null when router is baseline-uncalibrated
+  router: String!                    # "baseline" | "s1:<model-id>"
+  tokensEstimate: Int!
+}
+type Candidate {
+  groupId: ID!  score: Float!  probability: Float   # probability only when calibrated
+  operation: OperationRef!  skeleton: String!  variablesSchema: JSON!  sdl: String!
+  sideEffect: SideEffectLevel!  trust: TrustTier!  why: String
+}
+type OperationRef { id: ID!  branch: ID!  kind: String! }
+
+# ---------- graph walk ----------
+input NodeRef @oneOf { id: ID  key: NodeKey }
+input NodeKey { type: String!  value: JSON! }
+input EdgeFilter { types: [String!]  where: Predicate }
+input TraverseInput {
+  from: NodeRef!  through: EdgeFilter  direction: Direction = OUTBOUND
+  maxDepth: Int!                  # 1..16 (GQL-040)
+  strategy: TraverseStrategy = BFS  asOf: DateTime  where: Predicate
+  scopes: [ContextScope!]         # narrows visibility only (GQL-043)
+  first: Int = 100  after: Cursor
+  returnFields: [String!]         # projection of node props (token control)
+}
+input Predicate @oneOf {          # recursive boolean algebra over props/paths
+  and: [Predicate!]  or: [Predicate!]  not: Predicate
+  eq: Compare  ne: Compare  gt: Compare  gte: Compare  lt: Compare  lte: Compare
+  in: CompareList  contains: Compare  startsWith: Compare  exists: String
+}
+input Compare     { path: String!  value: JSON! }
+input CompareList { path: String!  values: [JSON!]! }
+type Subgraph { nodes: [GapNode!]!  edges: [GapEdge!]!  pageInfo: PageInfo!  truncated: Boolean!  stats: TraverseStats! }
+type GapNode  { id: ID!  type: String!  label: String!  props: JSON  provenance: Provenance  validFrom: DateTime  validTo: DateTime  scope: ContextScope }
+type GapEdge  { id: ID!  type: String!  from: ID!  to: ID!  props: JSON  confidence: Float  resolution: EdgeResolution!  provenance: Provenance }
+enum EdgeResolution { EXACT HEURISTIC }
+type TraverseStats { visited: Int!  returned: Int!  depthReached: Int!  tokensEstimate: Int! }
+type PageInfo { hasNextPage: Boolean!  endCursor: Cursor }
+type Provenance { source: String!  descHash: String  confidence: Float  extractedAt: DateTime  agent: String }
+
+# ---------- tasks (ADR-016) ----------
+input SubmitTaskInput {
+  contextId: ID  goal: String  strategy: TaskStrategy = SINGLE
+  steps: [TaskStepInput!]!   deadlineMs: Int  idempotencyKey: String
+}
+input TaskStepInput {
+  id: ID!  dependsOn: [ID!]
+  gapql: String            # executed through the normal pipeline as the submitting principal
+  variables: JSON
+  delegate: DelegateInput  # exactly one of gapql/delegate
+}
+input DelegateInput { branch: ID!  message: JSON!  expectArtifacts: [String!] }
+type Task {
+  id: ID!  contextId: ID  state: TaskState!  strategy: TaskStrategy!
+  steps: [TaskStep!]!  artifacts: [Artifact!]!  pendingApproval: Approval
+  createdAt: DateTime!  updatedAt: DateTime!  deadlineAt: DateTime  lastSeq: Int!
+  error: TaskError
+}
+type TaskStep { id: ID!  state: TaskState!  result: JSON  error: TaskError }
+type Artifact { id: ID!  name: String  mediaType: String!  data: JSON  uri: String  sha256: String }
+type Approval { id: ID!  action: String!  summary: String!  sideEffect: SideEffectLevel!  expiresAt: DateTime! }
+type TaskError { code: String!  message: String!  retryable: Boolean! }
+type TaskEvent { seq: Int!  taskId: ID!  at: DateTime!  state: TaskState!  stepId: ID  message: String  artifact: Artifact }
+type TaskConnection { nodes: [Task!]!  pageInfo: PageInfo! }
+input TaskFilter { state: [TaskState!]  contextId: ID }
+
+# ---------- meta / ingestion ----------
+type MetaGraph { generation: Int!  branches: [MetaBranch!]!  groupCount: Int!  tokensEstimate: Int! }
+type MetaBranch {
+  id: ID!  protocol: Protocol!  trust: TrustTier!  status: BranchStatus!
+  synopsis: String!  nodeCategories: [String!]!  edgePredicates: [String!]!
+  operationCount: Int!  readOnlyCount: Int!  mutatingCount: Int!
+}
+type PlanExplanation { plan: JSON!  branchesTouched: [ID!]!  estimatedCost: Int!  pushdowns: [String!]!  warnings: [String!]! }
+input ProposeSourceInput { kind: Protocol!  location: String!  name: String  trust: TrustTier = T2  notes: String }
+enum ProposalStatus { PROPOSED EXTRACTING ENRICHING VERIFYING STAGED AWAITING_APPROVAL PROMOTING ACTIVE WATCHING STABLE REJECTED FAILED ROLLED_BACK }
+type Proposal { id: ID!  status: ProposalStatus!  branch: ID  kind: Protocol!  location: String!  report: JSON  createdAt: DateTime!  updatedAt: DateTime! }
+type ProposalConnection { nodes: [Proposal!]!  pageInfo: PageInfo! }

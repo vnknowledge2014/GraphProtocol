@@ -1,0 +1,4 @@
+directive @budget(ms: Int, tokens: Int, costUnits: Int, failFast: Boolean = false) on QUERY | MUTATION | SUBSCRIPTION
+directive @dryRun on MUTATION
+directive @format(as: Format = JSON) on FIELD            # COLUMNAR is extension X-1 (M7)
+enum Format { JSON COLUMNAR }

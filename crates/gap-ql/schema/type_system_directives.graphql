@@ -1,0 +1,17 @@
+directive @branch(id: ID!, uid: ID!, protocol: Protocol!, trust: TrustTier!) on OBJECT | FIELD_DEFINITION
+directive @capabilityGroup(id: ID!) on FIELD_DEFINITION
+directive @key(fields: String!) repeatable on OBJECT                                   # ✎ entity key
+directive @join(to: String!, on: [JoinKey!]!, cardinality: Cardinality!,
+                strategy: JoinStrategy = FOREACH_BATCH, status: JoinStatus = PROPOSED,
+                evidence: JSON) on FIELD_DEFINITION                                    # status managed by gates (ADR-012)
+directive @sideEffect(level: SideEffectLevel!, idempotent: Boolean = false, dryRun: Boolean = false) on FIELD_DEFINITION   # ✎ (T0/T1 only)
+directive @compensate(with: String!) on FIELD_DEFINITION                                # ✎ operation id that undoes this one
+directive @auth(policy: String, scopes: [String!]) on OBJECT | FIELD_DEFINITION         # ✎
+directive @cost(weight: Int = 1, listSize: Int, perKey: Int) on FIELD_DEFINITION        # ✎
+directive @provenance(source: String!, descHash: String!, confidence: Float, extractedAt: DateTime) on OBJECT | FIELD_DEFINITION
+directive @temporal(validFrom: String, validTo: String, supersedes: String) on OBJECT | FIELD_DEFINITION   # ✎
+directive @pii(kind: String!) on FIELD_DEFINITION                                       # ✎ redaction policy hook
+input JoinKey { from: String!, to: String! }
+enum Cardinality { ONE_TO_ONE MANY_TO_ONE ONE_TO_MANY }   # MANY_TO_MANY is not expressible (RUN-021)
+enum JoinStrategy { FOREACH_BATCH REMOTE_PREDICATE }
+enum JoinStatus { PROPOSED VERIFIED ACTIVE DEPRECATED }
