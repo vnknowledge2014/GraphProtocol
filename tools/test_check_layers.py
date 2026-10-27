@@ -9,11 +9,15 @@ import os
 import shutil
 import subprocess
 import tempfile
+import tomllib
 import unittest
 from pathlib import Path
 from unittest import mock
 
 from tools import check_layers
+
+REPO_ROOT = Path(__file__).resolve().parent.parent
+PACKAGE_SCAN_DIRS = ("crates", "adapters", "bench", "fuzz", "sdks")
 
 
 def _write(path: Path, content: str) -> None:
@@ -258,6 +262,97 @@ class CheckLayersWorkspaceTests(unittest.TestCase):
             )
             self.assertEqual(rc, 0, msg=out)
             self.assertEqual(out.strip(), "OK: 4 workspace crates respect layering and ARC-002")
+
+
+def _audit_layers_completeness(repo_root: Path) -> tuple[set[str], set[str], set[str]]:
+    excluded_prefixes: set[str] = set()
+    root_cargo = repo_root / "Cargo.toml"
+    if root_cargo.is_file():
+        root_doc = tomllib.loads(root_cargo.read_text(encoding="utf-8"))
+        for item in root_doc.get("workspace", {}).get("exclude", []):
+            excluded_prefixes.add(item.strip("/"))
+
+    discovered: set[str] = set()
+    for top in PACKAGE_SCAN_DIRS:
+        top_dir = repo_root / top
+        if not top_dir.is_dir():
+            continue
+        for manifest in sorted(top_dir.rglob("Cargo.toml")):
+            rel_parts = manifest.relative_to(repo_root).parts
+            if "target" in rel_parts:
+                continue
+            doc = tomllib.loads(manifest.read_text(encoding="utf-8"))
+            rel_dir = manifest.parent.relative_to(repo_root).as_posix()
+            is_excluded = any(
+                rel_dir == ex or rel_dir.startswith(f"{ex}/") for ex in excluded_prefixes
+            )
+            if is_excluded and "workspace" in doc:
+                continue
+            pkg_name = doc.get("package", {}).get("name")
+            if pkg_name:
+                discovered.add(pkg_name)
+
+    layers_doc = tomllib.loads((repo_root / "tools" / "layers.toml").read_text(encoding="utf-8"))
+    layered = set(layers_doc.get("layers", {}).keys())
+    exempt = set(layers_doc.get("exempt_dev", {}).get("crates", []))
+    configured = layered | exempt
+    return discovered - configured, configured - discovered, layered & exempt
+
+
+class LayersTomlCompletenessTests(unittest.TestCase):
+    def test_real_repository_packages_match_layers_toml_without_gaps_or_stale_entries(self) -> None:
+        # spec: ARC-001, ADR-022
+        missing, stale, overlap = _audit_layers_completeness(REPO_ROOT)
+        self.assertEqual(missing, set(), msg=f"packages missing from tools/layers.toml: {sorted(missing)}")
+        self.assertEqual(stale, set(), msg=f"stale crates in tools/layers.toml: {sorted(stale)}")
+        self.assertEqual(overlap, set(), msg=f"crates in both [layers] and [exempt_dev]: {sorted(overlap)}")
+
+        layers_doc = tomllib.loads((REPO_ROOT / "tools" / "layers.toml").read_text(encoding="utf-8"))
+        configured = set(layers_doc["layers"]) | set(layers_doc.get("exempt_dev", {}).get("crates", []))
+        self.assertEqual(len(configured), 31)
+
+        # Verify standalone fuzz/Cargo.toml is explicitly excluded in root Cargo.toml and references valid crates.
+        fuzz_manifest = REPO_ROOT / "fuzz" / "Cargo.toml"
+        if fuzz_manifest.is_file():
+            fuzz_doc = tomllib.loads(fuzz_manifest.read_text(encoding="utf-8"))
+            self.assertIn("workspace", fuzz_doc)
+            for dep_name, dep_spec in fuzz_doc.get("dependencies", {}).items():
+                if isinstance(dep_spec, dict) and "path" in dep_spec:
+                    self.assertIn(dep_name, configured)
+
+    def test_completeness_audit_detects_missing_and_stale_packages_across_all_roots(self) -> None:
+        # spec: ARC-001, ADR-022
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            _write(root / "Cargo.toml", '[workspace]\nexclude = ["fuzz"]\n')
+            for folder, pkg in (
+                ("crates/c1", "pkg-crates"),
+                ("adapters/a1", "pkg-adapters"),
+                ("bench/b1", "pkg-bench"),
+                ("sdks/py", "pkg-sdks"),
+            ):
+                _write(root / folder / "Cargo.toml", f'[package]\nname = "{pkg}"\nversion = "0.1.0"\n')
+            # Standalone excluded fuzz workspace is ignored, while non-excluded fuzz member is checked.
+            _write(root / "fuzz" / "Cargo.toml", '[package]\nname = "standalone-fuzz"\n[workspace]\n')
+            _write(
+                root / "tools" / "layers.toml",
+                "\n".join(
+                    [
+                        "[layers]",
+                        'pkg-crates = 0',
+                        'pkg-adapters = 4',
+                        'pkg-stale = 5',
+                        "[exempt_dev]",
+                        'crates = ["pkg-bench"]',
+                    ]
+                )
+                + "\n",
+            )
+
+            missing, stale, overlap = _audit_layers_completeness(root)
+            self.assertEqual(missing, {"pkg-sdks"})
+            self.assertEqual(stale, {"pkg-stale"})
+            self.assertEqual(overlap, set())
 
 
 if __name__ == "__main__":
