@@ -11,6 +11,7 @@
 
 pub mod chaos;
 pub mod clock;
+pub mod mock_ngc;
 pub mod snapshot;
 
 #[cfg(test)]
