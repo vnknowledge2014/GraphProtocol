@@ -1,5 +1,6 @@
 //! SQLite [`crate::ContextStore`] and [`crate::ContextMaintenance`] backend (`ADR-020`, `ADR-025`, `ING-064`..`ING-067`).
 
+pub(crate) mod backup;
 pub(crate) mod crud;
 pub(crate) mod maintenance;
 pub mod schema;
