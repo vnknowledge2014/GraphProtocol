@@ -1453,4 +1453,53 @@ mod tests {
         let loaded = load_fixture_file(&path, "null_schema.json").expect("null schema must load");
         assert_eq!(loaded.schema, None);
     }
+
+    // spec: GQL-002 (VER-010)
+    #[test]
+    fn h2_load_fixtures_dir_sorts_relative_paths_lexicographically_including_dot_before_slash() {
+        let tmp = TempDir::new().expect("tempdir");
+        let make_fixture = |name: &str| -> String {
+            json!({
+                "name": name,
+                "class": ["Core"],
+                "spec": ["GQL-002"],
+                "request": {"query": "{ ok }"},
+                "expect": {"status": 200}
+            })
+            .to_string()
+        };
+
+        // Created in reverse order across nested subdirectories, including `a/z.json` vs `a.json`
+        // and `b/z.json` vs `b.json` (`.` = 0x2E < `/` = 0x2F, `-` = 0x2D < `.` = 0x2E).
+        write_file(tmp.path(), "z/last.json", &make_fixture("f11"));
+        write_file(tmp.path(), "m/sub/item.json", &make_fixture("f10"));
+        write_file(tmp.path(), "b/z.json", &make_fixture("f09"));
+        write_file(tmp.path(), "b/a.json", &make_fixture("f08"));
+        write_file(tmp.path(), "b.json", &make_fixture("f07"));
+        write_file(tmp.path(), "a0/first.json", &make_fixture("f06"));
+        write_file(tmp.path(), "a/z.json", &make_fixture("f05"));
+        write_file(tmp.path(), "a/m/deep.json", &make_fixture("f04"));
+        write_file(tmp.path(), "a/a.json", &make_fixture("f03"));
+        write_file(tmp.path(), "a.json", &make_fixture("f02"));
+        write_file(tmp.path(), "a-0.json", &make_fixture("f01"));
+
+        let loaded = load_fixtures_dir(tmp.path()).expect("all 11 fixtures must load");
+        let rel_paths: Vec<&str> = loaded.iter().map(|f| f.relative_path.as_str()).collect();
+        assert_eq!(
+            rel_paths,
+            vec![
+                "a-0.json",
+                "a.json",
+                "a/a.json",
+                "a/m/deep.json",
+                "a/z.json",
+                "a0/first.json",
+                "b.json",
+                "b/a.json",
+                "b/z.json",
+                "m/sub/item.json",
+                "z/last.json",
+            ]
+        );
+    }
 }

@@ -1167,4 +1167,21 @@ mod tests {
             "transport connection reset"
         );
     }
+
+    // spec: INV-15, SEC-040 (VER-011)
+    #[test]
+    fn h1_scrub_optional_secret_replaces_json_escaped_and_raw_token() {
+        let secret = SecretString::new(r#"a"b\c"#.to_owned());
+        let both = r#"escaped=a\"b\\c raw=a"b\c tail"#;
+        assert_eq!(
+            scrub_optional_secret(both, Some(&secret)),
+            "escaped=*** raw=*** tail"
+        );
+
+        let escaped_only = r#"payload={"token":"a\"b\\c"}"#;
+        assert_eq!(
+            scrub_optional_secret(escaped_only, Some(&secret)),
+            r#"payload={"token":"***"}"#
+        );
+    }
 }

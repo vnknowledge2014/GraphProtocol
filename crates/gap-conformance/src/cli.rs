@@ -695,4 +695,21 @@ mod tests {
             "stderr must never contain raw principal token: {stderr_str}"
         );
     }
+
+    // spec: GQL-002 (VER-010, VER-011)
+    #[test]
+    fn h3_cli_defaults_fixtures_to_conformance_when_flag_omitted() {
+        let cli = CliArgs::try_parse_from([
+            "gap-conformance",
+            "--target",
+            "http://127.0.0.1:8080/graphql",
+        ])
+        .expect("CLI parse without --fixtures must succeed");
+        assert_eq!(cli.fixtures, PathBuf::from("conformance"));
+        assert_eq!(cli.fixtures.to_str(), Some("conformance"));
+
+        let bare = CliArgs::try_parse_from(["gap-conformance"])
+            .expect("bare CLI parse with default flags must succeed");
+        assert_eq!(bare.fixtures, PathBuf::from("conformance"));
+    }
 }
