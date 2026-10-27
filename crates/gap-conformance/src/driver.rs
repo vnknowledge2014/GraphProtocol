@@ -172,15 +172,32 @@ impl PrincipalsMap {
         self.tokens.is_empty()
     }
 
-    /// Replaces any accidental occurrence of a configured bearer token in `input` with
-    /// [`REDACTED_MARKER`] (`"***"`, `INV-15`).
+    /// Replaces any accidental occurrence of a configured bearer token (in either raw or
+    /// JSON-escaped form, longest needles first) in `input` with [`REDACTED_MARKER`] (`"***"`,
+    /// `INV-15`).
     #[must_use]
     pub fn scrub_text(&self, input: &str) -> String {
-        let mut out = input.to_owned();
+        let mut needles: Vec<String> = Vec::new();
         for secret in self.tokens.values() {
             let raw = secret.expose_secret();
-            if !raw.is_empty() && out.contains(raw) {
-                out = out.replace(raw, REDACTED_MARKER);
+            if raw.is_empty() {
+                continue;
+            }
+            needles.push(raw.clone());
+            if let Some(escaped) = json_escaped_inner(raw) {
+                needles.push(escaped);
+            }
+        }
+        if needles.is_empty() {
+            return input.to_owned();
+        }
+        needles.sort_by(|a, b| b.len().cmp(&a.len()).then_with(|| a.cmp(b)));
+        needles.dedup();
+
+        let mut out = input.to_owned();
+        for needle in &needles {
+            if out.contains(needle.as_str()) {
+                out = out.replace(needle.as_str(), REDACTED_MARKER);
             }
         }
         out
@@ -530,14 +547,30 @@ fn redact_raw_url_userinfo(raw: &str) -> String {
     raw.to_owned()
 }
 
-fn scrub_optional_secret(text: &str, secret: Option<&SecretString>) -> String {
-    if let Some(s) = secret {
-        let raw = s.expose_secret();
-        if !raw.is_empty() && text.contains(raw) {
-            return text.replace(raw, REDACTED_MARKER);
-        }
+fn json_escaped_inner(raw: &str) -> Option<String> {
+    let encoded = serde_json::to_string(raw).ok()?;
+    let inner = encoded.strip_prefix('"')?.strip_suffix('"')?;
+    (inner != raw).then(|| inner.to_owned())
+}
+
+pub(crate) fn scrub_optional_secret(text: &str, secret: Option<&SecretString>) -> String {
+    let Some(s) = secret else {
+        return text.to_owned();
+    };
+    let raw = s.expose_secret();
+    if raw.is_empty() {
+        return text.to_owned();
     }
-    text.to_owned()
+    let mut out = text.to_owned();
+    if let Some(escaped) = json_escaped_inner(raw)
+        && out.contains(&escaped)
+    {
+        out = out.replace(&escaped, REDACTED_MARKER);
+    }
+    if out.contains(raw) {
+        out = out.replace(raw, REDACTED_MARKER);
+    }
+    out
 }
 
 fn format_error_chain(err: &dyn std::error::Error) -> String {
@@ -967,5 +1000,59 @@ mod tests {
         )
         .expect_err("with_timeouts must still reject https:// offline");
         assert!(matches!(https_err, DriverError::HttpsUnsupported { .. }));
+    }
+
+    // spec: INV-15, SEC-040
+    #[test]
+    fn e1_scrub_text_replaces_longest_overlapping_tokens_first_in_both_orders() {
+        let map_short_first =
+            PrincipalsMap::from_entries([("a_first", "abc"), ("z_second", "abcdef")]);
+        let map_long_first =
+            PrincipalsMap::from_entries([("a_first", "abcdef"), ("z_second", "abc")]);
+        let map_reverse_insert =
+            PrincipalsMap::from_entries([("z_second", "abcdef"), ("a_first", "abc")]);
+
+        assert_eq!(
+            map_short_first.scrub_text("x abcdef y abc z"),
+            "x *** y *** z"
+        );
+        assert_eq!(
+            map_long_first.scrub_text("x abcdef y abc z"),
+            "x *** y *** z"
+        );
+        assert_eq!(
+            map_reverse_insert.scrub_text("x abcdef y abc z"),
+            "x *** y *** z"
+        );
+    }
+
+    // spec: INV-15, SEC-040
+    #[test]
+    fn e2_scrub_text_replaces_json_escaped_and_raw_tokens() {
+        let map = PrincipalsMap::from_entries([("alice", "a\"b\\c"), ("ctrl", "t\n\x07k")]);
+
+        let mixed = "escaped=a\\\"b\\\\c and raw=a\"b\\c";
+        assert_eq!(map.scrub_text(mixed), "escaped=*** and raw=***");
+
+        let ctrl_mixed = "json=t\\n\\u0007k and raw=t\n\x07k";
+        assert_eq!(map.scrub_text(ctrl_mixed), "json=*** and raw=***");
+    }
+
+    // spec: INV-15
+    #[test]
+    fn e3_scrub_text_leaves_empty_map_empty_token_and_no_match_unchanged() {
+        assert_eq!(
+            PrincipalsMap::empty().scrub_text("plain diagnostic message"),
+            "plain diagnostic message"
+        );
+        assert_eq!(
+            PrincipalsMap::from_entries([("empty", "")]).scrub_text("plain diagnostic message"),
+            "plain diagnostic message"
+        );
+        assert_eq!(
+            PrincipalsMap::from_entries([("alice", "tok-unmatched-777")])
+                .scrub_text("plain diagnostic message"),
+            "plain diagnostic message"
+        );
     }
 }
