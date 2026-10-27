@@ -65,6 +65,10 @@ under Deviations in the handoff with the reason.
   props, scope, provenance) is a no-op (no new version, so incremental indexing stays idempotent, ING-062); changed
   content closes the old version (`valid_to = now`) and inserts a new one (`valid_from = now`).
 - Same for edges, unique current edge per `(tenant, edge_type, from, to)`.
+- Writes take the same `Caller` as reads (the writer). `put_batch(tenant, writer, nodes, edges)` applies the nodes and then
+  the edges in **one transaction** and is atomic: if any item is invalid, nothing of the batch is persisted. `put_node` and
+  `put_edge` are single-item wrappers. A batch is capped at 10,000 items. This exists so that ingesting a large repository
+  is not one commit per row; a test inserts 50,000 nodes and 100,000 edges through batches and checks the counts.
 - `tombstone_node` sets `valid_to = now` on the node and on all its current edges in one transaction.
   `delete_node` is a hard delete (used by retention) and removes its edges.
 - `as_of` selects rows with `valid_from <= t < COALESCE(valid_to, +inf)`. Default is `clock.now()` resolved once per
