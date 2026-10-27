@@ -319,16 +319,30 @@ class WpValidateTests(unittest.TestCase):
 
     def test_validate_missing_required_field_fails_for_every_field(self) -> None:
         # spec: ADR-022
-        for field in wp.REQUIRED:
+        required_fields = (
+            "id",
+            "title",
+            "milestone",
+            "role",
+            "size",
+            "depends_on",
+            "owns",
+            "spec_refs",
+            "deliverables",
+            "acceptance",
+        )
+        self.assertEqual(set(wp.REQUIRED), set(required_fields))
+        for field in required_fields:
             with self.subTest(field=field), tempfile.TemporaryDirectory() as tmp:
                 root = Path(tmp)
                 _seed_spec_tree(root)
-                entry = _make_wp()
+                # Use non-coder role so missing 'owns' cannot be masked by coder-owns check.
+                entry = _make_wp(role="tester")
                 del entry[field]
                 _write(root / "work" / "work-packages.toml", _render_wps([entry]))
 
                 rc, out = _run_validate(root)
-                self.assertEqual(rc, 1)
+                self.assertEqual(rc, 1, msg=f"field={field} output={out}")
                 self.assertIn(f"missing field '{field}'", out)
 
     def test_validate_empty_acceptance_fails(self) -> None:
