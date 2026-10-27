@@ -547,4 +547,168 @@ mod tests {
         assert_eq!(err.detail, "line 3");
         assert!(!err.to_string().contains(CANARY));
     }
+
+    // spec: INV-15
+    #[test]
+    fn f4a_detects_leak_in_span_name_only() {
+        let sink = CanarySink::new(CANARY).expect("valid canary");
+        let ((), capture) = TracingCapture::with_captured(|| {
+            let _span = tracing::info_span!("span_gap-canary-secret-token-9f8e7d6c5b4a");
+        });
+        assert!(capture.events().is_empty());
+        let err = sink
+            .check_tracing(&capture)
+            .expect_err("canary in span name must be detected");
+        assert_eq!(err.surface, "tracing.span.name");
+        assert_eq!(err.detail, "span[0]");
+        assert!(!err.to_string().contains(CANARY));
+    }
+
+    // spec: INV-15
+    #[test]
+    fn f4b_detects_leak_in_span_target_only() {
+        let sink = CanarySink::new(CANARY).expect("valid canary");
+        let ((), capture) = TracingCapture::with_captured(|| {
+            let _span = tracing::info_span!(
+                target: "tgt_gap-canary-secret-token-9f8e7d6c5b4a",
+                "clean_span"
+            );
+        });
+        assert!(capture.events().is_empty());
+        let err = sink
+            .check_tracing(&capture)
+            .expect_err("canary in span target must be detected");
+        assert_eq!(err.surface, "tracing.span.target");
+        assert_eq!(err.detail, "span[0]");
+        assert!(!err.to_string().contains(CANARY));
+    }
+
+    // spec: INV-15
+    #[test]
+    fn f4c_detects_leak_in_span_field_key_only() {
+        let sink = CanarySink::new(CANARY).expect("valid canary");
+        let ((), capture) = TracingCapture::with_captured(|| {
+            let _span = tracing::info_span!(
+                "clean_span",
+                "key.gap-canary-secret-token-9f8e7d6c5b4a" = "clean_value"
+            );
+        });
+        assert!(capture.events().is_empty());
+        let err = sink
+            .check_tracing(&capture)
+            .expect_err("canary in span field key must be detected");
+        assert_eq!(err.surface, "tracing.span.field");
+    }
+
+    // spec: INV-15
+    #[test]
+    fn f4d_detects_leak_in_event_target_only() {
+        let sink = CanarySink::new(CANARY).expect("valid canary");
+        let ((), capture) = TracingCapture::with_captured(|| {
+            tracing::info!(
+                target: "ev_gap-canary-secret-token-9f8e7d6c5b4a",
+                "clean message"
+            );
+        });
+        assert!(capture.spans().is_empty());
+        let err = sink
+            .check_tracing(&capture)
+            .expect_err("canary in event target must be detected");
+        assert_eq!(err.surface, "tracing.event.target");
+        assert_eq!(err.detail, "event[0]");
+        assert!(!err.to_string().contains(CANARY));
+    }
+
+    // spec: INV-15
+    #[test]
+    fn f4e_detects_leak_in_event_span_path_only() {
+        let sink = CanarySink::new(CANARY).expect("valid canary");
+        let capture = TracingCapture::new();
+        {
+            let _guard = capture.enter_guard();
+            let enclosing = tracing::info_span!("enclosing_gap-canary-secret-token-9f8e7d6c5b4a");
+            let _enter = enclosing.enter();
+            // Clear `spans` while `enclosing` stays entered so `capture` holds ONLY the event's
+            // `span_path` containing the canary.
+            capture.clear();
+            tracing::info!("clean message");
+        }
+        assert!(capture.spans().is_empty());
+        assert_eq!(capture.events().len(), 1);
+
+        let err = sink
+            .check_tracing(&capture)
+            .expect_err("canary in enclosing event span_path must be detected");
+        assert_eq!(err.surface, "tracing.event.span_path");
+        assert_eq!(err.detail, "event[0]");
+        assert!(!err.to_string().contains(CANARY));
+    }
+
+    // spec: INV-15, SEC-041
+    #[test]
+    fn f5a_span_field_key_leak_scrubs_canary_from_detail_display_and_debug() {
+        let sink = CanarySink::new(CANARY).expect("valid canary");
+        let ((), capture) = TracingCapture::with_captured(|| {
+            let _span = tracing::info_span!(
+                "clean_span",
+                "hdr.gap-canary-secret-token-9f8e7d6c5b4a" = "clean_val"
+            );
+        });
+        let err = sink
+            .check_tracing(&capture)
+            .expect_err("canary in span field key must fail");
+        assert_eq!(err.surface, "tracing.span.field");
+        assert_eq!(err.detail, "span[0].hdr.***");
+        assert!(!err.detail.contains(CANARY));
+        assert!(!err.to_string().contains(CANARY));
+        assert!(!format!("{err:?}").contains(CANARY));
+    }
+
+    // spec: INV-15, SEC-041
+    #[test]
+    fn f5b_event_field_key_leak_scrubs_canary_from_detail_display_and_debug() {
+        let sink = CanarySink::new(CANARY).expect("valid canary");
+        let ((), capture) = TracingCapture::with_captured(|| {
+            tracing::info!(
+                "hdr.gap-canary-secret-token-9f8e7d6c5b4a" = "clean_val",
+                "clean message"
+            );
+        });
+        let err = sink
+            .check_tracing(&capture)
+            .expect_err("canary in event field key must fail");
+        assert_eq!(err.surface, "tracing.event.field");
+        assert_eq!(err.detail, "event[0].hdr.***");
+        assert!(!err.detail.contains(CANARY));
+        assert!(!err.to_string().contains(CANARY));
+        assert!(!format!("{err:?}").contains(CANARY));
+    }
+
+    // spec: INV-15, SEC-041
+    #[test]
+    fn f5c_event_enclosing_span_field_key_leak_scrubs_canary_from_detail_display_and_debug() {
+        let sink = CanarySink::new(CANARY).expect("valid canary");
+        let capture = TracingCapture::new();
+        {
+            let _guard = capture.enter_guard();
+            let enclosing = tracing::info_span!(
+                "clean_span",
+                "hdr.gap-canary-secret-token-9f8e7d6c5b4a" = "clean_val"
+            );
+            let _enter = enclosing.enter();
+            capture.clear();
+            tracing::info!("clean message");
+        }
+        assert!(capture.spans().is_empty());
+        assert_eq!(capture.events().len(), 1);
+
+        let err = sink
+            .check_tracing(&capture)
+            .expect_err("canary in event enclosing span_field key must fail");
+        assert_eq!(err.surface, "tracing.event.span_field");
+        assert_eq!(err.detail, "event[0].span.hdr.***");
+        assert!(!err.detail.contains(CANARY));
+        assert!(!err.to_string().contains(CANARY));
+        assert!(!format!("{err:?}").contains(CANARY));
+    }
 }

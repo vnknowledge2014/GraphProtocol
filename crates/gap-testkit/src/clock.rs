@@ -60,4 +60,25 @@ mod tests {
         let core_ref: &gap_core::clock::ManualClock = &clock;
         assert_eq!(core_ref.elapsed(), Duration::from_millis(250));
     }
+
+    // spec: INV-02, ARC-010
+    #[tokio::test(start_paused = true)]
+    async fn f3_advance_paused_advances_both_tokio_instant_and_manual_clock_without_sleep() {
+        let clock = test_clock();
+        let t0_tokio = tokio::time::Instant::now();
+        let t0_clock = clock.now_instant();
+        let t0_millis = clock.unix_millis();
+
+        advance_paused(&clock, Duration::from_secs(5)).await;
+
+        assert_eq!(
+            tokio::time::Instant::now().duration_since(t0_tokio),
+            Duration::from_secs(5)
+        );
+        assert_eq!(
+            clock.now_instant().duration_since(t0_clock),
+            Duration::from_secs(5)
+        );
+        assert_eq!(clock.unix_millis() - t0_millis, 5_000);
+    }
 }

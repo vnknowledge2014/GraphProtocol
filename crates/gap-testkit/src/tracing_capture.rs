@@ -448,4 +448,69 @@ mod tests {
             Some("r-1")
         );
     }
+
+    // spec: INV-15
+    #[test]
+    fn f6a_clear_removes_captured_spans() {
+        let ((), capture) = TracingCapture::with_captured(|| {
+            let span = tracing::info_span!("to_be_cleared");
+            let _enter = span.enter();
+            tracing::info!("event inside span");
+        });
+        assert_eq!(capture.spans().len(), 1);
+        capture.clear();
+        assert!(capture.spans().is_empty());
+    }
+
+    // spec: INV-15
+    #[test]
+    fn f6b_clear_removes_captured_events() {
+        let ((), capture) = TracingCapture::with_captured(|| {
+            let span = tracing::info_span!("to_be_cleared");
+            let _enter = span.enter();
+            tracing::info!("event inside span");
+        });
+        assert_eq!(capture.events().len(), 1);
+        capture.clear();
+        assert!(capture.events().is_empty());
+    }
+
+    // spec: INV-15
+    #[test]
+    fn f6c_records_two_level_error_source_chain_in_order() {
+        #[derive(Debug)]
+        struct InnerError;
+        impl fmt::Display for InnerError {
+            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                f.write_str("inner root cause")
+            }
+        }
+        impl std::error::Error for InnerError {}
+
+        #[derive(Debug)]
+        struct OuterError(InnerError);
+        impl fmt::Display for OuterError {
+            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                f.write_str("outer wrapper error")
+            }
+        }
+        impl std::error::Error for OuterError {
+            fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+                Some(&self.0)
+            }
+        }
+
+        let err = OuterError(InnerError);
+        let ((), capture) = TracingCapture::with_captured(|| {
+            tracing::error!(error = &err as &dyn std::error::Error, "operation failed");
+        });
+
+        let events = capture.events();
+        assert_eq!(events.len(), 1);
+        let recorded = events[0]
+            .fields
+            .get("error")
+            .expect("captured error field must exist");
+        assert_eq!(recorded, "outer wrapper error: inner root cause");
+    }
 }

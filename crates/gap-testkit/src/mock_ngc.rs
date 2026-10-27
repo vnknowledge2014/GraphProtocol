@@ -741,4 +741,59 @@ mod tests {
         }
         assert_eq!(close_counts, [1, 1, 1, 1]);
     }
+
+    // spec: NGC-020, NGC-026
+    #[tokio::test(start_paused = true)]
+    async fn f1_foreach_empty_reports_zero_upstream_calls_and_three_items_report_one_batched_call()
+    {
+        let mock = MockNgcConnector::new();
+        mock.on_operation("crm.batch", |idx, _base, _var| {
+            ScriptStep::ok(json!({"idx": idx}))
+        });
+
+        let empty_out = mock.call_foreach("crm.batch", json!({}), Vec::new()).await;
+        assert_eq!(empty_out.upstream_calls, 0);
+        assert!(empty_out.chunks.is_empty());
+
+        let three_out = mock
+            .call_foreach(
+                "crm.batch",
+                json!({}),
+                vec![json!({"id": 1}), json!({"id": 2}), json!({"id": 3})],
+            )
+            .await;
+        assert_eq!(three_out.upstream_calls, 1);
+        assert_eq!(three_out.chunks.len(), 3);
+    }
+
+    // spec: NGC-020
+    #[tokio::test(start_paused = true)]
+    async fn f2_seeded_shuffle_matches_golden_permutations_for_eight_items_and_varies_by_seed() {
+        let run_for_seed = |seed: u64| async move {
+            let mock =
+                MockNgcConnector::new().with_interleaving(ForeachInterleaving::SeededShuffle(seed));
+            mock.on_operation("crm.shuffle8", |idx, _base, _var| {
+                ScriptStep::ok(json!({"idx": idx}))
+            });
+            let sets: Vec<Value> = (0_u32..8).map(|i| json!({"i": i})).collect();
+            let res = mock.call_foreach("crm.shuffle8", json!({}), sets).await;
+            res.chunks
+                .into_iter()
+                .map(|c| c.foreach_index)
+                .collect::<Vec<u32>>()
+        };
+
+        let order_42 = run_for_seed(42).await;
+        assert_eq!(order_42, vec![3, 0, 2, 6, 7, 5, 4, 1]);
+
+        let order_99 = run_for_seed(99).await;
+        assert_eq!(order_99, vec![2, 0, 5, 7, 6, 1, 4, 3]);
+        assert_ne!(order_42, order_99);
+
+        for seed in [0_u64, 1, 42, 99, 12_345] {
+            let mut sorted = run_for_seed(seed).await;
+            sorted.sort_unstable();
+            assert_eq!(sorted, vec![0, 1, 2, 3, 4, 5, 6, 7]);
+        }
+    }
 }
