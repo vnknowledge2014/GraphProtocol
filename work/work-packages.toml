@@ -71,8 +71,8 @@ depends_on = ["WP-M0-02"]
 owns = [".github/**", "justfile"]
 spec_refs = ["ADR-022", "OPS-040", "SEC-100"]
 deliverables = [
-  "GitHub Actions: build+nextest+clippy+fmt+doc on macOS and Linux; cargo-deny/audit; python tools checks (wp validate, check_layers, spec_trace); nightly workflow stubs (fuzz, bench, soak, routebench-smoke)",
-  "justfile recipes: verify (everything in CI locally), test, lint, fmt, docs, layers, wp-validate, spec-trace",
+  "GitHub Actions: build+nextest+clippy+fmt+doc on macOS and Linux; cargo-deny/audit; python tools checks (python3 -m unittest discover -s tools -p 'test_*.py' with the job failing when any test is skipped, wp validate, check_layers, check_refs, spec_trace); nightly workflow stubs (fuzz, bench, soak, routebench-smoke)",
+  "justfile recipes: verify (everything in CI locally), test, lint, fmt, docs, layers, wp-validate, spec-trace, refs, tools-test",
   "dependabot/renovate config limited to patch updates of workspace deps",
 ]
 acceptance = ["python3 -c \"import yaml\" 2>/dev/null || true", "test -f .github/workflows/ci.yml", "just --list | grep -q verify"]
