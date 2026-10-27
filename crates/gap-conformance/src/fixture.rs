@@ -1,5 +1,6 @@
 //! Recursive conformance fixture loader and schema validation (`VER-010`, `spec/02-gap-ql.md` §11).
 
+use std::collections::BTreeSet;
 use std::fmt;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
@@ -195,6 +196,30 @@ pub enum FixtureErrorKind {
     /// `"class"` contained an unrecognized class name.
     #[error("{0}")]
     UnknownClass(#[from] UnknownConformanceClass),
+    /// Required `"spec"` field was omitted.
+    #[error("missing required field `spec`")]
+    MissingSpec,
+    /// `"spec"` array was empty.
+    #[error("field `spec` must be a non-empty array")]
+    EmptySpec,
+    /// `"spec"` array contained a non-string JSON value.
+    #[error(
+        "invalid `spec[{index}]` entry `{entry}`: expected a string matching ^[A-Z][A-Z0-9]*-[0-9]{{2,3}}$"
+    )]
+    InvalidSpecEntryType {
+        /// Zero-based index inside `"spec"`.
+        index: usize,
+        /// Serialized JSON representation of the offending entry.
+        entry: String,
+    },
+    /// `"spec"` array contained a string not matching `^[A-Z][A-Z0-9]*-[0-9]{2,3}$`.
+    #[error("invalid `spec[{index}]` ID `{id}`: must match ^[A-Z][A-Z0-9]*-[0-9]{{2,3}}$")]
+    InvalidSpecId {
+        /// Zero-based index inside `"spec"`.
+        index: usize,
+        /// Offending spec ID string.
+        id: String,
+    },
     /// Both `"request"` and `"steps"` were present.
     #[error("fixture specifies both `request` and `steps`; exactly one is allowed")]
     BothRequestAndSteps,
@@ -253,6 +278,29 @@ const ALLOWED_TOP_LEVEL_KEYS: &[&str] = &[
     "steps",
     "expect",
 ];
+
+/// Returns `true` iff `id` matches `^[A-Z][A-Z0-9]*-[0-9]{2,3}$` (`VER-010`).
+///
+/// Examples of valid IDs: `GQL-070`, `INV-15`, `ADR-002`, `VER-010`.
+#[must_use]
+pub fn is_valid_spec_id(id: &str) -> bool {
+    let Some((prefix, digits)) = id.split_once('-') else {
+        return false;
+    };
+    let Some((&first, rest)) = prefix.as_bytes().split_first() else {
+        return false;
+    };
+    if !first.is_ascii_uppercase() {
+        return false;
+    }
+    if !rest
+        .iter()
+        .all(|b| b.is_ascii_uppercase() || b.is_ascii_digit())
+    {
+        return false;
+    }
+    (2..=3).contains(&digits.len()) && digits.bytes().all(|b| b.is_ascii_digit())
+}
 
 /// Loads and validates a single conformance fixture JSON file.
 ///
@@ -325,33 +373,38 @@ pub fn load_fixture_file(
         classes.push(parsed);
     }
 
-    let spec = if let Some(spec_val) = map.get("spec") {
-        let Some(spec_arr) = spec_val.as_array() else {
-            return Err(fail(FixtureErrorKind::InvalidFieldType {
-                field: "spec",
-                expected: "an array of non-empty spec ID strings",
+    let Some(spec_val) = map.get("spec") else {
+        return Err(fail(FixtureErrorKind::MissingSpec));
+    };
+    let Some(spec_arr) = spec_val.as_array() else {
+        return Err(fail(FixtureErrorKind::InvalidFieldType {
+            field: "spec",
+            expected: "a non-empty array of spec ID strings",
+        }));
+    };
+    if spec_arr.is_empty() {
+        return Err(fail(FixtureErrorKind::EmptySpec));
+    }
+
+    let mut seen_specs = BTreeSet::new();
+    let mut spec = Vec::with_capacity(spec_arr.len());
+    for (index, item) in spec_arr.iter().enumerate() {
+        let Some(s) = item.as_str() else {
+            return Err(fail(FixtureErrorKind::InvalidSpecEntryType {
+                index,
+                entry: item.to_string(),
             }));
         };
-        let mut ids = Vec::with_capacity(spec_arr.len());
-        for item in spec_arr {
-            let Some(s) = item.as_str() else {
-                return Err(fail(FixtureErrorKind::InvalidFieldType {
-                    field: "spec",
-                    expected: "an array of non-empty spec ID strings",
-                }));
-            };
-            if s.trim().is_empty() {
-                return Err(fail(FixtureErrorKind::InvalidFieldType {
-                    field: "spec",
-                    expected: "an array of non-empty spec ID strings",
-                }));
-            }
-            ids.push(s.to_owned());
+        if !is_valid_spec_id(s) {
+            return Err(fail(FixtureErrorKind::InvalidSpecId {
+                index,
+                id: s.to_owned(),
+            }));
         }
-        ids
-    } else {
-        Vec::new()
-    };
+        if seen_specs.insert(s.to_owned()) {
+            spec.push(s.to_owned());
+        }
+    }
 
     let schema = parse_optional_non_empty_string(map.get("schema"), "schema").map_err(&fail)?;
     let principal =
@@ -602,7 +655,7 @@ mod tests {
             &json!({
                 "name": "middle fixture",
                 "class": ["Discovery"],
-                "spec": [],
+                "spec": ["GQL-002"],
                 "request": {"query": "{ __metaGraph { generation } }"},
                 "expect": {"status": 200}
             })
@@ -994,35 +1047,35 @@ mod tests {
         for (file, payload) in [
             (
                 "bad_name_type.json",
-                json!({"name": 42, "class": ["Core"], "request": {"query": "{ ok }"}, "expect": {"status": 200}}),
+                json!({"name": 42, "class": ["Core"], "spec": ["GQL-002"], "request": {"query": "{ ok }"}, "expect": {"status": 200}}),
             ),
             (
                 "bad_class_type.json",
-                json!({"name": "x", "class": "Core", "request": {"query": "{ ok }"}, "expect": {"status": 200}}),
+                json!({"name": "x", "class": "Core", "spec": ["GQL-002"], "request": {"query": "{ ok }"}, "expect": {"status": 200}}),
             ),
             (
                 "bad_class_elem.json",
-                json!({"name": "x", "class": [1], "request": {"query": "{ ok }"}, "expect": {"status": 200}}),
+                json!({"name": "x", "class": [1], "spec": ["GQL-002"], "request": {"query": "{ ok }"}, "expect": {"status": 200}}),
             ),
             (
-                "bad_spec_elem.json",
-                json!({"name": "x", "class": ["Core"], "spec": [""], "request": {"query": "{ ok }"}, "expect": {"status": 200}}),
+                "bad_spec_type.json",
+                json!({"name": "x", "class": ["Core"], "spec": "GQL-002", "request": {"query": "{ ok }"}, "expect": {"status": 200}}),
             ),
             (
                 "bad_schema_empty.json",
-                json!({"name": "x", "class": ["Core"], "schema": "  ", "request": {"query": "{ ok }"}, "expect": {"status": 200}}),
+                json!({"name": "x", "class": ["Core"], "spec": ["GQL-002"], "schema": "  ", "request": {"query": "{ ok }"}, "expect": {"status": 200}}),
             ),
             (
                 "bad_principal_empty.json",
-                json!({"name": "x", "class": ["Core"], "principal": "", "request": {"query": "{ ok }"}, "expect": {"status": 200}}),
+                json!({"name": "x", "class": ["Core"], "spec": ["GQL-002"], "principal": "", "request": {"query": "{ ok }"}, "expect": {"status": 200}}),
             ),
             (
                 "bad_expect_scalar.json",
-                json!({"name": "x", "class": ["Core"], "request": {"query": "{ ok }"}, "expect": 200}),
+                json!({"name": "x", "class": ["Core"], "spec": ["GQL-002"], "request": {"query": "{ ok }"}, "expect": 200}),
             ),
             (
                 "bad_step_expect_scalar.json",
-                json!({"name": "x", "class": ["Core"], "steps": [{"request": {"query": "{ ok }"}, "expect": [200]}]}),
+                json!({"name": "x", "class": ["Core"], "spec": ["GQL-002"], "steps": [{"request": {"query": "{ ok }"}, "expect": [200]}]}),
             ),
         ] {
             let tmp = TempDir::new().expect("tempdir");
@@ -1037,5 +1090,241 @@ mod tests {
         let decoded: ConformanceClass = serde_json::from_str(&encoded).expect("deserialize class");
         assert_eq!(decoded, ConformanceClass::FacadeMcp);
         assert!(serde_json::from_str::<ConformanceClass>("\"NotAClass\"").is_err());
+    }
+
+    // spec: GQL-002 (VER-010)
+    #[test]
+    fn rejects_missing_spec_naming_file() {
+        let tmp = TempDir::new().expect("tempdir");
+        let path = write_file(
+            tmp.path(),
+            "missing_spec.json",
+            &json!({
+                "name": "missing spec",
+                "class": ["Core"],
+                "request": {"query": "{ ok }"},
+                "expect": {"status": 200}
+            })
+            .to_string(),
+        );
+        let err = load_fixtures_dir(tmp.path()).expect_err("missing spec must fail");
+        assert_eq!(err.path, path);
+        assert!(matches!(err.kind, FixtureErrorKind::MissingSpec));
+        assert!(err.to_string().contains("missing_spec.json"));
+    }
+
+    // spec: GQL-002 (VER-010)
+    #[test]
+    fn rejects_empty_spec_array_naming_file() {
+        let tmp = TempDir::new().expect("tempdir");
+        let path = write_file(
+            tmp.path(),
+            "empty_spec.json",
+            &json!({
+                "name": "empty spec",
+                "class": ["Core"],
+                "spec": [],
+                "request": {"query": "{ ok }"},
+                "expect": {"status": 200}
+            })
+            .to_string(),
+        );
+        let err = load_fixtures_dir(tmp.path()).expect_err("empty spec array must fail");
+        assert_eq!(err.path, path);
+        assert!(matches!(err.kind, FixtureErrorKind::EmptySpec));
+        assert!(err.to_string().contains("empty_spec.json"));
+    }
+
+    // spec: GQL-002 (VER-010)
+    #[test]
+    fn rejects_non_string_spec_entry_naming_file_and_entry() {
+        for (file, bad_entry, expected_rendered) in [
+            ("non_string_num.json", json!(123), "123"),
+            ("non_string_bool.json", json!(true), "true"),
+            ("non_string_null.json", json!(null), "null"),
+            (
+                "non_string_obj.json",
+                json!({"id": "GQL-070"}),
+                "{\"id\":\"GQL-070\"}",
+            ),
+        ] {
+            let tmp = TempDir::new().expect("tempdir");
+            let path = write_file(
+                tmp.path(),
+                file,
+                &json!({
+                    "name": "non-string spec entry",
+                    "class": ["Core"],
+                    "spec": ["GQL-070", bad_entry],
+                    "request": {"query": "{ ok }"},
+                    "expect": {"status": 200}
+                })
+                .to_string(),
+            );
+            let err = load_fixtures_dir(tmp.path()).expect_err("non-string spec entry must fail");
+            assert_eq!(err.path, path);
+            assert!(
+                matches!(
+                    &err.kind,
+                    FixtureErrorKind::InvalidSpecEntryType { index: 1, entry }
+                        if entry == expected_rendered
+                ),
+                "unexpected error kind: {:?}",
+                err.kind
+            );
+            let msg = err.to_string();
+            assert!(msg.contains(file), "error must name file `{file}`: {msg}");
+            assert!(
+                msg.contains(expected_rendered),
+                "error must name offending entry `{expected_rendered}`: {msg}"
+            );
+        }
+    }
+
+    // spec: GQL-002 (VER-010)
+    #[test]
+    fn rejects_bad_shape_spec_id_naming_file_and_entry() {
+        for bad_id in [
+            "not an id",
+            "",
+            "   ",
+            "GQL",
+            "GQL-",
+            "-15",
+            "9GQL-15",
+            "GQL-1",
+            "GQL_A-15",
+            "GQL-1-2",
+            "GQL-15 ",
+            " GQL-15",
+        ] {
+            let tmp = TempDir::new().expect("tempdir");
+            let path = write_file(
+                tmp.path(),
+                "bad_shape_spec.json",
+                &json!({
+                    "name": "bad shape spec",
+                    "class": ["Core"],
+                    "spec": [bad_id],
+                    "request": {"query": "{ ok }"},
+                    "expect": {"status": 200}
+                })
+                .to_string(),
+            );
+            let err = load_fixtures_dir(tmp.path()).expect_err("bad shape spec ID must fail");
+            assert_eq!(err.path, path);
+            assert!(
+                matches!(
+                    &err.kind,
+                    FixtureErrorKind::InvalidSpecId { index: 0, id } if id == bad_id
+                ),
+                "unexpected error kind for `{bad_id}`: {:?}",
+                err.kind
+            );
+            let msg = err.to_string();
+            assert!(msg.contains("bad_shape_spec.json"));
+            assert!(
+                msg.contains(bad_id),
+                "error must name offending entry `{bad_id}`: {msg}"
+            );
+        }
+    }
+
+    // spec: GQL-002 (VER-010)
+    #[test]
+    fn rejects_lowercase_spec_id_naming_file_and_entry() {
+        for lower_id in ["gql-070", "Gql-070", "inv-15", "a2A-01"] {
+            let tmp = TempDir::new().expect("tempdir");
+            let path = write_file(
+                tmp.path(),
+                "lowercase_spec.json",
+                &json!({
+                    "name": "lowercase spec",
+                    "class": ["Core"],
+                    "spec": ["GQL-070", lower_id],
+                    "request": {"query": "{ ok }"},
+                    "expect": {"status": 200}
+                })
+                .to_string(),
+            );
+            let err = load_fixtures_dir(tmp.path()).expect_err("lowercase spec ID must fail");
+            assert_eq!(err.path, path);
+            assert!(
+                matches!(
+                    &err.kind,
+                    FixtureErrorKind::InvalidSpecId { index: 1, id } if id == lower_id
+                ),
+                "unexpected error kind for `{lower_id}`: {:?}",
+                err.kind
+            );
+            let msg = err.to_string();
+            assert!(msg.contains("lowercase_spec.json"));
+            assert!(msg.contains(lower_id));
+        }
+    }
+
+    // spec: GQL-002 (VER-010)
+    #[test]
+    fn rejects_four_digit_spec_id_naming_file_and_entry() {
+        for four_digit_id in ["GQL-0070", "ADR-0002", "INV-1234"] {
+            let tmp = TempDir::new().expect("tempdir");
+            let path = write_file(
+                tmp.path(),
+                "four_digit_spec.json",
+                &json!({
+                    "name": "four digit spec",
+                    "class": ["Core"],
+                    "spec": [four_digit_id],
+                    "request": {"query": "{ ok }"},
+                    "expect": {"status": 200}
+                })
+                .to_string(),
+            );
+            let err = load_fixtures_dir(tmp.path()).expect_err("4-digit spec ID must fail");
+            assert_eq!(err.path, path);
+            assert!(
+                matches!(
+                    &err.kind,
+                    FixtureErrorKind::InvalidSpecId { index: 0, id } if id == four_digit_id
+                ),
+                "unexpected error kind for `{four_digit_id}`: {:?}",
+                err.kind
+            );
+            let msg = err.to_string();
+            assert!(msg.contains("four_digit_spec.json"));
+            assert!(msg.contains(four_digit_id));
+        }
+    }
+
+    // spec: GQL-002 (VER-010)
+    #[test]
+    fn collapses_duplicate_spec_ids_to_first_occurrence_and_accepts_valid_shapes() {
+        let tmp = TempDir::new().expect("tempdir");
+        let path = write_file(
+            tmp.path(),
+            "dedup_spec.json",
+            &json!({
+                "name": "dedup spec IDs",
+                "class": ["Core"],
+                "spec": [
+                    "GQL-070",
+                    "INV-15",
+                    "GQL-070",
+                    "ADR-002",
+                    "VER-010",
+                    "INV-15",
+                    "A2A-01",
+                    "ADR-002"
+                ],
+                "request": {"query": "{ ok }"},
+                "expect": {"status": 200}
+            })
+            .to_string(),
+        );
+        let loaded = load_fixture_file(&path, "dedup_spec.json").expect("valid spec IDs must load");
+        assert_eq!(
+            loaded.spec,
+            vec!["GQL-070", "INV-15", "ADR-002", "VER-010", "A2A-01"]
+        );
     }
 }

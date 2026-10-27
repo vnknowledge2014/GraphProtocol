@@ -33,12 +33,12 @@ Normative fixture syntax and response-matching rules are specified in [`spec/02-
 - **Required top-level fields:**
   - `"name"`: non-empty string identifying the test case.
   - `"class"`: non-empty array of valid conformance class names.
-  - `"spec"`: array of normative spec requirement IDs (e.g. `["GQL-070", "GQL-062"]`).
+  - `"spec"`: non-empty array of normative requirement IDs, each matching `^[A-Z][A-Z0-9]*-[0-9]{2,3}$` (e.g. `["GQL-070", "INV-15", "ADR-002", "VER-010"]`). Duplicate IDs inside a single fixture collapse to their first occurrence.
   - Either `"request"` + `"expect"` **XOR** `"steps"` (a non-empty array of `{ "request", "expect" }` objects executed sequentially on the same principal; execution halts at the first failing or erroring step).
 - **Optional top-level fields:**
   - `"schema"`: relative path to the composed supergraph SDL used by offline/spawned servers.
   - `"principal"`: logical caller identity resolved via `--principals <FILE>`.
-- **Validation:** Unknown top-level/request/step keys, missing or empty `"name"`, empty or unknown `"class"`, invalid JSON, empty `"steps"`, or providing both/neither of `"request"` and `"steps"` fail fixture loading with a typed error naming the offending file.
+- **Validation:** Unknown top-level/request/step keys, missing or empty `"name"`, empty or unknown `"class"`, missing/empty/malformed `"spec"` entries (naming both the file and the offending entry), invalid JSON, empty `"steps"`, or providing both/neither of `"request"` and `"steps"` fail fixture loading with a typed error naming the offending file.
 - **Subset matching (`spec/02-gap-ql.md` §11):**
   - Each step's `"expect"` is matched against the normalized observed response `{ "status", "data", "errors", "extensions", "headers", "dataNull" }`, where `"headers"` keys are lower-cased and `"dataNull"` is derived strictly from `data == null` (never trusted from the wire).
   - Objects match recursively as key subsets; scalars compare equal (numbers compare by mathematical value); arrays match index-wise with equal length unless wrapped in `{ "unordered": true, "items": [...] }`, which requires equal length and a one-to-one bipartite pairing. Mismatches report the JSON path of the first difference.
@@ -61,7 +61,7 @@ cargo run -p gap-conformance -- \
 
 | Flag | Status | Behavior |
 |---|---|---|
-| `--target <URL>` | Active (`WP-M0-09`) | POSTs `{query, variables?, operationName?, extensions?}` as `application/json` to `<URL>` **verbatim** (no path appended) with `Accept: application/graphql-response+json, application/json;q=0.9` (`GQL-003`). `https://` targets return a typed error because `reqwest` is compiled without a TLS backend (`ADR-002`). |
+| `--target <URL>` | Active (`WP-M0-09`) | POSTs `{query, variables?, operationName?, extensions?}` as `application/json` to `<URL>` **verbatim** (no path appended) with `Accept: application/graphql-response+json, application/json;q=0.9` (`GQL-003`). HTTP redirects are disabled (`3xx` responses are observed as-is with lower-cased headers including `location`, and bearer tokens are never forwarded). Enforces default `10 s` connect and `30 s` total request timeouts (including body reads; timeouts produce `verdict: "error"` with a scrubbed `"timeout"` detail). `https://` targets return a typed error because `reqwest` is compiled without a TLS backend (`ADR-002`). |
 | `--fixtures <DIR>` | Active (`WP-M0-09`) | Root directory recursively scanned for `*.json` fixtures (default: `conformance`). |
 | `--class <CLASS>` | Active (`WP-M0-09`) | Repeatable class filter. Unknown class names fail CLI parsing with exit code `2`. |
 | `--principals <FILE>` | Active (`WP-M0-09`) | JSON file mapping fixture `"principal"` names to bearer tokens (`INV-15`). |
