@@ -143,6 +143,96 @@ class CheckLayersWorkspaceTests(unittest.TestCase):
             self.assertEqual(rc, 0, msg=out)
             self.assertEqual(out.strip(), "OK: 5 workspace crates respect layering and ARC-002")
 
+    def test_external_non_workspace_path_dependency_accepted(self) -> None:
+        # spec: ARC-001, ADR-022
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            # External crate outside [workspace] members (sibling directory ../ext-serde).
+            _write(
+                base / "ext-serde" / "Cargo.toml",
+                '[package]\nname = "ext-serde"\nversion = "0.1.0"\nedition = "2021"\n',
+            )
+            _write(base / "ext-serde" / "src" / "lib.rs", "//! external dependency stub\n")
+
+            ws_root = base / "ws"
+            _write(
+                ws_root / "Cargo.toml",
+                '[workspace]\nresolver = "2"\nmembers = ["crates/gap-core", "crates/gap-ql"]\n',
+            )
+            _write(
+                ws_root / "crates" / "gap-core" / "Cargo.toml",
+                "\n".join(
+                    [
+                        "[package]",
+                        'name = "gap-core"',
+                        'version = "0.1.0"',
+                        'edition = "2021"',
+                        "",
+                        "[dependencies]",
+                        'ext-serde = { path = "../../../ext-serde" }',
+                    ]
+                )
+                + "\n",
+            )
+            _write(ws_root / "crates" / "gap-core" / "src" / "lib.rs", "//! core stub\n")
+            _write(
+                ws_root / "crates" / "gap-ql" / "Cargo.toml",
+                "\n".join(
+                    [
+                        "[package]",
+                        'name = "gap-ql"',
+                        'version = "0.1.0"',
+                        'edition = "2021"',
+                        "",
+                        "[dependencies]",
+                        'gap-core = { path = "../gap-core" }',
+                        'ext-serde = { path = "../../../ext-serde" }',
+                    ]
+                )
+                + "\n",
+            )
+            _write(ws_root / "crates" / "gap-ql" / "src" / "lib.rs", "//! ql stub\n")
+            _write(
+                ws_root / "tools" / "layers.toml",
+                "\n".join(
+                    [
+                        "[layers]",
+                        '"gap-core" = 0',
+                        '"gap-ql" = 1',
+                        "",
+                        "[exempt_dev]",
+                        "crates = []",
+                        "",
+                        "[forbidden]",
+                        'no_ml = ["gap-ql"]',
+                        "ml_crates = []",
+                    ]
+                )
+                + "\n",
+            )
+
+            hermetic_env = {
+                "CARGO_HOME": str(base / ".cargo-home"),
+                "__CARGO_TEST_ROOT": str(base),
+            }
+            with mock.patch.dict(os.environ, hermetic_env):
+                subprocess.run(
+                    ["cargo", "generate-lockfile", "--offline"],
+                    cwd=ws_root,
+                    check=True,
+                    capture_output=True,
+                    text=True,
+                )
+                out = io.StringIO()
+                with mock.patch.object(check_layers, "ROOT", ws_root), contextlib.redirect_stdout(out):
+                    rc = check_layers.main()
+
+            self.assertEqual(rc, 0, msg=out.getvalue())
+            self.assertEqual(
+                out.getvalue().strip(),
+                "OK: 2 workspace crates respect layering and ARC-002",
+            )
+
     def test_dependency_on_higher_layer_fails(self) -> None:
         # spec: ARC-001, ADR-022
         with tempfile.TemporaryDirectory() as tmp:
