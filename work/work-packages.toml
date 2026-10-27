@@ -539,7 +539,7 @@ spec_refs = ["RTE-070", "RTE-071", "RTE-072", "RTE-073", "RTE-074", "RTE-075", "
 deliverables = [
   "TelemetrySlot/Registry (dense slab, ArcSwap), DecayedEwma (packed CAS), InFlightGuard (RAII), Breaker FSM with 10x3 s bucket window, RetryBudget, P2C selection, Health-driven capacity weight",
   "tests: 64-thread lost-update test, cancel 10,000 futures => in_flight==0, FSM table-driven + shuttle interleavings, herding simulation (no share swing > 20%), retry-budget exhaustion",
-  "criterion benches: selection <= 20 us p99, update <= 1 us p99",
+  "criterion benches: selection <= 20 us p99, update <= 1 us p99; crates/gap-balance/Cargo.toml declares each bench with harness = false and sets [lib] bench = false, otherwise `cargo bench -- --quick` hands --quick to the libtest harness of the lib target and fails (reviewer-verified 2026-10-27); criterion is used with features = [\"cargo_bench_support\"] (root pin disables default features)",
 ]
 acceptance = ["cargo nextest run -p gap-balance", "cargo bench -p gap-balance -- --quick", "cargo clippy -p gap-balance --all-targets -- -D warnings"]
 
