@@ -290,6 +290,7 @@ impl HttpDriver {
 
         let client = reqwest::Client::builder()
             .no_proxy()
+            .redirect(reqwest::redirect::Policy::none())
             .build()
             .map_err(|err| DriverError::ClientInit(err.to_string()))?;
 
@@ -792,6 +793,21 @@ mod tests {
             .expect("empty 401 response");
         assert_eq!(empty_401.status, 401);
         assert!(empty_401.data_null);
+
+        // 302 redirect response is preserved as-is with lower-cased `location` header.
+        let redir_302 = decode_http_response(
+            "http://127.0.0.1:8080/",
+            302,
+            &[("Location".to_owned(), "/final".to_owned())],
+            b"",
+        )
+        .expect("302 response must decode as-is");
+        assert_eq!(redir_302.status, 302);
+        assert_eq!(
+            redir_302.headers.get("location").map(String::as_str),
+            Some("/final")
+        );
+        assert!(redir_302.data_null);
 
         // Plain-text 503 transport refusal produces default envelope.
         let text_503 = decode_http_response(

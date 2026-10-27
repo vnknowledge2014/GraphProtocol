@@ -5,14 +5,15 @@
 //! `Operation not permitted (os error 1)`, these tests intentionally remain active (not skipped or
 //! `#[ignore]`d) per `WP-M0-09` protocol so the reviewer runs them outside the sandbox.
 
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
 use axum::Router;
 use axum::body::Bytes;
 use axum::extract::OriginalUri;
-use axum::http::{HeaderMap, HeaderValue, Method, StatusCode};
+use axum::http::{HeaderMap, HeaderValue, Method, StatusCode, header};
 use axum::response::IntoResponse;
-use axum::routing::any;
+use axum::routing::{any, post};
 use gap_conformance::driver::{ConformanceDriver, GRAPHQL_ACCEPT_HEADER, HttpDriver};
 use gap_conformance::fixture::FixtureRequest;
 use gap_core::secret::SecretString;
@@ -234,4 +235,95 @@ async fn cli_target_mode_runs_end_to_end_against_axum_and_writes_report() {
     let report_val: Value = serde_json::from_str(&report_raw).expect("parse report.json");
     assert_eq!(report_val["summary"]["passed"], 1);
     assert_eq!(report_val["coverage"]["GQL-002"]["covered"], true);
+}
+
+// spec: GQL-003, INV-15 (VER-011)
+#[tokio::test]
+async fn http_driver_does_not_follow_redirects_or_forward_bearer_token() {
+    let root_hits = Arc::new(AtomicUsize::new(0));
+    let final_hits = Arc::new(AtomicUsize::new(0));
+    let root_hits_handler = Arc::clone(&root_hits);
+    let final_hits_handler = Arc::clone(&final_hits);
+
+    let app = Router::new()
+        .route(
+            "/",
+            post(move |headers: HeaderMap| {
+                let root_hits_handler = Arc::clone(&root_hits_handler);
+                async move {
+                    if headers.get(header::AUTHORIZATION).is_some() {
+                        root_hits_handler.fetch_add(1, Ordering::SeqCst);
+                    }
+                    let mut resp_headers = HeaderMap::new();
+                    resp_headers.insert(header::LOCATION, HeaderValue::from_static("/final"));
+                    (StatusCode::FOUND, resp_headers, "").into_response()
+                }
+            }),
+        )
+        .route(
+            "/final",
+            any(move || {
+                let final_hits_handler = Arc::clone(&final_hits_handler);
+                async move {
+                    final_hits_handler.fetch_add(1, Ordering::SeqCst);
+                    let mut resp_headers = HeaderMap::new();
+                    resp_headers.insert(
+                        header::CONTENT_TYPE,
+                        HeaderValue::from_static("application/graphql-response+json"),
+                    );
+                    (
+                        StatusCode::OK,
+                        resp_headers,
+                        json!({"data": {"followed": true}}).to_string(),
+                    )
+                        .into_response()
+                }
+            }),
+        );
+
+    let reserved = PortAllocator::reserve().expect("reserve loopback listener");
+    let addr = reserved.local_addr();
+    let listener = tokio::net::TcpListener::from_std(
+        reserved
+            .into_nonblocking_std()
+            .expect("nonblocking std listener"),
+    )
+    .expect("convert into tokio::net::TcpListener");
+    let server_task = tokio::spawn(async move {
+        let _ = axum::serve(listener, app).await;
+    });
+
+    let target_url = format!("http://{addr}/");
+    let driver = HttpDriver::new(&target_url).expect("construct HttpDriver");
+    let bearer = SecretString::new("tok-redirect-canary-998877".to_owned());
+    let req = FixtureRequest {
+        query: "{ ok }".to_owned(),
+        variables: None,
+        operation_name: None,
+        extensions: None,
+    };
+
+    let obs = driver
+        .execute(&req, Some(&bearer))
+        .await
+        .expect("execute against 302 axum server");
+
+    server_task.abort();
+
+    assert_eq!(obs.status, 302);
+    assert_eq!(
+        obs.headers.get("location").map(String::as_str),
+        Some("/final")
+    );
+    assert!(obs.data_null);
+    assert_eq!(
+        root_hits.load(Ordering::SeqCst),
+        1,
+        "POST / must receive the single authenticated request"
+    );
+    assert_eq!(
+        final_hits.load(Ordering::SeqCst),
+        0,
+        "/final redirect target must never be requested"
+    );
 }
