@@ -187,6 +187,25 @@ pub async fn execute_target_mode(
         }
     }
 
+    if report.summary.total == 0 {
+        let class_filter = if cli.classes.is_empty() {
+            "all".to_owned()
+        } else {
+            cli.classes
+                .iter()
+                .copied()
+                .map(ConformanceClass::as_str)
+                .collect::<Vec<_>>()
+                .join(", ")
+        };
+        let _ = writeln!(
+            stderr,
+            "error: no fixtures selected (directory: `{}`, class filter: [{class_filter}])",
+            cli.fixtures.display(),
+        );
+        return EXIT_USAGE_OR_UNSUPPORTED;
+    }
+
     let _ = writeln!(
         stdout,
         "gap-conformance: total={} passed={} failed={} errors={} spec_covered={}/{}",
@@ -413,5 +432,157 @@ mod tests {
         let code_cfg_err =
             execute_target_mode(&StaticOkDriver, &cli_bad_dir, &mut out, &mut err).await;
         assert_eq!(code_cfg_err, 2);
+    }
+
+    // spec: GQL-002 (VER-010, VER-011)
+    #[tokio::test]
+    async fn execute_target_mode_empty_dir_writes_report_and_exits_2() {
+        let tmp = TempDir::new().expect("tempdir");
+        let empty_dir = tmp.path().join("empty_fixtures");
+        fs::create_dir_all(&empty_dir).expect("mkdir empty_fixtures");
+        let report_path = tmp.path().join("empty_report.json");
+
+        let cli = CliArgs::try_parse_from([
+            "gap-conformance",
+            "--target",
+            "http://127.0.0.1:18080/gap",
+            "--fixtures",
+            empty_dir.to_str().expect("utf8"),
+            "--report",
+            report_path.to_str().expect("utf8"),
+        ])
+        .expect("parse cli");
+
+        let mut out = Vec::new();
+        let mut err = Vec::new();
+        let code = execute_target_mode(&StaticOkDriver, &cli, &mut out, &mut err).await;
+        assert_eq!(code, 2, "empty fixtures dir must exit 2 (no vacuous pass)");
+
+        let stderr_str = String::from_utf8(err).expect("utf8 stderr");
+        assert!(
+            stderr_str.contains("error: no fixtures selected"),
+            "stderr must contain `error: no fixtures selected`: {stderr_str}"
+        );
+        assert!(
+            stderr_str.contains(&empty_dir.display().to_string()),
+            "stderr must name the fixtures directory: {stderr_str}"
+        );
+        assert!(
+            stderr_str.contains("all"),
+            "stderr must name the active class filter: {stderr_str}"
+        );
+
+        let report_raw =
+            fs::read_to_string(&report_path).expect("report file must still be written first");
+        let report_json: Value = serde_json::from_str(&report_raw).expect("valid report JSON");
+        assert_eq!(report_json["summary"]["total"], 0);
+        assert_eq!(report_json["fixtures"], json!([]));
+    }
+
+    // spec: GQL-002 (VER-010, VER-011)
+    #[tokio::test]
+    async fn execute_target_mode_filter_excluding_everything_writes_report_and_exits_2() {
+        let tmp = TempDir::new().expect("tempdir");
+        let fixtures_dir = tmp.path().join("fixtures");
+        fs::create_dir_all(&fixtures_dir).expect("mkdir fixtures");
+        fs::write(
+            fixtures_dir.join("01_core.json"),
+            json!({
+                "name": "core fixture",
+                "class": ["Core"],
+                "spec": ["GQL-002"],
+                "request": {"query": "{ ok }"},
+                "expect": {"status": 200, "data": {"ok": true}}
+            })
+            .to_string(),
+        )
+        .expect("write core fixture");
+
+        let report_path = tmp.path().join("filtered_empty_report.json");
+        let cli = CliArgs::try_parse_from([
+            "gap-conformance",
+            "--target",
+            "http://127.0.0.1:18080/gap",
+            "--fixtures",
+            fixtures_dir.to_str().expect("utf8"),
+            "--class",
+            "Tasks",
+            "--class",
+            "NGC",
+            "--report",
+            report_path.to_str().expect("utf8"),
+        ])
+        .expect("parse cli");
+
+        let mut out = Vec::new();
+        let mut err = Vec::new();
+        let code = execute_target_mode(&StaticOkDriver, &cli, &mut out, &mut err).await;
+        assert_eq!(code, 2, "class filter matching 0 fixtures must exit 2");
+
+        let stderr_str = String::from_utf8(err).expect("utf8 stderr");
+        assert!(
+            stderr_str.contains("error: no fixtures selected"),
+            "stderr must contain `error: no fixtures selected`: {stderr_str}"
+        );
+        assert!(
+            stderr_str.contains(&fixtures_dir.display().to_string()),
+            "stderr must name the fixtures directory: {stderr_str}"
+        );
+        assert!(
+            stderr_str.contains("Tasks") && stderr_str.contains("NGC"),
+            "stderr must name the class filter: {stderr_str}"
+        );
+
+        let report_raw =
+            fs::read_to_string(&report_path).expect("report file must still be written first");
+        let report_json: Value = serde_json::from_str(&report_raw).expect("valid report JSON");
+        assert_eq!(report_json["summary"]["total"], 0);
+        assert_eq!(report_json["fixtures"], json!([]));
+    }
+
+    // spec: GQL-002 (VER-010, VER-011)
+    #[tokio::test]
+    async fn execute_target_mode_single_passing_fixture_exits_0() {
+        let tmp = TempDir::new().expect("tempdir");
+        let fixtures_dir = tmp.path().join("single_ok");
+        fs::create_dir_all(&fixtures_dir).expect("mkdir single_ok");
+        fs::write(
+            fixtures_dir.join("01_ok.json"),
+            json!({
+                "name": "single passing fixture",
+                "class": ["Core"],
+                "spec": ["GQL-002"],
+                "request": {"query": "{ ok }"},
+                "expect": {"status": 200, "data": {"ok": true}}
+            })
+            .to_string(),
+        )
+        .expect("write 01_ok.json");
+
+        let report_path = tmp.path().join("single_ok_report.json");
+        let cli = CliArgs::try_parse_from([
+            "gap-conformance",
+            "--target",
+            "http://127.0.0.1:18080/gap",
+            "--fixtures",
+            fixtures_dir.to_str().expect("utf8"),
+            "--class",
+            "Core",
+            "--report",
+            report_path.to_str().expect("utf8"),
+        ])
+        .expect("parse cli");
+
+        let mut out = Vec::new();
+        let mut err = Vec::new();
+        let code = execute_target_mode(&StaticOkDriver, &cli, &mut out, &mut err).await;
+        assert_eq!(code, 0, "single passing fixture must exit 0");
+        assert!(err.is_empty());
+
+        let report_json: Value =
+            serde_json::from_str(&fs::read_to_string(&report_path).expect("read report"))
+                .expect("valid report JSON");
+        assert_eq!(report_json["summary"]["total"], 1);
+        assert_eq!(report_json["summary"]["passed"], 1);
     }
 }

@@ -74,9 +74,9 @@ cargo run -p gap-conformance -- \
 
 | Exit Code | Meaning |
 |---|---|
-| `0` | All executed fixtures passed (`verdict == "pass"`). |
+| `0` | At least one fixture executed (`total >= 1`) and all executed fixtures passed (`verdict == "pass"`). |
 | `1` | Conformance failure: at least one executed fixture produced `verdict == "fail"` or `verdict == "error"`. |
-| `2` | Usage, configuration, fixture-load, principals-load, unsupported-scheme (`https://`), or staged-mode error. |
+| `2` | Usage, configuration, fixture-load, principals-load, empty fixture selection (`total == 0`, e.g. empty `--fixtures` directory or `--class` filter matching nothing — `--report` is still written first if requested), unsupported-scheme (`https://`), or staged-mode error. |
 
 ## Deterministic JSON Report Format (`--report`)
 

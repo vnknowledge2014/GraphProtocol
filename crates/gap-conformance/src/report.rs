@@ -180,16 +180,23 @@ impl ConformanceReport {
         }
     }
 
-    /// Returns `true` iff zero fixtures failed and zero fixtures errored (`exit code 0`).
+    /// Returns `true` iff at least one fixture ran and zero fixtures failed or errored (`exit code 0`).
     #[must_use]
     pub const fn all_passed(&self) -> bool {
-        self.summary.failed == 0 && self.summary.errors == 0
+        self.summary.total > 0 && self.summary.failed == 0 && self.summary.errors == 0
     }
 
-    /// CLI exit code (`0` if all fixtures passed, `1` if at least one failed or errored).
+    /// CLI exit code (`0` if `total > 0` and all fixtures passed, `1` if at least one failed or
+    /// errored, `2` if zero fixtures were selected).
     #[must_use]
     pub const fn exit_code(&self) -> u8 {
-        if self.all_passed() { 0 } else { 1 }
+        if self.summary.total == 0 {
+            2
+        } else if self.all_passed() {
+            0
+        } else {
+            1
+        }
     }
 
     /// Serializes this report as pretty-printed deterministic JSON with trailing newline.
