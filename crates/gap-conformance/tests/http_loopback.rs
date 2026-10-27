@@ -16,6 +16,7 @@ use axum::routing::any;
 use gap_conformance::driver::{ConformanceDriver, GRAPHQL_ACCEPT_HEADER, HttpDriver};
 use gap_conformance::fixture::FixtureRequest;
 use gap_core::secret::SecretString;
+use gap_testkit::port::PortAllocator;
 use serde_json::{Value, json};
 
 #[derive(Debug, Clone)]
@@ -76,10 +77,14 @@ async fn http_driver_posts_to_exact_axum_loopback_url_without_appending_path() {
         },
     ));
 
-    let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
-        .await
-        .expect("bind 127.0.0.1:0");
-    let addr = listener.local_addr().expect("local_addr");
+    let reserved = PortAllocator::reserve().expect("reserve loopback listener");
+    let addr = reserved.local_addr();
+    let listener = tokio::net::TcpListener::from_std(
+        reserved
+            .into_nonblocking_std()
+            .expect("nonblocking std listener"),
+    )
+    .expect("convert into tokio::net::TcpListener");
     let server_task = tokio::spawn(async move {
         let _ = axum::serve(listener, app).await;
     });
@@ -155,10 +160,14 @@ async fn cli_target_mode_runs_end_to_end_against_axum_and_writes_report() {
         (StatusCode::OK, resp_headers, payload.to_string()).into_response()
     }));
 
-    let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
-        .await
-        .expect("bind 127.0.0.1:0");
-    let addr = listener.local_addr().expect("local_addr");
+    let reserved = PortAllocator::reserve().expect("reserve loopback listener");
+    let addr = reserved.local_addr();
+    let listener = tokio::net::TcpListener::from_std(
+        reserved
+            .into_nonblocking_std()
+            .expect("nonblocking std listener"),
+    )
+    .expect("convert into tokio::net::TcpListener");
     let server_task = tokio::spawn(async move {
         let _ = axum::serve(listener, app).await;
     });

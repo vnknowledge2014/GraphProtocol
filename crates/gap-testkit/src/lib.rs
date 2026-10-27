@@ -9,10 +9,13 @@
     clippy::unimplemented
 )]
 
+pub mod canary;
 pub mod chaos;
 pub mod clock;
 pub mod mock_ngc;
+pub mod port;
 pub mod snapshot;
+pub mod tracing_capture;
 
 #[cfg(test)]
 mod workspace_policy_tests {
