@@ -2,6 +2,7 @@
 
 pub(crate) mod crud;
 pub mod schema;
+pub(crate) mod search;
 pub(crate) mod traverse;
 
 use std::fs;
@@ -23,7 +24,6 @@ use crate::store::ContextStore;
 use crate::types::{
     BatchResult, Caller, DEFAULT_MAX_EDGES_PER_TENANT, DEFAULT_MAX_NODES_PER_TENANT, Edge, EdgeId,
     GraphCounts, NewEdge, NewNode, Node, NodeId, TraverseQuery, TraverseResult,
-    validate_search_limit,
 };
 
 /// Default SQLite `busy_timeout` in milliseconds (`m2-01-design.md` §8).
@@ -452,15 +452,13 @@ impl ContextStore for SqliteContextStore {
 
     fn search_nodes(
         &self,
-        _tenant: &TenantScope,
+        tenant: &TenantScope,
         caller: &Caller,
-        _query: &str,
+        query: &str,
         limit: u32,
-        _as_of: Option<Timestamp>,
+        as_of: Option<Timestamp>,
     ) -> Result<Vec<Node>, StoreError> {
-        crate::types::validate_caller(caller)?;
-        validate_search_limit(limit)?;
-        Err(StoreError::Backend)
+        self.exec_search_nodes(tenant, caller, query, limit, as_of)
     }
 }
 
