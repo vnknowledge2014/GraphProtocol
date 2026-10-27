@@ -278,5 +278,11 @@ All errors: `{ message, path?, locations?, extensions: { code, retry: { retryabl
 ```
 Matching semantics: `expect` is a *subset match* (objects: all listed keys equal; arrays: element-wise subset in order unless `"unordered": true`). The runner reports spec-ID coverage.
 
+Precisely (so that any implementation of a runner agrees):
+- **Observed response.** The runner matches `expect` against the JSON object `{ "status": <HTTP status code>, "data": <response data, null when absent>, "errors": <response errors, [] when absent>, "extensions": <response extensions, {} when absent>, "headers": <lower-cased header name → string>, "dataNull": <true iff data is null or absent> }`. `dataNull` is therefore derived, never sent by the server.
+- **Objects:** every key listed in `expect` MUST exist in the observed object and match recursively; unlisted observed keys are ignored. **Scalars and `null`:** equal (numbers compare by value). **Arrays:** ordered by default: same length and `expect[i]` matches `observed[i]` for every `i` (an expected array is *not* a prefix or subsequence). To match regardless of order, write the expected array as the wrapper object `{ "unordered": true, "items": [ … ] }`: same length and a one-to-one pairing exists in which every expected item matches its paired observed item.
+- **`steps`.** A fixture has either `request` + `expect` or `steps`: a non-empty list of `{ "request": …, "expect": … }` executed in order on the same principal and session, each matched against that step's own observed response; the first failing step fails the fixture and later steps are not run.
+- **Coverage.** The report lists, per spec id named in `spec`, the fixtures that cover it and their verdicts; an id counts as covered only if at least one fixture naming it passed.
+
 ## 12. Extension X-1: columnar lists (scheduled M7)
 `@format(as: COLUMNAR)` on a list field returns `{"columns":["id","total"],"rows":[["1",10.5],…]}` instead of repeated object keys, targeted at token reduction for large homogeneous lists; clients expand losslessly. Normative details are deferred until GAP-Bench shows ≥ 20% token reduction on the large-list suite.
