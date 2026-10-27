@@ -463,6 +463,10 @@ impl ConformanceDriver for HttpDriver {
                 decode_http_response(&self.raw_target, status, &raw_headers, &body_bytes)
             };
 
+            // Equivalent-mutant note (D6): reqwest's `.timeout(total)` and this outer
+            // `tokio::time::timeout(self.total_timeout, ...)` intentionally back each other up
+            // across header receipt and response-body streaming; removing only one layer is
+            // behaviour-neutral, and both layers are kept as defense in depth.
             match tokio::time::timeout(self.total_timeout, send_and_read).await {
                 Ok(result) => result,
                 Err(_elapsed) => Err(DriverError::Transport {
@@ -1053,6 +1057,114 @@ mod tests {
             PrincipalsMap::from_entries([("alice", "tok-unmatched-777")])
                 .scrub_text("plain diagnostic message"),
             "plain diagnostic message"
+        );
+    }
+
+    // spec: INV-15, SEC-041 (VER-011)
+    #[test]
+    fn c6a_principals_load_file_rejects_empty_principal_name() {
+        let tmp = TempDir::new().expect("tempdir");
+        let path = tmp.path().join("empty_principal.json");
+        fs::write(&path, r#"{"": "tok"}"#).expect("write empty principal");
+        let err = PrincipalsMap::load_file(&path).expect_err("empty principal name must fail");
+        assert_eq!(err.path, path);
+        assert!(matches!(
+            err.kind,
+            PrincipalsErrorKind::InvalidEntry { ref principal } if principal.is_empty()
+        ));
+    }
+
+    // spec: INV-15, SEC-041 (VER-011)
+    #[test]
+    fn c6b_principals_load_file_rejects_whitespace_principal_name() {
+        let tmp = TempDir::new().expect("tempdir");
+        let path = tmp.path().join("blank_principal.json");
+        fs::write(&path, r#"{"   ": "tok"}"#).expect("write blank principal");
+        let err = PrincipalsMap::load_file(&path).expect_err("whitespace principal name must fail");
+        assert_eq!(err.path, path);
+        assert!(matches!(
+            err.kind,
+            PrincipalsErrorKind::InvalidEntry { ref principal } if principal == "   "
+        ));
+    }
+
+    // spec: INV-15 (VER-011)
+    #[test]
+    fn c6c_principals_load_file_preserves_surrounding_spaces_on_non_empty_name() {
+        let tmp = TempDir::new().expect("tempdir");
+        let path = tmp.path().join("padded_principal.json");
+        fs::write(&path, r#"{" alice ": "tok-padded-123"}"#).expect("write padded principal");
+        let map = PrincipalsMap::load_file(&path).expect("non-empty padded name loads verbatim");
+        assert_eq!(
+            map.get(" alice ")
+                .map(SecretString::expose_secret)
+                .map(String::as_str),
+            Some("tok-padded-123")
+        );
+        assert!(map.get("alice").is_none());
+    }
+
+    // spec: INV-15, SEC-040, SEC-041 (VER-011)
+    #[test]
+    fn d1_invalid_target_url_redacts_raw_userinfo_in_display_and_debug() {
+        let err = HttpDriver::new("http://user:pass@[::1")
+            .expect_err("invalid IPv6 host must fail URL parsing");
+        assert!(matches!(err, DriverError::InvalidTargetUrl { .. }));
+
+        let display_str = err.to_string();
+        let debug_str = format!("{err:?}");
+
+        assert!(
+            !display_str.contains("user"),
+            "Display leaked username: {display_str}"
+        );
+        assert!(
+            !display_str.contains("pass"),
+            "Display leaked password: {display_str}"
+        );
+        assert!(
+            display_str.contains("***@"),
+            "Display must contain `***@`: {display_str}"
+        );
+
+        assert!(
+            !debug_str.contains("user"),
+            "Debug leaked username: {debug_str}"
+        );
+        assert!(
+            !debug_str.contains("pass"),
+            "Debug leaked password: {debug_str}"
+        );
+        assert!(
+            debug_str.contains("***@"),
+            "Debug must contain `***@`: {debug_str}"
+        );
+    }
+
+    // spec: INV-15, SEC-040 (VER-011)
+    #[test]
+    fn d2_scrub_optional_secret_replaces_token_and_preserves_clean_or_empty_inputs() {
+        let secret = SecretString::new("tok-d2-secret-888".to_owned());
+        let empty_secret = SecretString::new(String::new());
+
+        assert_eq!(
+            scrub_optional_secret(
+                "transport failed with Bearer tok-d2-secret-888!",
+                Some(&secret)
+            ),
+            "transport failed with Bearer ***!"
+        );
+        assert_eq!(
+            scrub_optional_secret("transport connection reset", Some(&secret)),
+            "transport connection reset"
+        );
+        assert_eq!(
+            scrub_optional_secret("transport connection reset", Some(&empty_secret)),
+            "transport connection reset"
+        );
+        assert_eq!(
+            scrub_optional_secret("transport connection reset", None),
+            "transport connection reset"
         );
     }
 }

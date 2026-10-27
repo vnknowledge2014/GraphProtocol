@@ -761,4 +761,55 @@ mod tests {
             prop_assert_eq!(subset_match(&wrapper, &Value::Array(permuted)), Ok(()));
         }
     }
+
+    // spec: GQL-002 (VER-010)
+    #[test]
+    fn a1_negative_zero_and_positive_zero_floats_and_integer_zero_match() {
+        let neg_zero: Value = serde_json::from_str("-0.0").expect("parse -0.0");
+        let pos_zero: Value = serde_json::from_str("0.0").expect("parse 0.0");
+        let int_zero: Value = serde_json::from_str("0").expect("parse 0");
+
+        // Sanity-check that serde_json preserved distinct IEEE-754 sign bits for -0.0 and +0.0.
+        assert_ne!(
+            neg_zero.as_f64().expect("neg f64").to_bits(),
+            pos_zero.as_f64().expect("pos f64").to_bits()
+        );
+
+        assert_eq!(subset_match(&neg_zero, &pos_zero), Ok(()));
+        assert_eq!(subset_match(&pos_zero, &neg_zero), Ok(()));
+        assert_eq!(subset_match(&int_zero, &neg_zero), Ok(()));
+        assert_eq!(subset_match(&neg_zero, &int_zero), Ok(()));
+    }
+
+    // spec: GQL-002 (VER-010)
+    #[test]
+    fn a2a_mismatch_under_leading_underscore_key_uses_dot_path() {
+        let err = subset_match(&json!({"_x": 1}), &json!({"_x": 2}))
+            .expect_err("value mismatch under `_x` must fail");
+        assert_eq!(err.path, "$._x");
+    }
+
+    // spec: GQL-002 (VER-010)
+    #[test]
+    fn a2b_mismatch_under_digit_prefixed_key_uses_bracket_path() {
+        let err = subset_match(&json!({"1a": 1}), &json!({"1a": 2}))
+            .expect_err("value mismatch under `1a` must fail");
+        assert_eq!(err.path, "$[\"1a\"]");
+    }
+
+    // spec: GQL-002 (VER-010)
+    #[test]
+    fn a2c_mismatch_under_hyphenated_key_uses_bracket_path() {
+        let err = subset_match(&json!({"a-b": 1}), &json!({"a-b": 2}))
+            .expect_err("value mismatch under `a-b` must fail");
+        assert_eq!(err.path, "$[\"a-b\"]");
+    }
+
+    // spec: GQL-002 (VER-010)
+    #[test]
+    fn a2d_mismatch_under_empty_key_uses_bracket_path() {
+        let err = subset_match(&json!({"": 1}), &json!({"": 2}))
+            .expect_err("value mismatch under empty key must fail");
+        assert_eq!(err.path, "$[\"\"]");
+    }
 }

@@ -585,4 +585,114 @@ mod tests {
         assert_eq!(report_json["summary"]["total"], 1);
         assert_eq!(report_json["summary"]["passed"], 1);
     }
+
+    #[derive(Debug)]
+    struct AlwaysTransportErrDriver;
+
+    impl ConformanceDriver for AlwaysTransportErrDriver {
+        fn target(&self) -> &str {
+            "http://127.0.0.1:18080/gap"
+        }
+
+        fn execute<'a>(
+            &'a self,
+            _request: &'a FixtureRequest,
+            _bearer_token: Option<&'a SecretString>,
+        ) -> BoxFuture<'a, Result<ObservedResponse, DriverError>> {
+            Box::pin(async {
+                Err(DriverError::Transport {
+                    target: "http://127.0.0.1:18080/gap".to_owned(),
+                    reason: "connection reset".to_owned(),
+                })
+            })
+        }
+    }
+
+    // spec: GQL-002 (VER-011)
+    #[tokio::test]
+    async fn b1b_execute_target_mode_with_transport_error_only_exits_1() {
+        let tmp = TempDir::new().expect("tempdir");
+        let fixtures_dir = tmp.path().join("err_only");
+        fs::create_dir_all(&fixtures_dir).expect("mkdir err_only");
+        fs::write(
+            fixtures_dir.join("01_err.json"),
+            json!({
+                "name": "transport error fixture",
+                "class": ["Core"],
+                "spec": ["GQL-002"],
+                "request": {"query": "{ ok }"},
+                "expect": {"status": 200}
+            })
+            .to_string(),
+        )
+        .expect("write 01_err.json");
+
+        let cli = CliArgs::try_parse_from([
+            "gap-conformance",
+            "--target",
+            "http://127.0.0.1:18080/gap",
+            "--fixtures",
+            fixtures_dir.to_str().expect("utf8"),
+        ])
+        .expect("parse cli");
+
+        let mut out = Vec::new();
+        let mut err = Vec::new();
+        let code = execute_target_mode(&AlwaysTransportErrDriver, &cli, &mut out, &mut err).await;
+        assert_eq!(code, 1);
+    }
+
+    // spec: INV-15, SEC-040 (VER-010, VER-011)
+    #[tokio::test]
+    async fn d5_execute_target_mode_scrubs_principal_token_from_fixture_load_error() {
+        let tmp = TempDir::new().expect("tempdir");
+        let principals_path = tmp.path().join("principals.json");
+        fs::write(
+            &principals_path,
+            json!({"alice": "tok-load-err-secret-555"}).to_string(),
+        )
+        .expect("write principals.json");
+
+        let fixtures_dir = tmp.path().join("leaky_fixtures");
+        fs::create_dir_all(&fixtures_dir).expect("mkdir leaky_fixtures");
+        fs::write(
+            fixtures_dir.join("01_bad.json"),
+            json!({
+                "name": "unknown key equals token",
+                "class": ["Core"],
+                "spec": ["GQL-002"],
+                "request": {"query": "{ ok }"},
+                "expect": {"status": 200},
+                "tok-load-err-secret-555": true
+            })
+            .to_string(),
+        )
+        .expect("write 01_bad.json");
+
+        let cli = CliArgs::try_parse_from([
+            "gap-conformance",
+            "--target",
+            "http://127.0.0.1:18080/gap",
+            "--fixtures",
+            fixtures_dir.to_str().expect("utf8"),
+            "--principals",
+            principals_path.to_str().expect("utf8"),
+        ])
+        .expect("parse cli");
+
+        let mut out = Vec::new();
+        let mut err = Vec::new();
+        let code = execute_target_mode(&StaticOkDriver, &cli, &mut out, &mut err).await;
+        assert_eq!(code, 2);
+
+        let stderr_str = String::from_utf8(err).expect("utf8 stderr");
+        assert!(
+            stderr_str.contains("***"),
+            "stderr must contain `***`: {stderr_str}"
+        );
+        assert!(
+            !stderr_str.contains("tok-load-err-secret-555"),
+            "stderr must never contain raw principal token: {stderr_str}"
+        );
+    }
 }

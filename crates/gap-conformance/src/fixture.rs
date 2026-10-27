@@ -401,6 +401,8 @@ pub fn load_fixture_file(
                 id: s.to_owned(),
             }));
         }
+        // Mutation-harness note (D7): collapses intra-fixture duplicate spec IDs to their first
+        // occurrence; covered by `collapses_duplicate_spec_ids_to_first_occurrence_and_accepts_valid_shapes`.
         if seen_specs.insert(s.to_owned()) {
             spec.push(s.to_owned());
         }
@@ -1326,5 +1328,129 @@ mod tests {
             loaded.spec,
             vec!["GQL-070", "INV-15", "ADR-002", "VER-010", "A2A-01"]
         );
+    }
+
+    // spec: GQL-002 (VER-010)
+    #[test]
+    fn d3a_rejects_spec_id_with_trailing_letter_in_two_char_digits() {
+        let tmp = TempDir::new().expect("tempdir");
+        let path = write_file(
+            tmp.path(),
+            "d3_inv_1a.json",
+            &json!({
+                "name": "bad digit letter",
+                "class": ["Core"],
+                "spec": ["INV-1A"],
+                "request": {"query": "{ ok }"},
+                "expect": {"status": 200}
+            })
+            .to_string(),
+        );
+        let err = load_fixtures_dir(tmp.path()).expect_err("`INV-1A` must be rejected");
+        assert_eq!(err.path, path);
+        assert!(matches!(
+            &err.kind,
+            FixtureErrorKind::InvalidSpecId { index: 0, id } if id == "INV-1A"
+        ));
+        let msg = err.to_string();
+        assert!(msg.contains("d3_inv_1a.json"));
+        assert!(msg.contains("INV-1A"));
+    }
+
+    // spec: GQL-002 (VER-010)
+    #[test]
+    fn d3b_rejects_spec_id_with_leading_letter_in_three_char_digits() {
+        let tmp = TempDir::new().expect("tempdir");
+        let path = write_file(
+            tmp.path(),
+            "d3_inv_a12.json",
+            &json!({
+                "name": "bad digit letter",
+                "class": ["Core"],
+                "spec": ["INV-A12"],
+                "request": {"query": "{ ok }"},
+                "expect": {"status": 200}
+            })
+            .to_string(),
+        );
+        let err = load_fixtures_dir(tmp.path()).expect_err("`INV-A12` must be rejected");
+        assert_eq!(err.path, path);
+        assert!(matches!(
+            &err.kind,
+            FixtureErrorKind::InvalidSpecId { index: 0, id } if id == "INV-A12"
+        ));
+        let msg = err.to_string();
+        assert!(msg.contains("d3_inv_a12.json"));
+        assert!(msg.contains("INV-A12"));
+    }
+
+    // spec: GQL-002 (VER-010)
+    #[test]
+    fn d3c_rejects_spec_id_with_lowercase_hex_letter_in_digits() {
+        let tmp = TempDir::new().expect("tempdir");
+        let path = write_file(
+            tmp.path(),
+            "d3_gql_0x1.json",
+            &json!({
+                "name": "bad digit hex letter",
+                "class": ["Core"],
+                "spec": ["GQL-0x1"],
+                "request": {"query": "{ ok }"},
+                "expect": {"status": 200}
+            })
+            .to_string(),
+        );
+        let err = load_fixtures_dir(tmp.path()).expect_err("`GQL-0x1` must be rejected");
+        assert_eq!(err.path, path);
+        assert!(matches!(
+            &err.kind,
+            FixtureErrorKind::InvalidSpecId { index: 0, id } if id == "GQL-0x1"
+        ));
+        let msg = err.to_string();
+        assert!(msg.contains("d3_gql_0x1.json"));
+        assert!(msg.contains("GQL-0x1"));
+    }
+
+    // spec: GQL-002 (VER-010)
+    #[test]
+    fn d4a_treats_null_principal_as_absent() {
+        let tmp = TempDir::new().expect("tempdir");
+        let path = write_file(
+            tmp.path(),
+            "null_principal.json",
+            &json!({
+                "name": "null principal treated as absent",
+                "class": ["Core"],
+                "spec": ["GQL-002"],
+                "principal": null,
+                "request": {"query": "{ ok }"},
+                "expect": {"status": 200}
+            })
+            .to_string(),
+        );
+        let loaded =
+            load_fixture_file(&path, "null_principal.json").expect("null principal must load");
+        assert_eq!(loaded.principal, None);
+    }
+
+    // spec: GQL-002 (VER-010)
+    #[test]
+    fn d4b_treats_null_schema_as_absent() {
+        let tmp = TempDir::new().expect("tempdir");
+        let path = write_file(
+            tmp.path(),
+            "null_schema.json",
+            &json!({
+                "name": "null schema treated as absent",
+                "class": ["Core"],
+                "spec": ["GQL-002"],
+                "schema": null,
+                "request": {"query": "{ ok }"},
+                "expect": {"status": 200}
+            })
+            .to_string(),
+        );
+        let loaded = load_fixture_file(&path, "null_schema.json").expect("null schema must load");
+        assert_eq!(loaded.schema, None);
     }
 }

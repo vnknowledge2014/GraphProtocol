@@ -453,4 +453,349 @@ mod tests {
         );
         assert!(err_detail.contains("***"));
     }
+
+    // spec: GQL-002 (VER-010, VER-011)
+    #[tokio::test]
+    async fn c1a_class_filter_selects_multi_class_fixture_when_one_class_matches() {
+        let ok_obs = ObservedResponse::from_parts(
+            200,
+            std::iter::empty::<(&str, &str)>(),
+            json!({"data": {"ok": true}}).as_object(),
+        );
+        let driver = ScriptedDriver::new(vec![Ok(ok_obs)]);
+        let fixture = make_single_fixture(
+            "core+secure fixture",
+            "core/multi.json",
+            vec![ConformanceClass::Core, ConformanceClass::Secure],
+            vec!["GQL-002"],
+            None,
+            "{ ok }",
+            json!({"status": 200, "data": {"ok": true}}),
+        );
+        let config = RunnerConfig {
+            classes: vec![ConformanceClass::Core],
+            principals: PrincipalsMap::empty(),
+        };
+        let report = run_suite(&driver, &[fixture], &config, None).await;
+        assert_eq!(report.summary.total, 1);
+        assert_eq!(report.summary.passed, 1);
+    }
+
+    // spec: GQL-002 (VER-010, VER-011)
+    #[tokio::test]
+    async fn c1b_class_filter_selects_single_class_fixture_when_filter_lists_multiple_classes() {
+        let ok_obs = ObservedResponse::from_parts(
+            200,
+            std::iter::empty::<(&str, &str)>(),
+            json!({"data": {"ok": true}}).as_object(),
+        );
+        let driver = ScriptedDriver::new(vec![Ok(ok_obs)]);
+        let fixture = make_single_fixture(
+            "core-only fixture",
+            "core/single.json",
+            vec![ConformanceClass::Core],
+            vec!["GQL-002"],
+            None,
+            "{ ok }",
+            json!({"status": 200, "data": {"ok": true}}),
+        );
+        let config = RunnerConfig {
+            classes: vec![ConformanceClass::Core, ConformanceClass::Secure],
+            principals: PrincipalsMap::empty(),
+        };
+        let report = run_suite(&driver, &[fixture], &config, None).await;
+        assert_eq!(report.summary.total, 1);
+        assert_eq!(report.summary.passed, 1);
+    }
+
+    // spec: GQL-002 (VER-010, VER-011)
+    #[tokio::test]
+    async fn c1c_class_filter_excludes_fixture_whose_class_is_disjoint() {
+        let driver = ScriptedDriver::new(Vec::new());
+        let fixture = make_single_fixture(
+            "tasks fixture",
+            "tasks/01.json",
+            vec![ConformanceClass::Tasks],
+            vec!["GQL-002"],
+            None,
+            "{ task }",
+            json!({"status": 200}),
+        );
+        let config = RunnerConfig {
+            classes: vec![ConformanceClass::Core, ConformanceClass::Secure],
+            principals: PrincipalsMap::empty(),
+        };
+        let report = run_suite(&driver, &[fixture], &config, None).await;
+        assert_eq!(report.summary.total, 0);
+        assert!(driver.recorded_calls().is_empty());
+    }
+
+    // spec: INV-15, SEC-041 (VER-010)
+    #[tokio::test]
+    async fn c2_unmapped_principal_errors_even_when_anyone_principal_exists() {
+        let driver = ScriptedDriver::new(Vec::new());
+        let fixture = make_single_fixture(
+            "needs agent-b",
+            "secure/agent_b.json",
+            vec![ConformanceClass::Secure],
+            vec!["INV-15"],
+            Some("agent-b"),
+            "{ secretOp }",
+            json!({"status": 200}),
+        );
+        let config = RunnerConfig {
+            classes: Vec::new(),
+            principals: PrincipalsMap::from_entries([
+                ("anyone", "tok-anyone-fallback-trap"),
+                ("agent-a", "tok-agent-a"),
+            ]),
+        };
+
+        let report = run_suite(&driver, &[fixture], &config, None).await;
+        assert_eq!(report.summary.total, 1);
+        assert_eq!(report.fixtures[0].verdict, Verdict::Error);
+        let detail = report.fixtures[0]
+            .detail
+            .as_deref()
+            .expect("error verdict must carry detail");
+        assert!(
+            detail.contains("agent-b"),
+            "detail must name unmapped principal `agent-b`: {detail}"
+        );
+        assert_eq!(driver.recorded_calls().len(), 0);
+    }
+
+    // spec: GQL-002, INV-15 (VER-010)
+    #[tokio::test]
+    async fn c3_multi_step_fixture_sends_principal_bearer_token_on_every_step() {
+        let step0_ok = ObservedResponse::from_parts(
+            200,
+            std::iter::empty::<(&str, &str)>(),
+            json!({"data": {"n": 1}}).as_object(),
+        );
+        let step1_ok = ObservedResponse::from_parts(
+            200,
+            std::iter::empty::<(&str, &str)>(),
+            json!({"data": {"n": 2}}).as_object(),
+        );
+        let driver = ScriptedDriver::new(vec![Ok(step0_ok), Ok(step1_ok)]);
+
+        let fixture = LoadedFixture {
+            path: PathBuf::from("secure/two_steps.json"),
+            relative_path: "secure/two_steps.json".to_owned(),
+            name: "authenticated two-step fixture".to_owned(),
+            class: vec![ConformanceClass::Secure],
+            spec: vec!["INV-15".to_owned()],
+            schema: None,
+            principal: Some("agent-two-step".to_owned()),
+            execution: FixtureExecution::Steps(vec![
+                FixtureStep {
+                    request: FixtureRequest {
+                        query: "{ stepOne }".to_owned(),
+                        variables: None,
+                        operation_name: None,
+                        extensions: None,
+                    },
+                    expect: json!({"status": 200, "data": {"n": 1}}),
+                },
+                FixtureStep {
+                    request: FixtureRequest {
+                        query: "{ stepTwo }".to_owned(),
+                        variables: None,
+                        operation_name: None,
+                        extensions: None,
+                    },
+                    expect: json!({"status": 200, "data": {"n": 2}}),
+                },
+            ]),
+        };
+
+        let config = RunnerConfig {
+            classes: Vec::new(),
+            principals: PrincipalsMap::from_entries([("agent-two-step", "tok-step-bearer-777")]),
+        };
+        let report = run_suite(&driver, &[fixture], &config, None).await;
+        assert_eq!(report.fixtures[0].verdict, Verdict::Pass);
+        assert_eq!(
+            driver.recorded_calls(),
+            vec![
+                (
+                    "{ stepOne }".to_owned(),
+                    Some("tok-step-bearer-777".to_owned())
+                ),
+                (
+                    "{ stepTwo }".to_owned(),
+                    Some("tok-step-bearer-777".to_owned())
+                ),
+            ]
+        );
+    }
+
+    // spec: GQL-002 (VER-010)
+    #[tokio::test]
+    async fn c4_steps_stop_immediately_after_driver_error_on_second_step() {
+        let step0_ok = ObservedResponse::from_parts(
+            200,
+            std::iter::empty::<(&str, &str)>(),
+            json!({"data": {"s": 0}}).as_object(),
+        );
+        let step1_err = DriverError::Transport {
+            target: "http://127.0.0.1:18080/graphql".to_owned(),
+            reason: "connection reset on step 1".to_owned(),
+        };
+        let step2_ok = ObservedResponse::from_parts(
+            200,
+            std::iter::empty::<(&str, &str)>(),
+            json!({"data": {"s": 2}}).as_object(),
+        );
+        let driver = ScriptedDriver::new(vec![Ok(step0_ok), Err(step1_err), Ok(step2_ok)]);
+
+        let fixture = LoadedFixture {
+            path: PathBuf::from("core/err_step.json"),
+            relative_path: "core/err_step.json".to_owned(),
+            name: "three steps with error at index 1".to_owned(),
+            class: vec![ConformanceClass::Core],
+            spec: vec!["GQL-002".to_owned()],
+            schema: None,
+            principal: None,
+            execution: FixtureExecution::Steps(vec![
+                FixtureStep {
+                    request: FixtureRequest {
+                        query: "{ s0 }".to_owned(),
+                        variables: None,
+                        operation_name: None,
+                        extensions: None,
+                    },
+                    expect: json!({"status": 200, "data": {"s": 0}}),
+                },
+                FixtureStep {
+                    request: FixtureRequest {
+                        query: "{ s1 }".to_owned(),
+                        variables: None,
+                        operation_name: None,
+                        extensions: None,
+                    },
+                    expect: json!({"status": 200, "data": {"s": 1}}),
+                },
+                FixtureStep {
+                    request: FixtureRequest {
+                        query: "{ s2 }".to_owned(),
+                        variables: None,
+                        operation_name: None,
+                        extensions: None,
+                    },
+                    expect: json!({"status": 200, "data": {"s": 2}}),
+                },
+            ]),
+        };
+
+        let report = run_suite(&driver, &[fixture], &RunnerConfig::default(), None).await;
+        assert_eq!(driver.recorded_calls().len(), 2);
+        assert_eq!(report.fixtures[0].verdict, Verdict::Error);
+        let detail = report.fixtures[0]
+            .detail
+            .as_deref()
+            .expect("step error must carry detail");
+        assert!(
+            detail.starts_with("step 1:"),
+            "expected detail starting with `step 1:`, got: {detail}"
+        );
+    }
+
+    // spec: INV-15, SEC-040 (VER-010)
+    #[tokio::test]
+    async fn c5a_step_mismatch_detail_scrubs_principal_token() {
+        let echoed_obs = ObservedResponse::from_parts(
+            200,
+            std::iter::empty::<(&str, &str)>(),
+            json!({"data": {"echo": "leaked tok-SECRET-123"}}).as_object(),
+        );
+        let driver = ScriptedDriver::new(vec![Ok(echoed_obs)]);
+
+        let fixture = LoadedFixture {
+            path: PathBuf::from("secure/step_mismatch_scrub.json"),
+            relative_path: "secure/step_mismatch_scrub.json".to_owned(),
+            name: "step mismatch scrub".to_owned(),
+            class: vec![ConformanceClass::Secure],
+            spec: vec!["INV-15".to_owned()],
+            schema: None,
+            principal: Some("alice".to_owned()),
+            execution: FixtureExecution::Steps(vec![FixtureStep {
+                request: FixtureRequest {
+                    query: "{ echo }".to_owned(),
+                    variables: None,
+                    operation_name: None,
+                    extensions: None,
+                },
+                expect: json!({"status": 200, "data": {"echo": "clean"}}),
+            }]),
+        };
+
+        let config = RunnerConfig {
+            classes: Vec::new(),
+            principals: PrincipalsMap::from_entries([("alice", "tok-SECRET-123")]),
+        };
+        let report = run_suite(&driver, &[fixture], &config, None).await;
+        assert_eq!(report.fixtures[0].verdict, Verdict::Fail);
+        let detail = report.fixtures[0]
+            .detail
+            .as_deref()
+            .expect("step mismatch detail");
+        assert!(
+            detail.contains("***"),
+            "detail must contain `***`: {detail}"
+        );
+        assert!(
+            !detail.contains("tok-SECRET-123"),
+            "detail must never contain token: {detail}"
+        );
+    }
+
+    // spec: INV-15, SEC-040 (VER-010)
+    #[tokio::test]
+    async fn c5b_step_driver_error_detail_scrubs_principal_token() {
+        let leak_err = DriverError::Transport {
+            target: "http://127.0.0.1:18080/graphql".to_owned(),
+            reason: "upstream echoed Bearer tok-SECRET-123".to_owned(),
+        };
+        let driver = ScriptedDriver::new(vec![Err(leak_err)]);
+
+        let fixture = LoadedFixture {
+            path: PathBuf::from("secure/step_err_scrub.json"),
+            relative_path: "secure/step_err_scrub.json".to_owned(),
+            name: "step error scrub".to_owned(),
+            class: vec![ConformanceClass::Secure],
+            spec: vec!["INV-15".to_owned()],
+            schema: None,
+            principal: Some("alice".to_owned()),
+            execution: FixtureExecution::Steps(vec![FixtureStep {
+                request: FixtureRequest {
+                    query: "{ echo }".to_owned(),
+                    variables: None,
+                    operation_name: None,
+                    extensions: None,
+                },
+                expect: json!({"status": 200}),
+            }]),
+        };
+
+        let config = RunnerConfig {
+            classes: Vec::new(),
+            principals: PrincipalsMap::from_entries([("alice", "tok-SECRET-123")]),
+        };
+        let report = run_suite(&driver, &[fixture], &config, None).await;
+        assert_eq!(report.fixtures[0].verdict, Verdict::Error);
+        let detail = report.fixtures[0]
+            .detail
+            .as_deref()
+            .expect("step error detail");
+        assert!(
+            detail.contains("***"),
+            "detail must contain `***`: {detail}"
+        );
+        assert!(
+            !detail.contains("tok-SECRET-123"),
+            "detail must never contain token: {detail}"
+        );
+    }
 }

@@ -38,6 +38,7 @@ Normative fixture syntax and response-matching rules are specified in [`spec/02-
 - **Optional top-level fields:**
   - `"schema"`: relative path to the composed supergraph SDL used by offline/spawned servers.
   - `"principal"`: logical caller identity resolved via `--principals <FILE>`.
+  - An optional string field set to `null` is treated as absent.
 - **Validation:** Unknown top-level/request/step keys, missing or empty `"name"`, empty or unknown `"class"`, missing/empty/malformed `"spec"` entries (naming both the file and the offending entry), invalid JSON, empty `"steps"`, or providing both/neither of `"request"` and `"steps"` fail fixture loading with a typed error naming the offending file.
 - **Subset matching (`spec/02-gap-ql.md` §11):**
   - Each step's `"expect"` is matched against the normalized observed response `{ "status", "data", "errors", "extensions", "headers", "dataNull" }`, where `"headers"` keys are lower-cased and `"dataNull"` is derived strictly from `data == null` (never trusted from the wire).

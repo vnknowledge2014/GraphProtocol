@@ -328,4 +328,181 @@ mod tests {
         let j_clock = with_clock.to_json_pretty().expect("json with clock");
         assert!(j_clock.contains("\"generated_at\": \"2023-11-14T22:13:20Z\""));
     }
+
+    // spec: GQL-002 (VER-010, VER-011)
+    #[test]
+    fn b1a_report_with_only_error_verdict_is_not_all_passed_and_exits_1() {
+        let report = ConformanceReport::from_results(
+            "http://127.0.0.1:8080",
+            vec![FixtureReport {
+                name: "only error".to_owned(),
+                file: "secure/01.json".to_owned(),
+                class: vec![ConformanceClass::Secure],
+                spec: vec!["INV-15".to_owned()],
+                verdict: Verdict::Error,
+                detail: Some("unmapped principal".to_owned()),
+            }],
+            None,
+        );
+        assert_eq!(
+            report.summary,
+            ReportSummary {
+                total: 1,
+                passed: 0,
+                failed: 0,
+                errors: 1,
+                spec_ids_total: 1,
+                spec_ids_covered: 0,
+            }
+        );
+        assert!(!report.all_passed());
+        assert_eq!(report.exit_code(), 1);
+    }
+
+    // spec: GQL-002 (VER-010, VER-011)
+    #[test]
+    fn b2_empty_report_all_passed_is_false() {
+        let report = ConformanceReport::from_results("http://127.0.0.1:8080", Vec::new(), None);
+        assert_eq!(report.summary.total, 0);
+        assert!(!report.all_passed());
+    }
+
+    // spec: GQL-002 (VER-010, VER-011)
+    #[test]
+    fn b3_empty_report_exit_code_is_2() {
+        let report = ConformanceReport::from_results("http://127.0.0.1:8080", Vec::new(), None);
+        assert_eq!(report.summary.total, 0);
+        assert_eq!(report.exit_code(), 2);
+    }
+
+    // spec: INV-02, GQL-002 (VER-010, VER-011)
+    #[test]
+    fn b4_report_json_pretty_matches_exact_golden_including_trailing_newline_and_verdict_case() {
+        let clock = ManualClock::new(1_700_000_000_000);
+        let report = ConformanceReport::from_results(
+            "http://127.0.0.1:8080/graphql",
+            vec![
+                FixtureReport {
+                    name: "case pass".to_owned(),
+                    file: "gql/01.json".to_owned(),
+                    class: vec![ConformanceClass::Core],
+                    spec: vec!["GQL-002".to_owned()],
+                    verdict: Verdict::Pass,
+                    detail: None,
+                },
+                FixtureReport {
+                    name: "case fail".to_owned(),
+                    file: "gql/02.json".to_owned(),
+                    class: vec![ConformanceClass::Discovery],
+                    spec: vec!["GQL-070".to_owned()],
+                    verdict: Verdict::Fail,
+                    detail: Some("mismatch at `$.status`".to_owned()),
+                },
+                FixtureReport {
+                    name: "case error".to_owned(),
+                    file: "secure/03.json".to_owned(),
+                    class: vec![ConformanceClass::Secure],
+                    spec: vec!["INV-15".to_owned()],
+                    verdict: Verdict::Error,
+                    detail: Some("transport timeout".to_owned()),
+                },
+            ],
+            Some(&clock),
+        );
+
+        let actual = report.to_json_pretty().expect("serialize golden report");
+        let expected = concat!(
+            "{\n",
+            "  \"runner\": {\n",
+            "    \"name\": \"gap-conformance\",\n",
+            "    \"version\": \"0.1.0\"\n",
+            "  },\n",
+            "  \"target\": \"http://127.0.0.1:8080/graphql\",\n",
+            "  \"generated_at\": \"2023-11-14T22:13:20Z\",\n",
+            "  \"fixtures\": [\n",
+            "    {\n",
+            "      \"name\": \"case pass\",\n",
+            "      \"file\": \"gql/01.json\",\n",
+            "      \"class\": [\n",
+            "        \"Core\"\n",
+            "      ],\n",
+            "      \"spec\": [\n",
+            "        \"GQL-002\"\n",
+            "      ],\n",
+            "      \"verdict\": \"pass\",\n",
+            "      \"detail\": null\n",
+            "    },\n",
+            "    {\n",
+            "      \"name\": \"case fail\",\n",
+            "      \"file\": \"gql/02.json\",\n",
+            "      \"class\": [\n",
+            "        \"Discovery\"\n",
+            "      ],\n",
+            "      \"spec\": [\n",
+            "        \"GQL-070\"\n",
+            "      ],\n",
+            "      \"verdict\": \"fail\",\n",
+            "      \"detail\": \"mismatch at `$.status`\"\n",
+            "    },\n",
+            "    {\n",
+            "      \"name\": \"case error\",\n",
+            "      \"file\": \"secure/03.json\",\n",
+            "      \"class\": [\n",
+            "        \"Secure\"\n",
+            "      ],\n",
+            "      \"spec\": [\n",
+            "        \"INV-15\"\n",
+            "      ],\n",
+            "      \"verdict\": \"error\",\n",
+            "      \"detail\": \"transport timeout\"\n",
+            "    }\n",
+            "  ],\n",
+            "  \"summary\": {\n",
+            "    \"total\": 3,\n",
+            "    \"passed\": 1,\n",
+            "    \"failed\": 1,\n",
+            "    \"errors\": 1,\n",
+            "    \"spec_ids_total\": 3,\n",
+            "    \"spec_ids_covered\": 1\n",
+            "  },\n",
+            "  \"coverage\": {\n",
+            "    \"GQL-002\": {\n",
+            "      \"covered\": true,\n",
+            "      \"passed\": 1,\n",
+            "      \"fixtures\": [\n",
+            "        {\n",
+            "          \"name\": \"case pass\",\n",
+            "          \"file\": \"gql/01.json\",\n",
+            "          \"verdict\": \"pass\"\n",
+            "        }\n",
+            "      ]\n",
+            "    },\n",
+            "    \"GQL-070\": {\n",
+            "      \"covered\": false,\n",
+            "      \"passed\": 0,\n",
+            "      \"fixtures\": [\n",
+            "        {\n",
+            "          \"name\": \"case fail\",\n",
+            "          \"file\": \"gql/02.json\",\n",
+            "          \"verdict\": \"fail\"\n",
+            "        }\n",
+            "      ]\n",
+            "    },\n",
+            "    \"INV-15\": {\n",
+            "      \"covered\": false,\n",
+            "      \"passed\": 0,\n",
+            "      \"fixtures\": [\n",
+            "        {\n",
+            "          \"name\": \"case error\",\n",
+            "          \"file\": \"secure/03.json\",\n",
+            "          \"verdict\": \"error\"\n",
+            "        }\n",
+            "      ]\n",
+            "    }\n",
+            "  }\n",
+            "}\n",
+        );
+
+        assert_eq!(actual, expected);
+    }
 }
