@@ -8,4 +8,5 @@
     clippy::unimplemented
 )]
 
+pub mod matcher;
 pub mod ngc_kit;

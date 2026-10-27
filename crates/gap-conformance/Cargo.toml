@@ -6,7 +6,25 @@ rust-version.workspace = true
 license.workspace = true
 description = "Black-box GAP protocol conformance runner and NGC connector conformance kit (L5)."
 
+[[bin]]
+name = "gap-conformance"
+path = "src/main.rs"
+
 [dependencies]
+anyhow.workspace = true
+clap = { workspace = true, features = ["derive"] }
 gap-core.workspace = true
 gap-ngc-sdk.workspace = true
 gap-proto.workspace = true
+reqwest = { workspace = true, features = ["json"] }
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
+thiserror.workspace = true
+tokio = { workspace = true, features = ["io-util", "macros", "net", "process", "rt-multi-thread", "time"] }
+tracing.workspace = true
+
+[dev-dependencies]
+axum.workspace = true
+gap-testkit.workspace = true
+proptest.workspace = true
+tempfile.workspace = true
