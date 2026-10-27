@@ -75,14 +75,14 @@ candle-core = "0.11.0"
 candle-nn = "0.11.0"
 candle-transformers = "0.11.0"
 cedar-policy = "4.14.0"
-criterion = "0.8.2"
+criterion = { version = "0.8.2", default-features = false } # members add features = ["cargo_bench_support"]
 crossbeam-utils = "0.8.23"
 dashmap = "6.2.1" # non-hot-path only (INV-02)
 divan = "0.1.21"
 ed25519-dalek = "3.0.0"
 fastembed = "7.5.0"
 governor = "0.10.4"
-hdrhistogram = "7.6.0"
+hdrhistogram = { version = "7.6.0", default-features = false }
 hnsw_rs = "0.3.5"
 jsonschema = "0.60.1"
 jsonwebtoken = "11.1.0"
@@ -132,7 +132,7 @@ clap = "4.6.7"
 http = "1.5.0"
 hyper = "1.12.0"
 im = "15.1.0"
-reqwest = "0.13.5"
+reqwest = { version = "0.13.5", default-features = false } # no TLS backend yet: the WP that needs TLS picks one and clears the licence gate
 safetensors = "0.8.0"
 schemars = "1.2.3"
 serde = "1.0.229"
@@ -149,3 +149,7 @@ uuid = "1.29.0"
 opentelemetry-otlp = { version = "0.33.1", default-features = false }
 opentelemetry_sdk = "0.33.1"
 tracing-subscriber = "0.3.23"
+
+# Added for WP-M0-09, WP-M2-01 and WP-M3-01 (2026-10-27): dev-only temp directories for the
+# SQLite backup/restore tests and the conformance fixtures (already in the lockfile via proptest).
+tempfile = "3.27.0"
