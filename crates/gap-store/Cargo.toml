@@ -7,7 +7,19 @@ license.workspace = true
 description = "ContextStore, TaskStore, AuditLog, and IdempotencyStore traits and SQLite/SurrealDB backends (L1)."
 
 [features]
+conformance = []
 store-surreal = []
 
 [dependencies]
+blake3.workspace = true
 gap-core.workspace = true
+rusqlite = { workspace = true, features = ["backup", "blob", "bundled", "functions", "limits", "serde_json", "uuid"] }
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+uuid = { workspace = true, features = ["serde", "v4", "v7"] }
+
+[dev-dependencies]
+proptest.workspace = true
+tempfile.workspace = true

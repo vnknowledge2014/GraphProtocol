@@ -9,7 +9,21 @@
 )]
 
 pub mod audit;
+pub mod error;
 pub mod feedback;
 pub mod idempotency;
+pub mod store;
 pub mod surreal;
 pub mod tasks;
+pub mod types;
+
+pub use error::StoreError;
+pub use gap_core::clock::{Clock, Timestamp};
+pub use gap_core::ids::{TaskId, TenantId, TenantScope};
+pub use store::{ContextMaintenance, ContextStore};
+pub use types::{
+    BaseScope, BatchResult, Caller, Direction, Edge, EdgeId, EdgeResolution, EdgeType, GraphCounts,
+    NewEdge, NewNode, Node, NodeId, NodeType, Provenance, PurgePolicy, PurgeReport, Scope,
+    ScopeSpec, TraverseQuery, TraverseResume, TraverseResult, TraverseStats, TraverseStrategy,
+    TraverseWarning,
+};
