@@ -528,7 +528,7 @@ pub struct Edge {
 /// Write payload for `put_edge` and `put_batch` (`m2-01-design.md` §§2, 4).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct NewEdge {
-    /// Optional edge ID (`Some` allowed on `Global`-to-`Global` creation or matching an existing
+    /// Optional edge ID (`Some` assigns a deterministic ID on creation or matches an existing
     /// edge; `None` mints a UUIDv7 or reuses the current `(edge_type, from, to)` ID).
     pub id: Option<EdgeId>,
     /// Edge relationship type.
@@ -877,6 +877,9 @@ pub fn append_canonical_json(value: &JsonValue, out: &mut Vec<u8>) -> Result<(),
 /// Validates `props` nesting depth (`<= 16`) and canonical UTF-8 byte length (`<= 65,536`),
 /// returning the canonical serialized JSON string.
 pub fn validate_and_serialize_props(props: &JsonMap<String, JsonValue>) -> Result<String, StoreError> {
+    if props.is_empty() {
+        return Ok("{}".to_owned());
+    }
     let wrapped = JsonValue::Object(props.clone());
     if json_container_depth(&wrapped) > MAX_PROPS_DEPTH {
         return Err(StoreError::Invalid {

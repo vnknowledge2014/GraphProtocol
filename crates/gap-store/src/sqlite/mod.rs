@@ -1,5 +1,6 @@
 //! SQLite [`crate::ContextStore`] and [`crate::ContextMaintenance`] backend (`ADR-020`, `ADR-025`, `ING-064`..`ING-067`).
 
+pub(crate) mod crud;
 pub mod schema;
 
 use std::fs;
@@ -9,14 +10,20 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Condvar, Mutex, MutexGuard};
 use std::time::Duration;
 
-use gap_core::clock::Clock;
+use gap_core::clock::{Clock, Timestamp};
+use gap_core::ids::TenantScope;
 use rusqlite::limits::Limit;
 use rusqlite::{Connection, ErrorCode as SqliteErrorCode, OpenFlags};
 use uuid::{Builder as UuidBuilder, Uuid};
 
 use crate::error::StoreError;
 pub use crate::sqlite::schema::{FORMAT_VERSION, Migration};
-use crate::types::{DEFAULT_MAX_EDGES_PER_TENANT, DEFAULT_MAX_NODES_PER_TENANT};
+use crate::store::ContextStore;
+use crate::types::{
+    BatchResult, Caller, DEFAULT_MAX_EDGES_PER_TENANT, DEFAULT_MAX_NODES_PER_TENANT, Edge, EdgeId,
+    GraphCounts, NewEdge, NewNode, Node, NodeId, TraverseQuery, TraverseResult,
+    validate_search_limit, validate_traverse_query,
+};
 
 /// Default SQLite `busy_timeout` in milliseconds (`m2-01-design.md` §8).
 pub const DEFAULT_BUSY_TIMEOUT_MS: u32 = 5_000;
@@ -284,7 +291,6 @@ pub struct SqliteContextStore {
     pub(crate) clock: Arc<dyn Clock>,
     pub(crate) writer: Mutex<Connection>,
     pub(crate) readers: ReaderPool,
-    #[cfg_attr(not(test), allow(dead_code))]
     uuid_seq: AtomicU64,
 }
 
@@ -362,7 +368,6 @@ impl SqliteContextStore {
 
     /// Mints an RFC 9562 UUIDv7 using the injected [`Clock`] (`INV-02`, never `SystemTime::now`)
     /// plus a monotonic counter and CSPRNG entropy.
-    #[cfg_attr(not(test), allow(dead_code))]
     pub(crate) fn mint_uuid_v7(&self) -> Uuid {
         let unix_ms = u64::try_from(self.clock.unix_millis().max(0)).unwrap_or(0);
         let seq = self.uuid_seq.fetch_add(1, Ordering::Relaxed);
@@ -374,6 +379,89 @@ impl SqliteContextStore {
         rand_bytes[1] = seq_lo;
         rand_bytes[2..10].copy_from_slice(&entropy[2..10]);
         UuidBuilder::from_unix_timestamp_millis(unix_ms, &rand_bytes).into_uuid()
+    }
+}
+
+impl ContextStore for SqliteContextStore {
+    fn put_batch(
+        &self,
+        tenant: &TenantScope,
+        writer: &Caller,
+        nodes: &[NewNode],
+        edges: &[NewEdge],
+    ) -> Result<BatchResult, StoreError> {
+        self.exec_put_batch(tenant, writer, nodes, edges)
+    }
+
+    fn get_node(
+        &self,
+        tenant: &TenantScope,
+        caller: &Caller,
+        id: &NodeId,
+        as_of: Option<Timestamp>,
+    ) -> Result<Option<Node>, StoreError> {
+        self.exec_get_node(tenant, caller, id, as_of)
+    }
+
+    fn get_edge(
+        &self,
+        tenant: &TenantScope,
+        caller: &Caller,
+        id: &EdgeId,
+        as_of: Option<Timestamp>,
+    ) -> Result<Option<Edge>, StoreError> {
+        self.exec_get_edge(tenant, caller, id, as_of)
+    }
+
+    fn tombstone_node(
+        &self,
+        tenant: &TenantScope,
+        writer: &Caller,
+        id: &NodeId,
+    ) -> Result<(), StoreError> {
+        self.exec_tombstone_node(tenant, writer, id)
+    }
+
+    fn delete_node(
+        &self,
+        tenant: &TenantScope,
+        writer: &Caller,
+        id: &NodeId,
+    ) -> Result<(), StoreError> {
+        self.exec_delete_node(tenant, writer, id)
+    }
+
+    fn counts(
+        &self,
+        tenant: &TenantScope,
+        caller: &Caller,
+        as_of: Option<Timestamp>,
+    ) -> Result<GraphCounts, StoreError> {
+        self.exec_counts(tenant, caller, as_of)
+    }
+
+    fn traverse(
+        &self,
+        _tenant: &TenantScope,
+        caller: &Caller,
+        query: &TraverseQuery,
+    ) -> Result<TraverseResult, StoreError> {
+        crate::types::validate_caller(caller)?;
+        let _ = validate_traverse_query(query)?;
+        Err(StoreError::Backend)
+    }
+
+    fn search_nodes(
+        &self,
+        _tenant: &TenantScope,
+        caller: &Caller,
+        _query: &str,
+        limit: u32,
+        _as_of: Option<Timestamp>,
+    ) -> Result<Vec<Node>, StoreError> {
+        crate::types::validate_caller(caller)?;
+        validate_search_limit(limit)?;
+        Err(StoreError::Backend)
     }
 }
 
