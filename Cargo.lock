@@ -858,6 +858,15 @@ dependencies = [
  "gap-core",
  "gap-ngc-sdk",
  "gap-proto",
+ "proptest",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror 2.0.21",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+ "uuid",
 ]
 
 [[package]]

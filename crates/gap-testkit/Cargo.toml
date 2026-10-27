@@ -11,3 +11,14 @@ description = "Development-only deterministic test utilities, mocks, and workspa
 gap-core.workspace = true
 gap-ngc-sdk.workspace = true
 gap-proto.workspace = true
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
+thiserror.workspace = true
+tokio = { workspace = true, features = ["macros", "rt", "sync", "test-util", "time"] }
+tracing.workspace = true
+tracing-subscriber.workspace = true
+uuid = { workspace = true, features = ["v4"] }
+
+[dev-dependencies]
+proptest.workspace = true
+tempfile.workspace = true

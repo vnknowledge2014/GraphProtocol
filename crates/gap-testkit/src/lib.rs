@@ -10,6 +10,8 @@
 )]
 
 pub mod chaos;
+pub mod clock;
+pub mod snapshot;
 
 #[cfg(test)]
 mod workspace_policy_tests {
