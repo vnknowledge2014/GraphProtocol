@@ -9,6 +9,8 @@
 )]
 
 pub mod audit;
+#[cfg(any(test, feature = "conformance"))]
+pub mod conformance;
 pub mod error;
 pub mod feedback;
 pub mod idempotency;
@@ -29,6 +31,6 @@ pub use tasks::TaskStore;
 pub use types::{
     BaseScope, BatchResult, Caller, Direction, Edge, EdgeId, EdgeResolution, EdgeType, GraphCounts,
     NewEdge, NewNode, Node, NodeId, NodeType, Provenance, PurgePolicy, PurgeReport, Scope,
-    ScopeSpec, TraverseQuery, TraverseResume, TraverseResult, TraverseStats, TraverseStrategy,
+    ScopeSpec, TraverseQuery, TraverseResult, TraverseResume, TraverseStats, TraverseStrategy,
     TraverseWarning,
 };
