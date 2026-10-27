@@ -4,6 +4,7 @@
 use std::collections::BTreeMap;
 use std::fmt;
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 
 use gap_core::secret::{REDACTED_MARKER, SecretString};
 use gap_core::traits::BoxFuture;
@@ -16,6 +17,20 @@ use crate::matcher::ObservedResponse;
 
 /// Exact `Accept` header value mandated for `HttpDriver` (`GQL-003`, `WP-M0-09`).
 pub const GRAPHQL_ACCEPT_HEADER: &str = "application/graphql-response+json, application/json;q=0.9";
+
+/// Default TCP connect timeout in seconds (`10 s`) for [`HttpDriver`] (`GQL-003`, `VER-011`).
+pub const DEFAULT_CONNECT_TIMEOUT_SECS: u64 = 10;
+
+/// Default total request timeout in seconds (`30 s`, including reading the response body) for
+/// [`HttpDriver`] (`GQL-003`, `VER-011`).
+pub const DEFAULT_TOTAL_TIMEOUT_SECS: u64 = 30;
+
+/// Default TCP connect timeout (`10 s`) for [`HttpDriver`] (`GQL-003`, `VER-011`).
+pub const DEFAULT_CONNECT_TIMEOUT: Duration = Duration::from_secs(DEFAULT_CONNECT_TIMEOUT_SECS);
+
+/// Default total request timeout (`30 s`, including reading the response body) for [`HttpDriver`]
+/// (`GQL-003`, `VER-011`).
+pub const DEFAULT_TOTAL_TIMEOUT: Duration = Duration::from_secs(DEFAULT_TOTAL_TIMEOUT_SECS);
 
 /// Specific failure loading a `--principals <file.json>` mapping (`INV-15`).
 #[derive(Debug, Error)]
@@ -253,11 +268,14 @@ pub struct HttpDriver {
     raw_target: String,
     parsed_url: reqwest::Url,
     client: reqwest::Client,
+    connect_timeout: Duration,
+    total_timeout: Duration,
 }
 
 impl HttpDriver {
     /// Constructs an [`HttpDriver`] targeting `target_url` **exactly as given** without appending
-    /// any path segment.
+    /// any path segment, using [`DEFAULT_CONNECT_TIMEOUT`] (`10 s`) and [`DEFAULT_TOTAL_TIMEOUT`]
+    /// (`30 s`).
     ///
     /// # Errors
     ///
@@ -266,6 +284,22 @@ impl HttpDriver {
     /// - Returns [`DriverError::UnsupportedScheme`] for schemes other than `http://`.
     /// - Returns [`DriverError::InvalidTargetUrl`] if `target_url` is not a valid URL.
     pub fn new(target_url: impl Into<String>) -> Result<Self, DriverError> {
+        Self::with_timeouts(target_url, DEFAULT_CONNECT_TIMEOUT, DEFAULT_TOTAL_TIMEOUT)
+    }
+
+    /// Constructs an [`HttpDriver`] targeting `target_url` **exactly as given** with explicit
+    /// `connect` and `total` request timeouts (`total` covers sending the request, awaiting
+    /// response headers, and reading the full response body).
+    ///
+    /// # Errors
+    ///
+    /// Returns [`DriverError`] if `target_url` is invalid or uses an unsupported scheme, or if the
+    /// underlying HTTP client fails to initialize.
+    pub fn with_timeouts(
+        target_url: impl Into<String>,
+        connect: Duration,
+        total: Duration,
+    ) -> Result<Self, DriverError> {
         let raw = target_url.into();
         let parsed = reqwest::Url::parse(&raw).map_err(|err| DriverError::InvalidTargetUrl {
             url: redact_raw_url_userinfo(&raw),
@@ -291,6 +325,8 @@ impl HttpDriver {
         let client = reqwest::Client::builder()
             .no_proxy()
             .redirect(reqwest::redirect::Policy::none())
+            .connect_timeout(connect)
+            .timeout(total)
             .build()
             .map_err(|err| DriverError::ClientInit(err.to_string()))?;
 
@@ -298,7 +334,38 @@ impl HttpDriver {
             raw_target: sanitized_target,
             parsed_url: parsed,
             client,
+            connect_timeout: connect,
+            total_timeout: total,
         })
+    }
+
+    /// Configured TCP connect timeout.
+    #[must_use]
+    pub const fn connect_timeout(&self) -> Duration {
+        self.connect_timeout
+    }
+
+    /// Configured end-to-end total request timeout (including reading the response body).
+    #[must_use]
+    pub const fn total_timeout(&self) -> Duration {
+        self.total_timeout
+    }
+
+    fn map_reqwest_error(
+        &self,
+        err: &reqwest::Error,
+        bearer_token: Option<&SecretString>,
+    ) -> DriverError {
+        let chain = format_error_chain(err);
+        let detailed = if err.is_timeout() {
+            format!("request timeout: {chain}")
+        } else {
+            chain
+        };
+        DriverError::Transport {
+            target: self.raw_target.clone(),
+            reason: scrub_optional_secret(&detailed, bearer_token),
+        }
     }
 
     /// Builds the outbound [`reqwest::Request`] for `fixture_req` and optional `bearer_token`.
@@ -353,31 +420,45 @@ impl ConformanceDriver for HttpDriver {
                 "sending GAP-QL conformance HTTP request"
             );
 
-            let resp =
-                self.client
+            let send_and_read = async {
+                let resp = self
+                    .client
                     .execute(http_req)
                     .await
-                    .map_err(|err| DriverError::Transport {
-                        target: self.raw_target.clone(),
-                        reason: scrub_optional_secret(&format_error_chain(&err), bearer_token),
-                    })?;
+                    .map_err(|err| self.map_reqwest_error(&err, bearer_token))?;
 
-            let status = resp.status().as_u16();
-            let mut raw_headers: Vec<(String, String)> = Vec::with_capacity(resp.headers().len());
-            for (name, val) in resp.headers() {
-                let val_str = match val.to_str() {
-                    Ok(s) => s.to_owned(),
-                    Err(_) => String::from_utf8_lossy(val.as_bytes()).into_owned(),
-                };
-                raw_headers.push((name.as_str().to_owned(), val_str));
+                let status = resp.status().as_u16();
+                let mut raw_headers: Vec<(String, String)> =
+                    Vec::with_capacity(resp.headers().len());
+                for (name, val) in resp.headers() {
+                    let val_str = match val.to_str() {
+                        Ok(s) => s.to_owned(),
+                        Err(_) => String::from_utf8_lossy(val.as_bytes()).into_owned(),
+                    };
+                    raw_headers.push((name.as_str().to_owned(), val_str));
+                }
+
+                let body_bytes = resp
+                    .bytes()
+                    .await
+                    .map_err(|err| self.map_reqwest_error(&err, bearer_token))?;
+
+                decode_http_response(&self.raw_target, status, &raw_headers, &body_bytes)
+            };
+
+            match tokio::time::timeout(self.total_timeout, send_and_read).await {
+                Ok(result) => result,
+                Err(_elapsed) => Err(DriverError::Transport {
+                    target: self.raw_target.clone(),
+                    reason: scrub_optional_secret(
+                        &format!(
+                            "request timeout after {:?} waiting for response",
+                            self.total_timeout
+                        ),
+                        bearer_token,
+                    ),
+                }),
             }
-
-            let body_bytes = resp.bytes().await.map_err(|err| DriverError::Transport {
-                target: self.raw_target.clone(),
-                reason: scrub_optional_secret(&format_error_chain(&err), bearer_token),
-            })?;
-
-            decode_http_response(&self.raw_target, status, &raw_headers, &body_bytes)
         })
     }
 }
@@ -860,5 +941,31 @@ mod tests {
             .expect_err("CRLF in bearer token must fail");
         assert_eq!(hdr_err, DriverError::InvalidBearerHeader);
         assert!(!hdr_err.to_string().contains("canary-crlf-token"));
+    }
+
+    // spec: GQL-003 (VER-011)
+    #[test]
+    fn http_driver_defaults_to_10s_connect_and_30s_total_timeouts_and_accepts_custom_timeouts() {
+        let default_driver =
+            HttpDriver::new("http://127.0.0.1:8080/graphql").expect("default HttpDriver");
+        assert_eq!(default_driver.connect_timeout(), Duration::from_secs(10));
+        assert_eq!(default_driver.total_timeout(), Duration::from_secs(30));
+
+        let custom_driver = HttpDriver::with_timeouts(
+            "http://127.0.0.1:8080/graphql",
+            Duration::from_millis(150),
+            Duration::from_millis(200),
+        )
+        .expect("custom timeout HttpDriver");
+        assert_eq!(custom_driver.connect_timeout(), Duration::from_millis(150));
+        assert_eq!(custom_driver.total_timeout(), Duration::from_millis(200));
+
+        let https_err = HttpDriver::with_timeouts(
+            "https://example.test/graphql",
+            Duration::from_millis(150),
+            Duration::from_millis(200),
+        )
+        .expect_err("with_timeouts must still reject https:// offline");
+        assert!(matches!(https_err, DriverError::HttpsUnsupported { .. }));
     }
 }

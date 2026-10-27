@@ -5,8 +5,10 @@
 //! `Operation not permitted (os error 1)`, these tests intentionally remain active (not skipped or
 //! `#[ignore]`d) per `WP-M0-09` protocol so the reviewer runs them outside the sandbox.
 
+use std::path::PathBuf;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
 use axum::Router;
 use axum::body::Bytes;
@@ -14,11 +16,16 @@ use axum::extract::OriginalUri;
 use axum::http::{HeaderMap, HeaderValue, Method, StatusCode, header};
 use axum::response::IntoResponse;
 use axum::routing::{any, post};
-use gap_conformance::driver::{ConformanceDriver, GRAPHQL_ACCEPT_HEADER, HttpDriver};
-use gap_conformance::fixture::FixtureRequest;
+use gap_conformance::driver::{
+    ConformanceDriver, GRAPHQL_ACCEPT_HEADER, HttpDriver, PrincipalsMap,
+};
+use gap_conformance::fixture::{ConformanceClass, FixtureExecution, FixtureRequest, LoadedFixture};
+use gap_conformance::report::Verdict;
+use gap_conformance::runner::{RunnerConfig, run_suite};
 use gap_core::secret::SecretString;
 use gap_testkit::port::PortAllocator;
 use serde_json::{Value, json};
+use tokio::io::AsyncWriteExt;
 
 #[derive(Debug, Clone)]
 struct CapturedHttpCall {
@@ -326,4 +333,143 @@ async fn http_driver_does_not_follow_redirects_or_forward_bearer_token() {
         0,
         "/final redirect target must never be requested"
     );
+}
+
+// spec: GQL-003, INV-15 (VER-011)
+#[tokio::test]
+async fn http_driver_with_timeouts_errors_when_server_accepts_and_never_replies() {
+    let reserved = PortAllocator::reserve().expect("reserve loopback listener");
+    let target_url = reserved.http_url();
+    let listener = tokio::net::TcpListener::from_std(
+        reserved
+            .into_nonblocking_std()
+            .expect("nonblocking std listener"),
+    )
+    .expect("convert into tokio::net::TcpListener");
+
+    let accept_task = tokio::spawn(async move {
+        let mut held_sockets = Vec::new();
+        while let Ok((stream, _peer)) = listener.accept().await {
+            held_sockets.push(stream);
+        }
+    });
+
+    let canary = "tok-timeout-canary-5544332211";
+    let driver = HttpDriver::with_timeouts(
+        &target_url,
+        Duration::from_secs(2),
+        Duration::from_millis(200),
+    )
+    .expect("construct HttpDriver with 200ms total timeout");
+    let bearer = SecretString::new(canary.to_owned());
+    let req = FixtureRequest {
+        query: "{ ok }".to_owned(),
+        variables: None,
+        operation_name: None,
+        extensions: None,
+    };
+
+    let err = tokio::time::timeout(Duration::from_secs(5), driver.execute(&req, Some(&bearer)))
+        .await
+        .expect("HttpDriver::execute must fail within 5s instead of hanging")
+        .expect_err("silent accepted socket must time out");
+
+    let err_msg = err.to_string();
+    assert!(
+        err_msg.to_ascii_lowercase().contains("timeout"),
+        "expected error message to contain `timeout`, got: {err_msg}"
+    );
+    assert!(
+        !err_msg.contains(canary),
+        "timeout error must never leak principal bearer token"
+    );
+
+    // Also verify runner maps the driver timeout to Verdict::Error with scrubbed `timeout` detail.
+    let fixture = LoadedFixture {
+        path: PathBuf::from("01_hang.json"),
+        relative_path: "01_hang.json".to_owned(),
+        name: "hanging target times out".to_owned(),
+        class: vec![ConformanceClass::Core],
+        spec: vec!["GQL-003".to_owned()],
+        schema: None,
+        principal: Some("alice".to_owned()),
+        execution: FixtureExecution::Single {
+            request: req,
+            expect: json!({"status": 200}),
+        },
+    };
+    let cfg = RunnerConfig {
+        classes: vec![],
+        principals: PrincipalsMap::from_entries([("alice", canary)]),
+    };
+    let report = tokio::time::timeout(
+        Duration::from_secs(5),
+        run_suite(&driver, &[fixture], &cfg, None),
+    )
+    .await
+    .expect("run_suite must return within 5s");
+
+    accept_task.abort();
+
+    assert_eq!(report.summary.errors, 1);
+    assert_eq!(report.fixtures[0].verdict, Verdict::Error);
+    let detail = report.fixtures[0]
+        .detail
+        .as_deref()
+        .expect("verdict=error must carry detail");
+    assert!(
+        detail.to_ascii_lowercase().contains("timeout"),
+        "expected report detail to contain `timeout`, got: {detail}"
+    );
+    assert!(!detail.contains(canary));
+
+    // Also verify `total_timeout` covers stalled response-body reads after HTTP 200 headers arrive.
+    let reserved_body = PortAllocator::reserve().expect("reserve stalled-body listener");
+    let body_url = reserved_body.http_url();
+    let body_listener = tokio::net::TcpListener::from_std(
+        reserved_body
+            .into_nonblocking_std()
+            .expect("nonblocking std listener"),
+    )
+    .expect("convert into tokio::net::TcpListener");
+
+    let stalled_body_task = tokio::spawn(async move {
+        if let Ok((mut stream, _)) = body_listener.accept().await {
+            let partial = b"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: 64\r\n\r\n{\"data\":";
+            let _ = stream.write_all(partial).await;
+            let _ = stream.flush().await;
+            tokio::time::sleep(Duration::from_secs(60)).await;
+        }
+    });
+
+    let body_driver = HttpDriver::with_timeouts(
+        &body_url,
+        Duration::from_secs(2),
+        Duration::from_millis(200),
+    )
+    .expect("construct stalled-body HttpDriver");
+    let body_req = FixtureRequest {
+        query: "{ ok }".to_owned(),
+        variables: None,
+        operation_name: None,
+        extensions: None,
+    };
+    let body_err = tokio::time::timeout(
+        Duration::from_secs(5),
+        body_driver.execute(&body_req, Some(&bearer)),
+    )
+    .await
+    .expect("stalled body read must fail within 5s")
+    .expect_err("stalled body read must time out");
+
+    stalled_body_task.abort();
+
+    assert!(
+        body_err
+            .to_string()
+            .to_ascii_lowercase()
+            .contains("timeout"),
+        "expected stalled-body error to contain `timeout`, got: {body_err}"
+    );
+    assert!(!body_err.to_string().contains(canary));
 }
