@@ -363,11 +363,7 @@ impl MockNgcConnector {
         let interleaving = guard.interleaving;
         let batch_size = guard.upstream_batch_size.max(1);
         let n_u32 = u32::try_from(foreach_sets.len()).unwrap_or(u32::MAX);
-        let upstream_calls = if n_u32 == 0 {
-            0
-        } else {
-            n_u32.div_ceil(batch_size)
-        };
+        let upstream_calls = n_u32.div_ceil(batch_size);
 
         let mut steps = Vec::with_capacity(foreach_sets.len());
         for (idx, var_set) in foreach_sets.iter().enumerate() {
