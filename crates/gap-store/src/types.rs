@@ -856,7 +856,7 @@ pub fn append_canonical_json(value: &JsonValue, out: &mut Vec<u8>) -> Result<(),
                 JsonValue::Object(map) => {
                     let mut entries: Vec<(&str, &JsonValue)> =
                         map.iter().map(|(k, v)| (k.as_str(), v)).collect();
-                    entries.sort_unstable_by(|(a, _), (b, _)| a.cmp(b));
+                    entries.sort_unstable_by_key(|(a, _)| *a);
                     stack.push(CanonWork::Raw(b"}"));
                     for (idx, (k, v)) in entries.into_iter().enumerate().rev() {
                         stack.push(CanonWork::Value(v));
