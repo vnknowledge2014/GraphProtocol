@@ -25,7 +25,7 @@ use gap_conformance::runner::{RunnerConfig, run_suite};
 use gap_core::secret::SecretString;
 use gap_testkit::port::PortAllocator;
 use serde_json::{Value, json};
-use tokio::io::AsyncWriteExt;
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 #[derive(Debug, Clone)]
 struct CapturedHttpCall {
@@ -435,6 +435,17 @@ async fn http_driver_with_timeouts_errors_when_server_accepts_and_never_replies(
 
     let stalled_body_task = tokio::spawn(async move {
         if let Ok((mut stream, _)) = body_listener.accept().await {
+            // Read the request head before replying: answering before the client has sent its
+            // request makes hyper fail with "unexpected message from connection" under CPU load
+            // instead of reaching the stalled body this scenario is about.
+            let mut head = Vec::new();
+            let mut chunk = [0_u8; 1024];
+            while !head.windows(4).any(|window| window == b"\r\n\r\n") {
+                match stream.read(&mut chunk).await {
+                    Ok(0) | Err(_) => return,
+                    Ok(read) => head.extend_from_slice(&chunk[..read]),
+                }
+            }
             let partial = b"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: 64\r\n\r\n{\"data\":";
             let _ = stream.write_all(partial).await;
             let _ = stream.flush().await;
