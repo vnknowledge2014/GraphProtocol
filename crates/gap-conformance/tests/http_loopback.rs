@@ -141,3 +141,88 @@ async fn http_driver_posts_to_exact_axum_loopback_url_without_appending_path() {
         })
     );
 }
+
+// spec: GQL-002, GQL-003, INV-15 (VER-010, VER-011)
+#[tokio::test]
+async fn cli_target_mode_runs_end_to_end_against_axum_and_writes_report() {
+    let app = Router::new().fallback(any(|| async {
+        let mut resp_headers = HeaderMap::new();
+        resp_headers.insert(
+            "content-type",
+            HeaderValue::from_static("application/graphql-response+json"),
+        );
+        let payload = json!({"data": {"ok": true}});
+        (StatusCode::OK, resp_headers, payload.to_string()).into_response()
+    }));
+
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+        .await
+        .expect("bind 127.0.0.1:0");
+    let addr = listener.local_addr().expect("local_addr");
+    let server_task = tokio::spawn(async move {
+        let _ = axum::serve(listener, app).await;
+    });
+
+    let tmp = tempfile::TempDir::new().expect("tempdir");
+    let fixtures_dir = tmp.path().join("fixtures");
+    std::fs::create_dir_all(&fixtures_dir).expect("mkdir fixtures");
+    std::fs::write(
+        fixtures_dir.join("01_ok.json"),
+        json!({
+            "name": "live target ok",
+            "class": ["Core"],
+            "spec": ["GQL-002", "GQL-003"],
+            "principal": "agent-e2e",
+            "request": {"query": "{ ok }"},
+            "expect": {"status": 200, "data": {"ok": true}, "dataNull": false}
+        })
+        .to_string(),
+    )
+    .expect("write fixture");
+
+    let principals_path = tmp.path().join("principals.json");
+    std::fs::write(
+        &principals_path,
+        json!({"agent-e2e": "tok-e2e-live-canary"}).to_string(),
+    )
+    .expect("write principals");
+
+    let report_path = tmp.path().join("report.json");
+    let target_url = format!("http://{addr}/graphql");
+
+    let mut out = Vec::new();
+    let mut err = Vec::new();
+    let exit_code = gap_conformance::cli::run_cli_from_args(
+        [
+            "gap-conformance",
+            "--target",
+            &target_url,
+            "--fixtures",
+            fixtures_dir.to_str().expect("utf8"),
+            "--class",
+            "Core",
+            "--principals",
+            principals_path.to_str().expect("utf8"),
+            "--report",
+            report_path.to_str().expect("utf8"),
+        ],
+        &mut out,
+        &mut err,
+    )
+    .await;
+
+    server_task.abort();
+
+    assert_eq!(
+        exit_code,
+        0,
+        "expected exit code 0; stderr={}; report={:?}",
+        String::from_utf8_lossy(&err),
+        std::fs::read_to_string(&report_path).ok()
+    );
+    let report_raw = std::fs::read_to_string(&report_path).expect("read report.json");
+    assert!(!report_raw.contains("tok-e2e-live-canary"));
+    let report_val: Value = serde_json::from_str(&report_raw).expect("parse report.json");
+    assert_eq!(report_val["summary"]["passed"], 1);
+    assert_eq!(report_val["coverage"]["GQL-002"]["covered"], true);
+}

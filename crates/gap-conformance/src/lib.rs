@@ -8,7 +8,10 @@
     clippy::unimplemented
 )]
 
+pub mod cli;
 pub mod driver;
 pub mod fixture;
 pub mod matcher;
 pub mod ngc_kit;
+pub mod report;
+pub mod runner;
