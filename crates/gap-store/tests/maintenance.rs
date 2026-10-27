@@ -16,12 +16,7 @@ use rusqlite::{Connection, OpenFlags, params};
 use serde_json::Map as JsonMap;
 use tempfile::TempDir;
 
-fn make_node(
-    id: Option<&str>,
-    label: &str,
-    summary: Option<&str>,
-    scope: ScopeSpec,
-) -> NewNode {
+fn make_node(id: Option<&str>, label: &str, summary: Option<&str>, scope: ScopeSpec) -> NewNode {
     NewNode {
         id: id.map(|s| NodeId::new(s).expect("node id")),
         node_type: NodeType::new("Note").expect("node type"),
@@ -84,7 +79,12 @@ fn tombstone_task_nodes_isolates_tenant_and_task_preserves_as_of_and_reclaims_qu
         .put_node(
             &tenant_a,
             &caller,
-            make_node(None, "Task1 Note", None, ScopeSpec::Task { task_id: task_1 }),
+            make_node(
+                None,
+                "Task1 Note",
+                None,
+                ScopeSpec::Task { task_id: task_1 },
+            ),
         )
         .expect("put t1_node");
     let t1_eph = store
@@ -106,7 +106,12 @@ fn tombstone_task_nodes_isolates_tenant_and_task_preserves_as_of_and_reclaims_qu
         .put_node(
             &tenant_a,
             &caller,
-            make_node(None, "Task2 Note", None, ScopeSpec::Task { task_id: task_2 }),
+            make_node(
+                None,
+                "Task2 Note",
+                None,
+                ScopeSpec::Task { task_id: task_2 },
+            ),
         )
         .expect("put t2_node");
 
@@ -198,9 +203,7 @@ fn tombstone_task_nodes_isolates_tenant_and_task_preserves_as_of_and_reclaims_qu
             .is_some()
     );
     assert_eq!(
-        store
-            .counts(&tenant_a, &caller, None)
-            .expect("counts now"),
+        store.counts(&tenant_a, &caller, None).expect("counts now"),
         GraphCounts { nodes: 2, edges: 0 }
     );
 
@@ -421,7 +424,12 @@ fn purge_expired_enforces_exact_microsecond_boundaries_cleans_fts_and_edges_and_
             .put_node(
                 &tenant_a,
                 &caller,
-                make_node(Some("blocked-before-purge"), "Blocked", None, ScopeSpec::Global),
+                make_node(
+                    Some("blocked-before-purge"),
+                    "Blocked",
+                    None,
+                    ScopeSpec::Global
+                ),
             )
             .expect_err("saturated before eph_1h purge"),
         StoreError::QuotaExceeded
@@ -477,7 +485,12 @@ fn purge_expired_enforces_exact_microsecond_boundaries_cleans_fts_and_edges_and_
         .put_node(
             &tenant_a,
             &caller,
-            make_node(Some("reclaimed-after-eph"), "Reclaimed", None, ScopeSpec::Global),
+            make_node(
+                Some("reclaimed-after-eph"),
+                "Reclaimed",
+                None,
+                ScopeSpec::Global,
+            ),
         )
         .expect("node slot reclaimed after purging expired ephemeral");
 

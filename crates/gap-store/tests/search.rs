@@ -162,7 +162,10 @@ fn hostile_fts5_syntax_never_errors_and_never_acts_as_operators() {
         let hits = store
             .search_nodes(&tenant, &caller, empty_like, 10, None)
             .expect("must not error on punctuation/control query");
-        assert!(hits.is_empty(), "expected empty result for `{empty_like:?}`");
+        assert!(
+            hits.is_empty(),
+            "expected empty result for `{empty_like:?}`"
+        );
     }
 
     // `"alpha OR beta"` MUST quote `OR` as a literal token — returning ONLY `doc:literal_or`,
@@ -186,7 +189,10 @@ fn hostile_fts5_syntax_never_errors_and_never_acts_as_operators() {
         "alpha\0module",
     ] {
         let res = store.search_nodes(&tenant, &caller, hostile, 10, None);
-        assert!(res.is_ok(), "hostile query `{hostile}` must not raise FTS5 error");
+        assert!(
+            res.is_ok(),
+            "hostile query `{hostile}` must not raise FTS5 error"
+        );
     }
 
     // Prefix wildcard `*` must NOT act as FTS5 prefix wildcard: `"alph*"` tokenizes to `"alph"`,

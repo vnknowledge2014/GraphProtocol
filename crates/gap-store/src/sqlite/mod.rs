@@ -486,9 +486,8 @@ mod tests {
 
         // 1. Fresh non-existent file.
         let fresh_path = dir.path().join("fresh.db");
-        let store =
-            SqliteContextStore::open(SqliteConfig::new(&fresh_path), Arc::clone(&clock))
-                .expect("open fresh");
+        let store = SqliteContextStore::open(SqliteConfig::new(&fresh_path), Arc::clone(&clock))
+            .expect("open fresh");
         {
             let reader = store.readers.checkout();
             assert_eq!(
@@ -669,7 +668,10 @@ mod tests {
         );
 
         let bytes_after = fs::read(&future_path).expect("read after");
-        assert_eq!(bytes_before, bytes_after, "database file must remain byte-identical");
+        assert_eq!(
+            bytes_before, bytes_after,
+            "database file must remain byte-identical"
+        );
         assert!(!dir.path().join("future.db-wal").exists());
         assert!(!dir.path().join("future.db-shm").exists());
     }
@@ -763,13 +765,18 @@ mod tests {
             .query_row("PRAGMA synchronous;", [], |r| r.get(0))
             .expect("synchronous");
         assert_eq!(sync_val, 1);
-        assert_eq!(writer.limit(Limit::SQLITE_LIMIT_LENGTH).expect("lim"), 2_097_152);
+        assert_eq!(
+            writer.limit(Limit::SQLITE_LIMIT_LENGTH).expect("lim"),
+            2_097_152
+        );
         assert_eq!(
             writer.limit(Limit::SQLITE_LIMIT_SQL_LENGTH).expect("lim"),
             262_144
         );
         assert_eq!(
-            writer.limit(Limit::SQLITE_LIMIT_VARIABLE_NUMBER).expect("lim"),
+            writer
+                .limit(Limit::SQLITE_LIMIT_VARIABLE_NUMBER)
+                .expect("lim"),
             999
         );
         drop(writer);
@@ -780,13 +787,18 @@ mod tests {
             .query_row("PRAGMA query_only;", [], |r| r.get(0))
             .expect("query_only");
         assert_eq!(query_only, 1);
-        assert_eq!(reader.limit(Limit::SQLITE_LIMIT_LENGTH).expect("lim"), 2_097_152);
+        assert_eq!(
+            reader.limit(Limit::SQLITE_LIMIT_LENGTH).expect("lim"),
+            2_097_152
+        );
         assert_eq!(
             reader.limit(Limit::SQLITE_LIMIT_SQL_LENGTH).expect("lim"),
             262_144
         );
         assert_eq!(
-            reader.limit(Limit::SQLITE_LIMIT_VARIABLE_NUMBER).expect("lim"),
+            reader
+                .limit(Limit::SQLITE_LIMIT_VARIABLE_NUMBER)
+                .expect("lim"),
             999
         );
     }

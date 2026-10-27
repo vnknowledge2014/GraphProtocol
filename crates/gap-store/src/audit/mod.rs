@@ -96,11 +96,7 @@ pub trait AuditLog: Send + Sync {
     ) -> Result<AuditVerifyReport, StoreError>;
 
     /// Appends `entry` to `tenant`'s hash chain (`INV-09`, `SEC-090`).
-    fn append(
-        &self,
-        tenant: &TenantScope,
-        entry: &AuditEntry,
-    ) -> Result<AuditRecord, StoreError> {
+    fn append(&self, tenant: &TenantScope, entry: &AuditEntry) -> Result<AuditRecord, StoreError> {
         self.append_chain(&AuditChain::Tenant(tenant.clone()), entry)
     }
 

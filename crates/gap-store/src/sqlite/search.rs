@@ -67,11 +67,7 @@ pub(crate) fn build_fts5_literal_query(raw: &str) -> Option<String> {
         expr.push_str(token);
         expr.push('"');
     }
-    if expr.is_empty() {
-        None
-    } else {
-        Some(expr)
-    }
+    if expr.is_empty() { None } else { Some(expr) }
 }
 
 impl SqliteContextStore {

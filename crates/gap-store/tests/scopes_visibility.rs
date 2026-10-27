@@ -207,7 +207,9 @@ fn scope_visibility_rules_for_literal_callers_and_ephemeral_expiry() {
         );
     }
     assert_eq!(
-        store.counts(&tenant_b, &alice_full, None).expect("tenant_b counts"),
+        store
+            .counts(&tenant_b, &alice_full, None)
+            .expect("tenant_b counts"),
         GraphCounts { nodes: 0, edges: 0 }
     );
 
@@ -334,7 +336,9 @@ fn scope_visibility_rules_for_literal_callers_and_ephemeral_expiry() {
     }
     // Bob now sees only the 1 Global non-ephemeral node.
     assert_eq!(
-        store.counts(&tenant_a, &bob_plain, None).expect("bob counts"),
+        store
+            .counts(&tenant_a, &bob_plain, None)
+            .expect("bob counts"),
         GraphCounts { nodes: 1, edges: 0 }
     );
 }
@@ -449,10 +453,18 @@ fn invisible_nodes_and_edges_are_byte_identical_to_missing_entities() {
     let bob = Caller::new("bob");
 
     let alice_priv_1 = store
-        .put_node(&tenant, &alice, new_node(None, "secret-1", ScopeSpec::Private))
+        .put_node(
+            &tenant,
+            &alice,
+            new_node(None, "secret-1", ScopeSpec::Private),
+        )
         .expect("p1");
     let alice_priv_2 = store
-        .put_node(&tenant, &alice, new_node(None, "secret-2", ScopeSpec::Private))
+        .put_node(
+            &tenant,
+            &alice,
+            new_node(None, "secret-2", ScopeSpec::Private),
+        )
         .expect("p2");
     let alice_edge = store
         .put_edge(&tenant, &alice, new_edge(&alice_priv_1, &alice_priv_2))
@@ -564,14 +576,22 @@ fn edge_visible_and_counted_only_when_both_endpoints_are_visible() {
         .put_node(
             &tenant,
             &alice,
-            new_node(Some(NodeId::new("g1").expect("id")), "g1", ScopeSpec::Global),
+            new_node(
+                Some(NodeId::new("g1").expect("id")),
+                "g1",
+                ScopeSpec::Global,
+            ),
         )
         .expect("g1");
     let g2 = store
         .put_node(
             &tenant,
             &alice,
-            new_node(Some(NodeId::new("g2").expect("id")), "g2", ScopeSpec::Global),
+            new_node(
+                Some(NodeId::new("g2").expect("id")),
+                "g2",
+                ScopeSpec::Global,
+            ),
         )
         .expect("g2");
     let p1 = store
@@ -609,15 +629,37 @@ fn edge_visible_and_counted_only_when_both_endpoints_are_visible() {
         store.counts(&tenant, &bob, None).expect("bob counts"),
         GraphCounts { nodes: 3, edges: 2 }
     );
-    assert!(store.get_edge(&tenant, &bob, &e_gg, None).expect("ok").is_some());
-    assert!(store.get_edge(&tenant, &bob, &e_ge, None).expect("ok").is_some());
-    assert!(store.get_edge(&tenant, &bob, &e_gp, None).expect("ok").is_none());
-    assert!(store.get_edge(&tenant, &bob, &e_pg, None).expect("ok").is_none());
+    assert!(
+        store
+            .get_edge(&tenant, &bob, &e_gg, None)
+            .expect("ok")
+            .is_some()
+    );
+    assert!(
+        store
+            .get_edge(&tenant, &bob, &e_ge, None)
+            .expect("ok")
+            .is_some()
+    );
+    assert!(
+        store
+            .get_edge(&tenant, &bob, &e_gp, None)
+            .expect("ok")
+            .is_none()
+    );
+    assert!(
+        store
+            .get_edge(&tenant, &bob, &e_pg, None)
+            .expect("ok")
+            .is_none()
+    );
 
     // Once `eph` expires, e_ge immediately becomes invisible and uncounted too (before purge)!
     manual.advance(Duration::from_secs(3_600));
     assert_eq!(
-        store.counts(&tenant, &bob, None).expect("bob counts post-expiry"),
+        store
+            .counts(&tenant, &bob, None)
+            .expect("bob counts post-expiry"),
         GraphCounts { nodes: 2, edges: 1 }
     );
     assert!(

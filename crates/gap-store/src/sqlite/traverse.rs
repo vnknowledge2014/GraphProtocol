@@ -15,8 +15,8 @@ use crate::sqlite::crud::{
 };
 use crate::sqlite::{SqliteContextStore, map_sqlite_err};
 use crate::types::{
-    Caller, Direction, Edge, EdgeId, Node, NodeId, Scope, TraverseQuery, TraverseResume,
-    TraverseResult, TraverseStats, TraverseStrategy, TraverseWarning, normalize_timestamp,
+    Caller, Direction, Edge, EdgeId, Node, NodeId, Scope, TraverseQuery, TraverseResult,
+    TraverseResume, TraverseStats, TraverseStrategy, TraverseWarning, normalize_timestamp,
     timestamp_to_micros, validate_caller, validate_traverse_query,
 };
 
@@ -416,10 +416,8 @@ fn run_bfs_or_shortest(env: &TraverseEnv<'_>) -> Result<WalkOutput, StoreError> 
     let page_ids: Vec<&str> = page_slice.iter().map(|(id, _)| id.as_str()).collect();
     let nodes = materialize_page_nodes(env.conn, env.tenant_str, env.as_of_us, &page_ids)?;
 
-    let returned_depth: HashMap<&str, u32> = page_slice
-        .iter()
-        .map(|(id, d)| (id.as_str(), *d))
-        .collect();
+    let returned_depth: HashMap<&str, u32> =
+        page_slice.iter().map(|(id, d)| (id.as_str(), *d)).collect();
 
     let mut edge_map: HashMap<EdgeId, Edge> = HashMap::new();
     if !page_slice.is_empty() {
@@ -444,10 +442,8 @@ fn run_bfs_or_shortest(env: &TraverseEnv<'_>) -> Result<WalkOutput, StoreError> 
                 }
             }
             TraverseStrategy::Shortest => {
-                let visited_depth_map: HashMap<&str, u32> = cte_rows
-                    .iter()
-                    .map(|(id, d)| (id.as_str(), *d))
-                    .collect();
+                let visited_depth_map: HashMap<&str, u32> =
+                    cte_rows.iter().map(|(id, d)| (id.as_str(), *d)).collect();
                 let mut pred_stmt = env
                     .conn
                     .prepare_cached(step_sql_for_direction(inverse_direction(
@@ -459,11 +455,9 @@ fn run_bfs_or_shortest(env: &TraverseEnv<'_>) -> Result<WalkOutput, StoreError> 
                         continue;
                     }
                     let candidates = query_eligible_neighbours(&mut pred_stmt, env, v_id)?;
-                    let chosen = candidates
-                        .into_iter()
-                        .find(|(u_id, _)| {
-                            visited_depth_map.get(u_id.as_str()) == Some(&(v_depth - 1))
-                        });
+                    let chosen = candidates.into_iter().find(|(u_id, _)| {
+                        visited_depth_map.get(u_id.as_str()) == Some(&(v_depth - 1))
+                    });
                     if let Some((u_id, edge)) = chosen
                         && returned_depth.contains_key(u_id.as_str())
                     {
@@ -549,10 +543,15 @@ fn run_dfs(env: &TraverseEnv<'_>) -> Result<WalkOutput, StoreError> {
     let start_idx = match &env.query.after {
         None => 0,
         Some(TraverseResume::Dfs { ordinal, node_id }) => {
-            if let Some(pos) = emitted_nodes.iter().position(|(id, _)| id == node_id.as_str()) {
+            if let Some(pos) = emitted_nodes
+                .iter()
+                .position(|(id, _)| id == node_id.as_str())
+            {
                 pos + 1
             } else {
-                (*ordinal as usize).saturating_add(1).min(emitted_nodes.len())
+                (*ordinal as usize)
+                    .saturating_add(1)
+                    .min(emitted_nodes.len())
             }
         }
         Some(_) => return Err(StoreError::Backend),
@@ -575,10 +574,8 @@ fn run_dfs(env: &TraverseEnv<'_>) -> Result<WalkOutput, StoreError> {
 
     let page_ids: Vec<&str> = page_slice.iter().map(|(id, _)| id.as_str()).collect();
     let nodes = materialize_page_nodes(env.conn, env.tenant_str, env.as_of_us, &page_ids)?;
-    let returned_depth: HashMap<&str, u32> = page_slice
-        .iter()
-        .map(|(id, d)| (id.as_str(), *d))
-        .collect();
+    let returned_depth: HashMap<&str, u32> =
+        page_slice.iter().map(|(id, d)| (id.as_str(), *d)).collect();
     let edges = sort_returned_edges(traversed_edges, &returned_depth);
     let stats = TraverseStats {
         visited: visited_count,
@@ -685,8 +682,11 @@ fn run_weighted(env: &TraverseEnv<'_>) -> Result<WalkOutput, StoreError> {
 
     let start_idx = match &env.query.after {
         None => 0,
-        Some(TraverseResume::Weighted { cost_bits, node_id }) => settled_nodes
-            .partition_point(|(id, bits, _)| (*bits, id.as_str()) <= (*cost_bits, node_id.as_str())),
+        Some(TraverseResume::Weighted { cost_bits, node_id }) => {
+            settled_nodes.partition_point(|(id, bits, _)| {
+                (*bits, id.as_str()) <= (*cost_bits, node_id.as_str())
+            })
+        }
         Some(_) => return Err(StoreError::Backend),
     };
 

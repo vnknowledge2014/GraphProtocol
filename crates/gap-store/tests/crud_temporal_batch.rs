@@ -93,7 +93,10 @@ fn temporal_versions_as_of_boundaries_and_content_hash_idempotence() {
             |r| r.get(0),
         )
         .expect("count node versions");
-    assert_eq!(version_rows, 1, "identical re-put must not create a second version");
+    assert_eq!(
+        version_rows, 1,
+        "identical re-put must not create a second version"
+    );
 
     let edge_rows: i64 = raw
         .query_row(
@@ -102,7 +105,10 @@ fn temporal_versions_as_of_boundaries_and_content_hash_idempotence() {
             |r| r.get(0),
         )
         .expect("count edge versions");
-    assert_eq!(edge_rows, 1, "identical edge re-put must not create a second version");
+    assert_eq!(
+        edge_rows, 1,
+        "identical edge re-put must not create a second version"
+    );
 
     // Advance and write changed version v2.
     manual.advance(Duration::from_secs(10));
@@ -194,7 +200,9 @@ fn temporal_versions_as_of_boundaries_and_content_hash_idempotence() {
         "tombstone must close incident edges"
     );
     assert_eq!(
-        store.counts(&tenant, &writer, None).expect("counts after tomb"),
+        store
+            .counts(&tenant, &writer, None)
+            .expect("counts after tomb"),
         GraphCounts { nodes: 1, edges: 0 }
     );
     // Historical query at t_v2 still sees both nodes and the edge!
@@ -244,9 +252,21 @@ fn put_batch_atomicity_cap_and_50k_nodes_100k_edges_ingestion() {
         .map(|i| make_global_node(&format!("atomic:{i}"), "ok"))
         .collect();
     let mut batch_edges: Vec<NewEdge> = (0..49)
-        .map(|i| make_edge(None, "CALLS", &format!("atomic:{i}"), &format!("atomic:{}", i + 1)))
+        .map(|i| {
+            make_edge(
+                None,
+                "CALLS",
+                &format!("atomic:{i}"),
+                &format!("atomic:{}", i + 1),
+            )
+        })
         .collect();
-    batch_edges.push(make_edge(None, "CALLS", "atomic:0", "atomic:does_not_exist"));
+    batch_edges.push(make_edge(
+        None,
+        "CALLS",
+        "atomic:0",
+        "atomic:does_not_exist",
+    ));
 
     let err = store
         .put_batch(&tenant, &writer, &batch_nodes, &batch_edges)
@@ -310,7 +330,9 @@ fn put_batch_atomicity_cap_and_50k_nodes_100k_edges_ingestion() {
     }
 
     assert_eq!(
-        store.counts(&tenant, &writer, None).expect("50k/100k counts"),
+        store
+            .counts(&tenant, &writer, None)
+            .expect("50k/100k counts"),
         GraphCounts {
             nodes: 50_000,
             edges: 100_000,
@@ -405,7 +427,9 @@ fn hostile_sql_injection_strings_stored_and_returned_verbatim() {
 
     let mut node = make_global_node(hostile_id, hostile_label);
     node.props = props.clone();
-    store.put_node(&tenant, &caller, node).expect("store hostile global node");
+    store
+        .put_node(&tenant, &caller, node)
+        .expect("store hostile global node");
 
     let group_node_id = store
         .put_node(
@@ -426,7 +450,12 @@ fn hostile_sql_injection_strings_stored_and_returned_verbatim() {
         .expect("store hostile group node");
 
     let got = store
-        .get_node(&tenant, &caller, &NodeId::new(hostile_id).expect("id"), None)
+        .get_node(
+            &tenant,
+            &caller,
+            &NodeId::new(hostile_id).expect("id"),
+            None,
+        )
         .expect("get hostile")
         .expect("exists");
     assert_eq!(got.id.as_str(), hostile_id);

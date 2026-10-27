@@ -14,8 +14,8 @@ use gap_core::clock::{Clock, ManualClock};
 use gap_store::sqlite::FORMAT_VERSION;
 use gap_store::{
     Caller, ContextStore, Durability, EdgeResolution, EdgeType, GraphCounts, NewEdge, NewNode,
-    NodeId, NodeType, Provenance, ScopeSpec, SqliteConfig, SqliteContextStore, StoreError,
-    TaskId, TenantId,
+    NodeId, NodeType, Provenance, ScopeSpec, SqliteConfig, SqliteContextStore, StoreError, TaskId,
+    TenantId,
 };
 use rusqlite::{Connection, OpenFlags};
 use serde_json::{Map as JsonMap, json};
@@ -286,8 +286,8 @@ fn backup_and_restore_round_trip_preserves_all_rows_versions_fts_and_tenant_isol
     let restored_snapshot = dump_all_rows(&restored_path);
     assert_eq!(live_snapshot, restored_snapshot);
 
-    let restored =
-        SqliteContextStore::open(SqliteConfig::new(&restored_path), clock_dyn).expect("open restored");
+    let restored = SqliteContextStore::open(SqliteConfig::new(&restored_path), clock_dyn)
+        .expect("open restored");
 
     assert_eq!(
         restored
@@ -548,7 +548,9 @@ fn online_backup_is_safe_under_concurrent_writer_and_readers_with_barriers() {
         reader_handles.push(thread::spawn(move || {
             barrier.wait();
             for _ in 0..60 {
-                let c = store.counts(&tenant, &caller, None).expect("concurrent counts");
+                let c = store
+                    .counts(&tenant, &caller, None)
+                    .expect("concurrent counts");
                 assert!(c.nodes >= 20 && c.nodes <= 100);
                 let hits = store
                     .search_nodes(&tenant, &caller, "concurrentbackuptoken", 50, None)

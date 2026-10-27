@@ -14,8 +14,8 @@ use gap_store::types::{micros_to_timestamp, timestamp_to_micros};
 use gap_store::{
     BaseScope, Caller, ContextStore, Direction, Durability, Edge, EdgeId, EdgeResolution, EdgeType,
     NewEdge, NewNode, Node, NodeId, NodeType, Provenance, Scope, ScopeSpec, SqliteConfig,
-    SqliteContextStore, StoreError, TaskId, TenantId, TraverseQuery, TraverseResume,
-    TraverseResult, TraverseStats, TraverseStrategy, TraverseWarning,
+    SqliteContextStore, StoreError, TaskId, TenantId, TraverseQuery, TraverseResult,
+    TraverseResume, TraverseStats, TraverseStrategy, TraverseWarning,
 };
 use proptest::prelude::*;
 use serde_json::{Map as JsonMap, Value as JsonValue, json};
@@ -222,7 +222,9 @@ fn cycles_self_loops_parallel_edges_directions_and_depth_cap_boundaries() {
         q.max_depth = 16;
         q.strategy = strat;
         q.direction = Direction::Outbound;
-        let out_res = store.traverse(&tenant, &caller, &q).expect("outbound cycle");
+        let out_res = store
+            .traverse(&tenant, &caller, &q)
+            .expect("outbound cycle");
         assert_eq!(node_ids(&out_res), vec!["n1", "n2", "n3"]);
 
         if strat == TraverseStrategy::Shortest {
@@ -246,15 +248,22 @@ fn cycles_self_loops_parallel_edges_directions_and_depth_cap_boundaries() {
     let mut in_q = TraverseQuery::new(NodeId::new("n1").expect("id"));
     in_q.direction = Direction::Inbound;
     in_q.max_depth = 1;
-    let in_res = store.traverse(&tenant, &caller, &in_q).expect("inbound d=1");
+    let in_res = store
+        .traverse(&tenant, &caller, &in_q)
+        .expect("inbound d=1");
     assert_eq!(node_ids(&in_res), vec!["n1", "n0", "n3"]);
 
     // 18-node chain c00 -> c01 -> ... -> c17 to test depth 1, 16, and 17, and first 1, 1000, 1001.
-    let chain_nodes: Vec<NewNode> = (0..=17)
-        .map(|i| global_node(&format!("c{i:02}")))
-        .collect();
+    let chain_nodes: Vec<NewNode> = (0..=17).map(|i| global_node(&format!("c{i:02}"))).collect();
     let chain_edges: Vec<NewEdge> = (0..17)
-        .map(|i| plain_edge(&format!("ce{i:02}"), "CALLS", &format!("c{i:02}"), &format!("c{:02}", i + 1)))
+        .map(|i| {
+            plain_edge(
+                &format!("ce{i:02}"),
+                "CALLS",
+                &format!("c{i:02}"),
+                &format!("c{:02}", i + 1),
+            )
+        })
         .collect();
     store
         .put_batch(&tenant, &caller, &chain_nodes, &chain_edges)
@@ -473,7 +482,10 @@ fn weighted_invalid_weights_warnings_visited_cap_truncation_resume_and_indisting
                 None => break,
             }
         }
-        assert_eq!(paged_nodes, full.nodes, "paged nodes must concatenate to full for {strat:?}");
+        assert_eq!(
+            paged_nodes, full.nodes,
+            "paged nodes must concatenate to full for {strat:?}"
+        );
     }
 }
 
@@ -535,7 +547,12 @@ impl ReferenceGraph {
         }
     }
 
-    fn traverse(&self, caller: &Caller, now_ts: Timestamp, query: &TraverseQuery) -> TraverseResult {
+    fn traverse(
+        &self,
+        caller: &Caller,
+        now_ts: Timestamp,
+        query: &TraverseQuery,
+    ) -> TraverseResult {
         let visited_cap = query.visited_cap.unwrap_or(100_000) as usize;
         let now_us = timestamp_to_micros(now_ts);
         let as_of_ts = query.as_of.unwrap_or(now_ts);
@@ -587,9 +604,11 @@ impl ReferenceGraph {
                 let next_opt = match dir {
                     Direction::Outbound if &e.from == u => Some(e.to.clone()),
                     Direction::Inbound if &e.to == u => Some(e.from.clone()),
-                    Direction::Both if &e.from == u || &e.to == u => {
-                        Some(if &e.from == u { e.to.clone() } else { e.from.clone() })
-                    }
+                    Direction::Both if &e.from == u || &e.to == u => Some(if &e.from == u {
+                        e.to.clone()
+                    } else {
+                        e.from.clone()
+                    }),
                     _ => None,
                 };
                 if let Some(v) = next_opt {
@@ -871,7 +890,9 @@ impl ReferenceGraph {
                                 skipped_invalid.insert(e.id);
                                 continue;
                             };
-                            traversed_edges.entry(e.id.clone()).or_insert_with(|| e.clone());
+                            traversed_edges
+                                .entry(e.id.clone())
+                                .or_insert_with(|| e.clone());
                             let raw_next = cost + w;
                             if !raw_next.is_finite() {
                                 continue;
@@ -905,10 +926,12 @@ impl ReferenceGraph {
                 let take_n = remaining.len().min(query.first as usize);
                 let page_slice = &remaining[..take_n];
                 let resume = if remaining.len() > take_n {
-                    page_slice.last().map(|(id, b, _)| TraverseResume::Weighted {
-                        cost_bits: *b,
-                        node_id: id.clone(),
-                    })
+                    page_slice
+                        .last()
+                        .map(|(id, b, _)| TraverseResume::Weighted {
+                            cost_bits: *b,
+                            node_id: id.clone(),
+                        })
                 } else {
                     None
                 };

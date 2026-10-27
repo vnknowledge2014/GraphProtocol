@@ -119,7 +119,10 @@ fn validate_staged_backup(staging_path: &Path) -> Result<(), StoreError> {
     };
 
     if integrity_rows.len() != 1 || !integrity_rows[0].eq_ignore_ascii_case("ok") {
-        tracing::warn!(findings = integrity_rows.len(), "backup failed sqlite integrity_check");
+        tracing::warn!(
+            findings = integrity_rows.len(),
+            "backup failed sqlite integrity_check"
+        );
         return Err(StoreError::Corrupt);
     }
 
@@ -209,10 +212,7 @@ impl SqliteContextStore {
     /// `PRAGMA integrity_check` and the `PRAGMA user_version` check, and returns
     /// [`StoreError::Corrupt`] (or [`StoreError::FormatTooNew`]) without creating `target` if
     /// verification fails.
-    pub fn restore_from(
-        src: impl AsRef<Path>,
-        target: impl AsRef<Path>,
-    ) -> Result<(), StoreError> {
+    pub fn restore_from(src: impl AsRef<Path>, target: impl AsRef<Path>) -> Result<(), StoreError> {
         let src_path = src.as_ref();
         let target_path = target.as_ref();
 

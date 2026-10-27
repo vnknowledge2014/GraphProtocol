@@ -76,11 +76,8 @@ pub trait IdempotencyStore: Send + Sync {
     ) -> Result<(), StoreError>;
 
     /// Looks up a non-expired [`IdempotencyRecord`] for `(tenant, key)`.
-    fn get(
-        &self,
-        tenant: &TenantScope,
-        key: &str,
-    ) -> Result<Option<IdempotencyRecord>, StoreError>;
+    fn get(&self, tenant: &TenantScope, key: &str)
+    -> Result<Option<IdempotencyRecord>, StoreError>;
 }
 
 #[cfg(test)]

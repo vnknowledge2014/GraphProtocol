@@ -566,7 +566,9 @@ pub struct GraphCounts {
 }
 
 /// Edge traversal direction (`spec/02-gap-ql.md` `Direction`).
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[derive(
+    Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize,
+)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum Direction {
     /// Follow edges from `from` to `to`.
@@ -579,7 +581,9 @@ pub enum Direction {
 }
 
 /// Bounded graph walk strategy (`spec/02-gap-ql.md` `TraverseStrategy`, `ING-067`).
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[derive(
+    Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize,
+)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum TraverseStrategy {
     /// Breadth-first search ordered by `(depth, node_id)`.
@@ -766,7 +770,11 @@ pub fn validate_caller(caller: &Caller) -> Result<(), StoreError> {
 
 /// Validates [`Provenance`] fields (`source` `1..=256` bytes, finite `confidence` in `0.0..=1.0`).
 pub fn validate_provenance(prov: &Provenance) -> Result<(), StoreError> {
-    validate_non_control_id(&prov.source, MAX_PROVENANCE_SOURCE_BYTES, "provenance.source")?;
+    validate_non_control_id(
+        &prov.source,
+        MAX_PROVENANCE_SOURCE_BYTES,
+        "provenance.source",
+    )?;
     if let Some(conf) = prov.confidence
         && (!conf.is_finite() || !(0.0..=1.0).contains(&conf))
     {
@@ -876,7 +884,9 @@ pub fn append_canonical_json(value: &JsonValue, out: &mut Vec<u8>) -> Result<(),
 
 /// Validates `props` nesting depth (`<= 16`) and canonical UTF-8 byte length (`<= 65,536`),
 /// returning the canonical serialized JSON string.
-pub fn validate_and_serialize_props(props: &JsonMap<String, JsonValue>) -> Result<String, StoreError> {
+pub fn validate_and_serialize_props(
+    props: &JsonMap<String, JsonValue>,
+) -> Result<String, StoreError> {
     if props.is_empty() {
         return Ok("{}".to_owned());
     }
@@ -953,12 +963,14 @@ pub fn resolve_scope_spec(spec: &ScopeSpec, now_us: i64) -> Result<ResolvedScope
         }),
         ScopeSpec::Ephemeral { base, expires_at } => {
             let expires_at_us = match expires_at {
-                None => now_us
-                    .checked_add(DEFAULT_EPHEMERAL_TTL_US)
-                    .ok_or(StoreError::Invalid {
-                        field: "expires_at",
-                        reason: "timestamp overflow",
-                    })?,
+                None => {
+                    now_us
+                        .checked_add(DEFAULT_EPHEMERAL_TTL_US)
+                        .ok_or(StoreError::Invalid {
+                            field: "expires_at",
+                            reason: "timestamp overflow",
+                        })?
+                }
                 Some(ts) => {
                     let exp_us = timestamp_to_micros(*ts);
                     let max_exp_us = now_us.saturating_add(MAX_EPHEMERAL_TTL_US);
@@ -1180,7 +1192,9 @@ mod tests {
 
         let sql_looking = "node'; DROP TABLE nodes;--";
         assert_eq!(
-            NodeId::new(sql_looking).expect("SQL-looking id allowed").as_str(),
+            NodeId::new(sql_looking)
+                .expect("SQL-looking id allowed")
+                .as_str(),
             sql_looking
         );
 
@@ -1302,7 +1316,13 @@ mod tests {
             n.provenance.confidence = Some(valid_conf);
             assert!(validate_new_node(&n, now_us).is_ok());
         }
-        for bad_conf in [-0.0001_f32, 1.0001_f32, f32::NAN, f32::INFINITY, f32::NEG_INFINITY] {
+        for bad_conf in [
+            -0.0001_f32,
+            1.0001_f32,
+            f32::NAN,
+            f32::INFINITY,
+            f32::NEG_INFINITY,
+        ] {
             let mut n = base_node.clone();
             n.provenance.confidence = Some(bad_conf);
             assert!(matches!(
@@ -1315,7 +1335,15 @@ mod tests {
         }
 
         // Group claim: 0 invalid, 1 valid, 128 valid, 129 invalid.
-        assert!(resolve_scope_spec(&ScopeSpec::Group { group: String::new() }, now_us).is_err());
+        assert!(
+            resolve_scope_spec(
+                &ScopeSpec::Group {
+                    group: String::new()
+                },
+                now_us
+            )
+            .is_err()
+        );
         assert!(
             resolve_scope_spec(
                 &ScopeSpec::Group {
@@ -1345,12 +1373,15 @@ mod tests {
         );
 
         // Ephemeral TTL: None -> now + 1h; now -> invalid; now + 1us -> valid; now + 24h -> valid; now + 24h + 1us -> invalid.
-        let default_eph = resolve_scope_spec(&ScopeSpec::ephemeral_default(BaseScope::Private), now_us)
-            .expect("default ephemeral");
+        let default_eph =
+            resolve_scope_spec(&ScopeSpec::ephemeral_default(BaseScope::Private), now_us)
+                .expect("default ephemeral");
         assert_eq!(default_eph.expires_at_us, Some(now_us + 3_600_000_000));
 
         let at_now = micros_to_timestamp(now_us).expect("ts");
-        assert!(resolve_scope_spec(&ScopeSpec::ephemeral(BaseScope::Global, at_now), now_us).is_err());
+        assert!(
+            resolve_scope_spec(&ScopeSpec::ephemeral(BaseScope::Global, at_now), now_us).is_err()
+        );
 
         let plus_1us = micros_to_timestamp(now_us + 1).expect("ts");
         assert!(
@@ -1376,11 +1407,17 @@ mod tests {
     #[test]
     fn props_size_64kib_and_depth_16_boundaries() {
         let depth_16 = build_nested_props(16);
-        assert_eq!(json_container_depth(&JsonValue::Object(depth_16.clone())), 16);
+        assert_eq!(
+            json_container_depth(&JsonValue::Object(depth_16.clone())),
+            16
+        );
         assert!(validate_and_serialize_props(&depth_16).is_ok());
 
         let depth_17 = build_nested_props(17);
-        assert_eq!(json_container_depth(&JsonValue::Object(depth_17.clone())), 17);
+        assert_eq!(
+            json_container_depth(&JsonValue::Object(depth_17.clone())),
+            17
+        );
         assert!(matches!(
             validate_and_serialize_props(&depth_17),
             Err(StoreError::Invalid { field: "props", .. })
@@ -1417,7 +1454,10 @@ mod tests {
     fn traverse_and_search_query_limit_boundaries() {
         let start = NodeId::new("start").expect("id");
         let base = TraverseQuery::new(start.clone());
-        assert_eq!(validate_traverse_query(&base).expect("default cap"), 100_000);
+        assert_eq!(
+            validate_traverse_query(&base).expect("default cap"),
+            100_000
+        );
 
         let mut d0 = base.clone();
         d0.max_depth = 0;

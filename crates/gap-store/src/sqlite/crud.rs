@@ -828,7 +828,8 @@ impl SqliteContextStore {
             let mut close_node_stmt = tx
                 .prepare_cached(CLOSE_NODE_BY_ROWID_SQL)
                 .map_err(map_sqlite_err)?;
-            let mut insert_node_stmt = tx.prepare_cached(INSERT_NODE_SQL).map_err(map_sqlite_err)?;
+            let mut insert_node_stmt =
+                tx.prepare_cached(INSERT_NODE_SQL).map_err(map_sqlite_err)?;
             let mut insert_fts_stmt = tx
                 .prepare_cached(INSERT_NODE_FTS_SQL)
                 .map_err(map_sqlite_err)?;
