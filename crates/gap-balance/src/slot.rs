@@ -387,4 +387,174 @@ mod tests {
         slot.on_first_attempt();
         assert_eq!(slot.retry_budget().balance_millis(), 10_100);
     }
+
+    struct WarnCounter(Arc<crate::sync::AtomicU32>);
+
+    impl tracing::Subscriber for WarnCounter {
+        fn enabled(&self, metadata: &tracing::Metadata<'_>) -> bool {
+            *metadata.level() <= tracing::Level::WARN
+        }
+
+        fn new_span(&self, _span: &tracing::span::Attributes<'_>) -> tracing::span::Id {
+            tracing::span::Id::from_u64(1)
+        }
+
+        fn record(&self, _span: &tracing::span::Id, _values: &tracing::span::Record<'_>) {}
+
+        fn record_follows_from(&self, _span: &tracing::span::Id, _follows: &tracing::span::Id) {}
+
+        fn event(&self, event: &tracing::Event<'_>) {
+            if *event.metadata().level() == tracing::Level::WARN {
+                self.0.fetch_add(1, Ordering::Relaxed);
+            }
+        }
+
+        fn enter(&self, _span: &tracing::span::Id) {}
+
+        fn exit(&self, _span: &tracing::span::Id) {}
+    }
+
+    // spec: RTE-083, RTE-086, NGC-070, NGC-072 (ADR-025)
+    #[test]
+    fn health_and_capacity_weights_degraded_multiplication_invalid_and_not_serving() {
+        let now = Now::from_ms(1_000);
+
+        // Initial capacity floor at 1 when max_in_flight == 0.
+        let zero_slot = TelemetrySlot::new(SlotParams {
+            max_in_flight: 0,
+            default_timeout_ms: 1_000,
+            label: Arc::from("zero-cap"),
+        });
+        assert_eq!(zero_slot.capacity(), 1);
+        zero_slot.apply_health(HealthStatus::Degraded, None, now);
+        assert_eq!(zero_slot.capacity(), 1);
+
+        // 1. max_in_flight = 10 x weight 0.3 -> 3; Serving with None restores 10.
+        let slot10 = TelemetrySlot::new(SlotParams {
+            max_in_flight: 10,
+            default_timeout_ms: 1_000,
+            label: Arc::from("cap-10"),
+        });
+        assert_eq!(slot10.capacity(), 10);
+
+        slot10.apply_health(HealthStatus::Serving, Some(0.3), now);
+        assert_eq!(slot10.capacity(), 3);
+        assert_eq!(slot10.view(now).capacity, 3);
+
+        // 2. Degraded halves (floor, minimum 1).
+        slot10.apply_health(HealthStatus::Degraded, None, now);
+        assert_eq!(slot10.capacity(), 5);
+
+        let slot9 = TelemetrySlot::new(SlotParams {
+            max_in_flight: 9,
+            default_timeout_ms: 1_000,
+            label: Arc::from("cap-9"),
+        });
+        slot9.apply_health(HealthStatus::Degraded, None, now);
+        assert_eq!(slot9.capacity(), 4); // floor(9 * 0.5) = 4
+
+        let slot1 = TelemetrySlot::new(SlotParams {
+            max_in_flight: 1,
+            default_timeout_ms: 1_000,
+            label: Arc::from("cap-1"),
+        });
+        slot1.apply_health(HealthStatus::Degraded, None, now);
+        assert_eq!(slot1.capacity(), 1); // max(1, floor(1 * 0.5)) = 1
+
+        // 3. Multiplicative combination of capacity_weight and Degraded factor (0.5).
+        let slot20 = TelemetrySlot::new(SlotParams {
+            max_in_flight: 20,
+            default_timeout_ms: 1_000,
+            label: Arc::from("cap-20"),
+        });
+        slot20.apply_health(HealthStatus::Degraded, Some(0.3), now);
+        assert_eq!(slot20.capacity(), 3); // floor(20 * 0.3 * 0.5) = 3
+
+        slot10.apply_health(HealthStatus::Degraded, Some(0.3), now);
+        assert_eq!(slot10.capacity(), 1); // floor(10 * 0.3 * 0.5) = floor(1.5) = 1
+
+        slot10.apply_health(HealthStatus::Degraded, Some(0.05), now);
+        assert_eq!(slot10.capacity(), 1); // max(1, floor(10 * 0.05 * 0.5)) = 1
+
+        // Serving restores full capacity (10).
+        slot10.apply_health(HealthStatus::Serving, None, now);
+        assert_eq!(slot10.capacity(), 10);
+
+        // 4. Valid upper/lower bounds emit 0 warnings; out-of-range / non-finite weights act as 1.0 and log warn!
+        let warns = Arc::new(crate::sync::AtomicU32::new(0));
+        let sub = WarnCounter(Arc::clone(&warns));
+        tracing::subscriber::with_default(sub, || {
+            slot10.apply_health(HealthStatus::Serving, Some(1.0), now);
+            assert_eq!(slot10.capacity(), 10);
+            slot10.apply_health(HealthStatus::Serving, Some(f64::MIN_POSITIVE), now);
+            assert_eq!(slot10.capacity(), 1);
+            slot10.apply_health(HealthStatus::Serving, None, now);
+            assert_eq!(slot10.capacity(), 10);
+            assert_eq!(
+                warns.load(Ordering::Relaxed),
+                0,
+                "valid weights and None must not log warnings"
+            );
+
+            let invalid_weights = [
+                0.0,
+                -0.0,
+                -1.0,
+                f64::NAN,
+                1.000_001,
+                1.5,
+                f64::INFINITY,
+                f64::NEG_INFINITY,
+            ];
+            for (idx, bad) in invalid_weights.iter().copied().enumerate() {
+                // First shrink capacity to 3 so we prove the invalid weight actively resets to 1.0 (10 / 5).
+                slot10.apply_health(HealthStatus::Serving, Some(0.3), now);
+                assert_eq!(slot10.capacity(), 3);
+
+                slot10.apply_health(HealthStatus::Serving, Some(bad), now);
+                assert_eq!(
+                    slot10.capacity(),
+                    10,
+                    "invalid weight #{idx} ({bad:?}) with Serving must act as 1.0"
+                );
+
+                slot10.apply_health(HealthStatus::Degraded, Some(bad), now);
+                assert_eq!(
+                    slot10.capacity(),
+                    5,
+                    "invalid weight #{idx} ({bad:?}) with Degraded must act as 1.0 * 0.5"
+                );
+            }
+            assert_eq!(
+                warns.load(Ordering::Relaxed),
+                (invalid_weights.len() * 2) as u32,
+                "each invalid Some(weight) call must log one warning"
+            );
+        });
+
+        // 5. NotServing opens the circuit immediately with retry_after = remaining open time (5,000 ms for k = 0).
+        let health_slot = TelemetrySlot::new(SlotParams {
+            max_in_flight: 10,
+            default_timeout_ms: 1_000,
+            label: Arc::from("health-open"),
+        });
+        health_slot.apply_health(HealthStatus::NotServing, Some(0.4), Now::from_ms(1_000));
+        assert_eq!(health_slot.capacity(), 4);
+        assert_eq!(
+            health_slot.view(Now::from_ms(1_000)).state,
+            BreakerState::Open
+        );
+        match health_slot.breaker().admit(Now::from_ms(1_000)) {
+            crate::breaker::Admission::Rejected { retry_after } => {
+                assert_eq!(retry_after, Duration::from_millis(5_000));
+            }
+            other => panic!("expected Rejected(5_000ms), got {other:?}"),
+        }
+        match health_slot.breaker().admit(Now::from_ms(2_750)) {
+            crate::breaker::Admission::Rejected { retry_after } => {
+                assert_eq!(retry_after, Duration::from_millis(3_250));
+            }
+            other => panic!("expected Rejected(3_250ms), got {other:?}"),
+        }
+    }
 }
