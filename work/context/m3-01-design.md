@@ -1,6 +1,6 @@
 # WP-M3-01 binding design — gap-balance (telemetry slots, EWMA, breaker, retry budget, P2C)
 
-Status: binding for WP-M3-01 (reviewer, 2026-10-28). The normative text is `spec/04-routing.md` §8
+Status: WP-M3-01 CLOSED (2026-10-28); the rules decided during review are now in `spec/04-routing.md` §8 (RTE-079 d, RTE-084, RTE-085) and the spec wins on any difference. Original status: binding for WP-M3-01 (reviewer, 2026-10-28). The normative text is `spec/04-routing.md` §8
 (RTE-070..086, RTE-090..093; RTE-077..079, 084..086 and 093 were added by the reviewer on 2026-10-28 and
 resolve defects of the first draft: out-of-order timestamps, the self-contradicting HalfOpen rule,
 window clearing, registry growth). If this file and the spec disagree, the spec wins. Do not re-decide
