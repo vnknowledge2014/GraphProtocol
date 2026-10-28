@@ -8,7 +8,7 @@ use std::time::Duration;
 
 use gap_core::clock::{Clock, ManualClock, Timestamp};
 use gap_core::ids::{TaskId, TenantId, TenantScope};
-use rusqlite::{Connection, StatementStatus};
+use rusqlite::{Connection, StatementStatus, params};
 use serde_json::{Map as JsonMap, json};
 use tempfile::TempDir;
 
@@ -491,6 +491,28 @@ fn assert_traversal_plan_invariants(conn: &Connection) {
     }
 }
 
+fn assert_search_nodes_plan_invariants(conn: &Connection, fts_table: &str) {
+    let search_sql = search::build_search_nodes_fts_sql(fts_table);
+    let search_plan = explain_query_plan(conn, &search_sql);
+    assert_no_table_or_tenant_scan("search_nodes", &search_plan);
+    let fts_pos = search_plan
+        .iter()
+        .position(|d| d.starts_with(&format!("SCAN {fts_table} VIRTUAL TABLE INDEX")))
+        .unwrap_or_else(|| {
+            panic!("search_nodes must drive from FTS5 virtual table: {search_plan:#?}")
+        });
+    let n_pos = search_plan
+        .iter()
+        .position(|d| d == "SEARCH n USING INTEGER PRIMARY KEY (rowid=?)")
+        .unwrap_or_else(|| {
+            panic!("search_nodes must join `nodes` by INTEGER PRIMARY KEY: {search_plan:#?}")
+        });
+    assert!(
+        fts_pos < n_pos,
+        "search_nodes join order must be `{fts_table} -> nodes(rowid)` ({fts_pos} < {n_pos}): {search_plan:#?}"
+    );
+}
+
 fn assert_other_hot_path_plan_invariants(conn: &Connection, fts_table: &str) {
     // `get_node`
     let get_node_plan = explain_query_plan(conn, crud::SELECT_NODE_AS_OF_SQL);
@@ -561,25 +583,7 @@ fn assert_other_hot_path_plan_invariants(conn: &Connection, fts_table: &str) {
     );
 
     // `search_nodes` (join from per-tenant FTS5 virtual table to `nodes`)
-    let search_sql = search::build_search_nodes_fts_sql(fts_table);
-    let search_plan = explain_query_plan(conn, &search_sql);
-    assert_no_table_or_tenant_scan("search_nodes", &search_plan);
-    let fts_pos = search_plan
-        .iter()
-        .position(|d| d.starts_with(&format!("SCAN {fts_table} VIRTUAL TABLE INDEX")))
-        .unwrap_or_else(|| {
-            panic!("search_nodes must drive from FTS5 virtual table: {search_plan:#?}")
-        });
-    let n_pos = search_plan
-        .iter()
-        .position(|d| d == "SEARCH n USING INTEGER PRIMARY KEY (rowid=?)")
-        .unwrap_or_else(|| {
-            panic!("search_nodes must join `nodes` by INTEGER PRIMARY KEY: {search_plan:#?}")
-        });
-    assert!(
-        fts_pos < n_pos,
-        "search_nodes join order must be `{fts_table} -> nodes(rowid)` ({fts_pos} < {n_pos}): {search_plan:#?}"
-    );
+    assert_search_nodes_plan_invariants(conn, fts_table);
 
     // `tombstone_node` incident edge updates
     let close_out_plan = explain_query_plan(conn, crud::CLOSE_OUTBOUND_EDGES_SQL);
@@ -1132,9 +1136,11 @@ fn ing_088_plans_remain_locked_under_adversarial_statistics_and_decoy_indexes() 
     assert_traversal_plan_invariants(&conn);
     assert_other_hot_path_plan_invariants(&conn, &fts_table);
 
-    // Pass B (reverse join-order statistics: 1-row `nodes` vs 10M-row `edges`):
-    // Even with `INDEXED BY` intact, removing `CROSS JOIN` before `nodes` in traversal CTEs or
-    // step neighbour queries flips `nv (tenant=?)` ahead of `e`.
+    // Pass B (reverse join-order statistics: tiny 5-row `nodes` vs 10M-row `edges` and FTS5's
+    // 50,000-cost `MATCH` scan):
+    // Even with `INDEXED BY` intact, removing `CROSS JOIN` before `nodes` in traversal CTEs,
+    // step neighbour queries, or `build_search_nodes_fts_sql` flips `nodes (tenant=?)` ahead of
+    // `edges` / `<fts_table>`.
     let mut conn_b = Connection::open_in_memory().expect("open in-memory B");
     assert_eq!(
         schema::apply_migrations(&mut conn_b).expect("migrate B"),
@@ -1146,25 +1152,29 @@ fn ing_088_plans_remain_locked_under_adversarial_statistics_and_decoy_indexes() 
              ANALYZE;
              DELETE FROM sqlite_stat1;
              INSERT INTO sqlite_stat1 (tbl, idx, stat) VALUES
-                 ('nodes', NULL, '1'),
-                 ('nodes', 'idx_nodes_temporal', '1 1 1 1 1'),
-                 ('nodes', 'idx_nodes_current', '1 1 1'),
-                 ('nodes', 'idx_nodes_base_task', '1 1 1 1 1'),
-                 ('nodes', 'idx_nodes_ephemeral', '1 1 1 1'),
-                 ('nodes', 'idx_nodes_task_purge', '1 1 1 1'),
+                 ('nodes', NULL, '5'),
+                 ('nodes', 'idx_nodes_temporal', '5 5 1 1 1'),
+                 ('nodes', 'idx_nodes_current', '5 5 1'),
+                 ('nodes', 'idx_nodes_task', '5 5 1 1 1'),
+                 ('nodes', 'idx_nodes_base_task', '5 5 1 1 1'),
+                 ('nodes', 'idx_nodes_ephemeral', '5 5 1 1'),
+                 ('nodes', 'idx_nodes_task_purge', '5 5 1 1'),
                  ('edges', NULL, '10000000'),
                  ('edges', 'idx_edges_from', '10000000 10000000 10000000 10000000 10000000'),
                  ('edges', 'idx_edges_to', '10000000 10000000 10000000 10000000 10000000'),
                  ('edges', 'idx_edges_id_temporal', '10000000 10000000 10000000 10000000 10000000'),
+                 ('edges', 'idx_edges_current_id', '10000000 10000000 10000000'),
                  ('edges', 'idx_edges_current_quad', '10000000 10000000 10000000 10000000 10000000');
              ANALYZE sqlite_master;"
         ))
         .expect("install Pass B adversarial sqlite_stat1");
 
     assert_traversal_plan_invariants(&conn_b);
+    assert_other_hot_path_plan_invariants(&conn_b, &fts_table);
 
-    // Pass C (tiny `edges` vs recursive queue `bfs`):
-    // Removing `CROSS JOIN` before `edges` in traversal CTEs flips `edges` ahead of `bfs`.
+    // Pass C (huge `nodes` vs tiny `edges` and recursive queue `bfs`):
+    // Removing `CROSS JOIN` before `edges` in traversal CTEs flips `edges` ahead of `bfs`, while
+    // `search_nodes` must continue driving from FTS into `nodes` via `INTEGER PRIMARY KEY`.
     conn_b
         .execute_batch(
             "DELETE FROM sqlite_stat1;
@@ -1180,4 +1190,514 @@ fn ing_088_plans_remain_locked_under_adversarial_statistics_and_decoy_indexes() 
 
     assert_traversal_plan_invariants(&conn_b);
     assert_other_hot_path_plan_invariants(&conn_b, &fts_table);
+}
+
+struct DeltaStatsHarness {
+    _dir: TempDir,
+    clock: Arc<ManualClock>,
+    store: SqliteContextStore,
+    tenant_a: TenantScope,
+    tenant_b: TenantScope,
+    caller_a: Caller,
+    active_task: TaskId,
+    base_ms: i64,
+}
+
+fn build_delta_stats_harness() -> DeltaStatsHarness {
+    let dir = TempDir::new().expect("tempdir");
+    let db_path = dir.path().join("ing_088_delta_stats.db");
+    let mut cfg = SqliteConfig::new(&db_path);
+    cfg.durability = Durability::Off;
+    cfg.reader_pool_size = NonZeroUsize::new(1).expect("nonzero 1");
+
+    let base_ms: i64 = 1_700_000_000_000;
+    let clock = Arc::new(ManualClock::new(base_ms as u64));
+    let clock_dyn: Arc<dyn Clock> = Arc::clone(&clock) as Arc<dyn Clock>;
+    let store = SqliteContextStore::open(cfg, clock_dyn).expect("open delta stats store");
+
+    let tenant_a = TenantId::new("alpha-tenant").expect("tenant_a").scope();
+    let tenant_b = TenantId::new("beta-tenant").expect("tenant_b").scope();
+
+    let active_task =
+        TaskId::parse("018f1000-0000-7000-8000-000000000099").expect("active task uuid");
+    let mut caller_a = Caller::new("alice");
+    caller_a.task_chain = vec![active_task];
+    let caller_b = Caller::new("bob");
+
+    // Populate `tenant_b` with 2 GLOBAL nodes, 1 long-lived EPHEMERAL node, and 2 active edges
+    // (`(3, 2)` active counts) so every scenario verifies a second tenant stays untouched and
+    // matches its raw active recount after every `purge_expired` call (`INV-09`).
+    let b_nodes = vec![
+        NewNode {
+            id: Some(NodeId::new("b:global-1").expect("id")),
+            node_type: NodeType::new("Entity").expect("nt"),
+            label: "beta global 1".to_owned(),
+            summary: Some("beta summary 1".to_owned()),
+            props: JsonMap::new(),
+            scope: ScopeSpec::Global,
+            provenance: Provenance::new("seed-b"),
+        },
+        NewNode {
+            id: Some(NodeId::new("b:global-2").expect("id")),
+            node_type: NodeType::new("Entity").expect("nt"),
+            label: "beta global 2".to_owned(),
+            summary: Some("beta summary 2".to_owned()),
+            props: JsonMap::new(),
+            scope: ScopeSpec::Global,
+            provenance: Provenance::new("seed-b"),
+        },
+        NewNode {
+            id: None,
+            node_type: NodeType::new("Scratch").expect("nt"),
+            label: "beta long-lived ephemeral".to_owned(),
+            summary: None,
+            props: JsonMap::new(),
+            scope: ScopeSpec::Ephemeral {
+                base: BaseScope::Global,
+                expires_at: Some(Timestamp::from_unix_millis(base_ms + 3_600_000).expect("ts")),
+            },
+            provenance: Provenance::new("seed-b"),
+        },
+    ];
+    let b_batch = store
+        .put_batch(&tenant_b, &caller_b, &b_nodes, &[])
+        .expect("seed tenant_b nodes");
+    let b_ephem_id = b_batch.node_ids[2].clone();
+    let b_edges = vec![
+        NewEdge {
+            id: None,
+            edge_type: EdgeType::new("LINKS").expect("et"),
+            from: NodeId::new("b:global-1").expect("id"),
+            to: NodeId::new("b:global-2").expect("id"),
+            props: JsonMap::new(),
+            confidence: Some(1.0),
+            resolution: EdgeResolution::Exact,
+            provenance: Provenance::new("seed-b"),
+        },
+        NewEdge {
+            id: None,
+            edge_type: EdgeType::new("LINKS").expect("et"),
+            from: b_ephem_id,
+            to: NodeId::new("b:global-1").expect("id"),
+            props: JsonMap::new(),
+            confidence: Some(1.0),
+            resolution: EdgeResolution::Exact,
+            provenance: Provenance::new("seed-b"),
+        },
+    ];
+    store
+        .put_batch(&tenant_b, &caller_b, &[], &b_edges)
+        .expect("seed tenant_b edges");
+
+    DeltaStatsHarness {
+        _dir: dir,
+        clock,
+        store,
+        tenant_a,
+        tenant_b,
+        caller_a,
+        active_task,
+        base_ms,
+    }
+}
+
+fn read_tenant_stats_and_raw_recount(
+    store: &SqliteContextStore,
+    tenant: &TenantScope,
+) -> ((u64, u64), (u64, u64)) {
+    let t_str = tenant.tenant().as_str();
+    let mut writer = lock_unpoisoned(&store.writer);
+    let tx = writer.transaction().expect("open stats check tx");
+    let stats = crud::read_tenant_stats(&tx, t_str).expect("read_tenant_stats");
+    let raw_nodes: i64 = tx
+        .query_row(
+            "SELECT COUNT(*) FROM nodes WHERE tenant = ?1 AND valid_to IS NULL",
+            params![t_str],
+            |r| r.get(0),
+        )
+        .expect("raw active nodes recount");
+    let raw_edges: i64 = tx
+        .query_row(
+            "SELECT COUNT(*) FROM edges WHERE tenant = ?1 AND valid_to IS NULL",
+            params![t_str],
+            |r| r.get(0),
+        )
+        .expect("raw active edges recount");
+    let recount = (
+        u64::try_from(raw_nodes).expect("non-negative raw_nodes"),
+        u64::try_from(raw_edges).expect("non-negative raw_edges"),
+    );
+    (stats, recount)
+}
+
+fn assert_all_tenants_stats_equal_recount(
+    context: &str,
+    store: &SqliteContextStore,
+    expected_per_tenant: &[(&TenantScope, (u64, u64))],
+) {
+    for (tenant, expected) in expected_per_tenant {
+        let (stats, recount) = read_tenant_stats_and_raw_recount(store, tenant);
+        assert_eq!(
+            stats,
+            recount,
+            "{context}: tenant `{}` delta-maintained tenant_stats {stats:?} != raw active recount {recount:?}",
+            tenant.tenant().as_str()
+        );
+        assert_eq!(
+            stats,
+            *expected,
+            "{context}: tenant `{}` tenant_stats {stats:?} != expected {expected:?}",
+            tenant.tenant().as_str()
+        );
+    }
+}
+
+fn new_global_node(id: &str, label: &str) -> NewNode {
+    NewNode {
+        id: Some(NodeId::new(id).expect("global id")),
+        node_type: NodeType::new("Entity").expect("nt"),
+        label: label.to_owned(),
+        summary: Some(format!("summary for {label}")),
+        props: JsonMap::new(),
+        scope: ScopeSpec::Global,
+        provenance: Provenance::new("test"),
+    }
+}
+
+fn new_ephemeral_node(label: &str, expires_at_ms: i64) -> NewNode {
+    NewNode {
+        id: None,
+        node_type: NodeType::new("Scratch").expect("nt"),
+        label: label.to_owned(),
+        summary: Some(format!("ephemeral {label}")),
+        props: JsonMap::new(),
+        scope: ScopeSpec::Ephemeral {
+            base: BaseScope::Global,
+            expires_at: Some(Timestamp::from_unix_millis(expires_at_ms).expect("ts")),
+        },
+        provenance: Provenance::new("test"),
+    }
+}
+
+fn new_links_edge(from: NodeId, to: NodeId) -> NewEdge {
+    NewEdge {
+        id: None,
+        edge_type: EdgeType::new("LINKS").expect("et"),
+        from,
+        to,
+        props: JsonMap::new(),
+        confidence: Some(1.0),
+        resolution: EdgeResolution::Exact,
+        provenance: Provenance::new("test"),
+    }
+}
+
+// spec: ING-088
+// spec: INV-09
+#[test]
+fn ing_088_purge_expired_decrements_tenant_stats_for_active_ephemeral_and_incident_edges() {
+    let h = build_delta_stats_harness();
+    let y_id = NodeId::new("a:global-y").expect("y");
+
+    let batch = h
+        .store
+        .put_batch(
+            &h.tenant_a,
+            &h.caller_a,
+            &[
+                new_global_node("a:global-y", "surviving Y"),
+                new_ephemeral_node("expiring X", h.base_ms + 5_000),
+            ],
+            &[],
+        )
+        .expect("put X and Y");
+    let x_id = batch.node_ids[1].clone();
+
+    h.store
+        .put_batch(
+            &h.tenant_a,
+            &h.caller_a,
+            &[],
+            &[
+                new_links_edge(x_id.clone(), y_id.clone()),
+                new_links_edge(y_id.clone(), x_id),
+            ],
+        )
+        .expect("put outbound and inbound edges on X");
+
+    assert_all_tenants_stats_equal_recount(
+        "before scenario 1 purge",
+        &h.store,
+        &[(&h.tenant_a, (2, 2)), (&h.tenant_b, (3, 2))],
+    );
+
+    h.clock.advance(Duration::from_secs(10));
+    let report = h
+        .store
+        .purge_expired(&PurgePolicy {
+            task_retention: Duration::from_secs(60),
+        })
+        .expect("purge_expired scenario 1");
+    assert_eq!(report.purged_ephemeral_nodes, 1);
+    assert_eq!(report.purged_edges, 2);
+
+    // Node count drops by 1 (2 -> 1) and edge count drops by 2 (2 -> 0); `tenant_b` is untouched.
+    assert_all_tenants_stats_equal_recount(
+        "after scenario 1 purge",
+        &h.store,
+        &[(&h.tenant_a, (1, 0)), (&h.tenant_b, (3, 2))],
+    );
+}
+
+// spec: ING-088
+// spec: INV-09
+#[test]
+fn ing_088_purge_expired_counts_ephemeral_self_loop_once_in_tenant_stats() {
+    let h = build_delta_stats_harness();
+    let y_id = NodeId::new("a:global-y").expect("y");
+    let z_id = NodeId::new("a:global-z").expect("z");
+
+    let batch = h
+        .store
+        .put_batch(
+            &h.tenant_a,
+            &h.caller_a,
+            &[
+                new_global_node("a:global-y", "surviving Y"),
+                new_global_node("a:global-z", "surviving Z"),
+                new_ephemeral_node("expiring X with self-loop", h.base_ms + 5_000),
+            ],
+            &[],
+        )
+        .expect("put Y, Z, and X");
+    let x_id = batch.node_ids[2].clone();
+
+    // Include surviving edge `Y -> Z` alongside `X -> Y`, `Y -> X`, and self-loop `X -> X`
+    // (`edge_count == 4` before purge) so `saturating_sub` cannot mask subtracting 4 instead of 3.
+    h.store
+        .put_batch(
+            &h.tenant_a,
+            &h.caller_a,
+            &[],
+            &[
+                new_links_edge(x_id.clone(), y_id.clone()),
+                new_links_edge(y_id.clone(), x_id.clone()),
+                new_links_edge(x_id.clone(), x_id),
+                new_links_edge(y_id, z_id),
+            ],
+        )
+        .expect("put outbound, inbound, self-loop, and surviving edges");
+
+    assert_all_tenants_stats_equal_recount(
+        "before scenario 2 self-loop purge",
+        &h.store,
+        &[(&h.tenant_a, (3, 4)), (&h.tenant_b, (3, 2))],
+    );
+
+    h.clock.advance(Duration::from_secs(10));
+    let report = h
+        .store
+        .purge_expired(&PurgePolicy {
+            task_retention: Duration::from_secs(60),
+        })
+        .expect("purge_expired scenario 2");
+    assert_eq!(report.purged_ephemeral_nodes, 1);
+    assert_eq!(report.purged_edges, 3);
+
+    // Edge count drops by 3 (4 -> 1), NOT by 4 (4 -> 0); `tenant_b` stays at (3, 2).
+    assert_all_tenants_stats_equal_recount(
+        "after scenario 2 self-loop purge",
+        &h.store,
+        &[(&h.tenant_a, (2, 1)), (&h.tenant_b, (3, 2))],
+    );
+}
+
+// spec: ING-088
+// spec: INV-09
+#[test]
+fn ing_088_purge_expired_does_not_double_decrement_already_tombstoned_ephemeral_node() {
+    let h = build_delta_stats_harness();
+    let y_id = NodeId::new("a:global-live").expect("y");
+
+    let batch = h
+        .store
+        .put_batch(
+            &h.tenant_a,
+            &h.caller_a,
+            &[
+                new_global_node("a:global-live", "live node that must remain counted"),
+                new_ephemeral_node("tombstoned before expiry", h.base_ms + 10_000),
+            ],
+            &[],
+        )
+        .expect("put live Y and ephemeral E");
+    let e_id = batch.node_ids[1].clone();
+
+    h.store
+        .put_batch(
+            &h.tenant_a,
+            &h.caller_a,
+            &[],
+            &[new_links_edge(e_id.clone(), y_id)],
+        )
+        .expect("put E -> Y");
+
+    assert_all_tenants_stats_equal_recount(
+        "before tombstone_node on ephemeral E",
+        &h.store,
+        &[(&h.tenant_a, (2, 1)), (&h.tenant_b, (3, 2))],
+    );
+
+    // Tombstone `E` before it expires: `tombstone_node` already decrements `tenant_stats` to (1, 0).
+    h.clock.advance(Duration::from_secs(2));
+    h.store
+        .tombstone_node(&h.tenant_a, &h.caller_a, &e_id)
+        .expect("tombstone_node E before expiry");
+
+    assert_all_tenants_stats_equal_recount(
+        "after tombstone_node before expiry",
+        &h.store,
+        &[(&h.tenant_a, (1, 0)), (&h.tenant_b, (3, 2))],
+    );
+
+    // Advance past `E`'s expiry and purge: `node_count` must remain 1 (not subtracted again to 0).
+    h.clock.advance(Duration::from_secs(15));
+    let report = h
+        .store
+        .purge_expired(&PurgePolicy {
+            task_retention: Duration::from_secs(60),
+        })
+        .expect("purge_expired scenario 3");
+    assert_eq!(report.purged_ephemeral_nodes, 1);
+
+    assert_all_tenants_stats_equal_recount(
+        "after purging already-tombstoned ephemeral node",
+        &h.store,
+        &[(&h.tenant_a, (1, 0)), (&h.tenant_b, (3, 2))],
+    );
+}
+
+// spec: ING-088
+// spec: INV-09
+#[test]
+fn ing_088_purge_expired_subtracts_shared_edge_once_and_keeps_closed_task_stats_unchanged() {
+    let h = build_delta_stats_harness();
+    let y_id = NodeId::new("a:global-y").expect("y");
+    let z_id = NodeId::new("a:global-z").expect("z");
+
+    // Scenario 4: `A -> B` where both `A` and `B` are EPHEMERAL and expire in the same pass,
+    // plus surviving `Y -> Z` so `saturating_sub` cannot hide subtracting `A -> B` twice.
+    let batch = h
+        .store
+        .put_batch(
+            &h.tenant_a,
+            &h.caller_a,
+            &[
+                new_global_node("a:global-y", "surviving Y"),
+                new_global_node("a:global-z", "surviving Z"),
+                new_ephemeral_node("ephemeral A", h.base_ms + 5_000),
+                new_ephemeral_node("ephemeral B", h.base_ms + 5_000),
+            ],
+            &[],
+        )
+        .expect("put Y, Z, A, B");
+    let a_id = batch.node_ids[2].clone();
+    let b_id = batch.node_ids[3].clone();
+
+    h.store
+        .put_batch(
+            &h.tenant_a,
+            &h.caller_a,
+            &[],
+            &[
+                new_links_edge(a_id, b_id),
+                new_links_edge(y_id.clone(), z_id),
+            ],
+        )
+        .expect("put A -> B and Y -> Z");
+
+    assert_all_tenants_stats_equal_recount(
+        "before scenario 4 shared-edge purge",
+        &h.store,
+        &[(&h.tenant_a, (4, 2)), (&h.tenant_b, (3, 2))],
+    );
+
+    h.clock.advance(Duration::from_secs(10));
+    let report_eph = h
+        .store
+        .purge_expired(&PurgePolicy {
+            task_retention: Duration::from_secs(60),
+        })
+        .expect("purge_expired scenario 4");
+    assert_eq!(report_eph.purged_ephemeral_nodes, 2);
+    assert_eq!(report_eph.purged_edges, 1);
+
+    // `A -> B` is subtracted once (2 -> 1), leaving surviving `Y -> Z` counted.
+    assert_all_tenants_stats_equal_recount(
+        "after scenario 4 shared-edge purge",
+        &h.store,
+        &[(&h.tenant_a, (2, 1)), (&h.tenant_b, (3, 2))],
+    );
+
+    // Scenario 5: TASK node purged after `tombstone_task_nodes` (closed versions only) leaves
+    // `tenant_stats` unchanged by the purge and equal to the raw recount.
+    let task_batch = h
+        .store
+        .put_batch(
+            &h.tenant_a,
+            &h.caller_a,
+            &[NewNode {
+                id: None,
+                node_type: NodeType::new("Note").expect("nt"),
+                label: "task artifact".to_owned(),
+                summary: Some("closed then purged".to_owned()),
+                props: JsonMap::new(),
+                scope: ScopeSpec::Task {
+                    task_id: h.active_task,
+                },
+                provenance: Provenance::new("test"),
+            }],
+            &[],
+        )
+        .expect("put TASK node");
+    let k_id = task_batch.node_ids[0].clone();
+
+    h.store
+        .put_batch(&h.tenant_a, &h.caller_a, &[], &[new_links_edge(k_id, y_id)])
+        .expect("put K -> Y");
+
+    assert_all_tenants_stats_equal_recount(
+        "before tombstone_task_nodes",
+        &h.store,
+        &[(&h.tenant_a, (3, 2)), (&h.tenant_b, (3, 2))],
+    );
+
+    h.clock.advance(Duration::from_secs(1));
+    let closed = h
+        .store
+        .tombstone_task_nodes(&h.tenant_a, h.active_task)
+        .expect("tombstone_task_nodes");
+    assert_eq!(closed, 1);
+
+    assert_all_tenants_stats_equal_recount(
+        "after tombstone_task_nodes before purge",
+        &h.store,
+        &[(&h.tenant_a, (2, 1)), (&h.tenant_b, (3, 2))],
+    );
+
+    h.clock.advance(Duration::from_secs(20));
+    let report_task = h
+        .store
+        .purge_expired(&PurgePolicy {
+            task_retention: Duration::from_secs(5),
+        })
+        .expect("purge_expired scenario 5");
+    assert_eq!(report_task.purged_task_nodes, 1);
+    assert_eq!(report_task.purged_edges, 1);
+
+    assert_all_tenants_stats_equal_recount(
+        "after scenario 5 closed-task purge",
+        &h.store,
+        &[(&h.tenant_a, (2, 1)), (&h.tenant_b, (3, 2))],
+    );
 }

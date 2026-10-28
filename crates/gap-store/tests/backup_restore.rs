@@ -692,6 +692,87 @@ fn ing_087_verify_required_tables_and_restore_reject_v3_database_with_leftover_s
     assert!(!restore_target.exists());
 }
 
+// spec: ING-088, ING-087, ING-064
+#[test]
+fn ing_088_verify_required_tables_and_restore_reject_v4_database_missing_task_purge_index() {
+    let dir = TempDir::new().expect("tempdir");
+    let live_path = dir.path().join("v4_live.db");
+    let backup_path = dir.path().join("v4_backup.db");
+    let missing_idx_v4_src = dir.path().join("v4_missing_task_purge_idx.db");
+    let rejected_v4_target = dir.path().join("v4_must_not_be_created.db");
+    let same_schema_v3_src = dir.path().join("v3_without_task_purge_idx.db");
+    let accepted_v3_target = dir.path().join("v3_restored_ok.db");
+
+    let clock: Arc<dyn Clock> = Arc::new(ManualClock::new(1_700_000_000_000));
+    let store = SqliteContextStore::open(SqliteConfig::new(&live_path), Arc::clone(&clock))
+        .expect("open v4 store");
+    let tenant = TenantId::new("acme").expect("acme").scope();
+    let writer = Caller::new("alice");
+
+    store
+        .put_node(
+            &tenant,
+            &writer,
+            NewNode {
+                id: Some(NodeId::new("doc:v4").expect("id")),
+                node_type: NodeType::new("Doc").expect("type"),
+                label: "v4 node".to_owned(),
+                summary: Some("v4 task purge index required".to_owned()),
+                props: JsonMap::new(),
+                scope: ScopeSpec::Global,
+                provenance: Provenance::new("test"),
+            },
+        )
+        .expect("put v4 node");
+    store.backup_to(&backup_path).expect("backup v4");
+
+    fs::copy(&backup_path, &missing_idx_v4_src).expect("copy v4 backup");
+    {
+        let raw = Connection::open(&missing_idx_v4_src).expect("open raw v4 copy");
+        raw.execute_batch("DROP INDEX idx_nodes_task_purge;")
+            .expect("drop idx_nodes_task_purge");
+        assert_eq!(
+            gap_store::sqlite::schema::read_user_version(&raw).expect("user_version"),
+            4
+        );
+        assert_eq!(FORMAT_VERSION, 4);
+        assert_eq!(
+            gap_store::sqlite::schema::verify_required_tables(&raw)
+                .expect_err("v4 database missing idx_nodes_task_purge must be rejected"),
+            StoreError::Corrupt
+        );
+    }
+
+    assert_eq!(
+        SqliteContextStore::restore_from(&missing_idx_v4_src, &rejected_v4_target)
+            .expect_err("restore_from must reject v4 backup missing idx_nodes_task_purge"),
+        StoreError::Corrupt
+    );
+    assert!(!rejected_v4_target.exists());
+
+    // The exact same schema without `idx_nodes_task_purge` at `user_version = 3` is still accepted
+    // by both `verify_required_tables` and `restore_from` (and migrates to v4 when opened).
+    fs::copy(&missing_idx_v4_src, &same_schema_v3_src).expect("copy to v3 candidate");
+    {
+        let raw_v3 = Connection::open(&same_schema_v3_src).expect("open raw v3 candidate");
+        raw_v3
+            .execute_batch("PRAGMA user_version = 3;")
+            .expect("set user_version = 3");
+        assert_eq!(
+            gap_store::sqlite::schema::read_user_version(&raw_v3).expect("user_version 3"),
+            3
+        );
+        gap_store::sqlite::schema::verify_required_tables(&raw_v3)
+            .expect("v3 database without idx_nodes_task_purge must still be accepted");
+    }
+
+    SqliteContextStore::restore_from(&same_schema_v3_src, &accepted_v3_target)
+        .expect("restore_from must accept v3 database without idx_nodes_task_purge");
+    let reopened = SqliteContextStore::open(SqliteConfig::new(&accepted_v3_target), clock)
+        .expect("open restored v3 -> v4");
+    assert_eq!(reopened.format_version().expect("migrated ver"), 4);
+}
+
 // spec: ING-064, INV-15, ING-087
 #[test]
 fn inv_15_restore_from_rejects_data_page_corruption_caught_by_integrity_check_with_header_and_page1_intact()
