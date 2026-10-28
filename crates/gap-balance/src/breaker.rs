@@ -1,27 +1,553 @@
-//! Per-branch circuit breaker (`RTE-080`..`RTE-085`; expanded with bucket window & FSM in Group 4).
+//! Lock-free per-branch circuit breaker with 10x3 s rolling bucket window and 3-probe `HalfOpen`
+//! majority FSM (`RTE-080`..`RTE-085`, `OPS-020`).
 
+use std::fmt;
 use std::time::Duration;
 
 use crate::slot::{HealthStatus, Outcome};
-use crate::sync::Arc;
+use crate::sync::{Arc, AtomicU64, Ordering};
 use crate::time::Now;
+
+/// Width of each rolling-window bucket in milliseconds (`3 s`, `RTE-080`).
+const BUCKET_MS: u64 = 3_000;
+
+/// Number of buckets in the `30 s` rolling window (`10 * 3 s`, `RTE-080`).
+const NUM_BUCKETS: usize = 10;
+
+/// Minimum calls in the active window before trip evaluation (`RTE-080`, `RTE-084`).
+const MIN_WINDOW_CALLS: u64 = 20;
+
+/// Maximum per-bucket 12-bit counter before proportional halving (`RTE-084`).
+const BUCKET_COUNTER_CAP: u64 = 4_094;
+const BUCKET_COUNTER_MASK: u64 = 0xFFF;
+const BUCKET_CYCLE_BITS: u32 = 22;
+const BUCKET_CYCLE_MASK: u64 = (1_u64 << BUCKET_CYCLE_BITS) - 1;
+const BUCKET_EMPTY: u64 = u64::MAX;
+
+/// Modulus for `closed_gen` (`0..63`, never `63` so packed bucket words never equal `u64::MAX`).
+const CLOSED_GEN_MOD: u8 = 63;
+
+/// Continuous `Closed` duration (`5 min`) that resets backoff level `k` to `0` (`RTE-085`).
+const K_RESET_CLOSED_MS: u64 = 300_000;
+
+/// Maximum backoff exponent `k` (`Open(6)` = `60 s`, `RTE-085`).
+const MAX_K: u8 = 6;
+
+/// Maximum concurrent and total probes per `HalfOpen` episode (`RTE-085`).
+const MAX_EPISODE_PROBES: u8 = 3;
+
+/// Probe majority needed to close or reopen an episode (`2` of `3`, `RTE-085`).
+const PROBE_MAJORITY: u8 = 2;
+
+/// `retry_after` returned when `HalfOpen` has all probe slots occupied (`1 s`, `RTE-085`).
+const HALF_OPEN_RETRY_AFTER: Duration = Duration::from_secs(1);
+
+/// Flapping window duration (`10 min`, `RTE-082`, `RTE-085`).
+const FLAPPING_WINDOW_MS: u64 = 600_000;
+
+/// Transition count threshold (`> 6` inside `10 min`) indicating flapping (`RTE-082`, `RTE-085`).
+const FLAPPING_THRESHOLD: usize = 6;
+
+/// Size of the recent-transition timestamp ring (`RTE-085`).
+const TRANSITION_RING_LEN: usize = 8;
+const TRANSITION_UNSET: u64 = u64::MAX;
+
+const PAYLOAD_BITS: u32 = 51;
+const PAYLOAD_MASK: u64 = (1_u64 << PAYLOAD_BITS) - 1;
+const EPISODE_BITS: u32 = 45;
+const EPISODE_MASK: u64 = (1_u64 << EPISODE_BITS) - 1;
+
+/// Returns the `Open(k)` duration in milliseconds: `5, 10, 20, 40, 60, 60, 60 s` (`RTE-085`).
+#[inline]
+const fn open_duration_ms(k: u8) -> u64 {
+    match k {
+        0 => 5_000,
+        1 => 10_000,
+        2 => 20_000,
+        3 => 40_000,
+        _ => 60_000,
+    }
+}
 
 /// Observable circuit-breaker state (`RTE-080`, `RTE-082`, `RTE-085`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum BreakerState {
-    /// Normal operation; calls admitted and tracked in the 30 s rolling window.
+    /// Normal operation; calls admitted and counted in the `30 s` window (`0` on gauge).
     Closed,
-    /// Recovery trial; up to 3 probes admitted per episode (`RTE-085`).
+    /// Recovery trial; up to `3` probes admitted per episode (`1` on gauge).
     HalfOpen,
-    /// Tripped or forced `NOT_SERVING`; calls rejected immediately (`RTE-081`).
+    /// Tripped or forced `NOT_SERVING`; calls rejected immediately (`2` on gauge).
     Open,
 }
 
-/// Per-branch circuit breaker (`RTE-080`..`RTE-085`).
+impl BreakerState {
+    #[inline]
+    const fn as_str(self) -> &'static str {
+        match self {
+            Self::Closed => "Closed",
+            Self::HalfOpen => "HalfOpen",
+            Self::Open => "Open",
+        }
+    }
+
+    #[inline]
+    const fn gauge_value(self) -> f64 {
+        match self {
+            Self::Closed => 0.0,
+            Self::HalfOpen => 1.0,
+            Self::Open => 2.0,
+        }
+    }
+}
+
+/// Result of [`Breaker::admit`] (`RTE-081`, `RTE-085`).
+#[derive(Debug)]
+pub enum Admission {
+    /// Breaker is [`BreakerState::Closed`]; normal call admitted.
+    Allowed,
+    /// Breaker is [`BreakerState::HalfOpen`]; caller holds one of the episode's probe slots.
+    Probe(ProbePermit),
+    /// Breaker is [`BreakerState::Open`] or all `HalfOpen` probe slots are taken (`RTE-085`).
+    Rejected {
+        /// Suggested client retry delay (`retry.afterMs`).
+        retry_after: Duration,
+    },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct UnpackedBucket {
+    closed_gen: u8,
+    cycle: u64,
+    ok: u64,
+    fail: u64,
+    slow: u64,
+}
+
+#[inline]
+fn pack_bucket(b: UnpackedBucket) -> u64 {
+    ((u64::from(b.closed_gen) & 0x3F) << 58)
+        | ((b.cycle & BUCKET_CYCLE_MASK) << 36)
+        | ((b.ok & BUCKET_COUNTER_MASK) << 24)
+        | ((b.fail & BUCKET_COUNTER_MASK) << 12)
+        | (b.slow & BUCKET_COUNTER_MASK)
+}
+
+#[inline]
+fn unpack_bucket(word: u64) -> Option<UnpackedBucket> {
+    if word == BUCKET_EMPTY {
+        return None;
+    }
+    Some(UnpackedBucket {
+        closed_gen: ((word >> 58) & 0x3F) as u8,
+        cycle: (word >> 36) & BUCKET_CYCLE_MASK,
+        ok: (word >> 24) & BUCKET_COUNTER_MASK,
+        fail: (word >> 12) & BUCKET_COUNTER_MASK,
+        slow: word & BUCKET_COUNTER_MASK,
+    })
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct UnpackedState {
+    state: BreakerState,
+    k: u8,
+    not_serving: bool,
+    has_opened: bool,
+    closed_gen: u8,
+    /// `closed_since_ms` in `Closed`, `open_until_ms` in `Open`, unused in `HalfOpen`.
+    timestamp_ms: u64,
+    in_flight_probes: u8,
+    ok_probes: u8,
+    fail_probes: u8,
+    episode: u64,
+}
+
+#[inline]
+fn pack_state(s: UnpackedState) -> u64 {
+    let state_bits: u64 = match s.state {
+        BreakerState::Closed => 0,
+        BreakerState::HalfOpen => 1,
+        BreakerState::Open => 2,
+    };
+    let payload = match s.state {
+        BreakerState::Closed | BreakerState::Open => s.timestamp_ms.min(PAYLOAD_MASK),
+        BreakerState::HalfOpen => {
+            (u64::from(s.in_flight_probes) & 0x3)
+                | ((u64::from(s.ok_probes) & 0x3) << 2)
+                | ((u64::from(s.fail_probes) & 0x3) << 4)
+                | ((s.episode & EPISODE_MASK) << 6)
+        }
+    };
+    (state_bits << 62)
+        | (u64::from(s.k & 0x7) << 59)
+        | (u64::from(s.not_serving) << 58)
+        | (u64::from(s.has_opened) << 57)
+        | (u64::from(s.closed_gen & 0x3F) << 51)
+        | payload
+}
+
+#[inline]
+fn unpack_state(word: u64) -> UnpackedState {
+    let state = match (word >> 62) & 0x3 {
+        0 => BreakerState::Closed,
+        1 => BreakerState::HalfOpen,
+        _ => BreakerState::Open,
+    };
+    let k = ((word >> 59) & 0x7) as u8;
+    let not_serving = ((word >> 58) & 0x1) != 0;
+    let has_opened = ((word >> 57) & 0x1) != 0;
+    let closed_gen = ((word >> 51) & 0x3F) as u8;
+    let payload = word & PAYLOAD_MASK;
+
+    match state {
+        BreakerState::Closed | BreakerState::Open => UnpackedState {
+            state,
+            k,
+            not_serving,
+            has_opened,
+            closed_gen,
+            timestamp_ms: payload,
+            in_flight_probes: 0,
+            ok_probes: 0,
+            fail_probes: 0,
+            episode: 0,
+        },
+        BreakerState::HalfOpen => UnpackedState {
+            state,
+            k,
+            not_serving,
+            has_opened,
+            closed_gen,
+            timestamp_ms: 0,
+            in_flight_probes: (payload & 0x3) as u8,
+            ok_probes: ((payload >> 2) & 0x3) as u8,
+            fail_probes: ((payload >> 4) & 0x3) as u8,
+            episode: (payload >> 6) & EPISODE_MASK,
+        },
+    }
+}
+
+struct BreakerInner {
+    default_timeout_ms: u32,
+    label: Arc<str>,
+    state_word: AtomicU64,
+    next_episode: AtomicU64,
+    buckets: [AtomicU64; NUM_BUCKETS],
+    transitions: [AtomicU64; TRANSITION_RING_LEN],
+    transition_seq: AtomicU64,
+}
+
+impl fmt::Debug for BreakerInner {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        // Acquire synchronizes with the latest Release/AcqRel transition on `state_word`.
+        let unpacked = unpack_state(self.state_word.load(Ordering::Acquire));
+        f.debug_struct("BreakerInner")
+            .field("default_timeout_ms", &self.default_timeout_ms)
+            .field("label", &self.label)
+            .field("state", &unpacked.state)
+            .field("k", &unpacked.k)
+            .field("not_serving", &unpacked.not_serving)
+            .finish()
+    }
+}
+
+impl BreakerInner {
+    fn new(default_timeout_ms: u32, label: Arc<str>) -> Self {
+        let initial = UnpackedState {
+            state: BreakerState::Closed,
+            k: 0,
+            not_serving: false,
+            has_opened: false,
+            closed_gen: 0,
+            timestamp_ms: 0,
+            in_flight_probes: 0,
+            ok_probes: 0,
+            fail_probes: 0,
+            episode: 0,
+        };
+        Self {
+            default_timeout_ms,
+            label,
+            state_word: AtomicU64::new(pack_state(initial)),
+            next_episode: AtomicU64::new(1),
+            buckets: std::array::from_fn(|_| AtomicU64::new(BUCKET_EMPTY)),
+            transitions: std::array::from_fn(|_| AtomicU64::new(TRANSITION_UNSET)),
+            transition_seq: AtomicU64::new(0),
+        }
+    }
+
+    fn emit_transition(&self, from: BreakerState, to: BreakerState, k: u8, reason: &'static str, now: Now) {
+        // Relaxed fetch_add suffices to assign each concurrent transition a distinct ring slot.
+        let seq = self.transition_seq.fetch_add(1, Ordering::Relaxed);
+        let slot = (seq as usize) % TRANSITION_RING_LEN;
+        // Release publishes the transition timestamp to subsequent `Acquire` loads in `flapping`.
+        self.transitions[slot].store(now.ms, Ordering::Release);
+
+        tracing::info!(
+            branch = &*self.label,
+            from = from.as_str(),
+            to = to.as_str(),
+            k = k,
+            reason = reason,
+            "circuit breaker state transition"
+        );
+        metrics::gauge!(
+            "gap_breaker_state",
+            "branch" => metrics::SharedString::from(Arc::clone(&self.label))
+        )
+        .set(to.gauge_value());
+    }
+
+    fn clear_buckets_except_gen(&self, active_gen: u8) {
+        for bucket in &self.buckets {
+            // Acquire observes prior bucket writes before deciding whether to clear stale generations.
+            let mut cur = bucket.load(Ordering::Acquire);
+            while let Some(unpacked) = unpack_bucket(cur) {
+                if unpacked.closed_gen == active_gen {
+                    break;
+                }
+                // AcqRel/Acquire ensures clearing an old generation never overwrites a concurrent active_gen write.
+                match bucket.compare_exchange_weak(
+                    cur,
+                    BUCKET_EMPTY,
+                    Ordering::AcqRel,
+                    Ordering::Acquire,
+                ) {
+                    Ok(_) => break,
+                    Err(actual) => cur = actual,
+                }
+            }
+        }
+    }
+
+    /// Materializes `Open -> HalfOpen` if the open timer has elapsed and Health is not `NotServing`.
+    fn advance_timer_if_due(&self, now: Now) -> u64 {
+        // Acquire observes the most recent state transition and open_until deadline.
+        let mut cur_raw = self.state_word.load(Ordering::Acquire);
+        loop {
+            let cur = unpack_state(cur_raw);
+            if cur.state != BreakerState::Open || cur.not_serving || now.ms < cur.timestamp_ms {
+                return cur_raw;
+            }
+            // Relaxed fetch_add suffices to mint a unique 45-bit episode tag for the candidate CAS.
+            let episode = self.next_episode.fetch_add(1, Ordering::Relaxed) & EPISODE_MASK;
+            let next = UnpackedState {
+                state: BreakerState::HalfOpen,
+                k: cur.k,
+                not_serving: false,
+                has_opened: true,
+                closed_gen: cur.closed_gen,
+                timestamp_ms: 0,
+                in_flight_probes: 0,
+                ok_probes: 0,
+                fail_probes: 0,
+                episode,
+            };
+            let next_raw = pack_state(next);
+            // AcqRel/Acquire guarantees only one thread wins Open -> HalfOpen and publishes episode = 0 probes.
+            match self.state_word.compare_exchange_weak(
+                cur_raw,
+                next_raw,
+                Ordering::AcqRel,
+                Ordering::Acquire,
+            ) {
+                Ok(_) => {
+                    self.emit_transition(
+                        BreakerState::Open,
+                        BreakerState::HalfOpen,
+                        cur.k,
+                        "open_timer_elapsed",
+                        now,
+                    );
+                    return next_raw;
+                }
+                Err(actual) => cur_raw = actual,
+            }
+        }
+    }
+
+    #[inline]
+    fn compute_closed_open_k(cur: UnpackedState, now: Now) -> u8 {
+        if !cur.has_opened || now.ms.saturating_sub(cur.timestamp_ms) >= K_RESET_CLOSED_MS {
+            0
+        } else {
+            (cur.k + 1).min(MAX_K)
+        }
+    }
+}
+
+/// RAII probe token issued by [`Breaker::admit`] during [`BreakerState::HalfOpen`] (`RTE-085`).
+///
+/// Calling [`ProbePermit::record`] records the probe outcome toward the 2-of-3 majority decision.
+/// Dropping the permit without calling `record` releases the probe slot and counts as neither
+/// success nor failure so cancelled futures cannot stall recovery.
+#[must_use = "dropping ProbePermit without calling record() releases the probe slot as cancelled"]
+#[derive(Debug)]
+pub struct ProbePermit {
+    inner: Arc<BreakerInner>,
+    episode: u64,
+    recorded: bool,
+}
+
+impl ProbePermit {
+    /// Consumes the permit and records its outcome (`Ok`/`ClientError` = success, `Failure` = failure)
+    /// against the `HalfOpen` episode (`RTE-085`).
+    pub fn record(mut self, outcome: Outcome, _latency: Duration, now: Now) {
+        self.recorded = true;
+        // Acquire loads the active HalfOpen episode word and probe tally.
+        let mut cur_raw = self.inner.state_word.load(Ordering::Acquire);
+        loop {
+            let cur = unpack_state(cur_raw);
+            if cur.state != BreakerState::HalfOpen || cur.episode != self.episode {
+                return;
+            }
+            let next_in_flight = cur.in_flight_probes.saturating_sub(1);
+            let is_success = matches!(outcome, Outcome::Ok | Outcome::ClientError);
+
+            if is_success {
+                let next_ok = cur.ok_probes.saturating_add(1);
+                if next_ok >= PROBE_MAJORITY {
+                    let next_gen = (cur.closed_gen + 1) % CLOSED_GEN_MOD;
+                    let closed = UnpackedState {
+                        state: BreakerState::Closed,
+                        k: cur.k,
+                        not_serving: false,
+                        has_opened: true,
+                        closed_gen: next_gen,
+                        timestamp_ms: now.ms,
+                        in_flight_probes: 0,
+                        ok_probes: 0,
+                        fail_probes: 0,
+                        episode: 0,
+                    };
+                    // AcqRel/Acquire atomically closes the episode and bumps closed_gen to invalidate old buckets.
+                    match self.inner.state_word.compare_exchange_weak(
+                        cur_raw,
+                        pack_state(closed),
+                        Ordering::AcqRel,
+                        Ordering::Acquire,
+                    ) {
+                        Ok(_) => {
+                            self.inner.clear_buckets_except_gen(next_gen);
+                            self.inner.emit_transition(
+                                BreakerState::HalfOpen,
+                                BreakerState::Closed,
+                                cur.k,
+                                "probe_succeeded",
+                                now,
+                            );
+                            return;
+                        }
+                        Err(actual) => cur_raw = actual,
+                    }
+                } else {
+                    let stay = UnpackedState {
+                        in_flight_probes: next_in_flight,
+                        ok_probes: next_ok,
+                        ..cur
+                    };
+                    // AcqRel/Acquire serializes probe tally updates across concurrent probes.
+                    match self.inner.state_word.compare_exchange_weak(
+                        cur_raw,
+                        pack_state(stay),
+                        Ordering::AcqRel,
+                        Ordering::Acquire,
+                    ) {
+                        Ok(_) => return,
+                        Err(actual) => cur_raw = actual,
+                    }
+                }
+            } else {
+                let next_fail = cur.fail_probes.saturating_add(1);
+                if next_fail >= PROBE_MAJORITY {
+                    let next_k = (cur.k + 1).min(MAX_K);
+                    let open_until = now.ms.saturating_add(open_duration_ms(next_k));
+                    let reopened = UnpackedState {
+                        state: BreakerState::Open,
+                        k: next_k,
+                        not_serving: cur.not_serving,
+                        has_opened: true,
+                        closed_gen: cur.closed_gen,
+                        timestamp_ms: open_until,
+                        in_flight_probes: 0,
+                        ok_probes: 0,
+                        fail_probes: 0,
+                        episode: 0,
+                    };
+                    // AcqRel/Acquire atomically reopens the breaker on the 2nd failed probe.
+                    match self.inner.state_word.compare_exchange_weak(
+                        cur_raw,
+                        pack_state(reopened),
+                        Ordering::AcqRel,
+                        Ordering::Acquire,
+                    ) {
+                        Ok(_) => {
+                            self.inner.emit_transition(
+                                BreakerState::HalfOpen,
+                                BreakerState::Open,
+                                next_k,
+                                "probe_failed",
+                                now,
+                            );
+                            return;
+                        }
+                        Err(actual) => cur_raw = actual,
+                    }
+                } else {
+                    let stay = UnpackedState {
+                        in_flight_probes: next_in_flight,
+                        fail_probes: next_fail,
+                        ..cur
+                    };
+                    // AcqRel/Acquire serializes probe failure tally updates across concurrent probes.
+                    match self.inner.state_word.compare_exchange_weak(
+                        cur_raw,
+                        pack_state(stay),
+                        Ordering::AcqRel,
+                        Ordering::Acquire,
+                    ) {
+                        Ok(_) => return,
+                        Err(actual) => cur_raw = actual,
+                    }
+                }
+            }
+        }
+    }
+}
+
+impl Drop for ProbePermit {
+    fn drop(&mut self) {
+        if self.recorded {
+            return;
+        }
+        // Acquire loads the active HalfOpen episode word before releasing the cancelled probe slot.
+        let mut cur_raw = self.inner.state_word.load(Ordering::Acquire);
+        loop {
+            let cur = unpack_state(cur_raw);
+            if cur.state != BreakerState::HalfOpen || cur.episode != self.episode {
+                return;
+            }
+            let next = UnpackedState {
+                in_flight_probes: cur.in_flight_probes.saturating_sub(1),
+                ..cur
+            };
+            // AcqRel/Acquire releases the slot without losing concurrent ok/fail tally updates.
+            match self.inner.state_word.compare_exchange_weak(
+                cur_raw,
+                pack_state(next),
+                Ordering::AcqRel,
+                Ordering::Acquire,
+            ) {
+                Ok(_) => return,
+                Err(actual) => cur_raw = actual,
+            }
+        }
+    }
+}
+
+/// Lock-free per-branch circuit breaker (`RTE-080`..`RTE-085`).
 #[derive(Debug)]
 pub struct Breaker {
-    _default_timeout_ms: u32,
-    _label: Arc<str>,
+    inner: Arc<BreakerInner>,
 }
 
 impl Breaker {
@@ -29,18 +555,1922 @@ impl Breaker {
     #[must_use]
     pub fn new(default_timeout_ms: u32, label: Arc<str>) -> Self {
         Self {
-            _default_timeout_ms: default_timeout_ms,
-            _label: label,
+            inner: Arc::new(BreakerInner::new(default_timeout_ms, label)),
         }
     }
 
-    /// Returns the breaker's state at `now`.
-    #[must_use]
-    pub fn state(&self, _now: Now) -> BreakerState {
-        BreakerState::Closed
+    /// Checks whether a call is admitted at `now`, issuing a [`ProbePermit`] in `HalfOpen`
+    /// when a probe slot is free (`RTE-081`, `RTE-085`).
+    pub fn admit(&self, now: Now) -> Admission {
+        let mut cur_raw = self.inner.advance_timer_if_due(now);
+        loop {
+            let cur = unpack_state(cur_raw);
+            match cur.state {
+                BreakerState::Closed => return Admission::Allowed,
+                BreakerState::Open => {
+                    if !cur.not_serving && now.ms >= cur.timestamp_ms {
+                        cur_raw = self.inner.advance_timer_if_due(now);
+                        continue;
+                    }
+                    let rem_ms = cur.timestamp_ms.saturating_sub(now.ms);
+                    return Admission::Rejected {
+                        retry_after: Duration::from_millis(rem_ms),
+                    };
+                }
+                BreakerState::HalfOpen => {
+                    let used = cur
+                        .in_flight_probes
+                        .saturating_add(cur.ok_probes)
+                        .saturating_add(cur.fail_probes);
+                    if used >= MAX_EPISODE_PROBES {
+                        return Admission::Rejected {
+                            retry_after: HALF_OPEN_RETRY_AFTER,
+                        };
+                    }
+                    let next = UnpackedState {
+                        in_flight_probes: cur.in_flight_probes + 1,
+                        ..cur
+                    };
+                    // AcqRel/Acquire ensures at most 3 ProbePermits can be reserved in an episode.
+                    match self.inner.state_word.compare_exchange_weak(
+                        cur_raw,
+                        pack_state(next),
+                        Ordering::AcqRel,
+                        Ordering::Acquire,
+                    ) {
+                        Ok(_) => {
+                            return Admission::Probe(ProbePermit {
+                                inner: Arc::clone(&self.inner),
+                                episode: cur.episode,
+                                recorded: false,
+                            });
+                        }
+                        Err(actual) => cur_raw = actual,
+                    }
+                }
+            }
+        }
     }
 
-    pub(crate) fn record_call(&self, _outcome: Outcome, _latency: Duration, _now: Now) {}
+    /// Returns the breaker's state at `now` (`RTE-080`, `RTE-085`).
+    #[must_use]
+    pub fn state(&self, now: Now) -> BreakerState {
+        let raw = self.inner.advance_timer_if_due(now);
+        unpack_state(raw).state
+    }
 
-    pub(crate) fn on_health(&self, _status: HealthStatus, _now: Now) {}
+    /// Returns `true` iff strictly more than `6` transitions occurred in the last `10` minutes
+    /// (`600,000 ms`, `RTE-082`, `RTE-085`).
+    #[must_use]
+    pub fn flapping(&self, now: Now) -> bool {
+        let _ = self.inner.advance_timer_if_due(now);
+        let mut recent = 0_usize;
+        for slot in &self.inner.transitions {
+            // Acquire pairs with the Release store in `emit_transition`.
+            let ts = slot.load(Ordering::Acquire);
+            if ts != TRANSITION_UNSET && ts <= now.ms && now.ms.saturating_sub(ts) < FLAPPING_WINDOW_MS {
+                recent += 1;
+            }
+        }
+        recent > FLAPPING_THRESHOLD
+    }
+
+    /// Read-only eligibility check for P2C selection that NEVER mutates breaker state or probe
+    /// tallies (`RTE-073`, `RTE-079(e)`).
+    #[allow(dead_code)]
+    #[must_use]
+    pub(crate) fn is_selectable_readonly(&self, now: Now) -> bool {
+        // Acquire observes the latest state transition and probe reservation count without writing.
+        let s = unpack_state(self.inner.state_word.load(Ordering::Acquire));
+        match s.state {
+            BreakerState::Closed => true,
+            BreakerState::HalfOpen => {
+                s.in_flight_probes
+                    .saturating_add(s.ok_probes)
+                    .saturating_add(s.fail_probes)
+                    < MAX_EPISODE_PROBES
+            }
+            BreakerState::Open => !s.not_serving && now.ms >= s.timestamp_ms,
+        }
+    }
+
+    /// Records a non-probe call completion into the rolling bucket window when `Closed` (`RTE-084`, `RTE-085`).
+    pub(crate) fn record_call(&self, outcome: Outcome, latency: Duration, now: Now) {
+        let raw = self.inner.advance_timer_if_due(now);
+        let initial = unpack_state(raw);
+        if initial.state != BreakerState::Closed {
+            return;
+        }
+        let my_gen = initial.closed_gen;
+
+        let epoch = now.ms / BUCKET_MS;
+        let idx = (epoch % (NUM_BUCKETS as u64)) as usize;
+        let cycle = epoch / (NUM_BUCKETS as u64);
+
+        let (inc_ok, inc_fail) = match outcome {
+            Outcome::Ok | Outcome::ClientError => (1_u64, 0_u64),
+            Outcome::Failure => (0_u64, 1_u64),
+        };
+        let is_slow = latency.as_millis().saturating_mul(5)
+            > u128::from(self.inner.default_timeout_ms) * 4;
+        let inc_slow = u64::from(is_slow);
+
+        let bucket = &self.inner.buckets[idx];
+        // Acquire observes previous bucket state before atomic lazy-reset / increment.
+        let mut cur_b = bucket.load(Ordering::Acquire);
+        loop {
+            // Acquire re-verifies the breaker is still in the same `Closed` generation.
+            let check = unpack_state(self.inner.state_word.load(Ordering::Acquire));
+            if check.state != BreakerState::Closed || check.closed_gen != my_gen {
+                return;
+            }
+
+            let next_b = match unpack_bucket(cur_b) {
+                Some(b) if b.closed_gen == my_gen => {
+                    let stored_epoch = b.cycle * (NUM_BUCKETS as u64) + (idx as u64);
+                    if stored_epoch > epoch {
+                        return;
+                    }
+                    if stored_epoch == epoch {
+                        let (mut ok, mut fail, mut slow) = (b.ok, b.fail, b.slow);
+                        if ok >= BUCKET_COUNTER_CAP
+                            || fail >= BUCKET_COUNTER_CAP
+                            || slow >= BUCKET_COUNTER_CAP
+                        {
+                            ok >>= 1;
+                            fail >>= 1;
+                            slow >>= 1;
+                        }
+                        UnpackedBucket {
+                            closed_gen: my_gen,
+                            cycle,
+                            ok: ok + inc_ok,
+                            fail: fail + inc_fail,
+                            slow: slow + inc_slow,
+                        }
+                    } else {
+                        UnpackedBucket {
+                            closed_gen: my_gen,
+                            cycle,
+                            ok: inc_ok,
+                            fail: inc_fail,
+                            slow: inc_slow,
+                        }
+                    }
+                }
+                _ => UnpackedBucket {
+                    closed_gen: my_gen,
+                    cycle,
+                    ok: inc_ok,
+                    fail: inc_fail,
+                    slow: inc_slow,
+                },
+            };
+
+            // AcqRel/Acquire makes lazy epoch reset + counter increment a single linearizable step.
+            match bucket.compare_exchange_weak(
+                cur_b,
+                pack_bucket(next_b),
+                Ordering::AcqRel,
+                Ordering::Acquire,
+            ) {
+                Ok(_) => break,
+                Err(actual) => cur_b = actual,
+            }
+        }
+
+        // Sum buckets belonging to `my_gen` within `[epoch.saturating_sub(9), epoch]`.
+        let min_epoch = epoch.saturating_sub((NUM_BUCKETS as u64) - 1);
+        let mut total_ok = 0_u64;
+        let mut total_fail = 0_u64;
+        let mut total_slow = 0_u64;
+        for (slot_idx, b_atom) in self.inner.buckets.iter().enumerate() {
+            // Acquire observes all committed increments before evaluating the trip threshold.
+            if let Some(b) = unpack_bucket(b_atom.load(Ordering::Acquire))
+                && b.closed_gen == my_gen
+            {
+                let b_epoch = b.cycle * (NUM_BUCKETS as u64) + (slot_idx as u64);
+                if b_epoch >= min_epoch && b_epoch <= epoch {
+                    total_ok += b.ok;
+                    total_fail += b.fail;
+                    total_slow += b.slow;
+                }
+            }
+        }
+
+        let calls = total_ok + total_fail;
+        let should_trip = calls >= MIN_WINDOW_CALLS
+            && (total_fail * 2 >= calls || total_slow * 5 >= calls * 4);
+        if !should_trip {
+            return;
+        }
+
+        // Acquire loads the current state word to attempt Closed -> Open transition.
+        let mut cur_s_raw = self.inner.state_word.load(Ordering::Acquire);
+        loop {
+            let cur_s = unpack_state(cur_s_raw);
+            if cur_s.state != BreakerState::Closed || cur_s.closed_gen != my_gen {
+                return;
+            }
+            let next_k = BreakerInner::compute_closed_open_k(cur_s, now);
+            let open_until = now.ms.saturating_add(open_duration_ms(next_k));
+            let opened = UnpackedState {
+                state: BreakerState::Open,
+                k: next_k,
+                not_serving: cur_s.not_serving,
+                has_opened: true,
+                closed_gen: cur_s.closed_gen,
+                timestamp_ms: open_until,
+                in_flight_probes: 0,
+                ok_probes: 0,
+                fail_probes: 0,
+                episode: 0,
+            };
+            // AcqRel/Acquire ensures at most one thread trips Closed -> Open for this generation.
+            match self.inner.state_word.compare_exchange_weak(
+                cur_s_raw,
+                pack_state(opened),
+                Ordering::AcqRel,
+                Ordering::Acquire,
+            ) {
+                Ok(_) => {
+                    self.inner.emit_transition(
+                        BreakerState::Closed,
+                        BreakerState::Open,
+                        next_k,
+                        "window_threshold",
+                        now,
+                    );
+                    return;
+                }
+                Err(actual) => cur_s_raw = actual,
+            }
+        }
+    }
+
+    /// Applies an upstream NGC `Health` signal (`RTE-083`, `RTE-085`).
+    pub(crate) fn on_health(&self, status: HealthStatus, now: Now) {
+        let mut cur_raw = self.inner.advance_timer_if_due(now);
+        match status {
+            HealthStatus::NotServing => loop {
+                let cur = unpack_state(cur_raw);
+                match cur.state {
+                    BreakerState::Open => {
+                        if cur.not_serving {
+                            return;
+                        }
+                        let held = UnpackedState {
+                            not_serving: true,
+                            ..cur
+                        };
+                        // AcqRel/Acquire latches `not_serving` without changing `k` or `open_until`.
+                        match self.inner.state_word.compare_exchange_weak(
+                            cur_raw,
+                            pack_state(held),
+                            Ordering::AcqRel,
+                            Ordering::Acquire,
+                        ) {
+                            Ok(_) => return,
+                            Err(actual) => cur_raw = actual,
+                        }
+                    }
+                    BreakerState::Closed => {
+                        let next_k = BreakerInner::compute_closed_open_k(cur, now);
+                        let open_until = now.ms.saturating_add(open_duration_ms(next_k));
+                        let opened = UnpackedState {
+                            state: BreakerState::Open,
+                            k: next_k,
+                            not_serving: true,
+                            has_opened: true,
+                            closed_gen: cur.closed_gen,
+                            timestamp_ms: open_until,
+                            in_flight_probes: 0,
+                            ok_probes: 0,
+                            fail_probes: 0,
+                            episode: 0,
+                        };
+                        // AcqRel/Acquire transitions Closed -> Open and latches the NotServing hold.
+                        match self.inner.state_word.compare_exchange_weak(
+                            cur_raw,
+                            pack_state(opened),
+                            Ordering::AcqRel,
+                            Ordering::Acquire,
+                        ) {
+                            Ok(_) => {
+                                self.inner.emit_transition(
+                                    BreakerState::Closed,
+                                    BreakerState::Open,
+                                    next_k,
+                                    "health_not_serving",
+                                    now,
+                                );
+                                return;
+                            }
+                            Err(actual) => cur_raw = actual,
+                        }
+                    }
+                    BreakerState::HalfOpen => {
+                        let next_k = (cur.k + 1).min(MAX_K);
+                        let open_until = now.ms.saturating_add(open_duration_ms(next_k));
+                        let opened = UnpackedState {
+                            state: BreakerState::Open,
+                            k: next_k,
+                            not_serving: true,
+                            has_opened: true,
+                            closed_gen: cur.closed_gen,
+                            timestamp_ms: open_until,
+                            in_flight_probes: 0,
+                            ok_probes: 0,
+                            fail_probes: 0,
+                            episode: 0,
+                        };
+                        // AcqRel/Acquire aborts the HalfOpen episode into Open(k + 1) with NotServing latched.
+                        match self.inner.state_word.compare_exchange_weak(
+                            cur_raw,
+                            pack_state(opened),
+                            Ordering::AcqRel,
+                            Ordering::Acquire,
+                        ) {
+                            Ok(_) => {
+                                self.inner.emit_transition(
+                                    BreakerState::HalfOpen,
+                                    BreakerState::Open,
+                                    next_k,
+                                    "health_not_serving",
+                                    now,
+                                );
+                                return;
+                            }
+                            Err(actual) => cur_raw = actual,
+                        }
+                    }
+                }
+            },
+            HealthStatus::Serving | HealthStatus::Degraded => {
+                loop {
+                    let cur = unpack_state(cur_raw);
+                    if !cur.not_serving {
+                        break;
+                    }
+                    let cleared = UnpackedState {
+                        not_serving: false,
+                        ..cur
+                    };
+                    // AcqRel/Acquire releases the NotServing hold without closing the breaker directly.
+                    match self.inner.state_word.compare_exchange_weak(
+                        cur_raw,
+                        pack_state(cleared),
+                        Ordering::AcqRel,
+                        Ordering::Acquire,
+                    ) {
+                        Ok(_) => break,
+                        Err(actual) => cur_raw = actual,
+                    }
+                }
+                let _ = self.inner.advance_timer_if_due(now);
+            }
+        }
+    }
+
+    /// Clears buckets outside the active `30 s` window or belonging to prior `Closed` generations (`RTE-084`).
+    #[allow(dead_code)]
+    pub(crate) fn clear_stale_buckets(&self, now: Now) {
+        // Acquire reads the current generation so live buckets of the active generation are preserved.
+        let s = unpack_state(self.inner.state_word.load(Ordering::Acquire));
+        let cur_epoch = now.ms / BUCKET_MS;
+        let min_epoch = cur_epoch.saturating_sub((NUM_BUCKETS as u64) - 1);
+
+        for (slot_idx, bucket) in self.inner.buckets.iter().enumerate() {
+            // Acquire observes bucket state before attempting stale cleanup.
+            let mut cur = bucket.load(Ordering::Acquire);
+            while let Some(b) = unpack_bucket(cur) {
+                let b_epoch = b.cycle * (NUM_BUCKETS as u64) + (slot_idx as u64);
+                let is_live = s.state == BreakerState::Closed
+                    && b.closed_gen == s.closed_gen
+                    && b_epoch >= min_epoch
+                    && b_epoch <= cur_epoch;
+                if is_live {
+                    break;
+                }
+                // AcqRel/Acquire avoids clobbering a concurrent hot-path write to this bucket.
+                match bucket.compare_exchange_weak(
+                    cur,
+                    BUCKET_EMPTY,
+                    Ordering::AcqRel,
+                    Ordering::Acquire,
+                ) {
+                    Ok(_) => break,
+                    Err(actual) => cur = actual,
+                }
+            }
+        }
+    }
+
+    /// Returns summed `(ok, fail, slow)` in the active window at `now` for concurrency tests.
+    #[doc(hidden)]
+    #[must_use]
+    pub fn window_totals(&self, now: Now) -> (u64, u64, u64) {
+        // Acquire reads the current generation and active bucket words consistently.
+        let s = unpack_state(self.inner.state_word.load(Ordering::Acquire));
+        if s.state != BreakerState::Closed {
+            return (0, 0, 0);
+        }
+        let epoch = now.ms / BUCKET_MS;
+        let min_epoch = epoch.saturating_sub((NUM_BUCKETS as u64) - 1);
+        let mut ok = 0;
+        let mut fail = 0;
+        let mut slow = 0;
+        for (slot_idx, bucket) in self.inner.buckets.iter().enumerate() {
+            // Acquire pairs with AcqRel bucket updates.
+            if let Some(b) = unpack_bucket(bucket.load(Ordering::Acquire))
+                && b.closed_gen == s.closed_gen
+            {
+                let b_epoch = b.cycle * (NUM_BUCKETS as u64) + (slot_idx as u64);
+                if b_epoch >= min_epoch && b_epoch <= epoch {
+                    ok += b.ok;
+                    fail += b.fail;
+                    slow += b.slow;
+                }
+            }
+        }
+        (ok, fail, slow)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::BTreeMap;
+    use std::sync::{Arc as StdArc, Mutex as StdMutex};
+
+    use proptest::prelude::*;
+    use proptest::test_runner::{Config as ProptestConfig, RngAlgorithm, RngSeed};
+    use tracing::field::{Field, Visit};
+
+    use super::*;
+
+    // ---- Hand-written minimal `tracing::Subscriber` for transition capture ----
+
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    struct RecordedTransitionEvent {
+        branch: String,
+        from: String,
+        to: String,
+        k: u64,
+        reason: String,
+    }
+
+    #[derive(Default)]
+    struct EventVisitor {
+        fields: BTreeMap<String, String>,
+        k: Option<u64>,
+    }
+
+    impl Visit for EventVisitor {
+        fn record_str(&mut self, field: &Field, value: &str) {
+            self.fields.insert(field.name().to_owned(), value.to_owned());
+        }
+
+        fn record_u64(&mut self, field: &Field, value: u64) {
+            if field.name() == "k" {
+                self.k = Some(value);
+            }
+            self.fields.insert(field.name().to_owned(), value.to_string());
+        }
+
+        fn record_debug(&mut self, field: &Field, value: &dyn fmt::Debug) {
+            self.fields
+                .insert(field.name().to_owned(), format!("{value:?}"));
+        }
+    }
+
+    struct TransitionSubscriber {
+        events: StdArc<StdMutex<Vec<RecordedTransitionEvent>>>,
+    }
+
+    impl tracing::Subscriber for TransitionSubscriber {
+        fn enabled(&self, _metadata: &tracing::Metadata<'_>) -> bool {
+            true
+        }
+
+        fn new_span(&self, _span: &tracing::span::Attributes<'_>) -> tracing::span::Id {
+            tracing::span::Id::from_u64(1)
+        }
+
+        fn record(&self, _span: &tracing::span::Id, _values: &tracing::span::Record<'_>) {}
+
+        fn record_follows_from(&self, _span: &tracing::span::Id, _follows: &tracing::span::Id) {}
+
+        fn event(&self, event: &tracing::Event<'_>) {
+            let mut visitor = EventVisitor::default();
+            event.record(&mut visitor);
+            if let (Some(branch), Some(from), Some(to), Some(k), Some(reason)) = (
+                visitor.fields.get("branch").cloned(),
+                visitor.fields.get("from").cloned(),
+                visitor.fields.get("to").cloned(),
+                visitor.k,
+                visitor.fields.get("reason").cloned(),
+            ) {
+                self.events
+                    .lock()
+                    .expect("event log lock")
+                    .push(RecordedTransitionEvent {
+                        branch,
+                        from,
+                        to,
+                        k,
+                        reason,
+                    });
+            }
+        }
+
+        fn enter(&self, _span: &tracing::span::Id) {}
+
+        fn exit(&self, _span: &tracing::span::Id) {}
+    }
+
+    // ---- Hand-written minimal `metrics::Recorder` for gauge capture ----
+
+    #[derive(Debug, Clone, PartialEq)]
+    struct RecordedGaugeSet {
+        name: String,
+        branch: String,
+        value: f64,
+    }
+
+    struct CaptureGaugeHandle {
+        name: String,
+        branch: String,
+        writes: StdArc<StdMutex<Vec<RecordedGaugeSet>>>,
+    }
+
+    impl metrics::GaugeFn for CaptureGaugeHandle {
+        fn increment(&self, _value: f64) {}
+        fn decrement(&self, _value: f64) {}
+        fn set(&self, value: f64) {
+            self.writes
+                .lock()
+                .expect("gauge log lock")
+                .push(RecordedGaugeSet {
+                    name: self.name.clone(),
+                    branch: self.branch.clone(),
+                    value,
+                });
+        }
+    }
+
+    struct TestMetricsRecorder {
+        writes: StdArc<StdMutex<Vec<RecordedGaugeSet>>>,
+    }
+
+    impl metrics::Recorder for TestMetricsRecorder {
+        fn describe_counter(
+            &self,
+            _key: metrics::KeyName,
+            _unit: Option<metrics::Unit>,
+            _description: metrics::SharedString,
+        ) {
+        }
+
+        fn describe_gauge(
+            &self,
+            _key: metrics::KeyName,
+            _unit: Option<metrics::Unit>,
+            _description: metrics::SharedString,
+        ) {
+        }
+
+        fn describe_histogram(
+            &self,
+            _key: metrics::KeyName,
+            _unit: Option<metrics::Unit>,
+            _description: metrics::SharedString,
+        ) {
+        }
+
+        fn register_counter(
+            &self,
+            _key: &metrics::Key,
+            _metadata: &metrics::Metadata<'_>,
+        ) -> metrics::Counter {
+            metrics::Counter::noop()
+        }
+
+        fn register_gauge(
+            &self,
+            key: &metrics::Key,
+            _metadata: &metrics::Metadata<'_>,
+        ) -> metrics::Gauge {
+            let branch = key
+                .labels()
+                .find(|l| l.key() == "branch")
+                .map(|l| l.value().to_owned())
+                .unwrap_or_default();
+            metrics::Gauge::from_arc(StdArc::new(CaptureGaugeHandle {
+                name: key.name().to_owned(),
+                branch,
+                writes: StdArc::clone(&self.writes),
+            }))
+        }
+
+        fn register_histogram(
+            &self,
+            _key: &metrics::Key,
+            _metadata: &metrics::Metadata<'_>,
+        ) -> metrics::Histogram {
+            metrics::Histogram::noop()
+        }
+    }
+
+    // ---- Table-driven Breaker FSM (> 30 rows) ----
+
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    enum ExpectedAdmit {
+        Allowed,
+        Probe,
+        RejectedMs(u64),
+    }
+
+    #[derive(Debug, Clone)]
+    enum Step {
+        RecordMany {
+            count: usize,
+            outcome: Outcome,
+            latency_ms: u64,
+            at_ms: u64,
+        },
+        Health {
+            status: HealthStatus,
+            at_ms: u64,
+        },
+        AdmitProbe {
+            slot: usize,
+            at_ms: u64,
+        },
+        ResolveProbe {
+            slot: usize,
+            outcome: Outcome,
+            latency_ms: u64,
+            at_ms: u64,
+        },
+        DropProbe {
+            slot: usize,
+        },
+        ObserveState {
+            at_ms: u64,
+            expected: BreakerState,
+        },
+    }
+
+    struct FsmCase {
+        name: &'static str,
+        timeout_ms: u32,
+        steps: Vec<Step>,
+        check_ms: u64,
+        expected_state: BreakerState,
+        expected_admit: ExpectedAdmit,
+        expected_flapping: bool,
+        expected_transitions: usize,
+    }
+
+    fn trip_20_failures(at_ms: u64) -> Step {
+        Step::RecordMany {
+            count: 20,
+            outcome: Outcome::Failure,
+            latency_ms: 10,
+            at_ms,
+        }
+    }
+
+    fn close_via_two_probes(at_ms: u64) -> Vec<Step> {
+        vec![
+            Step::AdmitProbe { slot: 0, at_ms },
+            Step::AdmitProbe { slot: 1, at_ms },
+            Step::ResolveProbe {
+                slot: 0,
+                outcome: Outcome::Ok,
+                latency_ms: 10,
+                at_ms,
+            },
+            Step::ResolveProbe {
+                slot: 1,
+                outcome: Outcome::Ok,
+                latency_ms: 10,
+                at_ms,
+            },
+        ]
+    }
+
+    fn fail_two_probes(at_ms: u64) -> Vec<Step> {
+        vec![
+            Step::AdmitProbe { slot: 0, at_ms },
+            Step::AdmitProbe { slot: 1, at_ms },
+            Step::ResolveProbe {
+                slot: 0,
+                outcome: Outcome::Failure,
+                latency_ms: 10,
+                at_ms,
+            },
+            Step::ResolveProbe {
+                slot: 1,
+                outcome: Outcome::Failure,
+                latency_ms: 10,
+                at_ms,
+            },
+        ]
+    }
+
+    // spec: RTE-080, RTE-081, RTE-082, RTE-083, RTE-084, RTE-085, OPS-020
+    #[test]
+    #[allow(clippy::vec_init_then_push)]
+    fn breaker_fsm_table_driven_34_cases_and_telemetry_events() {
+        let mut cases: Vec<FsmCase> = Vec::new();
+
+        // 1. Fresh breaker is Closed and Allowed.
+        cases.push(FsmCase {
+            name: "01_fresh_closed",
+            timeout_ms: 1_000,
+            steps: vec![],
+            check_ms: 0,
+            expected_state: BreakerState::Closed,
+            expected_admit: ExpectedAdmit::Allowed,
+            expected_flapping: false,
+            expected_transitions: 0,
+        });
+
+        // 2. 19 failures never trip (calls < 20).
+        cases.push(FsmCase {
+            name: "02_19_failures_do_not_trip",
+            timeout_ms: 1_000,
+            steps: vec![Step::RecordMany {
+                count: 19,
+                outcome: Outcome::Failure,
+                latency_ms: 10,
+                at_ms: 100,
+            }],
+            check_ms: 100,
+            expected_state: BreakerState::Closed,
+            expected_admit: ExpectedAdmit::Allowed,
+            expected_flapping: false,
+            expected_transitions: 0,
+        });
+
+        // 3. 20 calls with 9 failures + 11 fast Ok do NOT trip.
+        cases.push(FsmCase {
+            name: "03_20_calls_9_failures_stay_closed",
+            timeout_ms: 1_000,
+            steps: vec![
+                Step::RecordMany {
+                    count: 9,
+                    outcome: Outcome::Failure,
+                    latency_ms: 10,
+                    at_ms: 200,
+                },
+                Step::RecordMany {
+                    count: 11,
+                    outcome: Outcome::Ok,
+                    latency_ms: 10,
+                    at_ms: 200,
+                },
+            ],
+            check_ms: 200,
+            expected_state: BreakerState::Closed,
+            expected_admit: ExpectedAdmit::Allowed,
+            expected_flapping: false,
+            expected_transitions: 0,
+        });
+
+        // 4. 20 calls with 10 failures + 10 fast Ok trip Open(k=0) with 5,000 ms retry_after.
+        cases.push(FsmCase {
+            name: "04_20_calls_10_failures_trip_open_k0",
+            timeout_ms: 1_000,
+            steps: vec![
+                Step::RecordMany {
+                    count: 10,
+                    outcome: Outcome::Ok,
+                    latency_ms: 10,
+                    at_ms: 200,
+                },
+                Step::RecordMany {
+                    count: 10,
+                    outcome: Outcome::Failure,
+                    latency_ms: 10,
+                    at_ms: 200,
+                },
+            ],
+            check_ms: 200,
+            expected_state: BreakerState::Open,
+            expected_admit: ExpectedAdmit::RejectedMs(5_000),
+            expected_flapping: false,
+            expected_transitions: 1,
+        });
+
+        // 5. Slow rate: 15 slow Ok (801 ms > 800 ms) + 5 boundary-fast Ok (800 ms) do NOT trip.
+        cases.push(FsmCase {
+            name: "05_20_calls_15_slow_stay_closed",
+            timeout_ms: 1_000,
+            steps: vec![
+                Step::RecordMany {
+                    count: 15,
+                    outcome: Outcome::Ok,
+                    latency_ms: 801,
+                    at_ms: 500,
+                },
+                Step::RecordMany {
+                    count: 5,
+                    outcome: Outcome::Ok,
+                    latency_ms: 800,
+                    at_ms: 500,
+                },
+            ],
+            check_ms: 500,
+            expected_state: BreakerState::Closed,
+            expected_admit: ExpectedAdmit::Allowed,
+            expected_flapping: false,
+            expected_transitions: 0,
+        });
+
+        // 6. Slow rate: 16 slow Ok (801 ms) + 4 fast Ok (800 ms) trip Open(k=0).
+        cases.push(FsmCase {
+            name: "06_20_calls_16_slow_trip_open",
+            timeout_ms: 1_000,
+            steps: vec![
+                Step::RecordMany {
+                    count: 4,
+                    outcome: Outcome::Ok,
+                    latency_ms: 800,
+                    at_ms: 500,
+                },
+                Step::RecordMany {
+                    count: 16,
+                    outcome: Outcome::Ok,
+                    latency_ms: 801,
+                    at_ms: 500,
+                },
+            ],
+            check_ms: 500,
+            expected_state: BreakerState::Open,
+            expected_admit: ExpectedAdmit::RejectedMs(5_000),
+            expected_flapping: false,
+            expected_transitions: 1,
+        });
+
+        // 7. Exact 0.8 * timeout_ms (800 ms for 1,000 ms timeout) is NOT slow even across 20 calls.
+        cases.push(FsmCase {
+            name: "07_20_calls_at_exact_800ms_not_slow",
+            timeout_ms: 1_000,
+            steps: vec![Step::RecordMany {
+                count: 20,
+                outcome: Outcome::Ok,
+                latency_ms: 800,
+                at_ms: 500,
+            }],
+            check_ms: 500,
+            expected_state: BreakerState::Closed,
+            expected_admit: ExpectedAdmit::Allowed,
+            expected_flapping: false,
+            expected_transitions: 0,
+        });
+
+        // 8. ClientErrors count as ok (never failures): 25 ClientErrors + 9 Failures stay Closed.
+        cases.push(FsmCase {
+            name: "08_client_errors_never_count_as_failures",
+            timeout_ms: 1_000,
+            steps: vec![
+                Step::RecordMany {
+                    count: 25,
+                    outcome: Outcome::ClientError,
+                    latency_ms: 10,
+                    at_ms: 300,
+                },
+                Step::RecordMany {
+                    count: 9,
+                    outcome: Outcome::Failure,
+                    latency_ms: 10,
+                    at_ms: 300,
+                },
+            ],
+            check_ms: 300,
+            expected_state: BreakerState::Closed,
+            expected_admit: ExpectedAdmit::Allowed,
+            expected_flapping: false,
+            expected_transitions: 0,
+        });
+
+        // 9. Timeout (Failure with latency 1,000 ms > 800 ms) increments BOTH fail and slow:
+        // 4 timeouts + 12 slow Ok + 4 fast Ok => fail=4 (<10), slow=16 (>=16) => trips!
+        cases.push(FsmCase {
+            name: "09_timeout_counts_as_both_fail_and_slow",
+            timeout_ms: 1_000,
+            steps: vec![
+                Step::RecordMany {
+                    count: 4,
+                    outcome: Outcome::Ok,
+                    latency_ms: 100,
+                    at_ms: 400,
+                },
+                Step::RecordMany {
+                    count: 12,
+                    outcome: Outcome::Ok,
+                    latency_ms: 850,
+                    at_ms: 400,
+                },
+                Step::RecordMany {
+                    count: 4,
+                    outcome: Outcome::Failure,
+                    latency_ms: 1_000,
+                    at_ms: 400,
+                },
+            ],
+            check_ms: 400,
+            expected_state: BreakerState::Open,
+            expected_admit: ExpectedAdmit::RejectedMs(5_000),
+            expected_flapping: false,
+            expected_transitions: 1,
+        });
+
+        // 10. Events at 0 ms remain inside the window at 29,999 ms (epoch 9, window [0..=9]).
+        cases.push(FsmCase {
+            name: "10_window_includes_0ms_at_29999ms",
+            timeout_ms: 1_000,
+            steps: vec![
+                Step::RecordMany {
+                    count: 9,
+                    outcome: Outcome::Failure,
+                    latency_ms: 10,
+                    at_ms: 0,
+                },
+                Step::RecordMany {
+                    count: 10,
+                    outcome: Outcome::Ok,
+                    latency_ms: 10,
+                    at_ms: 29_999,
+                },
+                Step::RecordMany {
+                    count: 1,
+                    outcome: Outcome::Failure,
+                    latency_ms: 10,
+                    at_ms: 29_999,
+                },
+            ],
+            check_ms: 29_999,
+            expected_state: BreakerState::Open,
+            expected_admit: ExpectedAdmit::RejectedMs(5_000),
+            expected_flapping: false,
+            expected_transitions: 1,
+        });
+
+        // 11. Events at 0 ms fall outside the window at 30,000 ms (epoch 10, window [1..=10]).
+        cases.push(FsmCase {
+            name: "11_window_excludes_0ms_at_30000ms",
+            timeout_ms: 1_000,
+            steps: vec![
+                Step::RecordMany {
+                    count: 10,
+                    outcome: Outcome::Failure,
+                    latency_ms: 10,
+                    at_ms: 0,
+                },
+                Step::RecordMany {
+                    count: 11,
+                    outcome: Outcome::Ok,
+                    latency_ms: 10,
+                    at_ms: 30_000,
+                },
+                Step::RecordMany {
+                    count: 9,
+                    outcome: Outcome::Failure,
+                    latency_ms: 10,
+                    at_ms: 30_000,
+                },
+            ],
+            check_ms: 30_000,
+            expected_state: BreakerState::Closed,
+            expected_admit: ExpectedAdmit::Allowed,
+            expected_flapping: false,
+            expected_transitions: 0,
+        });
+
+        // 12. Epoch boundary at 3,000 ms: events at 3,000 ms (epoch 1) stay inside at 30,000 ms (epoch 10).
+        cases.push(FsmCase {
+            name: "12_epoch_boundary_3000ms_included_at_30000ms",
+            timeout_ms: 1_000,
+            steps: vec![
+                Step::RecordMany {
+                    count: 9,
+                    outcome: Outcome::Failure,
+                    latency_ms: 10,
+                    at_ms: 3_000,
+                },
+                Step::RecordMany {
+                    count: 10,
+                    outcome: Outcome::Ok,
+                    latency_ms: 10,
+                    at_ms: 30_000,
+                },
+                Step::RecordMany {
+                    count: 1,
+                    outcome: Outcome::Failure,
+                    latency_ms: 10,
+                    at_ms: 30_000,
+                },
+            ],
+            check_ms: 30_000,
+            expected_state: BreakerState::Open,
+            expected_admit: ExpectedAdmit::RejectedMs(5_000),
+            expected_flapping: false,
+            expected_transitions: 1,
+        });
+
+        // 13. Epoch boundary at 2,999 ms (epoch 0) vs 30,000 ms (epoch 10): excluded!
+        cases.push(FsmCase {
+            name: "13_epoch_boundary_2999ms_excluded_at_30000ms",
+            timeout_ms: 1_000,
+            steps: vec![
+                Step::RecordMany {
+                    count: 10,
+                    outcome: Outcome::Failure,
+                    latency_ms: 10,
+                    at_ms: 2_999,
+                },
+                Step::RecordMany {
+                    count: 11,
+                    outcome: Outcome::Ok,
+                    latency_ms: 10,
+                    at_ms: 30_000,
+                },
+                Step::RecordMany {
+                    count: 9,
+                    outcome: Outcome::Failure,
+                    latency_ms: 10,
+                    at_ms: 30_000,
+                },
+            ],
+            check_ms: 30_000,
+            expected_state: BreakerState::Closed,
+            expected_admit: ExpectedAdmit::Allowed,
+            expected_flapping: false,
+            expected_transitions: 0,
+        });
+
+        // 14..21. Open durations for k = 0..6 and exact boundary ms (open_until - 1 vs open_until),
+        // plus saturation at k = 6 (60_000 ms).
+        let expected_open_ms: [u64; 8] = [5_000, 10_000, 20_000, 40_000, 60_000, 60_000, 60_000, 60_000];
+        for (level_idx, &dur_ms) in expected_open_ms.iter().enumerate() {
+            // Before boundary (open_until - 1): still Open with retry_after = 1 ms.
+            let mut steps_before = vec![trip_20_failures(1_000)];
+            let mut cursor = 1_000_u64;
+            for prev_dur in expected_open_ms.iter().take(level_idx) {
+                cursor += *prev_dur;
+                steps_before.extend(fail_two_probes(cursor));
+            }
+            cases.push(FsmCase {
+                name: match level_idx {
+                    0 => "14_open_k0_1ms_before_boundary",
+                    1 => "15_open_k1_1ms_before_boundary",
+                    2 => "16_open_k2_1ms_before_boundary",
+                    3 => "17_open_k3_1ms_before_boundary",
+                    4 => "18_open_k4_1ms_before_boundary",
+                    5 => "19_open_k5_1ms_before_boundary",
+                    6 => "20_open_k6_1ms_before_boundary",
+                    _ => "21_open_k6_saturated_1ms_before_boundary",
+                },
+                timeout_ms: 1_000,
+                steps: steps_before,
+                check_ms: cursor + dur_ms - 1,
+                expected_state: BreakerState::Open,
+                expected_admit: ExpectedAdmit::RejectedMs(1),
+                expected_flapping: (1 + 2 * level_idx) > 6,
+                expected_transitions: 1 + 2 * level_idx,
+            });
+        }
+
+        // 22. Exact boundary millisecond transitions Open(k=0) -> HalfOpen and admits Probe.
+        cases.push(FsmCase {
+            name: "22_open_to_half_open_at_exact_5000ms",
+            timeout_ms: 1_000,
+            steps: vec![trip_20_failures(1_000)],
+            check_ms: 6_000,
+            expected_state: BreakerState::HalfOpen,
+            expected_admit: ExpectedAdmit::Probe,
+            expected_flapping: false,
+            expected_transitions: 2,
+        });
+
+        // 23. 4th concurrent probe in HalfOpen is rejected with retry_after = 1,000 ms.
+        cases.push(FsmCase {
+            name: "23_half_open_4th_concurrent_probe_rejected_1s",
+            timeout_ms: 1_000,
+            steps: vec![
+                trip_20_failures(0),
+                Step::AdmitProbe { slot: 0, at_ms: 5_000 },
+                Step::AdmitProbe { slot: 1, at_ms: 5_000 },
+                Step::AdmitProbe { slot: 2, at_ms: 5_000 },
+            ],
+            check_ms: 5_000,
+            expected_state: BreakerState::HalfOpen,
+            expected_admit: ExpectedAdmit::RejectedMs(1_000),
+            expected_flapping: false,
+            expected_transitions: 2,
+        });
+
+        // 24. 1 probe success does NOT close yet; 2nd probe success (including ClientError) closes!
+        cases.push(FsmCase {
+            name: "24_half_open_one_success_stays_half_open",
+            timeout_ms: 1_000,
+            steps: vec![
+                trip_20_failures(0),
+                Step::AdmitProbe { slot: 0, at_ms: 5_000 },
+                Step::ResolveProbe {
+                    slot: 0,
+                    outcome: Outcome::Ok,
+                    latency_ms: 10,
+                    at_ms: 5_010,
+                },
+            ],
+            check_ms: 5_010,
+            expected_state: BreakerState::HalfOpen,
+            expected_admit: ExpectedAdmit::Probe,
+            expected_flapping: false,
+            expected_transitions: 2,
+        });
+
+        // 25. 2 of 3 probes succeed (1 Failure + 1 Ok + 1 ClientError) -> Closed.
+        cases.push(FsmCase {
+            name: "25_half_open_majority_2_of_3_closes",
+            timeout_ms: 1_000,
+            steps: vec![
+                trip_20_failures(0),
+                Step::AdmitProbe { slot: 0, at_ms: 5_000 },
+                Step::AdmitProbe { slot: 1, at_ms: 5_000 },
+                Step::AdmitProbe { slot: 2, at_ms: 5_000 },
+                Step::ResolveProbe {
+                    slot: 0,
+                    outcome: Outcome::Failure,
+                    latency_ms: 10,
+                    at_ms: 5_010,
+                },
+                Step::ResolveProbe {
+                    slot: 1,
+                    outcome: Outcome::Ok,
+                    latency_ms: 10,
+                    at_ms: 5_020,
+                },
+                Step::ResolveProbe {
+                    slot: 2,
+                    outcome: Outcome::ClientError,
+                    latency_ms: 10,
+                    at_ms: 5_030,
+                },
+            ],
+            check_ms: 5_030,
+            expected_state: BreakerState::Closed,
+            expected_admit: ExpectedAdmit::Allowed,
+            expected_flapping: false,
+            expected_transitions: 3,
+        });
+
+        // 26. Dropped ProbePermit releases its slot without changing ok/fail tallies.
+        cases.push(FsmCase {
+            name: "26_dropped_probe_permit_frees_slot_unchanged_tally",
+            timeout_ms: 1_000,
+            steps: vec![
+                trip_20_failures(0),
+                Step::AdmitProbe { slot: 0, at_ms: 5_000 },
+                Step::AdmitProbe { slot: 1, at_ms: 5_000 },
+                Step::AdmitProbe { slot: 2, at_ms: 5_000 },
+                Step::DropProbe { slot: 1 },
+                Step::ResolveProbe {
+                    slot: 0,
+                    outcome: Outcome::Ok,
+                    latency_ms: 10,
+                    at_ms: 5_010,
+                },
+                Step::DropProbe { slot: 2 },
+            ],
+            check_ms: 5_010,
+            expected_state: BreakerState::HalfOpen,
+            expected_admit: ExpectedAdmit::Probe,
+            expected_flapping: false,
+            expected_transitions: 2,
+        });
+
+        // 27. Window is cleared on Closed: after closing at 5,000 ms, 19 new failures at 5,001 ms do NOT re-trip.
+        let mut s27 = vec![trip_20_failures(0)];
+        s27.extend(close_via_two_probes(5_000));
+        s27.push(Step::RecordMany {
+            count: 19,
+            outcome: Outcome::Failure,
+            latency_ms: 10,
+            at_ms: 5_001,
+        });
+        cases.push(FsmCase {
+            name: "27_window_cleared_on_closed_does_not_retrip",
+            timeout_ms: 1_000,
+            steps: s27,
+            check_ms: 5_001,
+            expected_state: BreakerState::Closed,
+            expected_admit: ExpectedAdmit::Allowed,
+            expected_flapping: false,
+            expected_transitions: 3,
+        });
+
+        // 28. Non-probe completions recorded while Open and HalfOpen do not touch window or probe tally.
+        let mut s28 = vec![
+            trip_20_failures(0),
+            Step::RecordMany {
+                count: 30,
+                outcome: Outcome::Failure,
+                latency_ms: 1_000,
+                at_ms: 2_000,
+            },
+            Step::ObserveState {
+                at_ms: 5_000,
+                expected: BreakerState::HalfOpen,
+            },
+            Step::RecordMany {
+                count: 30,
+                outcome: Outcome::Ok,
+                latency_ms: 5,
+                at_ms: 5_001,
+            },
+            Step::RecordMany {
+                count: 30,
+                outcome: Outcome::Failure,
+                latency_ms: 1_000,
+                at_ms: 5_002,
+            },
+        ];
+        s28.extend(close_via_two_probes(5_010));
+        s28.push(Step::RecordMany {
+            count: 1,
+            outcome: Outcome::Failure,
+            latency_ms: 10,
+            at_ms: 5_011,
+        });
+        cases.push(FsmCase {
+            name: "28_non_probe_records_ignored_in_open_and_half_open",
+            timeout_ms: 1_000,
+            steps: s28,
+            check_ms: 5_011,
+            expected_state: BreakerState::Closed,
+            expected_admit: ExpectedAdmit::Allowed,
+            expected_flapping: false,
+            expected_transitions: 3,
+        });
+
+        // 29. Re-opening inside 5 minutes (299,999 ms Closed) escalates k from 0 -> 1 (10,000 ms).
+        let mut s29 = vec![trip_20_failures(0)];
+        s29.extend(close_via_two_probes(5_000));
+        s29.push(trip_20_failures(5_000 + 299_999));
+        cases.push(FsmCase {
+            name: "29_reopen_within_5_min_escalates_k_to_1",
+            timeout_ms: 1_000,
+            steps: s29,
+            check_ms: 304_999,
+            expected_state: BreakerState::Open,
+            expected_admit: ExpectedAdmit::RejectedMs(10_000),
+            expected_flapping: false,
+            expected_transitions: 4,
+        });
+
+        // 30. Re-opening at exact 5 minutes (300,000 ms Closed) resets k to 0 (5,000 ms).
+        let mut s30 = vec![trip_20_failures(0)];
+        s30.extend(fail_two_probes(5_000)); // now Open(k=1) until 15_000
+        s30.extend(close_via_two_probes(15_000)); // Closed(last_k=1) since 15_000
+        s30.push(trip_20_failures(15_000 + 300_000)); // 315_000: >= 5 min Closed -> k=0 (5,000 ms)
+        cases.push(FsmCase {
+            name: "30_reopen_after_5_min_resets_k_to_0",
+            timeout_ms: 1_000,
+            steps: s30,
+            check_ms: 315_000,
+            expected_state: BreakerState::Open,
+            expected_admit: ExpectedAdmit::RejectedMs(5_000),
+            expected_flapping: false,
+            expected_transitions: 6,
+        });
+
+        // 31. Health = NotServing from Closed opens immediately and withholds Open -> HalfOpen past 5,000 ms.
+        cases.push(FsmCase {
+            name: "31_not_serving_opens_and_withholds_half_open",
+            timeout_ms: 1_000,
+            steps: vec![Step::Health {
+                status: HealthStatus::NotServing,
+                at_ms: 1_000,
+            }],
+            check_ms: 20_000,
+            expected_state: BreakerState::Open,
+            expected_admit: ExpectedAdmit::RejectedMs(0),
+            expected_flapping: false,
+            expected_transitions: 1,
+        });
+
+        // 32. Health = Serving does NOT close Open directly: before timer (2,000 ms) stays Open;
+        // after timer (6,000 ms) transitions Open -> HalfOpen (never Closed).
+        cases.push(FsmCase {
+            name: "32_serving_releases_hold_into_half_open_not_closed",
+            timeout_ms: 1_000,
+            steps: vec![
+                Step::Health {
+                    status: HealthStatus::NotServing,
+                    at_ms: 0,
+                },
+                Step::Health {
+                    status: HealthStatus::Serving,
+                    at_ms: 2_000,
+                },
+                Step::ObserveState {
+                    at_ms: 2_000,
+                    expected: BreakerState::Open,
+                },
+                Step::Health {
+                    status: HealthStatus::NotServing,
+                    at_ms: 3_000,
+                }, // already Open(k=0, open_until=5_000): k & open_until unchanged!
+                Step::ObserveState {
+                    at_ms: 6_000,
+                    expected: BreakerState::Open,
+                },
+                Step::Health {
+                    status: HealthStatus::Serving,
+                    at_ms: 6_000,
+                },
+            ],
+            check_ms: 6_000,
+            expected_state: BreakerState::HalfOpen,
+            expected_admit: ExpectedAdmit::Probe,
+            expected_flapping: false,
+            expected_transitions: 2,
+        });
+
+        // 33. Health = NotServing from HalfOpen reopens with k + 1 (10,000 ms).
+        cases.push(FsmCase {
+            name: "33_not_serving_from_half_open_reopens_k1",
+            timeout_ms: 1_000,
+            steps: vec![
+                trip_20_failures(0),
+                Step::ObserveState {
+                    at_ms: 5_000,
+                    expected: BreakerState::HalfOpen,
+                },
+                Step::Health {
+                    status: HealthStatus::NotServing,
+                    at_ms: 5_100,
+                },
+            ],
+            check_ms: 5_100,
+            expected_state: BreakerState::Open,
+            expected_admit: ExpectedAdmit::RejectedMs(10_000),
+            expected_flapping: false,
+            expected_transitions: 3,
+        });
+
+        // 34. Flapping: 7 transitions inside 10 min => true; after aging past 600,000 ms => false.
+        let mut s34 = vec![trip_20_failures(0)]; // #1 Closed->Open at 0
+        s34.extend(close_via_two_probes(5_000)); // #2 Open->HalfOpen, #3 HalfOpen->Closed at 5_000
+        s34.push(trip_20_failures(6_000)); // #4 Closed->Open(k=1) at 6_000
+        s34.extend(close_via_two_probes(16_000)); // #5 Open->HalfOpen, #6 HalfOpen->Closed at 16_000
+        s34.push(trip_20_failures(17_000)); // #7 Closed->Open(k=2) at 17_000
+        cases.push(FsmCase {
+            name: "34_flapping_true_at_7_transitions_inside_10min",
+            timeout_ms: 1_000,
+            steps: s34.clone(),
+            check_ms: 17_000,
+            expected_state: BreakerState::Open,
+            expected_admit: ExpectedAdmit::RejectedMs(20_000),
+            expected_flapping: true,
+            expected_transitions: 7,
+        });
+
+        // 35. Same 7 transitions checked at 605_000 ms (first 3 transitions at 0 & 5_000 aged >= 600,000 ms;
+        // plus #8 Open->HalfOpen at 605_000 => only 5 transitions inside last 10 min) => flapping false!
+        cases.push(FsmCase {
+            name: "35_flapping_false_after_transitions_age_out",
+            timeout_ms: 1_000,
+            steps: s34,
+            check_ms: 605_000,
+            expected_state: BreakerState::HalfOpen,
+            expected_admit: ExpectedAdmit::Probe,
+            expected_flapping: false,
+            expected_transitions: 8,
+        });
+
+        assert!(cases.len() >= 30);
+
+        for case in cases {
+            let events_buf = StdArc::new(StdMutex::new(Vec::new()));
+            let gauges_buf = StdArc::new(StdMutex::new(Vec::new()));
+            let subscriber = TransitionSubscriber {
+                events: StdArc::clone(&events_buf),
+            };
+            let recorder = TestMetricsRecorder {
+                writes: StdArc::clone(&gauges_buf),
+            };
+
+            tracing::subscriber::with_default(subscriber, || {
+                metrics::with_local_recorder(&recorder, || {
+                    let breaker = Breaker::new(case.timeout_ms, Arc::from("orders-eu"));
+                    let mut permits: [Option<ProbePermit>; 4] = [None, None, None, None];
+
+                    for step in case.steps {
+                        match step {
+                            Step::RecordMany {
+                                count,
+                                outcome,
+                                latency_ms,
+                                at_ms,
+                            } => {
+                                let now = Now::from_ms(at_ms);
+                                let dur = Duration::from_millis(latency_ms);
+                                for _ in 0..count {
+                                    breaker.record_call(outcome, dur, now);
+                                }
+                            }
+                            Step::Health { status, at_ms } => {
+                                breaker.on_health(status, Now::from_ms(at_ms));
+                            }
+                            Step::AdmitProbe { slot, at_ms } => match breaker.admit(Now::from_ms(at_ms)) {
+                                Admission::Probe(p) => permits[slot] = Some(p),
+                                other => panic!("{}: expected Probe at {at_ms}, got {other:?}", case.name),
+                            },
+                            Step::ResolveProbe {
+                                slot,
+                                outcome,
+                                latency_ms,
+                                at_ms,
+                            } => {
+                                let p = permits[slot]
+                                    .take()
+                                    .unwrap_or_else(|| panic!("{}: missing permit {slot}", case.name));
+                                p.record(outcome, Duration::from_millis(latency_ms), Now::from_ms(at_ms));
+                            }
+                            Step::DropProbe { slot } => {
+                                let _ = permits[slot].take();
+                            }
+                            Step::ObserveState { at_ms, expected } => {
+                                assert_eq!(
+                                    breaker.state(Now::from_ms(at_ms)),
+                                    expected,
+                                    "case {} intermediate state at {at_ms}",
+                                    case.name
+                                );
+                            }
+                        }
+                    }
+
+                    let check_now = Now::from_ms(case.check_ms);
+                    assert_eq!(
+                        breaker.state(check_now),
+                        case.expected_state,
+                        "case {} state mismatch",
+                        case.name
+                    );
+                    assert_eq!(
+                        breaker.flapping(check_now),
+                        case.expected_flapping,
+                        "case {} flapping mismatch",
+                        case.name
+                    );
+
+                    match (breaker.admit(check_now), case.expected_admit) {
+                        (Admission::Allowed, ExpectedAdmit::Allowed) => {}
+                        (Admission::Probe(p), ExpectedAdmit::Probe) => drop(p),
+                        (
+                            Admission::Rejected { retry_after },
+                            ExpectedAdmit::RejectedMs(exp_ms),
+                        ) => {
+                            assert_eq!(
+                                retry_after,
+                                Duration::from_millis(exp_ms),
+                                "case {} retry_after mismatch",
+                                case.name
+                            );
+                        }
+                        (actual, exp) => {
+                            panic!("case {}: admit got {actual:?}, expected {exp:?}", case.name)
+                        }
+                    }
+
+                    drop(permits);
+                });
+            });
+
+            let recorded_events = events_buf.lock().expect("events lock");
+            let recorded_gauges = gauges_buf.lock().expect("gauges lock");
+            assert_eq!(
+                recorded_events.len(),
+                case.expected_transitions,
+                "case {} transition event count mismatch: {recorded_events:?}",
+                case.name
+            );
+            assert_eq!(
+                recorded_gauges.len(),
+                case.expected_transitions,
+                "case {} gauge update count mismatch: {recorded_gauges:?}",
+                case.name
+            );
+
+            for (ev, g) in recorded_events.iter().zip(recorded_gauges.iter()) {
+                assert_eq!(ev.branch, "orders-eu");
+                assert!(!ev.reason.is_empty());
+                assert!(ev.k <= 6);
+                assert_eq!(g.name, "gap_breaker_state");
+                assert_eq!(g.branch, "orders-eu");
+                let expected_g = match ev.to.as_str() {
+                    "Closed" => 0.0,
+                    "HalfOpen" => 1.0,
+                    "Open" => 2.0,
+                    other => panic!("unexpected `to` state {other}"),
+                };
+                assert_eq!(g.value, expected_g);
+            }
+        }
+    }
+
+    // ---- Differential Proptest against Brute-Force Reference Model (2,000+ cases) ----
+
+    #[derive(Debug, Clone)]
+    struct RefEvent {
+        ms: u64,
+        outcome: Outcome,
+        latency_ms: u64,
+    }
+
+    #[derive(Debug, Clone)]
+    struct RefBreaker {
+        timeout_ms: u32,
+        state: BreakerState,
+        k: u8,
+        not_serving: bool,
+        has_opened: bool,
+        closed_since_ms: u64,
+        open_until_ms: u64,
+        episode: u64,
+        next_episode: u64,
+        in_flight_probes: u8,
+        ok_probes: u8,
+        fail_probes: u8,
+        events: Vec<RefEvent>,
+    }
+
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    enum RefAdmit {
+        Allowed,
+        Probe(u64),
+        Rejected(Duration),
+    }
+
+    impl RefBreaker {
+        fn new(timeout_ms: u32) -> Self {
+            Self {
+                timeout_ms,
+                state: BreakerState::Closed,
+                k: 0,
+                not_serving: false,
+                has_opened: false,
+                closed_since_ms: 0,
+                open_until_ms: 0,
+                episode: 0,
+                next_episode: 1,
+                in_flight_probes: 0,
+                ok_probes: 0,
+                fail_probes: 0,
+                events: Vec::new(),
+            }
+        }
+
+        fn advance_timer(&mut self, ms: u64) {
+            if self.state == BreakerState::Open && !self.not_serving && ms >= self.open_until_ms {
+                self.state = BreakerState::HalfOpen;
+                self.episode = self.next_episode;
+                self.next_episode += 1;
+                self.in_flight_probes = 0;
+                self.ok_probes = 0;
+                self.fail_probes = 0;
+            }
+        }
+
+        fn next_open_k_from_closed(&self, ms: u64) -> u8 {
+            if !self.has_opened || ms.saturating_sub(self.closed_since_ms) >= 300_000 {
+                0
+            } else {
+                (self.k + 1).min(6)
+            }
+        }
+
+        fn record_call(&mut self, outcome: Outcome, latency_ms: u64, ms: u64) {
+            self.advance_timer(ms);
+            if self.state != BreakerState::Closed {
+                return;
+            }
+            self.events.push(RefEvent {
+                ms,
+                outcome,
+                latency_ms,
+            });
+            let cur_epoch = ms / 3_000;
+            let min_epoch = cur_epoch.saturating_sub(9);
+            let mut ok = 0_u64;
+            let mut fail = 0_u64;
+            let mut slow = 0_u64;
+            for ev in &self.events {
+                let e = ev.ms / 3_000;
+                if e >= min_epoch && e <= cur_epoch {
+                    match ev.outcome {
+                        Outcome::Ok | Outcome::ClientError => ok += 1,
+                        Outcome::Failure => fail += 1,
+                    }
+                    if u128::from(ev.latency_ms) * 5 > u128::from(self.timeout_ms) * 4 {
+                        slow += 1;
+                    }
+                }
+            }
+            let calls = ok + fail;
+            if calls >= 20 && (fail * 2 >= calls || slow * 5 >= calls * 4) {
+                let next_k = self.next_open_k_from_closed(ms);
+                self.state = BreakerState::Open;
+                self.k = next_k;
+                self.has_opened = true;
+                self.open_until_ms = ms + open_duration_ms(next_k);
+            }
+        }
+
+        fn admit(&mut self, ms: u64) -> RefAdmit {
+            self.advance_timer(ms);
+            match self.state {
+                BreakerState::Closed => RefAdmit::Allowed,
+                BreakerState::Open => {
+                    RefAdmit::Rejected(Duration::from_millis(self.open_until_ms.saturating_sub(ms)))
+                }
+                BreakerState::HalfOpen => {
+                    if self.in_flight_probes + self.ok_probes + self.fail_probes >= 3 {
+                        RefAdmit::Rejected(Duration::from_secs(1))
+                    } else {
+                        self.in_flight_probes += 1;
+                        RefAdmit::Probe(self.episode)
+                    }
+                }
+            }
+        }
+
+        fn resolve_probe(&mut self, permit_ep: u64, outcome: Outcome, ms: u64) {
+            if self.state != BreakerState::HalfOpen || self.episode != permit_ep {
+                return;
+            }
+            self.in_flight_probes -= 1;
+            if matches!(outcome, Outcome::Ok | Outcome::ClientError) {
+                self.ok_probes += 1;
+                if self.ok_probes >= 2 {
+                    self.state = BreakerState::Closed;
+                    self.has_opened = true;
+                    self.closed_since_ms = ms;
+                    self.events.clear();
+                }
+            } else {
+                self.fail_probes += 1;
+                if self.fail_probes >= 2 {
+                    let next_k = (self.k + 1).min(6);
+                    self.state = BreakerState::Open;
+                    self.k = next_k;
+                    self.has_opened = true;
+                    self.open_until_ms = ms + open_duration_ms(next_k);
+                }
+            }
+        }
+
+        fn drop_probe(&mut self, permit_ep: u64) {
+            if self.state == BreakerState::HalfOpen && self.episode == permit_ep {
+                self.in_flight_probes -= 1;
+            }
+        }
+
+        fn on_health(&mut self, status: HealthStatus, ms: u64) {
+            self.advance_timer(ms);
+            match status {
+                HealthStatus::NotServing => match self.state {
+                    BreakerState::Open => {
+                        self.not_serving = true;
+                    }
+                    BreakerState::Closed => {
+                        let next_k = self.next_open_k_from_closed(ms);
+                        self.state = BreakerState::Open;
+                        self.k = next_k;
+                        self.not_serving = true;
+                        self.has_opened = true;
+                        self.open_until_ms = ms + open_duration_ms(next_k);
+                    }
+                    BreakerState::HalfOpen => {
+                        let next_k = (self.k + 1).min(6);
+                        self.state = BreakerState::Open;
+                        self.k = next_k;
+                        self.not_serving = true;
+                        self.has_opened = true;
+                        self.open_until_ms = ms + open_duration_ms(next_k);
+                    }
+                },
+                HealthStatus::Serving | HealthStatus::Degraded => {
+                    self.not_serving = false;
+                    self.advance_timer(ms);
+                }
+            }
+        }
+
+        fn state(&mut self, ms: u64) -> BreakerState {
+            self.advance_timer(ms);
+            self.state
+        }
+    }
+
+    #[derive(Debug, Clone)]
+    enum DiffOp {
+        Advance(u64),
+        RecordBatch {
+            n: u8,
+            outcome: Outcome,
+            latency_ms: u64,
+        },
+        Admit,
+        ResolvePermit {
+            idx: usize,
+            outcome: Outcome,
+            latency_ms: u64,
+        },
+        DropPermit {
+            idx: usize,
+        },
+        Health(HealthStatus),
+    }
+
+    fn arb_outcome() -> impl Strategy<Value = Outcome> {
+        prop_oneof![
+            Just(Outcome::Ok),
+            Just(Outcome::Failure),
+            Just(Outcome::ClientError),
+        ]
+    }
+
+    fn arb_health() -> impl Strategy<Value = HealthStatus> {
+        prop_oneof![
+            Just(HealthStatus::Serving),
+            Just(HealthStatus::Degraded),
+            Just(HealthStatus::NotServing),
+        ]
+    }
+
+    fn arb_diff_op() -> impl Strategy<Value = DiffOp> {
+        prop_oneof![
+            3 => prop_oneof![
+                0_u64..=10,
+                2_998_u64..=3_002,
+                4_998_u64..=5_002,
+                9_998_u64..=10_002,
+                29_998_u64..=30_002,
+                59_998_u64..=60_002,
+                299_998_u64..=300_002,
+            ].prop_map(DiffOp::Advance),
+            4 => (1_u8..=8, arb_outcome(), prop_oneof![50_u64..=799, 800_u64..=802, 850_u64..=1_500])
+                .prop_map(|(n, outcome, latency_ms)| DiffOp::RecordBatch { n, outcome, latency_ms }),
+            3 => Just(DiffOp::Admit),
+            2 => (0_usize..8, arb_outcome(), 10_u64..=1_200)
+                .prop_map(|(idx, outcome, latency_ms)| DiffOp::ResolvePermit { idx, outcome, latency_ms }),
+            2 => (0_usize..8).prop_map(|idx| DiffOp::DropPermit { idx }),
+            1 => arb_health().prop_map(DiffOp::Health),
+        ]
+    }
+
+    // spec: RTE-080, RTE-084, RTE-085
+    #[test]
+    fn breaker_differential_proptest_2000_cases_against_reference_model() {
+        let seed: u64 = 0x4741_505F_4D33_3031;
+        let config = ProptestConfig {
+            cases: 2_000,
+            rng_algorithm: RngAlgorithm::ChaCha,
+            rng_seed: RngSeed::Fixed(seed),
+            failure_persistence: None,
+            ..ProptestConfig::default()
+        };
+        let mut runner = proptest::test_runner::TestRunner::new(config);
+        let strategy = proptest::collection::vec(arb_diff_op(), 1..=60);
+
+        let run_res = runner.run(&strategy, |ops| {
+            let real = Breaker::new(1_000, Arc::from("diff-branch"));
+            let mut model = RefBreaker::new(1_000);
+            let mut real_permits: Vec<ProbePermit> = Vec::new();
+            let mut ref_permits: Vec<u64> = Vec::new();
+            let mut ms: u64 = 0;
+
+            for (step_no, op) in ops.iter().enumerate() {
+                match op {
+                    DiffOp::Advance(delta) => {
+                        ms = ms.saturating_add(*delta);
+                    }
+                    DiffOp::RecordBatch {
+                        n,
+                        outcome,
+                        latency_ms,
+                    } => {
+                        let now = Now::from_ms(ms);
+                        let dur = Duration::from_millis(*latency_ms);
+                        for _ in 0..*n {
+                            real.record_call(*outcome, dur, now);
+                            model.record_call(*outcome, *latency_ms, ms);
+                        }
+                    }
+                    DiffOp::Admit => {
+                        let now = Now::from_ms(ms);
+                        let r_adm = real.admit(now);
+                        let m_adm = model.admit(ms);
+                        match (r_adm, m_adm) {
+                            (Admission::Allowed, RefAdmit::Allowed) => {}
+                            (Admission::Probe(p), RefAdmit::Probe(ep)) => {
+                                real_permits.push(p);
+                                ref_permits.push(ep);
+                            }
+                            (Admission::Rejected { retry_after }, RefAdmit::Rejected(m_wait)) => {
+                                prop_assert_eq!(
+                                    retry_after,
+                                    m_wait,
+                                    "seed={:#x} step={} retry_after mismatch at ms={}",
+                                    seed,
+                                    step_no,
+                                    ms
+                                );
+                            }
+                            (r_other, m_other) => {
+                                prop_assert!(
+                                    false,
+                                    "seed={seed:#x} step={step_no} admit kind mismatch at ms={ms}: real={r_other:?} model={m_other:?}"
+                                );
+                            }
+                        }
+                    }
+                    DiffOp::ResolvePermit {
+                        idx,
+                        outcome,
+                        latency_ms,
+                    } => {
+                        if !real_permits.is_empty() {
+                            let pick = *idx % real_permits.len();
+                            let rp = real_permits.swap_remove(pick);
+                            let mp = ref_permits.swap_remove(pick);
+                            rp.record(*outcome, Duration::from_millis(*latency_ms), Now::from_ms(ms));
+                            model.resolve_probe(mp, *outcome, ms);
+                        }
+                    }
+                    DiffOp::DropPermit { idx } => {
+                        if !real_permits.is_empty() {
+                            let pick = *idx % real_permits.len();
+                            let rp = real_permits.swap_remove(pick);
+                            let mp = ref_permits.swap_remove(pick);
+                            drop(rp);
+                            model.drop_probe(mp);
+                        }
+                    }
+                    DiffOp::Health(h) => {
+                        real.on_health(*h, Now::from_ms(ms));
+                        model.on_health(*h, ms);
+                    }
+                }
+
+                let r_state = real.state(Now::from_ms(ms));
+                let m_state = model.state(ms);
+                prop_assert_eq!(
+                    r_state,
+                    m_state,
+                    "seed={:#x} step={} state mismatch at ms={}",
+                    seed,
+                    step_no,
+                    ms
+                );
+            }
+            Ok(())
+        });
+
+        if let Err(err) = run_res {
+            panic!("breaker differential proptest failed (seed={seed:#x}): {err}");
+        }
+    }
+
+    // spec: RTE-084
+    #[test]
+    fn breaker_bucket_saturation_halves_preserving_ratio() {
+        // Test proportional halving at counter saturation (4,094):
+        // Record 5,000 Ok calls and 200 Failure calls in one epoch (fail_rate = 200 / 5,200 < 0.5).
+        // Without halving or with saturating clamp to 4,095, ratios or sums could corrupt; with halving,
+        // breaker remains Closed because fail << ok.
+        let b = Breaker::new(1_000, Arc::from("high-qps"));
+        let now = Now::from_ms(0);
+        for _ in 0..5_000 {
+            b.record_call(Outcome::Ok, Duration::from_millis(5), now);
+        }
+        for _ in 0..200 {
+            b.record_call(Outcome::Failure, Duration::from_millis(5), now);
+        }
+        assert_eq!(b.state(now), BreakerState::Closed);
+
+        // Conversely, 5,000 Failure calls after 5,000 Ok calls exceed 50% and trip Open.
+        for _ in 0..5_000 {
+            b.record_call(Outcome::Failure, Duration::from_millis(5), now);
+        }
+        assert_eq!(b.state(now), BreakerState::Open);
+    }
 }

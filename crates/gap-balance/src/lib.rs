@@ -15,7 +15,7 @@ pub mod slot;
 mod sync;
 pub mod time;
 
-pub use breaker::{Breaker, BreakerState};
+pub use breaker::{Admission, Breaker, BreakerState, ProbePermit};
 pub use ewma::DecayedEwma;
 pub use retry::RetryBudget;
 pub use slot::{HealthStatus, InFlightGuard, Outcome, SlotParams, SlotView, TelemetrySlot};
