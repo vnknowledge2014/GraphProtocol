@@ -8,9 +8,15 @@
     clippy::unimplemented
 )]
 
+pub mod breaker;
 pub mod ewma;
+pub mod retry;
+pub mod slot;
 mod sync;
 pub mod time;
 
+pub use breaker::{Breaker, BreakerState};
 pub use ewma::DecayedEwma;
+pub use retry::RetryBudget;
+pub use slot::{HealthStatus, InFlightGuard, Outcome, SlotParams, SlotView, TelemetrySlot};
 pub use time::Now;

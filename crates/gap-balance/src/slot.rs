@@ -1,0 +1,381 @@
+//! Per-branch live telemetry slot and cancel-safe [`InFlightGuard`] (`RTE-070`..`RTE-072`, `RTE-084`, `RTE-086`).
+
+use std::time::Duration;
+
+use crossbeam_utils::CachePadded;
+
+use crate::breaker::{Breaker, BreakerState};
+use crate::ewma::DecayedEwma;
+use crate::retry::RetryBudget;
+use crate::sync::{Arc, AtomicU32, Ordering};
+use crate::time::Now;
+
+/// Half-life of the per-branch latency EWMA in milliseconds (`10 s`, `RTE §8.1`).
+pub(crate) const LATENCY_HALF_LIFE_MS: f32 = 10_000.0;
+
+/// Half-life of the per-branch error-rate EWMA in milliseconds (`30 s`, `RTE §8.1`).
+pub(crate) const ERROR_HALF_LIFE_MS: f32 = 30_000.0;
+
+/// Registration parameters configuring a [`TelemetrySlot`] (`RTE-078`, `RTE-080`, `RTE-086`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SlotParams {
+    /// Baseline maximum concurrent in-flight calls (`BranchLimits::max_in_flight`).
+    pub max_in_flight: u32,
+    /// Per-call connector timeout in milliseconds (`BranchLimits::timeout_ms`).
+    pub default_timeout_ms: u32,
+    /// Tenant-free metric/event branch label (`1..=64` bytes, no control chars, `OPS-020`, `RTE-078`).
+    pub label: Arc<str>,
+}
+
+/// Completed call classification fed into [`TelemetrySlot::record`] and `ProbePermit::record` (`RTE-080`, `RTE-084`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Outcome {
+    /// Call succeeded.
+    Ok,
+    /// Connector failed with `retryable = true` or timed out (`RTE-080`).
+    Failure,
+    /// Deterministic client error (`INVALID_ARGUMENT`, `PERMISSION_DENIED`, `NOT_FOUND`); not a
+    /// branch failure and excluded from latency EWMA (`RTE-080`, `RTE-084`).
+    ClientError,
+}
+
+/// Upstream connector health status reported by NGC `Health` polling (`NGC-070`, `RTE-083`, `RTE-086`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum HealthStatus {
+    /// Healthy and serving at normal (`1.0`) degraded factor.
+    Serving,
+    /// Serving with capacity halved (`0.5` factor, `RTE-086`).
+    Degraded,
+    /// Unhealthy; forces the circuit breaker `Open` (`RTE-083`, `RTE-085`).
+    NotServing,
+}
+
+/// Point-in-time diagnostic snapshot of a [`TelemetrySlot`] (`m3-01-design.md` §4).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct SlotView {
+    /// Time-decayed latency EWMA in microseconds (`10 s` half-life), or `None` if unknown.
+    pub latency_us: Option<f32>,
+    /// Time-decayed error-rate EWMA in `[0.0, 1.0]` (`30 s` half-life), or `None` if unknown.
+    pub error_rate: Option<f32>,
+    /// Current number of active in-flight calls held by [`InFlightGuard`]s.
+    pub in_flight: u32,
+    /// Effective concurrency capacity (`RTE-086`).
+    pub capacity: u32,
+    /// Circuit-breaker state observed at `now`.
+    pub state: BreakerState,
+}
+
+/// Live telemetry state for one branch slot outside `Snapshot` (`ARC-006`, `INV-10`, `RTE §8.1`).
+#[derive(Debug)]
+pub struct TelemetrySlot {
+    pub(crate) latency_us: CachePadded<DecayedEwma>,
+    pub(crate) error_rate: CachePadded<DecayedEwma>,
+    pub(crate) in_flight: CachePadded<AtomicU32>,
+    pub(crate) capacity: AtomicU32,
+    pub(crate) max_in_flight: u32,
+    pub(crate) breaker: Breaker,
+    pub(crate) retry_budget: RetryBudget,
+    pub(crate) label: Arc<str>,
+}
+
+impl TelemetrySlot {
+    /// Creates a fresh [`TelemetrySlot`] initialized from `params`.
+    #[must_use]
+    pub fn new(params: SlotParams) -> Self {
+        let initial_capacity = params.max_in_flight.max(1);
+        let label = Arc::clone(&params.label);
+        Self {
+            latency_us: CachePadded::new(DecayedEwma::new()),
+            error_rate: CachePadded::new(DecayedEwma::new()),
+            in_flight: CachePadded::new(AtomicU32::new(0)),
+            capacity: AtomicU32::new(initial_capacity),
+            max_in_flight: params.max_in_flight,
+            breaker: Breaker::new(params.default_timeout_ms, params.label),
+            retry_budget: RetryBudget::new(),
+            label,
+        }
+    }
+
+    /// Records a completed call into the error-rate EWMA, latency EWMA, and (when `Closed`)
+    /// the circuit-breaker window (`RTE-084`, `RTE-085`).
+    pub fn record(&self, outcome: Outcome, latency: Duration, now: Now) {
+        let err_sample = match outcome {
+            Outcome::Failure => 1.0_f32,
+            Outcome::Ok | Outcome::ClientError => 0.0_f32,
+        };
+        let _ = self.error_rate.update(err_sample, now.q, ERROR_HALF_LIFE_MS);
+
+        if matches!(outcome, Outcome::Ok | Outcome::Failure) {
+            let micros = (latency.as_secs_f64() * 1_000_000.0).min(f64::from(f32::MAX)) as f32;
+            let _ = self.latency_us.update(micros, now.q, LATENCY_HALF_LIFE_MS);
+        }
+
+        self.breaker.record_call(outcome, latency, now);
+    }
+
+    /// Deposits `0.1` token (`100` milli-tokens) into the slot's [`RetryBudget`] (`RTE-091`).
+    pub fn on_first_attempt(&self) {
+        self.retry_budget.deposit_first_attempt();
+    }
+
+    /// Applies an NGC `Health` report, recomputing `capacity` (`RTE-086`, `NGC-072`) and updating
+    /// the circuit breaker (`RTE-083`, `RTE-085`).
+    pub fn apply_health(&self, status: HealthStatus, capacity_weight: Option<f64>, now: Now) {
+        let weight = match capacity_weight {
+            Some(w) if w.is_finite() && w > 0.0 && w <= 1.0 => w,
+            Some(invalid) => {
+                tracing::warn!(
+                    branch = &*self.label,
+                    capacity_weight = ?invalid,
+                    "ignoring out-of-range capacity_weight outside (0.0, 1.0]; using 1.0"
+                );
+                1.0
+            }
+            None => 1.0,
+        };
+        let degraded_factor = match status {
+            HealthStatus::Degraded => 0.5,
+            HealthStatus::Serving | HealthStatus::NotServing => 1.0,
+        };
+        let scaled = (f64::from(self.max_in_flight) * weight * degraded_factor).floor();
+        let next_cap = if scaled >= f64::from(u32::MAX) {
+            u32::MAX
+        } else if scaled < 1.0 {
+            1
+        } else {
+            scaled as u32
+        };
+        self.capacity.store(next_cap, Ordering::Release);
+        self.breaker.on_health(status, now);
+    }
+
+    /// Returns a reference to the slot's [`Breaker`].
+    #[must_use]
+    pub fn breaker(&self) -> &Breaker {
+        &self.breaker
+    }
+
+    /// Returns a reference to the slot's [`RetryBudget`].
+    #[must_use]
+    pub fn retry_budget(&self) -> &RetryBudget {
+        &self.retry_budget
+    }
+
+    /// Returns the current active in-flight call count.
+    #[must_use]
+    pub fn in_flight(&self) -> u32 {
+        self.in_flight.load(Ordering::Acquire)
+    }
+
+    /// Returns the current effective capacity (`>= 1`, `RTE-086`).
+    #[must_use]
+    pub fn capacity(&self) -> u32 {
+        self.capacity.load(Ordering::Acquire)
+    }
+
+    /// Captures a point-in-time [`SlotView`] at `now` (cold path).
+    #[must_use]
+    pub fn view(&self, now: Now) -> SlotView {
+        SlotView {
+            latency_us: self.latency_us.read(now.q, LATENCY_HALF_LIFE_MS),
+            error_rate: self.error_rate.read(now.q, ERROR_HALF_LIFE_MS),
+            in_flight: self.in_flight.load(Ordering::Acquire),
+            capacity: self.capacity.load(Ordering::Acquire),
+            state: self.breaker.state(now),
+        }
+    }
+}
+
+/// Cancel-safe RAII guard tracking one active in-flight request on a [`TelemetrySlot`] (`RTE-071`).
+///
+/// [`Drop`] decrements `in_flight` exactly once, including on task/future cancellation and panic
+/// unwinding. Passing a guard to [`std::mem::forget`] permanently leaks its in-flight increment.
+#[must_use = "if unused, InFlightGuard drops immediately and releases its in-flight count"]
+#[derive(Debug)]
+pub struct InFlightGuard {
+    slot: Arc<TelemetrySlot>,
+}
+
+impl InFlightGuard {
+    /// Atomically increments `slot.in_flight` and returns a guard that decrements it on [`Drop`].
+    pub fn acquire(slot: &Arc<TelemetrySlot>) -> Self {
+        slot.in_flight.fetch_add(1, Ordering::AcqRel);
+        Self {
+            slot: Arc::clone(slot),
+        }
+    }
+}
+
+impl Drop for InFlightGuard {
+    fn drop(&mut self) {
+        self.slot.in_flight.fetch_sub(1, Ordering::AcqRel);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::panic::{AssertUnwindSafe, catch_unwind};
+
+    use super::*;
+
+    fn test_slot() -> Arc<TelemetrySlot> {
+        Arc::new(TelemetrySlot::new(SlotParams {
+            max_in_flight: 64,
+            default_timeout_ms: 1_000,
+            label: Arc::from("billing-primary"),
+        }))
+    }
+
+    // spec: RTE-071
+    #[test]
+    fn in_flight_guard_acquire_drop_nested_and_panic_unwind() {
+        let slot = test_slot();
+        assert_eq!(slot.in_flight(), 0);
+
+        {
+            let _g1 = InFlightGuard::acquire(&slot);
+            assert_eq!(slot.in_flight(), 1);
+            {
+                let g2 = InFlightGuard::acquire(&slot);
+                let g3 = InFlightGuard::acquire(&slot);
+                assert_eq!(slot.in_flight(), 3);
+                drop(g2);
+                assert_eq!(slot.in_flight(), 2);
+                drop(g3);
+                assert_eq!(slot.in_flight(), 1);
+            }
+            assert_eq!(slot.in_flight(), 1);
+        }
+        assert_eq!(slot.in_flight(), 0);
+
+        let unwind_res = catch_unwind(AssertUnwindSafe(|| {
+            let _g_outer = InFlightGuard::acquire(&slot);
+            assert_eq!(slot.in_flight(), 1);
+            let inner = catch_unwind(AssertUnwindSafe(|| {
+                let _g_inner = InFlightGuard::acquire(&slot);
+                assert_eq!(slot.in_flight(), 2);
+                panic!("simulated connector task panic");
+            }));
+            assert!(inner.is_err());
+            assert_eq!(slot.in_flight(), 1);
+            panic!("outer panic");
+        }));
+        assert!(unwind_res.is_err());
+        assert_eq!(slot.in_flight(), 0);
+    }
+
+    // spec: RTE-071
+    #[test]
+    fn in_flight_guard_10000_cancelled_timeout_and_unpolled_futures() {
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_time()
+            .start_paused(true)
+            .build()
+            .expect("build paused current-thread runtime");
+
+        rt.block_on(async {
+            let slot = test_slot();
+
+            // 1. Futures dropped before first poll never acquire a guard.
+            let mut unpolled = Vec::with_capacity(256);
+            for _ in 0..256 {
+                let s = Arc::clone(&slot);
+                unpolled.push(Box::pin(async move {
+                    let _guard = InFlightGuard::acquire(&s);
+                    tokio::time::sleep(Duration::from_secs(3_600)).await;
+                }));
+            }
+            assert_eq!(slot.in_flight(), 0);
+            drop(unpolled);
+            assert_eq!(slot.in_flight(), 0);
+
+            // 2. 10,000 tasks each hold a guard across sleep(1 h).await, then all are aborted.
+            let mut handles = Vec::with_capacity(10_000);
+            for _ in 0..10_000 {
+                let s = Arc::clone(&slot);
+                handles.push(tokio::spawn(async move {
+                    let _guard = InFlightGuard::acquire(&s);
+                    tokio::time::sleep(Duration::from_secs(3_600)).await;
+                }));
+            }
+            while slot.in_flight() < 10_000 {
+                tokio::task::yield_now().await;
+            }
+            assert_eq!(slot.in_flight(), 10_000);
+
+            for h in &handles {
+                h.abort();
+            }
+            for h in handles {
+                let err = h.await.expect_err("aborted task must return JoinError");
+                assert!(err.is_cancelled());
+            }
+            assert_eq!(slot.in_flight(), 0);
+
+            // 3. Futures dropped mid-flight by tokio::time::timeout release their guards.
+            let mut timeout_handles = Vec::with_capacity(1_000);
+            for _ in 0..1_000 {
+                let s = Arc::clone(&slot);
+                timeout_handles.push(tokio::spawn(async move {
+                    tokio::time::timeout(Duration::from_secs(1), async move {
+                        let _guard = InFlightGuard::acquire(&s);
+                        tokio::time::sleep(Duration::from_secs(3_600)).await;
+                    })
+                    .await
+                }));
+            }
+            while slot.in_flight() < 1_000 {
+                tokio::task::yield_now().await;
+            }
+            assert_eq!(slot.in_flight(), 1_000);
+
+            tokio::time::advance(Duration::from_secs(1)).await;
+            for h in timeout_handles {
+                let res = h.await.expect("timeout wrapper task completes cleanly");
+                assert!(res.is_err(), "inner sleep(1h) must time out at 1s");
+            }
+            assert_eq!(slot.in_flight(), 0);
+        });
+    }
+
+    // spec: RTE-084
+    #[test]
+    fn slot_record_updates_ewmas_and_ignores_client_error_latency() {
+        let slot = test_slot();
+        let t0 = Now::from_ms(0);
+        assert_eq!(
+            slot.view(t0),
+            SlotView {
+                latency_us: None,
+                error_rate: None,
+                in_flight: 0,
+                capacity: 64,
+                state: BreakerState::Closed,
+            }
+        );
+
+        // ClientError updates error_rate (0.0) but leaves latency_us unknown.
+        slot.record(Outcome::ClientError, Duration::from_millis(50), t0);
+        let v0 = slot.view(t0);
+        assert_eq!(v0.latency_us, None);
+        assert_eq!(v0.error_rate, Some(0.0));
+
+        // Ok seeds latency_us in microseconds (2 ms = 2,000 us).
+        let t1 = Now::from_ms(4);
+        slot.record(Outcome::Ok, Duration::from_millis(2), t1);
+        let v1 = slot.view(t1);
+        assert_eq!(v1.latency_us, Some(2_000.0));
+        assert_eq!(v1.error_rate, Some(0.0));
+
+        // Failure updates both latency_us and error_rate toward 1.0 (after 30s = 1 error half-life -> 0.5).
+        let t2 = Now::from_ms(30_004);
+        slot.record(Outcome::Failure, Duration::from_millis(10), t2);
+        let v2 = slot.view(t2);
+        let err = v2.error_rate.expect("error rate known");
+        assert!((err - 0.5).abs() <= 1e-3, "expected ~0.5, got {err}");
+        assert!(v2.latency_us.expect("latency known") > 2_000.0);
+
+        slot.on_first_attempt();
+        assert_eq!(slot.retry_budget().balance_millis(), 10_100);
+    }
+}
