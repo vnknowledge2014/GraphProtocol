@@ -394,7 +394,7 @@ role = "coder"
 size = "L"
 depends_on = ["WP-M0-08"]
 owns = ["crates/gap-store/**"]
-spec_refs = ["ADR-020", "ADR-025", "INV-19", "INV-09", "ING-064", "ING-065", "ING-066", "ING-067", "ING-080", "ING-081", "ING-082", "ING-083", "ING-084", "ING-085", "ING-086", "ING-087"]
+spec_refs = ["ADR-020", "ADR-025", "INV-19", "INV-09", "ING-064", "ING-065", "ING-066", "ING-067", "ING-080", "ING-081", "ING-082", "ING-083", "ING-084", "ING-085", "ING-086", "ING-087", "ING-088"]
 deliverables = [
   "ContextStore (nodes, typed edges, temporal validity, provenance, scopes Private|Task|Group|Global|Ephemeral, bounded traversal) + TaskStore/AuditLog/IdempotencyStore trait declarations; TenantScope token type (no API without it)",
   "rusqlite implementation: WAL, FTS5, recursive-CTE traversal with depth/visited caps, migrations (format_version), backup/restore helpers",
