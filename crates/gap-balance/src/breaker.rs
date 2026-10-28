@@ -1114,6 +1114,24 @@ mod tests {
         fn exit(&self, _span: &tracing::span::Id) {}
     }
 
+    /// Runs `f` with `subscriber` as the thread-local default while keeping two anchor
+    /// `Dispatch` instances alive so `tracing_core`'s `Rebuilder::JustOne` fast-path
+    /// cannot race concurrent test threads that have no subscriber installed.
+    fn with_transition_subscriber<T>(subscriber: TransitionSubscriber, f: impl FnOnce() -> T) -> T {
+        static ANCHOR_DISPATCHES: std::sync::OnceLock<(tracing::Dispatch, tracing::Dispatch)> =
+            std::sync::OnceLock::new();
+        let _ = ANCHOR_DISPATCHES.get_or_init(|| {
+            let d1 = tracing::Dispatch::new(TransitionSubscriber {
+                events: StdArc::new(StdMutex::new(Vec::new())),
+            });
+            let d2 = tracing::Dispatch::new(TransitionSubscriber {
+                events: StdArc::new(StdMutex::new(Vec::new())),
+            });
+            (d1, d2)
+        });
+        tracing::subscriber::with_default(subscriber, f)
+    }
+
     // ---- Hand-written minimal `metrics::Recorder` for gauge capture ----
 
     #[derive(Debug, Clone, PartialEq)]
@@ -2025,7 +2043,7 @@ mod tests {
                 writes: StdArc::clone(&gauges_buf),
             };
 
-            tracing::subscriber::with_default(subscriber, || {
+            with_transition_subscriber(subscriber, || {
                 metrics::with_local_recorder(&recorder, || {
                     let breaker = Breaker::new(case.timeout_ms, Arc::from("orders-eu"));
                     let mut permits: [Option<ProbePermit>; 4] = [None, None, None, None];
@@ -2705,5 +2723,363 @@ mod tests {
             Admission::Probe(permit) => drop(permit),
             other => panic!("expected Probe after Serving, got {other:?}"),
         }
+    }
+
+    // spec: RTE-085
+    #[test]
+    fn breaker_stale_probe_permit_drop_and_record_ignore_later_episode() {
+        // 1. Stale permit `drop` must not free a probe slot in episode 2.
+        {
+            let b = Breaker::new(1_000, Arc::from("stale-drop"));
+            for _ in 0..20 {
+                b.record_call(Outcome::Failure, Duration::from_millis(10), Now::from_ms(0));
+            }
+            let t_ep1 = Now::from_ms(5_000);
+            let p_a = match b.admit(t_ep1) {
+                Admission::Probe(p) => p,
+                other => panic!("ep1 A: {other:?}"),
+            };
+            let p_b = match b.admit(t_ep1) {
+                Admission::Probe(p) => p,
+                other => panic!("ep1 B: {other:?}"),
+            };
+            let p_c = match b.admit(t_ep1) {
+                Admission::Probe(p) => p,
+                other => panic!("ep1 C: {other:?}"),
+            };
+
+            p_b.record(
+                Outcome::Failure,
+                Duration::from_millis(10),
+                Now::from_ms(5_010),
+            );
+            p_c.record(
+                Outcome::Failure,
+                Duration::from_millis(10),
+                Now::from_ms(5_010),
+            );
+            assert_eq!(b.state(Now::from_ms(5_010)), BreakerState::Open);
+
+            // Episode 2 opens at 5,010 + 10,000 = 15,010 ms.
+            let t_ep2 = Now::from_ms(15_010);
+            let p_d = match b.admit(t_ep2) {
+                Admission::Probe(p) => p,
+                other => panic!("ep2 D: {other:?}"),
+            };
+            drop(p_a); // Stale episode-1 permit dropped while D is live in episode 2.
+
+            let p_e = match b.admit(t_ep2) {
+                Admission::Probe(p) => p,
+                other => panic!("ep2 E: {other:?}"),
+            };
+            let p_f = match b.admit(t_ep2) {
+                Admission::Probe(p) => p,
+                other => panic!("ep2 F: {other:?}"),
+            };
+            match b.admit(t_ep2) {
+                Admission::Rejected { retry_after } => {
+                    assert_eq!(retry_after, Duration::from_millis(1_000));
+                }
+                other => panic!("expected 4th admit in ep2 to be Rejected(1000ms), got {other:?}"),
+            }
+            drop((p_d, p_e, p_f));
+        }
+
+        // 2. Stale permit `record(Ok)` and `record(Failure)` must not touch episode 2's slot count or tallies.
+        for stale_outcome in [Outcome::Ok, Outcome::Failure] {
+            let b = Breaker::new(1_000, Arc::from("stale-record"));
+            for _ in 0..20 {
+                b.record_call(Outcome::Failure, Duration::from_millis(10), Now::from_ms(0));
+            }
+            let t_ep1 = Now::from_ms(5_000);
+            let p_a = match b.admit(t_ep1) {
+                Admission::Probe(p) => p,
+                other => panic!("ep1 A: {other:?}"),
+            };
+            let p_b = match b.admit(t_ep1) {
+                Admission::Probe(p) => p,
+                other => panic!("ep1 B: {other:?}"),
+            };
+            let p_c = match b.admit(t_ep1) {
+                Admission::Probe(p) => p,
+                other => panic!("ep1 C: {other:?}"),
+            };
+
+            p_b.record(
+                Outcome::Failure,
+                Duration::from_millis(10),
+                Now::from_ms(5_010),
+            );
+            p_c.record(
+                Outcome::Failure,
+                Duration::from_millis(10),
+                Now::from_ms(5_010),
+            );
+
+            let t_ep2 = Now::from_ms(15_010);
+            let p_d = match b.admit(t_ep2) {
+                Admission::Probe(p) => p,
+                other => panic!("ep2 D: {other:?}"),
+            };
+            p_a.record(stale_outcome, Duration::from_millis(10), t_ep2);
+
+            let p_e = match b.admit(t_ep2) {
+                Admission::Probe(p) => p,
+                other => panic!("ep2 E: {other:?}"),
+            };
+            let p_f = match b.admit(t_ep2) {
+                Admission::Probe(p) => p,
+                other => panic!("ep2 F: {other:?}"),
+            };
+            match b.admit(t_ep2) {
+                Admission::Rejected { retry_after } => {
+                    assert_eq!(retry_after, Duration::from_millis(1_000));
+                }
+                other => panic!(
+                    "expected Rejected(1000ms) after stale record({stale_outcome:?}), got {other:?}"
+                ),
+            }
+
+            // Verify episode 2's ok/fail tallies are still 0 (one real probe outcome must NOT reach majority 2).
+            p_d.record(stale_outcome, Duration::from_millis(10), t_ep2);
+            assert_eq!(
+                b.state(t_ep2),
+                BreakerState::HalfOpen,
+                "stale {stale_outcome:?} must not contribute toward episode 2 majority"
+            );
+            drop((p_e, p_f));
+        }
+    }
+
+    // spec: RTE-082, RTE-085
+    #[test]
+    fn breaker_flapping_window_10min_boundaries_and_future_timestamps() {
+        let b = Breaker::new(1_000, Arc::from("flap-bounds"));
+
+        // #1 Closed -> Open(0) at 100_000 ms
+        for _ in 0..20 {
+            b.record_call(
+                Outcome::Failure,
+                Duration::from_millis(10),
+                Now::from_ms(100_000),
+            );
+        }
+        // #2 Open -> HalfOpen, #3 HalfOpen -> Closed at 105_000 ms
+        let t2 = Now::from_ms(105_000);
+        match (b.admit(t2), b.admit(t2)) {
+            (Admission::Probe(p1), Admission::Probe(p2)) => {
+                p1.record(Outcome::Ok, Duration::from_millis(5), t2);
+                p2.record(Outcome::Ok, Duration::from_millis(5), t2);
+            }
+            other => panic!("expected 2 probes at 105_000, got {other:?}"),
+        }
+        // #4 Closed -> Open(1) at 105_000 ms
+        for _ in 0..20 {
+            b.record_call(Outcome::Failure, Duration::from_millis(10), t2);
+        }
+        // #5 Open -> HalfOpen, #6 HalfOpen -> Closed at 115_000 ms (6 transitions so far!)
+        let t3 = Now::from_ms(115_000);
+        match (b.admit(t3), b.admit(t3)) {
+            (Admission::Probe(p1), Admission::Probe(p2)) => {
+                p1.record(Outcome::Ok, Duration::from_millis(5), t3);
+                p2.record(Outcome::Ok, Duration::from_millis(5), t3);
+            }
+            other => panic!("expected 2 probes at 115_000, got {other:?}"),
+        }
+        assert!(!b.flapping(t3));
+
+        // #7 Closed -> Open(2) with NotServing hold at 116_000 ms (7 transitions total:
+        // [100_000, 105_000, 105_000, 105_000, 115_000, 115_000, 116_000]).
+        b.on_health(HealthStatus::NotServing, Now::from_ms(116_000));
+        assert!(b.flapping(Now::from_ms(116_000)));
+
+        // Future timestamp (116_000 > 115_000) is NOT counted at now = 115_000 -> only 6 count -> false!
+        assert!(
+            !b.flapping(Now::from_ms(115_000)),
+            "transition later than `now` must not be counted"
+        );
+
+        // 6 minutes after the latest transition (116_000 + 360_000 = 476_000 ms): all 7 are >= 6 min old
+        // (> 5 min, < 10 min) and still count -> true!
+        assert!(
+            b.flapping(Now::from_ms(476_000)),
+            "7 transitions 6 minutes ago must still count inside the 10-minute window"
+        );
+
+        // Exact 10-minute boundary on transition #1 (at 100_000 ms):
+        // at 100_000 + 599_999 = 699_999 ms -> 7 transitions in window -> true;
+        // at 100_000 + 600_000 = 700_000 ms -> #1 aged out (6 left) -> false.
+        assert!(b.flapping(Now::from_ms(699_999)));
+        assert!(!b.flapping(Now::from_ms(700_000)));
+    }
+
+    // spec: RTE-080, RTE-084
+    #[test]
+    fn breaker_counter_saturation_slow_and_ok_halving_preserves_ratio() {
+        let now = Now::from_ms(0);
+
+        // 1. 70% slow Ok + 30% fast Ok in one 3 s epoch across 10,000 calls (kills "halving skips slow").
+        let b_ok = Breaker::new(1_000, Arc::from("sat-slow-ok"));
+        for i in 0..10_000_u32 {
+            let dur = if i % 10 < 3 {
+                Duration::from_millis(100)
+            } else {
+                Duration::from_millis(900)
+            };
+            b_ok.record_call(Outcome::Ok, dur, now);
+        }
+        assert_eq!(b_ok.state(now), BreakerState::Closed);
+        let (ok, fail, slow) = b_ok.window_totals(now);
+        assert!(ok <= 4_095 && fail == 0 && slow <= 4_095);
+        let slow_ratio = (slow as f64) / (ok as f64);
+        assert!(
+            (slow_ratio - 0.70).abs() <= 0.01,
+            "expected slow/calls within 1% of 0.70, got {slow_ratio} (ok={ok}, slow={slow})"
+        );
+
+        // 2. 30% fast Ok + 35% slow Ok + 35% slow Failure in each 20-call block in one 3 s epoch:
+        //    slow = 70% > ok = 65% > fail = 35% (fast calls placed first in each block so cumulative
+        //    ratios never overshoot 0.70 or 0.35), so `slow` reaches 4,094 BEFORE `ok` (at call 5,849)!
+        //    Kills "saturation check ignores `slow`" as well as "halving skips `slow`".
+        let b_slow_first = Breaker::new(1_000, Arc::from("sat-slow-first"));
+        for i in 0..10_000_u32 {
+            let m = i % 20;
+            let (outcome, dur) = if m < 6 {
+                (Outcome::Ok, Duration::from_millis(100))
+            } else if m < 13 {
+                (Outcome::Ok, Duration::from_millis(900))
+            } else {
+                (Outcome::Failure, Duration::from_millis(900))
+            };
+            b_slow_first.record_call(outcome, dur, now);
+
+            // Check right past the first `slow` 12-bit wrap point (call 5,860) and at 10,000 calls.
+            if i + 1 == 5_860 || i + 1 == 10_000 {
+                assert_eq!(b_slow_first.state(now), BreakerState::Closed);
+                let (w_ok, w_fail, w_slow) = b_slow_first.window_totals(now);
+                assert!(w_ok <= 4_095 && w_fail <= 4_095 && w_slow <= 4_095);
+                let calls = (w_ok + w_fail) as f64;
+                let sr = (w_slow as f64) / calls;
+                let fr = (w_fail as f64) / calls;
+                assert!(
+                    (sr - 0.70).abs() <= 0.01,
+                    "at call {}: expected slow/calls ~0.70, got {sr} (ok={w_ok}, fail={w_fail}, slow={w_slow})",
+                    i + 1
+                );
+                assert!(
+                    (fr - 0.35).abs() <= 0.01,
+                    "at call {}: expected fail/calls ~0.35, got {fr}",
+                    i + 1
+                );
+            }
+        }
+    }
+
+    // spec: RTE-082, RTE-085, OPS-020
+    #[test]
+    fn breaker_k_saturates_at_6_in_tracing_events_with_60s_duration() {
+        let events_buf = StdArc::new(StdMutex::new(Vec::new()));
+        let sub = TransitionSubscriber {
+            events: StdArc::clone(&events_buf),
+        };
+
+        with_transition_subscriber(sub, || {
+            let b = Breaker::new(1_000, Arc::from("k-sat-6"));
+            let mut ms = 0_u64;
+
+            // Initial trip: Closed -> Open(k = 0), 5,000 ms.
+            for _ in 0..20 {
+                b.record_call(
+                    Outcome::Failure,
+                    Duration::from_millis(10),
+                    Now::from_ms(ms),
+                );
+            }
+
+            let expected_steps: [(u64, u64); 7] = [
+                (5_000, 1),  // Open(0)->HalfOpen, fail 2 probes -> Open(1) [10 s]
+                (10_000, 2), // Open(1)->HalfOpen, fail 2 probes -> Open(2) [20 s]
+                (20_000, 3), // Open(2)->HalfOpen, fail 2 probes -> Open(3) [40 s]
+                (40_000, 4), // Open(3)->HalfOpen, fail 2 probes -> Open(4) [60 s]
+                (60_000, 5), // Open(4)->HalfOpen, fail 2 probes -> Open(5) [60 s]
+                (60_000, 6), // Open(5)->HalfOpen, fail 2 probes -> Open(6) [60 s]
+                (60_000, 6), // Open(6)->HalfOpen, fail 2 probes -> Open(6) [saturates at 6, 60 s]
+            ];
+
+            for (wait_ms, _next_k) in expected_steps {
+                assert_eq!(b.state(Now::from_ms(ms + wait_ms - 1)), BreakerState::Open);
+                ms += wait_ms;
+                let now = Now::from_ms(ms);
+                match (b.admit(now), b.admit(now)) {
+                    (Admission::Probe(p1), Admission::Probe(p2)) => {
+                        p1.record(Outcome::Failure, Duration::from_millis(10), now);
+                        p2.record(Outcome::Failure, Duration::from_millis(10), now);
+                    }
+                    other => panic!("expected 2 probes at ms={ms}, got {other:?}"),
+                }
+                match b.admit(now) {
+                    Admission::Rejected { retry_after } => {
+                        if _next_k >= 4 {
+                            assert_eq!(retry_after, Duration::from_millis(60_000));
+                        }
+                    }
+                    other => panic!("expected Rejected after reopening at ms={ms}, got {other:?}"),
+                }
+            }
+
+            // Close at Open(6) + 60,000 ms, then re-trip within 5 minutes -> Closed -> Open(k = 6) lasting 60 s.
+            assert_eq!(b.state(Now::from_ms(ms + 59_999)), BreakerState::Open);
+            ms += 60_000;
+            let t_close = Now::from_ms(ms);
+            match (b.admit(t_close), b.admit(t_close)) {
+                (Admission::Probe(p1), Admission::Probe(p2)) => {
+                    p1.record(Outcome::Ok, Duration::from_millis(5), t_close);
+                    p2.record(Outcome::Ok, Duration::from_millis(5), t_close);
+                }
+                other => panic!("expected 2 probes to close at ms={ms}, got {other:?}"),
+            }
+            assert_eq!(b.state(t_close), BreakerState::Closed);
+
+            ms += 1_000;
+            let t_retrip = Now::from_ms(ms);
+            for _ in 0..20 {
+                b.record_call(Outcome::Failure, Duration::from_millis(10), t_retrip);
+            }
+            match b.admit(t_retrip) {
+                Admission::Rejected { retry_after } => {
+                    assert_eq!(retry_after, Duration::from_millis(60_000));
+                }
+                other => panic!("expected Open(6) 60s rejection, got {other:?}"),
+            }
+        });
+
+        let evs = events_buf.lock().expect("events");
+        let observed_ks: Vec<(&str, &str, u64)> = evs
+            .iter()
+            .map(|e| (e.from.as_str(), e.to.as_str(), e.k))
+            .collect();
+        assert_eq!(
+            observed_ks,
+            vec![
+                ("Closed", "Open", 0),
+                ("Open", "HalfOpen", 0),
+                ("HalfOpen", "Open", 1),
+                ("Open", "HalfOpen", 1),
+                ("HalfOpen", "Open", 2),
+                ("Open", "HalfOpen", 2),
+                ("HalfOpen", "Open", 3),
+                ("Open", "HalfOpen", 3),
+                ("HalfOpen", "Open", 4),
+                ("Open", "HalfOpen", 4),
+                ("HalfOpen", "Open", 5),
+                ("Open", "HalfOpen", 5),
+                ("HalfOpen", "Open", 6),
+                ("Open", "HalfOpen", 6),
+                ("HalfOpen", "Open", 6),
+                ("Open", "HalfOpen", 6),
+                ("HalfOpen", "Closed", 6),
+                ("Closed", "Open", 6),
+            ]
+        );
     }
 }

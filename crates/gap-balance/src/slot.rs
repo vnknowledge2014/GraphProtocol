@@ -557,4 +557,26 @@ mod tests {
             other => panic!("expected Rejected(3_250ms), got {other:?}"),
         }
     }
+
+    // spec: RTE-070, RTE-077, RTE-084
+    #[test]
+    fn slot_latency_ewma_10s_half_life_reads_exact_midpoint() {
+        let slot = test_slot();
+        slot.record(Outcome::Ok, Duration::from_millis(100), Now::from_ms(0));
+        assert_eq!(slot.view(Now::from_ms(0)).latency_us, Some(100_000.0));
+
+        slot.record(
+            Outcome::Ok,
+            Duration::from_millis(200),
+            Now::from_ms(10_000),
+        );
+        let lat = slot
+            .view(Now::from_ms(10_000))
+            .latency_us
+            .expect("latency known at 10 s");
+        assert!(
+            (lat - 150_000.0).abs() <= 1.0,
+            "expected 150,000 us after 10 s half-life, got {lat}"
+        );
+    }
 }

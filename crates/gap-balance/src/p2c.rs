@@ -1139,4 +1139,273 @@ mod tests {
         stop.store(true, std::sync::atomic::Ordering::Relaxed);
         toggler.join().expect("toggler thread clean");
     }
+
+    // spec: RTE-073, RTE-079, RTE-085
+    #[test]
+    fn p2c_open_member_selectable_once_timer_elapsed_unless_not_serving_or_probes_full() {
+        let t0 = Now::from_ms(0);
+        let a = make_slot(10);
+        let b = make_slot(10);
+        let c = make_slot(10);
+
+        // Trip member A at t0 (Open(k=0) until 5,000 ms) with low latency (1 ms),
+        // while B and C stay Closed with higher latency (50 ms) so A wins whenever sampled.
+        for _ in 0..20 {
+            a.record(Outcome::Failure, Duration::from_millis(1), t0);
+        }
+        b.record(Outcome::Ok, Duration::from_millis(50), Now::from_ms(4_999));
+        c.record(Outcome::Ok, Duration::from_millis(50), Now::from_ms(4_999));
+
+        let cands = [
+            Candidate {
+                uid: uid_with_byte(1),
+                slot: &a,
+            },
+            Candidate {
+                uid: uid_with_byte(2),
+                slot: &b,
+            },
+            Candidate {
+                uid: uid_with_byte(3),
+                slot: &c,
+            },
+        ];
+
+        // 1. At t0 + 4,999 ms (timer not elapsed), A is never selected over 5,000 draws.
+        let mut rng = XorShift64::new(0x1111_2222_3333_4444);
+        for _ in 0..5_000 {
+            let pick = select(&cands, Now::from_ms(4_999), &mut rng).expect("B/C eligible");
+            assert_ne!(
+                pick, 0,
+                "Open member before timer elapsed must not be selected"
+            );
+        }
+
+        // 2. At t0 + 5,000 ms (without calling state() or admit() beforehand, so stored word is still Open!),
+        // A IS selectable and selected sometimes; admit() then transitions to HalfOpen and issues Probe.
+        let t5000 = Now::from_ms(5_000);
+        let mut selected_a = 0_u32;
+        for _ in 0..5_000 {
+            if select(&cands, t5000, &mut rng) == Some(0) {
+                selected_a += 1;
+            }
+        }
+        assert!(
+            selected_a > 0,
+            "Open member whose timer elapsed must be selectable so it can receive its probe"
+        );
+
+        let p1 = match a.breaker().admit(t5000) {
+            Admission::Probe(p) => p,
+            other => {
+                panic!("expected Probe after selecting elapsed-timer Open member, got {other:?}")
+            }
+        };
+        let p2 = match a.breaker().admit(t5000) {
+            Admission::Probe(p) => p,
+            other => panic!("expected Probe 2, got {other:?}"),
+        };
+        let p3 = match a.breaker().admit(t5000) {
+            Admission::Probe(p) => p,
+            other => panic!("expected Probe 3, got {other:?}"),
+        };
+
+        // 3. HalfOpen member with all 3 probes taken is never selected over 5,000 draws.
+        for _ in 0..5_000 {
+            let pick = select(&cands, t5000, &mut rng).expect("B/C eligible");
+            assert_ne!(
+                pick, 0,
+                "HalfOpen member with 3 probes taken must not be selected"
+            );
+        }
+        drop((p1, p2, p3));
+
+        // 4. Member with NOT_SERVING hold and an elapsed timer is never selected over 5,000 draws.
+        let a_held = make_slot(10);
+        for _ in 0..20 {
+            a_held.record(Outcome::Failure, Duration::from_millis(1), t0);
+        }
+        a_held.apply_health(HealthStatus::NotServing, None, t0);
+        let cands_held = [
+            Candidate {
+                uid: uid_with_byte(1),
+                slot: &a_held,
+            },
+            Candidate {
+                uid: uid_with_byte(2),
+                slot: &b,
+            },
+            Candidate {
+                uid: uid_with_byte(3),
+                slot: &c,
+            },
+        ];
+        let t10000 = Now::from_ms(10_000);
+        b.record(Outcome::Ok, Duration::from_millis(50), t10000);
+        c.record(Outcome::Ok, Duration::from_millis(50), t10000);
+        for _ in 0..5_000 {
+            let pick = select(&cands_held, t10000, &mut rng).expect("B/C eligible");
+            assert_ne!(
+                pick, 0,
+                "NotServing-held Open member past timer must never be selected"
+            );
+        }
+    }
+
+    // spec: RTE-074, RTE-079
+    #[test]
+    fn p2c_single_unknown_candidate_uses_group_median_not_constant_fallback() {
+        let now = Now::from_ms(1_000);
+        let known_half_us = make_slot(10);
+        known_half_us.record(Outcome::Ok, Duration::from_nanos(500), now); // 0.5 us < 1.0 us fallback
+        let unknown_slot = make_slot(10);
+
+        let mut rng = XorShift64::new(0xabcd_1234);
+
+        // Case 1: A known (0.5 us, uid 9), B unknown (imputed 0.5 us median, uid 3).
+        // Costs tie at 0.5, in_flight = 0 -> lower uid (B, index 1) wins every time.
+        let cands_b_wins = [
+            Candidate {
+                uid: uid_with_byte(9),
+                slot: &known_half_us,
+            },
+            Candidate {
+                uid: uid_with_byte(3),
+                slot: &unknown_slot,
+            },
+        ];
+        for _ in 0..100 {
+            assert_eq!(select_excluding(&cands_b_wins, &[], now, &mut rng), Some(1));
+        }
+
+        // Case 2 (mirror): swap uids (A has uid 3, B has uid 9) -> A (index 0) wins every time.
+        let cands_a_wins = [
+            Candidate {
+                uid: uid_with_byte(3),
+                slot: &known_half_us,
+            },
+            Candidate {
+                uid: uid_with_byte(9),
+                slot: &unknown_slot,
+            },
+        ];
+        for _ in 0..100 {
+            assert_eq!(select_excluding(&cands_a_wins, &[], now, &mut rng), Some(0));
+        }
+    }
+
+    // spec: RTE-079
+    #[test]
+    fn p2c_lower_median_known_latency_over_64_exclusions_and_open_members() {
+        let now = Now::from_ms(1_000);
+
+        // 1. 70 members: 35 known at 10 us and 35 known at 1,000 us -> lower median (index 34) is 10.0.
+        let mut slots_70 = Vec::with_capacity(70);
+        for i in 0..70 {
+            let s = make_slot(10);
+            let us = if i < 35 { 10 } else { 1_000 };
+            s.record(Outcome::Ok, Duration::from_micros(us), now);
+            slots_70.push(s);
+        }
+        let cands_70: Vec<Candidate<'_>> = slots_70
+            .iter()
+            .enumerate()
+            .map(|(i, s)| Candidate {
+                uid: uid_with_byte(i as u8),
+                slot: s,
+            })
+            .collect();
+        assert_eq!(lower_median_known_latency(&cands_70, &[], now), 10.0);
+
+        // 2. 69 members with distinct known latencies 1..=69 us (reverse order) -> lower median (index 34) is 35.0.
+        let mut slots_69 = Vec::with_capacity(69);
+        for us in (1..=69_u64).rev() {
+            let s = make_slot(10);
+            s.record(Outcome::Ok, Duration::from_micros(us), now);
+            slots_69.push(s);
+        }
+        let cands_69: Vec<Candidate<'_>> = slots_69
+            .iter()
+            .enumerate()
+            .map(|(i, s)| Candidate {
+                uid: uid_with_byte(i as u8),
+                slot: s,
+            })
+            .collect();
+        assert_eq!(lower_median_known_latency(&cands_69, &[], now), 35.0);
+
+        // 3. Exact stack/binary-search boundary: 64 known (1..=64 -> 32.0) and 65 known (1..=65 -> 33.0).
+        assert_eq!(lower_median_known_latency(&cands_69[5..69], &[], now), 32.0); // 64..=1 -> 32.0
+        assert_eq!(lower_median_known_latency(&cands_69[4..69], &[], now), 33.0); // 65..=1 -> 33.0
+
+        // 4. Exclusions and Open members ignored in small (<= 64), exact-64, and > 64 (65 eligible) paths
+        //    with strictly distinct eligible latencies so ANY shift in `count`, `target_rank`, or `le_count`
+        //    changes the returned value:
+        //    - Small group (5 total): [1, 2, 100, 200, 300] us with indices [0, 1] excluded -> [100, 200, 300] -> 200.0
+        //      and with indices [0, 1] Open (NotServing) -> [100, 200, 300] -> 200.0.
+        let small_us = [1_u64, 2, 100, 200, 300];
+        let small_slots: Vec<Arc<TelemetrySlot>> = small_us
+            .iter()
+            .map(|&us| {
+                let s = make_slot(10);
+                s.record(Outcome::Ok, Duration::from_micros(us), now);
+                s
+            })
+            .collect();
+        let small_cands: Vec<Candidate<'_>> = small_slots
+            .iter()
+            .enumerate()
+            .map(|(i, s)| Candidate {
+                uid: uid_with_byte(i as u8),
+                slot: s,
+            })
+            .collect();
+        assert_eq!(
+            lower_median_known_latency(&small_cands, &[0, 1], now),
+            200.0
+        );
+        small_slots[0].apply_health(HealthStatus::NotServing, None, now);
+        small_slots[1].apply_health(HealthStatus::NotServing, None, now);
+        assert_eq!(lower_median_known_latency(&small_cands, &[], now), 200.0);
+
+        //    - Large group (85 total):
+        //      * indices 0..10: excluded, latency = 1..=10 us
+        //      * indices 10..20: Open (NotServing), latency = 11..=20 us
+        //      * indices 20..85 (65 eligible): distinct latencies 101..=165 us
+        //      For 65 eligible (`excl_65` = 0..10): sorted = [101..=165], target_rank = 32 -> 133.0.
+        //      For 64 eligible (`excl_64` = 0..10 plus 20): sorted = [102..=165], target_rank = 31 -> 133.0;
+        //      and excluding index 84 instead (`excl_64_hi` = 0..10 plus 84): sorted = [101..=164], target_rank = 31 -> 132.0.
+        let mut mixed_slots = Vec::with_capacity(85);
+        for i in 0..85_u64 {
+            let s = make_slot(10);
+            if i < 10 {
+                s.record(Outcome::Ok, Duration::from_micros(1 + i), now);
+            } else if i < 20 {
+                s.record(Outcome::Ok, Duration::from_micros(1 + i), now);
+                s.apply_health(HealthStatus::NotServing, None, now);
+            } else {
+                s.record(Outcome::Ok, Duration::from_micros(101 + (i - 20)), now);
+            }
+            mixed_slots.push(s);
+        }
+        let mixed_cands: Vec<Candidate<'_>> = mixed_slots
+            .iter()
+            .enumerate()
+            .map(|(i, s)| Candidate {
+                uid: uid_with_byte(i as u8),
+                slot: s,
+            })
+            .collect();
+        let excl_65 = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
+        assert_eq!(
+            lower_median_known_latency(&mixed_cands, &excl_65, now),
+            133.0
+        );
+
+        let excl_64_hi = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 84];
+        assert_eq!(
+            lower_median_known_latency(&mixed_cands, &excl_64_hi, now),
+            132.0
+        );
+    }
 }

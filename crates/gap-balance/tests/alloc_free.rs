@@ -251,4 +251,13 @@ fn hot_path_operations_perform_zero_heap_allocations() {
             drop(arc);
         }
     });
+
+    // 8. XorShift64::with_thread_local (including initial lazy per-thread seeding) + select
+    assert_zero_allocs("XorShift64::with_thread_local+select", || {
+        for _ in 0..200 {
+            black_box(XorShift64::with_thread_local(|tls| {
+                select(&cands_8, Now::from_ms(100), tls)
+            }));
+        }
+    });
 }

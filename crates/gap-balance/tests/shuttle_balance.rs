@@ -10,8 +10,11 @@ use std::time::Duration;
 
 use gap_balance::{
     Admission, BreakerState, HealthStatus, InFlightGuard, Now, Outcome, RetryBudget, SlotParams,
-    TelemetrySlot,
+    TelemetryRegistry, TelemetrySlot,
 };
+use gap_core::clock::ManualClock;
+use gap_core::ids::{BranchUid, TenantId};
+use gap_core::snapshot::TelemetrySlotKey;
 use shuttle::scheduler::{PctScheduler, RandomScheduler};
 use shuttle::sync::Arc;
 use shuttle::sync::atomic::{AtomicU32, Ordering};
@@ -482,5 +485,88 @@ fn shuttle_retry_budget_11_concurrent_withdrawals_succeed_exact_10() {
         }
         assert_eq!(wins.load(Ordering::Acquire), 10);
         assert_eq!(budget.balance_millis(), 0);
+    });
+}
+
+// spec: RTE-078, INV-09
+#[test]
+fn shuttle_registry_same_key_three_threads_idempotent() {
+    let tenant = TenantId::new("acme").expect("tenant");
+    let uid = BranchUid::from_unix_ms(1_700_000_000_000, [7_u8; 10]);
+    let key = TelemetrySlotKey::new(tenant, uid);
+
+    run_shuttle_suite(0x5170_0009, move || {
+        let clock = std::sync::Arc::new(ManualClock::new(1_700_000_000_000));
+        let reg = Arc::new(TelemetryRegistry::new(clock, 64));
+        let mut handles = Vec::with_capacity(3);
+        for tid in 0..3_u32 {
+            let reg = Arc::clone(&reg);
+            let k = key.clone();
+            handles.push(thread::spawn(move || {
+                reg.register(
+                    k,
+                    SlotParams {
+                        max_in_flight: 10 + tid,
+                        default_timeout_ms: 1_000,
+                        label: Arc::from("shuttle-reg"),
+                    },
+                )
+                .expect("idempotent register")
+            }));
+        }
+        let mut issued = Vec::with_capacity(3);
+        for h in handles {
+            issued.push(h.join().expect("register worker"));
+        }
+        assert_eq!(reg.len(), 1);
+        for s in issued {
+            assert_eq!(s.index(), 0);
+        }
+    });
+}
+
+// spec: RTE-084, RTE-085
+#[test]
+fn shuttle_breaker_generation_race_stale_writer_never_reopens_closed() {
+    // Thread 1 enters `record` in generation 0 on the 20th failure at `t0 = 0` (`bucket[0]`).
+    // Thread 2 drives `Open -> HalfOpen -> Closed(gen 1)` via NotServing/Serving + 2 Ok probes at
+    // `t1 = 30_000` (which also maps to `bucket[0]`, 10 epochs later) and records 5 Ok calls in `gen 1`.
+    // Under every schedule:
+    // - stale generation-0 trip CAS must never reopen `gen 1` (`state(t1) == Closed`);
+    // - stale generation-0 bucket CAS must never overwrite `gen 1`'s `bucket[0]` (`window_totals(t1) == (5, 0, 0)`).
+    run_shuttle_suite(0x5170_000a, || {
+        let slot = make_slot(32);
+        let t0 = Now::from_ms(0);
+        let t1 = Now::from_ms(30_000);
+        for _ in 0..19 {
+            slot.record(Outcome::Failure, Duration::from_millis(10), t0);
+        }
+
+        let s_stale = Arc::clone(&slot);
+        let writer = thread::spawn(move || {
+            s_stale.record(Outcome::Failure, Duration::from_millis(10), t0);
+        });
+
+        let s_rec = Arc::clone(&slot);
+        let recover = thread::spawn(move || {
+            s_rec.apply_health(HealthStatus::NotServing, None, t0);
+            s_rec.apply_health(HealthStatus::Serving, None, t0);
+            match (s_rec.breaker().admit(t1), s_rec.breaker().admit(t1)) {
+                (Admission::Probe(p1), Admission::Probe(p2)) => {
+                    p1.record(Outcome::Ok, Duration::from_millis(5), t1);
+                    p2.record(Outcome::Ok, Duration::from_millis(5), t1);
+                }
+                other => panic!("expected 2 recovery probes at t1, got {other:?}"),
+            }
+            for _ in 0..5 {
+                s_rec.record(Outcome::Ok, Duration::from_millis(5), t1);
+            }
+        });
+
+        writer.join().expect("stale writer join");
+        recover.join().expect("recover worker join");
+
+        assert_eq!(slot.breaker().state(t1), BreakerState::Closed);
+        assert_eq!(slot.breaker().window_totals(t1), (5, 0, 0));
     });
 }
