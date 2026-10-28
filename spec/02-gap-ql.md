@@ -3,7 +3,7 @@
 Normative IDs `GQL-*`. Rationale: ADR-001, 003, 010, 023. Replaces the 21-undefined-nonterminal EBNF of the earlier draft.
 
 ## 1. Definition: a profile of GraphQL
-- **GQL-001** A GAP-QL request document MUST be a valid GraphQL *executable document* and a GAP schema MUST be valid GraphQL SDL, per the GraphQL specification edition pinned in `docs/evidence/crate-versions.md` (verify at WP-M0-03). GAP adds **only**: (a) the reserved `gap` namespace (§3), (b) introspection extensions `__search`/`__metaGraph` (§4), (c) the directives in §5 (plus `@defer`/`@stream` only when the `incremental` feature is enabled, RUN-062), (d) request/response `extensions.gap` (§6), (e) limits and error codes (§8–§10).
+- **GQL-001** A GAP-QL request document MUST be a valid GraphQL *executable document* and a GAP schema MUST be valid GraphQL SDL, per the GraphQL `September 2025 Edition` pinned in `third_party/MANIFEST.toml` and `docs/evidence/crate-versions.md`. GAP adds **only**: (a) the reserved `gap` namespace (§3), (b) introspection extensions `__search`/`__metaGraph` (§4), (c) the directives in §5 (plus `@defer`/`@stream` only when the `incremental` feature is enabled, RUN-062), (d) request/response `extensions.gap` (§6), (e) limits and error codes (§8–§10).
 - **GQL-002** Implementations MUST use a conforming GraphQL parser/validator (reference: `apollo-compiler`) and MUST NOT accept documents that a conforming validator rejects, except where §7 mandates identical-looking errors for hidden elements.
 - **GQL-003** Transport: *GraphQL over HTTP* with `application/graphql-response+json` (and `application/json` fallback); `POST` required, `GET` allowed only for persisted operations; subscriptions via `graphql-sse` (distinct-connections mode) over HTTP/2. WebSocket subscriptions are out of scope (ADR-019).
 - **GQL-004** Field/argument/type names MUST NOT begin with `__` except introspection; branch schemas MUST NOT define the root fields `gap`, `__search`, `__metaGraph`, or the types listed in §3 (composition error `GAP_RESERVED_NAME`).
@@ -19,7 +19,7 @@ scalar DateTime            # RFC 3339 UTC
 scalar JSON                # any JSON value; used only for open-ended node properties
 scalar Cursor              # opaque, base64url, server-signed (tamper-evident)
 
-directive @oneOf on INPUT_OBJECT
+directive @oneOf on INPUT_OBJECT   # built-in in GraphQL September 2025 (Appendix D); declared explicitly because the parser in use may not pre-load it (third_party/specs/SPEC-NOTES.md Q-16)
 
 enum Direction        { OUTBOUND INBOUND BOTH }
 enum TraverseStrategy { BFS DFS SHORTEST WEIGHTED }
@@ -246,11 +246,11 @@ Tenant and principal are derived from authentication, never from the body (SEC-0
 - **GQL-072** Error messages MUST be ≤ 300 characters and contain no secret or hidden-element names (INV-15, GQL-062).
 
 ## 10. Error codes (stable enum)
-All errors: `{ message, path?, locations?, extensions: { code, retry: { retryable, afterMs? }, suggestion?, correlationId } }`. HTTP status applies only to *request-level* failures; operation-level failures return 200 with `errors[]` (ADR-023).
+All errors: `{ message, path?, locations?, extensions: { code, retry: { retryable, afterMs? }, suggestion?, correlationId } }`. Per GraphQL-over-HTTP (`application/graphql-response+json`), request errors raised before execution omit `data` and return `4xx`/`5xx` (`400` for JSON or GraphQL parse failures, `422` for GraphQL validation, operation-resolution or variable-coercion failures); on `graphql-sse` distinct-connections streams such errors are sent as `event: next` `{errors}` on a `200 text/event-stream`. Execution-phase errors include `data` and return `200` with `errors[]` (ADR-023).
 
 | Code | Class | Retryable | Notes |
 |---|---|---|---|
-| `GAP_PARSE_ERROR`, `GAP_VALIDATION_ERROR` (+ `GAP_UNKNOWN_FIELD`, `GAP_UNKNOWN_ARGUMENT`, `GAP_MISSING_ARGUMENT`, `GAP_TYPE_MISMATCH`) | request | no | HTTP 200 if a response document is produced, else 400 |
+| `GAP_PARSE_ERROR`, `GAP_VALIDATION_ERROR` (+ `GAP_UNKNOWN_FIELD`, `GAP_UNKNOWN_ARGUMENT`, `GAP_MISSING_ARGUMENT`, `GAP_TYPE_MISMATCH`) | request | no | `data` omitted; HTTP `400` (`GAP_PARSE_ERROR`, invalid JSON) or `422` (validation, coercion, operation resolution) with `application/graphql-response+json` |
 | `GAP_UNSUPPORTED_FEATURE`, `GAP_PERSISTED_OPERATION_NOT_FOUND`, `GAP_OPERATION_NOT_ALLOWED`, `GAP_DIRECTIVE_IGNORED` (warning) | request | no | |
 | `GAP_COMPLEXITY_EXCEEDED`, `GAP_DEPTH_EXCEEDED`, `GAP_RESPONSE_TOO_LARGE`, `GAP_BUDGET_EXCEEDED` | limits | no | message includes computed vs max |
 | `GAP_RATE_LIMITED`, `GAP_OVERLOADED` | load | yes (`afterMs`) | HTTP 429 / 503 at transport level when the whole request is refused |
@@ -272,7 +272,7 @@ All errors: `{ message, path?, locations?, extensions: { code, retry: { retryabl
   "schema": "fixtures/billing.graphql",          // composed supergraph used by the test server
   "principal": "agent-readonly",
   "request": { "query": "{ billing { invoce(id:\"1\"){total} } }" },
-  "expect": { "status": 200,
+  "expect": { "status": 422,
               "errors": [{ "extensions": { "code": "GAP_UNKNOWN_FIELD", "suggestion": { "didYouMean": ["invoice"] } } }],
               "dataNull": true } }
 ```
