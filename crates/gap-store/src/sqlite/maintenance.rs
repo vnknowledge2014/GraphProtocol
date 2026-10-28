@@ -8,7 +8,7 @@ use rusqlite::{TransactionBehavior, params};
 
 use crate::error::StoreError;
 use crate::sqlite::crud::{read_tenant_stats, write_tenant_stats};
-use crate::sqlite::{SqliteContextStore, lock_unpoisoned, map_sqlite_err};
+use crate::sqlite::{SqliteContextStore, lock_unpoisoned, map_sqlite_err, schema};
 use crate::store::ContextMaintenance;
 use crate::types::{PurgePolicy, PurgeReport, normalize_timestamp, timestamp_to_micros};
 
@@ -64,11 +64,6 @@ const SELECT_EXPIRED_TASK_ROWS_SQL: &str = "
             AND other.id = n.id
             AND (other.valid_to IS NULL OR other.valid_to > ?2)
       )
-";
-
-const DELETE_PURGED_FTS_ROW_SQL: &str = "
-    DELETE FROM nodes_fts
-    WHERE rowid = ?1 AND tenant = ?2
 ";
 
 const DELETE_PURGED_NODE_ROW_SQL: &str = "
@@ -221,9 +216,6 @@ impl SqliteContextStore {
             let mut sel_task = tx
                 .prepare_cached(SELECT_EXPIRED_TASK_ROWS_SQL)
                 .map_err(map_sqlite_err)?;
-            let mut del_fts = tx
-                .prepare_cached(DELETE_PURGED_FTS_ROW_SQL)
-                .map_err(map_sqlite_err)?;
             let mut del_node = tx
                 .prepare_cached(DELETE_PURGED_NODE_ROW_SQL)
                 .map_err(map_sqlite_err)?;
@@ -257,22 +249,6 @@ impl SqliteContextStore {
                     out
                 };
 
-                for (fts_rowid, node_id) in ephemeral_rows {
-                    del_fts
-                        .execute(params![fts_rowid, tenant_str])
-                        .map_err(map_sqlite_err)?;
-                    let deleted = del_node
-                        .execute(params![tenant_str, fts_rowid])
-                        .map_err(map_sqlite_err)?;
-                    if deleted > 0 {
-                        report.purged_ephemeral_nodes = report
-                            .purged_ephemeral_nodes
-                            .saturating_add(u64::try_from(deleted).unwrap_or(0));
-                        candidate_node_ids.insert(node_id);
-                        touched_tenant = true;
-                    }
-                }
-
                 let task_rows: Vec<(i64, String)> = {
                     let mapped = sel_task
                         .query_map(params![tenant_str, task_cutoff_us], |row| {
@@ -286,10 +262,36 @@ impl SqliteContextStore {
                     out
                 };
 
-                for (fts_rowid, node_id) in task_rows {
-                    del_fts
-                        .execute(params![fts_rowid, tenant_str])
+                let fts_table = schema::tenant_fts_table_name(tenant_str);
+                let del_fts_sql = format!("DELETE FROM {fts_table} WHERE rowid = ?1");
+                let mut del_fts = if (!ephemeral_rows.is_empty() || !task_rows.is_empty())
+                    && schema::fts_table_exists(&tx, &fts_table)?
+                {
+                    Some(tx.prepare_cached(&del_fts_sql).map_err(map_sqlite_err)?)
+                } else {
+                    None
+                };
+
+                for (fts_rowid, node_id) in ephemeral_rows {
+                    if let Some(stmt) = &mut del_fts {
+                        stmt.execute(params![fts_rowid]).map_err(map_sqlite_err)?;
+                    }
+                    let deleted = del_node
+                        .execute(params![tenant_str, fts_rowid])
                         .map_err(map_sqlite_err)?;
+                    if deleted > 0 {
+                        report.purged_ephemeral_nodes = report
+                            .purged_ephemeral_nodes
+                            .saturating_add(u64::try_from(deleted).unwrap_or(0));
+                        candidate_node_ids.insert(node_id);
+                        touched_tenant = true;
+                    }
+                }
+
+                for (fts_rowid, node_id) in task_rows {
+                    if let Some(stmt) = &mut del_fts {
+                        stmt.execute(params![fts_rowid]).map_err(map_sqlite_err)?;
+                    }
                     let deleted = del_node
                         .execute(params![tenant_str, fts_rowid])
                         .map_err(map_sqlite_err)?;

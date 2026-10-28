@@ -1,13 +1,73 @@
-//! SQLite schema, `PRAGMA user_version` migrations, and physical tenant-leading index layout
-//! (`INV-09`, `INV-19`, `ADR-020`, `ING-064`).
+//! SQLite schema, `PRAGMA user_version` migrations, per-tenant FTS5 shard naming, and physical
+//! tenant-leading index layout (`INV-09`, `INV-19`, `ADR-020`, `ING-064`).
 
-use rusqlite::{Connection, Transaction, TransactionBehavior};
+use std::fmt::Write as _;
+
+use rusqlite::{Connection, Transaction, TransactionBehavior, params};
 
 use crate::error::StoreError;
 use crate::sqlite::map_sqlite_err;
 
 /// Current on-disk SQLite schema version stored in `PRAGMA user_version` (`m2-01-design.md` §8).
-pub const FORMAT_VERSION: u32 = 2;
+pub const FORMAT_VERSION: u32 = 3;
+
+/// Derives the per-tenant FTS5 virtual table name `nodes_fts_<shard>`, where `<shard>` is the
+/// 16-character lowercase hex encoding of the first 8 bytes of `blake3(tenant_id)` (`INV-09`,
+/// `TM-09`, `R-4`).
+///
+/// Security invariant: ONLY this fixed `[0-9a-f]{16}` hex digest may be interpolated into SQL
+/// statements; the raw `tenant_id` string is never interpolated into SQL.
+#[must_use]
+pub fn tenant_fts_table_name(tenant_id: &str) -> String {
+    let digest = blake3::hash(tenant_id.as_bytes());
+    let mut table = String::with_capacity(10 + 16);
+    table.push_str("nodes_fts_");
+    for byte in &digest.as_bytes()[..8] {
+        let _ = write!(&mut table, "{byte:02x}");
+    }
+    debug_assert_eq!(table.len(), 26);
+    debug_assert!(
+        table[10..]
+            .bytes()
+            .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+    );
+    table
+}
+
+fn assert_valid_fts_shard_identifier(fts_table: &str) -> Result<(), StoreError> {
+    let Some(hex_part) = fts_table.strip_prefix("nodes_fts_") else {
+        return Err(StoreError::Backend);
+    };
+    if hex_part.len() != 16
+        || !hex_part
+            .bytes()
+            .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+    {
+        return Err(StoreError::Backend);
+    }
+    Ok(())
+}
+
+/// Lazily creates the per-tenant FTS5 virtual table inside an active write transaction (`R-4`).
+pub(crate) fn ensure_tenant_fts_table(
+    tx: &Transaction<'_>,
+    fts_table: &str,
+) -> Result<(), StoreError> {
+    assert_valid_fts_shard_identifier(fts_table)?;
+    let ddl = format!("CREATE VIRTUAL TABLE IF NOT EXISTS {fts_table} USING fts5(label, summary);");
+    tx.execute_batch(&ddl).map_err(map_sqlite_err)
+}
+
+/// Checks whether `table_name` exists in `sqlite_master` (`type = 'table'`).
+pub(crate) fn fts_table_exists(conn: &Connection, table_name: &str) -> Result<bool, StoreError> {
+    const TABLE_EXISTS_SQL: &str =
+        "SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?1)";
+    let mut stmt = conn
+        .prepare_cached(TABLE_EXISTS_SQL)
+        .map_err(map_sqlite_err)?;
+    stmt.query_row(params![table_name], |row| row.get::<_, bool>(0))
+        .map_err(map_sqlite_err)
+}
 
 /// Ordered, transactional schema migration step (`m2-01-design.md` §8).
 pub trait Migration: Send + Sync {
@@ -153,11 +213,61 @@ impl Migration for AddLifecycleIndexesV2 {
     }
 }
 
+struct SplitFtsPerTenantV3;
+
+impl Migration for SplitFtsPerTenantV3 {
+    fn target_version(&self) -> u32 {
+        3
+    }
+
+    fn name(&self) -> &'static str {
+        "split_fts_per_tenant_v3"
+    }
+
+    fn up(&self, tx: &Transaction<'_>) -> Result<(), StoreError> {
+        let tenants: Vec<String> = {
+            let mut stmt = tx
+                .prepare("SELECT DISTINCT tenant FROM nodes ORDER BY tenant ASC")
+                .map_err(map_sqlite_err)?;
+            let mapped = stmt
+                .query_map([], |row| row.get::<_, String>(0))
+                .map_err(map_sqlite_err)?;
+            let mut list = Vec::new();
+            for item in mapped {
+                list.push(item.map_err(map_sqlite_err)?);
+            }
+            list
+        };
+
+        for tenant_str in &tenants {
+            let fts_table = tenant_fts_table_name(tenant_str);
+            ensure_tenant_fts_table(tx, &fts_table)?;
+            let copy_sql = format!(
+                "INSERT INTO {fts_table} (rowid, label, summary)
+                 SELECT fts_rowid, label, COALESCE(summary, '')
+                 FROM nodes
+                 WHERE tenant = ?1
+                 ORDER BY fts_rowid ASC"
+            );
+            tx.execute(&copy_sql, params![tenant_str])
+                .map_err(map_sqlite_err)?;
+        }
+
+        tx.execute_batch(
+            "DROP TABLE IF EXISTS nodes_fts;
+             PRAGMA user_version = 3;",
+        )
+        .map_err(map_sqlite_err)
+    }
+}
+
 static MIGRATION_STEP_1: CreateBaseSchemaV1 = CreateBaseSchemaV1;
 static MIGRATION_STEP_2: AddLifecycleIndexesV2 = AddLifecycleIndexesV2;
+static MIGRATION_STEP_3: SplitFtsPerTenantV3 = SplitFtsPerTenantV3;
 
 /// Ordered built-in schema migrations (`1..=FORMAT_VERSION`).
-pub static MIGRATIONS: &[&dyn Migration] = &[&MIGRATION_STEP_1, &MIGRATION_STEP_2];
+pub static MIGRATIONS: &[&dyn Migration] =
+    &[&MIGRATION_STEP_1, &MIGRATION_STEP_2, &MIGRATION_STEP_3];
 
 /// Reads `PRAGMA user_version` as `u32` (treating negative values as corrupt).
 pub fn read_user_version(conn: &Connection) -> Result<u32, StoreError> {
@@ -203,19 +313,49 @@ pub fn apply_migrations(conn: &mut Connection) -> Result<u32, StoreError> {
     Ok(version)
 }
 
-/// Verifies that all required tables exist for a migrated database (`user_version >= 1`).
+/// Verifies that all required tables exist for a migrated or restored database (`user_version >= 1`).
 pub fn verify_required_tables(conn: &Connection) -> Result<(), StoreError> {
-    const CHECK_TABLES_SQL: &str = "
+    const CHECK_CORE_TABLES_SQL: &str = "
         SELECT COUNT(*)
         FROM sqlite_master
         WHERE type = 'table'
-          AND name IN ('tenant_stats', 'nodes', 'edges', 'nodes_fts')
+          AND name IN ('tenant_stats', 'nodes', 'edges')
     ";
-    let count: i64 = conn
-        .query_row(CHECK_TABLES_SQL, [], |row| row.get(0))
+    let core_count: i64 = conn
+        .query_row(CHECK_CORE_TABLES_SQL, [], |row| row.get(0))
         .map_err(map_sqlite_err)?;
-    if count != 4 {
+    if core_count != 3 {
         return Err(StoreError::Corrupt);
+    }
+
+    let version = read_user_version(conn)?;
+    if version == 0 {
+        return Err(StoreError::Corrupt);
+    }
+    if version <= 2 {
+        if !fts_table_exists(conn, "nodes_fts")? {
+            return Err(StoreError::Corrupt);
+        }
+        return Ok(());
+    }
+
+    // `version >= 3`: shared `nodes_fts` must not exist, and every tenant present in `nodes`
+    // must have its per-tenant `nodes_fts_<shard>` virtual table.
+    if fts_table_exists(conn, "nodes_fts")? {
+        return Err(StoreError::Corrupt);
+    }
+    let mut stmt = conn
+        .prepare("SELECT DISTINCT tenant FROM nodes")
+        .map_err(map_sqlite_err)?;
+    let mapped = stmt
+        .query_map([], |row| row.get::<_, String>(0))
+        .map_err(map_sqlite_err)?;
+    for item in mapped {
+        let tenant_str = item.map_err(map_sqlite_err)?;
+        let fts_table = tenant_fts_table_name(&tenant_str);
+        if !fts_table_exists(conn, &fts_table)? {
+            return Err(StoreError::Corrupt);
+        }
     }
     Ok(())
 }

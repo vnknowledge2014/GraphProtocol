@@ -566,17 +566,22 @@ fn purge_expired_enforces_exact_microsecond_boundaries_cleans_fts_and_edges_and_
         "live task v1"
     );
 
-    // Raw SQLite verification: zero FTS5 or table remnants for purged nodes.
+    // Raw SQLite verification: zero FTS5 or table remnants for purged nodes in either tenant shard.
     let raw = Connection::open_with_flags(&db_path, OpenFlags::SQLITE_OPEN_READ_ONLY)
         .expect("open raw readonly");
-    let remaining_fts_hits: i64 = raw
-        .query_row(
-            "SELECT COUNT(*) FROM nodes_fts WHERE nodes_fts MATCH '\"ephemeralzebratoken\" OR \"ephemeralgiraffetoken\" OR \"taskunicorntoken\"'",
-            [],
-            |r| r.get(0),
-        )
-        .expect("fts remnant query");
-    assert_eq!(remaining_fts_hits, 0);
+    for t_name in ["acme", "globex"] {
+        let shard_tbl = gap_store::sqlite::schema::tenant_fts_table_name(t_name);
+        let remaining_fts_hits: i64 = raw
+            .query_row(
+                &format!(
+                    "SELECT COUNT(*) FROM {shard_tbl} WHERE {shard_tbl} MATCH '\"ephemeralzebratoken\" OR \"ephemeralgiraffetoken\" OR \"taskunicorntoken\"'"
+                ),
+                [],
+                |r| r.get(0),
+            )
+            .expect("fts remnant query");
+        assert_eq!(remaining_fts_hits, 0, "remnant in {shard_tbl}");
+    }
 
     let remaining_purged_edges: i64 = raw
         .query_row(

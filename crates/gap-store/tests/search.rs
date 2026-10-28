@@ -5,10 +5,11 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use gap_core::clock::{Clock, ManualClock};
+use gap_core::clock::{Clock, ManualClock, Timestamp};
+use gap_store::sqlite::schema::tenant_fts_table_name;
 use gap_store::{
-    BaseScope, Caller, ContextStore, NewNode, NodeId, NodeType, Provenance, ScopeSpec,
-    SqliteConfig, SqliteContextStore, StoreError, TaskId, TenantId,
+    BaseScope, Caller, ContextMaintenance, ContextStore, NewNode, NodeId, NodeType, Provenance,
+    PurgePolicy, ScopeSpec, SqliteConfig, SqliteContextStore, StoreError, TaskId, TenantId,
 };
 use serde_json::Map as JsonMap;
 use tempfile::TempDir;
@@ -378,5 +379,231 @@ fn search_tenant_isolation_scope_indistinguishability_and_temporal_as_of() {
             .search_nodes(&tenant_a, &bob, "legacykeyword", 10, Some(t2))
             .expect("legacy at t2")
             .is_empty()
+    );
+}
+
+// spec: INV-09, INV-19, ING-065
+#[test]
+fn inv_09_bm25_ranking_is_isolated_per_tenant_and_unaffected_by_other_tenant_corpus() {
+    let dir = TempDir::new().expect("tempdir");
+    let clock: Arc<dyn Clock> = Arc::new(ManualClock::new(1_700_000_000_000));
+
+    let shared_store = SqliteContextStore::open(
+        SqliteConfig::new(dir.path().join("r4_shared.db")),
+        Arc::clone(&clock),
+    )
+    .expect("open shared");
+    let solo_store =
+        SqliteContextStore::open(SqliteConfig::new(dir.path().join("r4_solo.db")), clock)
+            .expect("open solo");
+
+    let ta = TenantId::new("ta").expect("ta").scope();
+    let tb = TenantId::new("tb").expect("tb").scope();
+    let caller = Caller::new("alice");
+
+    // Exact R-4 repro: `ta` has `short` ("alpha gamma") and `long` ("alpha alpha delta x6").
+    let ta_nodes = vec![
+        doc_node(Some("short"), "alpha gamma", None, ScopeSpec::Global),
+        doc_node(
+            Some("long"),
+            "alpha alpha delta delta delta delta delta delta",
+            None,
+            ScopeSpec::Global,
+        ),
+    ];
+    shared_store
+        .put_batch(&ta, &caller, &ta_nodes, &[])
+        .expect("seed ta shared");
+    solo_store
+        .put_batch(&ta, &caller, &ta_nodes, &[])
+        .expect("seed ta solo");
+
+    let before_hits = shared_store
+        .search_nodes(&ta, &caller, "alpha", 10, None)
+        .expect("ta search before tb");
+    let before_ids: Vec<&str> = before_hits.iter().map(|n| n.id.as_str()).collect();
+    assert_eq!(before_ids, vec!["short", "long"]);
+
+    let solo_hits = solo_store
+        .search_nodes(&ta, &caller, "alpha", 10, None)
+        .expect("ta solo search");
+    let solo_ids: Vec<&str> = solo_hits.iter().map(|n| n.id.as_str()).collect();
+    assert_eq!(solo_ids, vec!["short", "long"]);
+
+    // `tb` writes 40 long documents ("zzz", 150-token summary < 1,024 bytes) that previously
+    // inflated corpus-wide average document length and flipped `ta`'s BM25 order to `[long, short]`.
+    let summary_150 = (0..150)
+        .map(|i| format!("w{i}"))
+        .collect::<Vec<_>>()
+        .join(" ");
+    assert!(summary_150.len() < 1_024);
+    let tb_nodes: Vec<NewNode> = (0..40)
+        .map(|i| {
+            doc_node(
+                Some(&format!("tb:{i:02}")),
+                "zzz",
+                Some(&summary_150),
+                ScopeSpec::Global,
+            )
+        })
+        .collect();
+    shared_store
+        .put_batch(&tb, &caller, &tb_nodes, &[])
+        .expect("seed tb 40 long docs");
+
+    // `ta`'s ranking MUST remain `[short, long]`, identical to before `tb`'s writes and to `solo_store`.
+    let after_hits = shared_store
+        .search_nodes(&ta, &caller, "alpha", 10, None)
+        .expect("ta search after tb");
+    let after_ids: Vec<&str> = after_hits.iter().map(|n| n.id.as_str()).collect();
+    assert_eq!(after_ids, vec!["short", "long"]);
+    assert_eq!(after_ids, solo_ids);
+
+    // Terms existing only in `tb` return nothing for `ta`, while `tb` sees its own 40 matches.
+    assert!(
+        shared_store
+            .search_nodes(&ta, &caller, "zzz", 10, None)
+            .expect("ta zzz")
+            .is_empty()
+    );
+    assert!(
+        shared_store
+            .search_nodes(&ta, &caller, "w42", 10, None)
+            .expect("ta w42")
+            .is_empty()
+    );
+    assert_eq!(
+        shared_store
+            .search_nodes(&tb, &caller, "zzz", 100, None)
+            .expect("tb zzz")
+            .len(),
+        40
+    );
+}
+
+// spec: INV-09, INV-19, ING-065, ING-066
+#[test]
+fn inv_09_delete_purge_hex_shards_and_punctuation_tenant_ids_isolate_fts_tables() {
+    // Two distinct tenants produce distinct 16-hex shards, and punctuation like `a-b_c` never leaks
+    // into the SQL table identifier.
+    let shard_ta = tenant_fts_table_name("ta");
+    let shard_tb = tenant_fts_table_name("tb");
+    let shard_punct = tenant_fts_table_name("a-b_c");
+    assert_ne!(shard_ta, shard_tb);
+    assert_ne!(shard_ta, shard_punct);
+    assert_ne!(shard_tb, shard_punct);
+    for tbl in [&shard_ta, &shard_tb, &shard_punct] {
+        let hex = tbl.strip_prefix("nodes_fts_").expect("prefix");
+        assert_eq!(hex.len(), 16);
+        assert!(
+            hex.bytes()
+                .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+        );
+    }
+
+    let dir = TempDir::new().expect("tempdir");
+    let manual = Arc::new(ManualClock::new(1_700_000_000_000));
+    let clock: Arc<dyn Clock> = manual.clone();
+    let store = SqliteContextStore::open(SqliteConfig::new(dir.path().join("r4_ops.db")), clock)
+        .expect("open");
+
+    let ta = TenantId::new("ta").expect("ta").scope();
+    let tb = TenantId::new("tb").expect("tb").scope();
+    let punct = TenantId::new("a-b_c").expect("punct").scope();
+    let unwritten = TenantId::new("unwritten-tenant")
+        .expect("unwritten")
+        .scope();
+    let caller = Caller::new("alice");
+
+    // Searching a tenant that has never created an FTS table returns `Ok(vec![])`, not an error.
+    assert!(
+        store
+            .search_nodes(&unwritten, &caller, "anything", 10, None)
+            .expect("empty shard search")
+            .is_empty()
+    );
+
+    let t0_ns = manual.now_timestamp().unix_nanos();
+    let exp_60s = Timestamp::from_unix_nanos(t0_ns + 60 * 1_000_000_000).expect("60s");
+    let exp_1h = Timestamp::from_unix_nanos(t0_ns + 3_600 * 1_000_000_000).expect("1h");
+
+    for (scope, exp) in [(&ta, exp_60s), (&tb, exp_1h), (&punct, exp_1h)] {
+        store
+            .put_node(
+                scope,
+                &caller,
+                doc_node(
+                    Some("doc:shared"),
+                    "sharedkeyword",
+                    Some("per tenant copy"),
+                    ScopeSpec::Global,
+                ),
+            )
+            .expect("put shared");
+        store
+            .put_node(
+                scope,
+                &caller,
+                doc_node(
+                    None,
+                    "ephemeralkeyword",
+                    None,
+                    ScopeSpec::ephemeral(BaseScope::Global, exp),
+                ),
+            )
+            .expect("put eph");
+    }
+
+    // 1. `delete_node` in `ta` removes ONLY `ta`'s FTS row; `tb` and `a-b_c` keep theirs.
+    let shared_id = NodeId::new("doc:shared").expect("id");
+    store
+        .delete_node(&ta, &caller, &shared_id)
+        .expect("delete ta shared");
+    assert!(
+        store
+            .search_nodes(&ta, &caller, "sharedkeyword", 10, None)
+            .expect("ta after delete")
+            .is_empty()
+    );
+    assert_eq!(
+        store
+            .search_nodes(&tb, &caller, "sharedkeyword", 10, None)
+            .expect("tb intact")
+            .len(),
+        1
+    );
+    assert_eq!(
+        store
+            .search_nodes(&punct, &caller, "sharedkeyword", 10, None)
+            .expect("a-b_c intact")
+            .len(),
+        1
+    );
+
+    // 2. `purge_expired` at +60s purges `ta`'s expired ephemeral FTS row while `tb` and `a-b_c` keep theirs.
+    manual.advance(Duration::from_secs(60));
+    let report = store
+        .purge_expired(&PurgePolicy::default())
+        .expect("purge +60s");
+    assert_eq!(report.purged_ephemeral_nodes, 1);
+    assert!(
+        store
+            .search_nodes(&ta, &caller, "ephemeralkeyword", 10, None)
+            .expect("ta eph purged")
+            .is_empty()
+    );
+    assert_eq!(
+        store
+            .search_nodes(&tb, &caller, "ephemeralkeyword", 10, None)
+            .expect("tb eph intact")
+            .len(),
+        1
+    );
+    assert_eq!(
+        store
+            .search_nodes(&punct, &caller, "ephemeralkeyword", 10, None)
+            .expect("a-b_c eph intact")
+            .len(),
+        1
     );
 }

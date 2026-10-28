@@ -5,11 +5,13 @@ use std::collections::HashMap;
 
 use gap_core::clock::Timestamp;
 use gap_core::ids::{TaskId, TenantScope};
-use rusqlite::{Connection, OptionalExtension, Transaction, TransactionBehavior, params};
+use rusqlite::{
+    CachedStatement, Connection, OptionalExtension, Transaction, TransactionBehavior, params,
+};
 use serde_json::{Map as JsonMap, Value as JsonValue};
 
 use crate::error::StoreError;
-use crate::sqlite::{SqliteContextStore, lock_unpoisoned, map_sqlite_err};
+use crate::sqlite::{SqliteContextStore, lock_unpoisoned, map_sqlite_err, schema};
 use crate::types::{
     BatchResult, Caller, Edge, EdgeId, EdgeResolution, EdgeType, GraphCounts, MAX_BATCH_ITEMS,
     NewEdge, NewNode, Node, NodeId, NodeType, Provenance, ResolvedScope, Scope,
@@ -466,11 +468,6 @@ const INSERT_NODE_SQL: &str = "
     )
 ";
 
-const INSERT_NODE_FTS_SQL: &str = "
-    INSERT INTO nodes_fts (rowid, tenant, label, summary)
-    VALUES (?1, ?2, ?3, COALESCE(?4, ''))
-";
-
 const SELECT_CURRENT_EDGE_META_SQL: &str = "
     SELECT edge_rowid, id, valid_from, content_hash
     FROM edges
@@ -534,11 +531,6 @@ const COUNT_ACTIVE_INCIDENT_EDGES_SQL: &str = "
     WHERE tenant = ?1
       AND (from_id = ?2 OR to_id = ?2)
       AND valid_to IS NULL
-";
-
-const DELETE_NODE_FTS_ROW_SQL: &str = "
-    DELETE FROM nodes_fts
-    WHERE rowid = ?1 AND tenant = ?2
 ";
 
 const DELETE_INCIDENT_EDGES_SQL: &str = "
@@ -688,10 +680,49 @@ struct NodeVersionWrite<'a> {
     content_hash: &'a [u8; 32],
 }
 
+struct TenantFtsWriter<'a, 'conn> {
+    tx: &'a Transaction<'conn>,
+    fts_table: String,
+    insert_sql: String,
+    stmt: Option<CachedStatement<'a>>,
+}
+
+impl<'a, 'conn> TenantFtsWriter<'a, 'conn> {
+    fn new(tx: &'a Transaction<'conn>, tenant_str: &str) -> Self {
+        let fts_table = schema::tenant_fts_table_name(tenant_str);
+        let insert_sql = format!(
+            "INSERT INTO {fts_table} (rowid, label, summary) VALUES (?1, ?2, COALESCE(?3, ''))"
+        );
+        Self {
+            tx,
+            fts_table,
+            insert_sql,
+            stmt: None,
+        }
+    }
+
+    fn insert(&mut self, rowid: i64, label: &str, summary: Option<&str>) -> Result<(), StoreError> {
+        let stmt = match &mut self.stmt {
+            Some(s) => s,
+            None => {
+                schema::ensure_tenant_fts_table(self.tx, &self.fts_table)?;
+                let prepared = self
+                    .tx
+                    .prepare_cached(&self.insert_sql)
+                    .map_err(map_sqlite_err)?;
+                self.stmt.insert(prepared)
+            }
+        };
+        stmt.execute(params![rowid, label, summary])
+            .map_err(map_sqlite_err)?;
+        Ok(())
+    }
+}
+
 fn insert_node_version(
     tx: &Transaction<'_>,
     ins: &mut rusqlite::Statement<'_>,
-    fts_ins: &mut rusqlite::Statement<'_>,
+    fts_ins: &mut TenantFtsWriter<'_, '_>,
     w: &NodeVersionWrite<'_>,
 ) -> Result<(), StoreError> {
     let task_str = w.resolved.task_id.map(|t| t.to_string());
@@ -722,15 +753,7 @@ fn insert_node_version(
     .map_err(map_sqlite_err)?;
 
     let fts_rowid = tx.last_insert_rowid();
-    fts_ins
-        .execute(params![
-            fts_rowid,
-            w.tenant_str,
-            w.node.label.as_str(),
-            w.node.summary.as_deref()
-        ])
-        .map_err(map_sqlite_err)?;
-    Ok(())
+    fts_ins.insert(fts_rowid, w.node.label.as_str(), w.node.summary.as_deref())
 }
 
 struct EdgeVersionWrite<'a> {
@@ -830,9 +853,7 @@ impl SqliteContextStore {
                 .map_err(map_sqlite_err)?;
             let mut insert_node_stmt =
                 tx.prepare_cached(INSERT_NODE_SQL).map_err(map_sqlite_err)?;
-            let mut insert_fts_stmt = tx
-                .prepare_cached(INSERT_NODE_FTS_SQL)
-                .map_err(map_sqlite_err)?;
+            let mut insert_fts_stmt = TenantFtsWriter::new(&tx, tenant_str);
 
             for (raw_node, props_json, resolved, hash) in &prepared_nodes {
                 match (&raw_node.id, resolved.scope) {
@@ -1270,14 +1291,14 @@ impl SqliteContextStore {
             u64::try_from(raw.max(0)).unwrap_or(0)
         };
 
-        {
-            let mut del_fts = tx
-                .prepare_cached(DELETE_NODE_FTS_ROW_SQL)
-                .map_err(map_sqlite_err)?;
-            for rowid in fts_rowids {
-                del_fts
-                    .execute(params![rowid, tenant_str])
-                    .map_err(map_sqlite_err)?;
+        if !fts_rowids.is_empty() {
+            let fts_table = schema::tenant_fts_table_name(tenant_str);
+            if schema::fts_table_exists(&tx, &fts_table)? {
+                let del_fts_sql = format!("DELETE FROM {fts_table} WHERE rowid = ?1");
+                let mut del_fts = tx.prepare_cached(&del_fts_sql).map_err(map_sqlite_err)?;
+                for rowid in fts_rowids {
+                    del_fts.execute(params![rowid]).map_err(map_sqlite_err)?;
+                }
             }
         }
         {

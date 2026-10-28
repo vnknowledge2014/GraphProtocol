@@ -640,11 +640,11 @@ mod tests {
         }
 
         let clock: Arc<dyn Clock> = Arc::new(ManualClock::new(1_700_000_000_000));
-        let store =
-            SqliteContextStore::open(SqliteConfig::new(&v1_path), clock).expect("migrate v1 -> v2");
+        let store = SqliteContextStore::open(SqliteConfig::new(&v1_path), clock)
+            .expect("migrate v1 -> v2 -> v3");
         let reader_guard = store.readers.checkout();
         let reader = reader_guard.conn().expect("conn");
-        assert_eq!(schema::read_user_version(reader).expect("ver"), 2);
+        assert_eq!(schema::read_user_version(reader).expect("ver"), 3);
 
         let preserved_label: String = reader
             .query_row(
@@ -655,6 +655,13 @@ mod tests {
             .expect("preserved row");
         assert_eq!(preserved_label, "README");
 
+        assert!(
+            !schema::fts_table_exists(reader, "nodes_fts").expect("legacy fts check"),
+            "v3 migration must drop shared `nodes_fts`"
+        );
+        let acme_fts = schema::tenant_fts_table_name("acme");
+        assert!(schema::fts_table_exists(reader, &acme_fts).expect("acme fts exists"));
+
         let v2_idx_count: i64 = reader
             .query_row(
                 "SELECT COUNT(*) FROM sqlite_master WHERE type = 'index' AND name IN ('idx_nodes_task', 'idx_nodes_base_task', 'idx_nodes_ephemeral')",
@@ -663,6 +670,162 @@ mod tests {
             )
             .expect("v2 indexes");
         assert_eq!(v2_idx_count, 3);
+    }
+
+    // spec: INV-09, INV-19, ING-064 (ADR-020)
+    #[test]
+    fn previous_version_v2_raw_sql_database_migrates_to_v3_per_tenant_fts_and_preserves_search() {
+        let dir = TempDir::new().expect("tempdir");
+        let v2_path = dir.path().join("v2.db");
+        {
+            let raw = Connection::open(&v2_path).expect("open raw v2");
+            raw.execute_batch(
+                "CREATE TABLE tenant_stats (
+                    tenant TEXT NOT NULL,
+                    node_count INTEGER NOT NULL DEFAULT 0,
+                    edge_count INTEGER NOT NULL DEFAULT 0,
+                    PRIMARY KEY (tenant)
+                ) WITHOUT ROWID;
+                CREATE TABLE nodes (
+                    fts_rowid INTEGER PRIMARY KEY,
+                    tenant TEXT NOT NULL,
+                    id TEXT NOT NULL,
+                    node_type TEXT NOT NULL,
+                    label TEXT NOT NULL,
+                    summary TEXT,
+                    props_json TEXT NOT NULL,
+                    scope TEXT NOT NULL,
+                    base_scope TEXT NOT NULL,
+                    owner_principal TEXT NOT NULL,
+                    task_id TEXT,
+                    group_name TEXT,
+                    expires_at INTEGER,
+                    prov_source TEXT NOT NULL,
+                    prov_desc_hash TEXT,
+                    prov_confidence REAL,
+                    prov_extracted_at INTEGER,
+                    prov_agent TEXT,
+                    valid_from INTEGER NOT NULL,
+                    valid_to INTEGER,
+                    content_hash BLOB NOT NULL
+                );
+                CREATE UNIQUE INDEX idx_nodes_current ON nodes (tenant, id) WHERE valid_to IS NULL;
+                CREATE INDEX idx_nodes_temporal ON nodes (tenant, id, valid_from, valid_to);
+                CREATE INDEX idx_nodes_task ON nodes (tenant, scope, task_id, valid_to);
+                CREATE INDEX idx_nodes_base_task ON nodes (tenant, base_scope, task_id, valid_to);
+                CREATE INDEX idx_nodes_ephemeral ON nodes (tenant, scope, expires_at);
+                CREATE TABLE edges (
+                    edge_rowid INTEGER PRIMARY KEY,
+                    tenant TEXT NOT NULL,
+                    id TEXT NOT NULL,
+                    edge_type TEXT NOT NULL,
+                    from_id TEXT NOT NULL,
+                    to_id TEXT NOT NULL,
+                    props_json TEXT NOT NULL,
+                    confidence REAL,
+                    resolution TEXT NOT NULL,
+                    prov_source TEXT NOT NULL,
+                    prov_desc_hash TEXT,
+                    prov_confidence REAL,
+                    prov_extracted_at INTEGER,
+                    prov_agent TEXT,
+                    valid_from INTEGER NOT NULL,
+                    valid_to INTEGER,
+                    content_hash BLOB NOT NULL
+                );
+                CREATE UNIQUE INDEX idx_edges_current_quad ON edges (tenant, edge_type, from_id, to_id) WHERE valid_to IS NULL;
+                CREATE UNIQUE INDEX idx_edges_current_id ON edges (tenant, id) WHERE valid_to IS NULL;
+                CREATE INDEX idx_edges_from ON edges (tenant, from_id, valid_from, valid_to);
+                CREATE INDEX idx_edges_to ON edges (tenant, to_id, valid_from, valid_to);
+                CREATE INDEX idx_edges_id_temporal ON edges (tenant, id, valid_from, valid_to);
+                CREATE VIRTUAL TABLE nodes_fts USING fts5(tenant UNINDEXED, label, summary);
+                PRAGMA user_version = 2;",
+            )
+            .expect("apply raw v2 ddl");
+
+            raw.execute(
+                "INSERT INTO tenant_stats (tenant, node_count, edge_count) VALUES ('ta', 1, 0), ('a-b_c', 1, 0)",
+                [],
+            )
+            .expect("insert v2 stats");
+            raw.execute(
+                "INSERT INTO nodes VALUES (
+                    1, 'ta', 'doc:ta', 'Doc', 'migratedalpha', 'summaryta', '{}',
+                    'GLOBAL', 'GLOBAL', 'alice', NULL, NULL, NULL,
+                    'v2', NULL, NULL, NULL, NULL, 1700000000000000, NULL, X'01'
+                )",
+                [],
+            )
+            .expect("insert ta node");
+            raw.execute(
+                "INSERT INTO nodes VALUES (
+                    2, 'a-b_c', 'doc:punct', 'Doc', 'migratedpunct', 'summarypunct', '{}',
+                    'GLOBAL', 'GLOBAL', 'alice', NULL, NULL, NULL,
+                    'v2', NULL, NULL, NULL, NULL, 1700000000000000, NULL, X'02'
+                )",
+                [],
+            )
+            .expect("insert a-b_c node");
+            raw.execute(
+                "INSERT INTO nodes_fts (rowid, tenant, label, summary)
+                 VALUES (1, 'ta', 'migratedalpha', 'summaryta'),
+                        (2, 'a-b_c', 'migratedpunct', 'summarypunct')",
+                [],
+            )
+            .expect("insert v2 shared fts");
+        }
+
+        let clock: Arc<dyn Clock> = Arc::new(ManualClock::new(1_700_000_000_000));
+        let store =
+            SqliteContextStore::open(SqliteConfig::new(&v2_path), clock).expect("migrate v2 -> v3");
+        assert_eq!(store.format_version().expect("ver"), 3);
+
+        let shard_ta = schema::tenant_fts_table_name("ta");
+        let shard_punct = schema::tenant_fts_table_name("a-b_c");
+        assert_ne!(shard_ta, shard_punct);
+
+        {
+            let reader_guard = store.readers.checkout();
+            let reader = reader_guard.conn().expect("conn");
+            assert!(!schema::fts_table_exists(reader, "nodes_fts").expect("old fts dropped"));
+            assert!(schema::fts_table_exists(reader, &shard_ta).expect("ta shard exists"));
+            assert!(schema::fts_table_exists(reader, &shard_punct).expect("punct shard exists"));
+        }
+
+        let ta_scope = gap_core::ids::TenantId::new("ta").expect("ta").scope();
+        let punct_scope = gap_core::ids::TenantId::new("a-b_c")
+            .expect("a-b_c")
+            .scope();
+        let empty_scope = gap_core::ids::TenantId::new("empty-tenant")
+            .expect("empty")
+            .scope();
+        let caller = Caller::new("alice");
+
+        let ta_hits = store
+            .search_nodes(&ta_scope, &caller, "migratedalpha", 10, None)
+            .expect("search ta");
+        assert_eq!(ta_hits.len(), 1);
+        assert_eq!(ta_hits[0].id.as_str(), "doc:ta");
+        assert!(
+            store
+                .search_nodes(&ta_scope, &caller, "migratedpunct", 10, None)
+                .expect("cross search")
+                .is_empty()
+        );
+
+        let punct_hits = store
+            .search_nodes(&punct_scope, &caller, "migratedpunct", 10, None)
+            .expect("search punct");
+        assert_eq!(punct_hits.len(), 1);
+        assert_eq!(punct_hits[0].id.as_str(), "doc:punct");
+
+        // A tenant with no FTS shard table returns Ok(vec![]), not an error.
+        assert!(
+            store
+                .search_nodes(&empty_scope, &caller, "migratedalpha", 10, None)
+                .expect("empty tenant search")
+                .is_empty()
+        );
     }
 
     // spec: ING-064 (ADR-020)
@@ -714,7 +877,11 @@ mod tests {
         let reader_guard = store.readers.checkout();
         let reader = reader_guard.conn().expect("conn");
 
-        for table in ["tenant_stats", "nodes", "edges", "nodes_fts"] {
+        assert!(
+            !schema::fts_table_exists(reader, "nodes_fts").expect("shared fts must not exist"),
+            "v3 stores must use per-tenant `nodes_fts_<shard>` tables instead of a shared `nodes_fts`"
+        );
+        for table in ["tenant_stats", "nodes", "edges"] {
             let mut stmt = reader
                 .prepare(&format!("PRAGMA table_info({table});"))
                 .expect("table_info");

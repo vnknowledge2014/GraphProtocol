@@ -132,13 +132,33 @@ fn dump_all_rows(path: &Path) -> FullDatabaseSnapshot {
         .collect::<Result<Vec<_>, _>>()
         .expect("collect edges");
 
-    let fts = conn
-        .prepare("SELECT rowid, tenant, label, summary FROM nodes_fts ORDER BY rowid ASC")
-        .expect("prep fts")
-        .query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)))
-        .expect("query fts")
+    let fts_tables: Vec<String> = conn
+        .prepare(
+            "SELECT name FROM sqlite_master
+             WHERE type = 'table' AND name LIKE 'nodes_fts_%' AND sql LIKE 'CREATE VIRTUAL TABLE%'
+             ORDER BY name ASC",
+        )
+        .expect("prep fts_tables")
+        .query_map([], |r| r.get(0))
+        .expect("query fts_tables")
         .collect::<Result<Vec<_>, _>>()
-        .expect("collect fts");
+        .expect("collect fts_tables");
+
+    let mut fts = Vec::new();
+    for tbl in fts_tables {
+        let rows: Vec<(i64, String, String)> = conn
+            .prepare(&format!(
+                "SELECT rowid, label, summary FROM {tbl} ORDER BY rowid ASC"
+            ))
+            .expect("prep shard fts")
+            .query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))
+            .expect("query shard fts")
+            .collect::<Result<Vec<_>, _>>()
+            .expect("collect shard fts");
+        for (rowid, label, summary) in rows {
+            fts.push((rowid, tbl.clone(), label, summary));
+        }
+    }
 
     FullDatabaseSnapshot {
         tenant_stats,
@@ -484,6 +504,23 @@ fn restore_and_backup_refuse_existing_targets_and_reject_corrupted_or_future_bac
         StoreError::Backend
     );
     assert!(!bad_target_6.exists());
+
+    // 10. v3 backup missing a tenant's `nodes_fts_<shard>` virtual table -> `Corrupt`.
+    let missing_fts_src = dir.path().join("missing_tenant_fts.db");
+    fs::copy(&backup_path, &missing_fts_src).expect("copy for fts drop");
+    {
+        let raw = Connection::open(&missing_fts_src).expect("open missing_fts_src");
+        let shard = gap_store::sqlite::schema::tenant_fts_table_name("acme");
+        raw.execute_batch(&format!("DROP TABLE {shard};"))
+            .expect("drop tenant fts shard");
+    }
+    let bad_target_7 = dir.path().join("never_created_7.db");
+    assert_eq!(
+        SqliteContextStore::restore_from(&missing_fts_src, &bad_target_7)
+            .expect_err("missing tenant fts shard"),
+        StoreError::Corrupt
+    );
+    assert!(!bad_target_7.exists());
 }
 
 // spec: INV-02, ING-064
