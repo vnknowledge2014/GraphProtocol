@@ -8,7 +8,9 @@
     clippy::unimplemented
 )]
 
+pub mod ewma;
 mod sync;
 pub mod time;
 
+pub use ewma::DecayedEwma;
 pub use time::Now;
