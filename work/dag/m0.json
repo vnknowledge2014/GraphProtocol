@@ -21,13 +21,13 @@
     },
     {
       "id": 3,
-      "title": "WP-M0-03 Pin external specifications (MCP, A2A, GraphQL, GraphQL-over-HTTP). Deliverables: third_party/MANIFEST.toml with url, retrieved_at, sha256, license for: MCP spec 2026-07-28 (+2025-11-25 for outbound compat), A2A v1.0 a2a.proto + spec text, GraphQL spec edition used, GraphQL-over-HTTP spec, graphql-sse protocol; third_party/specs/*: vendored copies (or checksummed excerpts where licensing forbids copying) and a SPEC-NOTES.md listing every place spec/09 says 'verify against upstream' with the verified answer (MCP _meta keys, MRTR/input-required shape, A2A task state names); docs/evidence/crate-versions.md updated with the GraphQL edition and any contradictions found. Acceptance (must pass): python3 -c \"import tomllib;m=tomllib.load(open('third_party/MANIFEST.toml','rb'));assert len(m['spec'])>=5\" && test -f third_party/specs/SPEC-NOTES.md",
+      "title": "WP-M0-03 Pin external specifications (MCP, A2A, GraphQL, GraphQL-over-HTTP). Deliverables: third_party/MANIFEST.toml with url, retrieved_at, sha256, license for: MCP spec 2026-07-28 (+2025-11-25 for outbound compat), A2A v1.0 a2a.proto + spec text, GraphQL spec edition used, GraphQL-over-HTTP spec, graphql-sse protocol; third_party/specs/*: vendored copies (or checksummed excerpts where licensing forbids copying) and a SPEC-NOTES.md listing every place spec/09 says 'verify against upstream' with the verified answer (MCP _meta keys, MRTR/input-required shape, A2A task state names); docs/evidence/crate-versions.md updated with the GraphQL edition and any contradictions found; Follow work/context/m0-03-brief.md (binding): the sources are staged by the reviewer under .local/specs-staging (no network for the agent), third_party/specs/<bundle>/ holds byte-identical copies, MANIFEST.toml lists every file with the sha256 of the staging log, SPEC-NOTES.md answers Q-1..Q-18 with citations and lists every deferral to upstream, third_party/README.md explains re-verification and licences. Acceptance (must pass): python3 -c \"import tomllib;m=tomllib.load(open('third_party/MANIFEST.toml','rb'));assert len(m['spec'])>=5\" && test -f third_party/specs/SPEC-NOTES.md",
       "role": "analyzer",
       "depends_on": [
         1,
         2
       ],
-      "system_prompt": "Read AGENTS.md and docs/AGENT-GUIDE.md first. Work ONLY inside these paths: third_party/**, docs/evidence/crate-versions.md. Spec refs: CMP-001, CMP-020, GQL-001, ADR-017. Expand this work package into 2-5 minute steps before coding."
+      "system_prompt": "Read AGENTS.md and docs/AGENT-GUIDE.md first. Work ONLY inside these paths: third_party/**, docs/evidence/crate-versions.md. Spec refs: CMP-001, CMP-013, CMP-020, CMP-021, CMP-022, GQL-001, ADR-016, ADR-017. Expand this work package into 2-5 minute steps before coding."
     },
     {
       "id": 4,
