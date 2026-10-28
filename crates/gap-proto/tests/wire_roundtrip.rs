@@ -1,6 +1,7 @@
 //! Dynamic-to-static-to-dynamic wire compatibility, registry completeness, and negative decode tests.
 #![forbid(unsafe_code)]
 
+use std::cell::RefCell;
 use std::collections::{BTreeMap, BTreeSet};
 use std::panic::{AssertUnwindSafe, catch_unwind};
 
@@ -17,6 +18,10 @@ use prost_types::FileDescriptorSet;
 
 const CASES_PER_MESSAGE: u32 = 256;
 const MAX_RECURSION_DEPTH: usize = 3;
+
+// The WP-M0-06 brief (section 3.5) fixes these floors; lowering either silently weakens the suite.
+const _: () = assert!(CASES_PER_MESSAGE >= 256);
+const _: () = assert!(MAX_RECURSION_DEPTH >= 3);
 
 const TIMESTAMP_MIN_SECONDS: i64 = -62_135_596_800; // 0001-01-01T00:00:00Z
 const TIMESTAMP_MAX_SECONDS: i64 = 253_402_300_799; // 9999-12-31T23:59:59Z
@@ -741,8 +746,14 @@ fn run_roundtrip_suite(
             .unwrap_or_else(|| panic!("missing static registration for {full_name}"));
         let strategy = dynamic_message_strategy(desc.clone(), MAX_RECURSION_DEPTH);
         let mut runner = TestRunner::new(config.clone());
+        let populated = RefCell::new(BTreeSet::<String>::new());
 
         let result = runner.run(&strategy, |dyn_original| {
+            for field in desc.fields() {
+                if dyn_original.has_field(&field) {
+                    populated.borrow_mut().insert(field.name().to_owned());
+                }
+            }
             let dyn_encoded = dyn_original.encode_to_vec();
 
             // (a) Decode with static generated type and re-encode; dynamic decode of static
@@ -770,6 +781,19 @@ fn run_roundtrip_suite(
         if let Err(err) = result {
             panic!("proptest wire round-trip failed for {full_name}: {err}");
         }
+
+        // A field the generator never sets is never round-tripped: fail instead of passing vacuously.
+        let populated = populated.into_inner();
+        let never_populated: Vec<String> = desc
+            .fields()
+            .map(|field| field.name().to_owned())
+            .filter(|name| !populated.contains(name))
+            .collect();
+        assert!(
+            never_populated.is_empty(),
+            "{full_name}: the generator never populated field(s) {never_populated:?} in {CASES_PER_MESSAGE} cases, \
+             so the wire round-trip does not exercise them"
+        );
     }
 }
 
