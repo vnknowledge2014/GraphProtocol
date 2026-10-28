@@ -38,7 +38,7 @@ fn make_edge(id: Option<&str>, edge_type: &str, from: &str, to: &str) -> NewEdge
     }
 }
 
-// spec: ING-062, ING-064 (ADR-020)
+// spec: ING-062, ING-064, ING-082 (ADR-020)
 #[test]
 fn temporal_versions_as_of_boundaries_and_content_hash_idempotence() {
     let dir = TempDir::new().expect("tempdir");
@@ -225,7 +225,7 @@ fn temporal_versions_as_of_boundaries_and_content_hash_idempotence() {
     );
 }
 
-// spec: ING-064, INV-09
+// spec: ING-064, INV-09, ING-080
 #[test]
 fn put_batch_atomicity_cap_and_50k_nodes_100k_edges_ingestion() {
     let dir = TempDir::new().expect("tempdir");
@@ -340,7 +340,7 @@ fn put_batch_atomicity_cap_and_50k_nodes_100k_edges_ingestion() {
     );
 }
 
-// spec: ING-064, INV-09, INV-19
+// spec: ING-064, INV-09, INV-19, ING-087
 #[test]
 fn per_tenant_quotas_enforced_isolated_and_reclaimed_on_tombstone() {
     let dir = TempDir::new().expect("tempdir");

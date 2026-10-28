@@ -343,7 +343,7 @@ fn scope_visibility_rules_for_literal_callers_and_ephemeral_expiry() {
     );
 }
 
-// spec: ING-065, ING-066
+// spec: ING-065, ING-066, ING-081
 #[test]
 fn no_id_oracle_uuidv7_minting_and_scoped_updates() {
     let dir = TempDir::new().expect("tempdir");
@@ -439,7 +439,7 @@ fn no_id_oracle_uuidv7_minting_and_scoped_updates() {
     ));
 }
 
-// spec: ING-065, INV-15
+// spec: ING-065, INV-15, ING-083
 #[test]
 fn invisible_nodes_and_edges_are_byte_identical_to_missing_entities() {
     let dir = TempDir::new().expect("tempdir");
@@ -559,7 +559,7 @@ fn invisible_nodes_and_edges_are_byte_identical_to_missing_entities() {
     assert_eq!(del_invis.to_string(), del_miss.to_string());
 }
 
-// spec: ING-065, ING-066
+// spec: ING-065, ING-066, ING-083
 #[test]
 fn edge_visible_and_counted_only_when_both_endpoints_are_visible() {
     let dir = TempDir::new().expect("tempdir");

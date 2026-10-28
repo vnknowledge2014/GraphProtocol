@@ -620,7 +620,7 @@ proptest! {
     }
 }
 
-// spec: ING-062, ING-065, ING-066, INV-09
+// spec: ING-062, ING-065, ING-066, INV-09, ING-082
 #[test]
 fn ing_066_delete_after_tombstone_purges_as_of_history_and_second_delete_is_not_found() {
     let dir = TempDir::new().expect("tempdir");

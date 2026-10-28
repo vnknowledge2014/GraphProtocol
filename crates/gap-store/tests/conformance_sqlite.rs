@@ -11,7 +11,7 @@ use gap_store::conformance::run_context_store_suite;
 use gap_store::{Durability, SqliteConfig, SqliteContextStore};
 use tempfile::TempDir;
 
-// spec: INV-09, INV-19, ING-062, ING-064, ING-065, ING-066, ING-067 (ADR-020, ADR-025)
+// spec: INV-09, INV-19, ING-062, ING-064, ING-065, ING-066, ING-067, ING-080, ING-081, ING-082, ING-083, ING-084, ING-085, ING-086, ING-087 (ADR-020, ADR-025)
 #[test]
 fn sqlite_backend_conforms_to_context_store_suite() {
     let dir = TempDir::new().expect("tempdir");

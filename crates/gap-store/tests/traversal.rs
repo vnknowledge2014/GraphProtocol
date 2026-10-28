@@ -70,7 +70,7 @@ fn edge_ids(res: &TraverseResult) -> Vec<&str> {
     res.edges.iter().map(|e| e.id.as_str()).collect()
 }
 
-// spec: ING-064, ING-067, GQL-040
+// spec: ING-064, ING-067, GQL-040, ING-084
 #[test]
 fn literal_hand_computed_orders_for_bfs_dfs_shortest_and_weighted() {
     let dir = TempDir::new().expect("tempdir");
@@ -181,7 +181,7 @@ fn literal_hand_computed_orders_for_bfs_dfs_shortest_and_weighted() {
     assert_eq!(node_ids(&w2_res), vec!["s", "b", "c", "a", "d", "e"]);
 }
 
-// spec: ING-064, ING-067, GQL-040
+// spec: ING-064, ING-067, GQL-040, ING-084
 #[test]
 fn cycles_self_loops_parallel_edges_directions_and_depth_cap_boundaries() {
     let dir = TempDir::new().expect("tempdir");
@@ -317,7 +317,7 @@ fn cycles_self_loops_parallel_edges_directions_and_depth_cap_boundaries() {
     ));
 }
 
-// spec: ING-064, ING-065, ING-067
+// spec: ING-064, ING-065, ING-067, ING-084, ING-085
 #[test]
 fn weighted_invalid_weights_warnings_visited_cap_truncation_resume_and_indistinguishability() {
     let dir = TempDir::new().expect("tempdir");
@@ -1051,7 +1051,7 @@ struct GeneratedQuerySpec {
 proptest! {
     #![proptest_config(ProptestConfig::with_cases(48))]
 
-    // spec: ING-064, ING-065, ING-067, GQL-040, GQL-043
+    // spec: ING-064, ING-065, ING-067, GQL-040, GQL-043, ING-084, ING-085
     #[test]
     fn sqlite_traverse_matches_reference_model_up_to_40_nodes(
         node_specs in prop::collection::vec(
@@ -1411,7 +1411,7 @@ fn collect_pages_strict(
     (concatenated, pages)
 }
 
-// spec: ING-064, ING-067, GQL-040
+// spec: ING-064, ING-067, GQL-040, ING-084, ING-085
 #[test]
 fn ing_067_weighted_repro_1_zero_weight_edge_sorts_by_cost_then_node_id_and_pages_cleanly() {
     let dir = TempDir::new().expect("tempdir");
@@ -1449,7 +1449,7 @@ fn ing_067_weighted_repro_1_zero_weight_edge_sorts_by_cost_then_node_id_and_page
     assert_eq!(paged_f2, vec!["a", "m", "z"]);
 }
 
-// spec: ING-064, ING-067, GQL-040
+// spec: ING-064, ING-067, GQL-040, ING-084, ING-085
 #[test]
 fn ing_067_weighted_repro_2_direction_both_zero_weight_does_not_loop_on_resume() {
     let dir = TempDir::new().expect("tempdir");
@@ -1495,7 +1495,7 @@ fn ing_067_weighted_repro_2_direction_both_zero_weight_does_not_loop_on_resume()
     assert_eq!(paged_f2, vec!["n4", "n11", "n0", "n1", "s1"]);
 }
 
-// spec: ING-064, ING-067, GQL-040
+// spec: ING-064, ING-067, GQL-040, ING-084, ING-085
 #[test]
 fn ing_067_weighted_zero_weight_cycle_terminates_without_duplicates() {
     let dir = TempDir::new().expect("tempdir");
@@ -1543,7 +1543,7 @@ fn ing_067_weighted_zero_weight_cycle_terminates_without_duplicates() {
     assert_eq!(paged_f2, vec!["a", "b", "c", "d"]);
 }
 
-// spec: ING-064, ING-067, GQL-040
+// spec: ING-064, ING-067, GQL-040, ING-084, ING-085
 #[test]
 fn ing_067_weighted_equal_cost_group_straddling_visited_cap_keeps_smallest_ids_and_min_hop_depth() {
     let dir = TempDir::new().expect("tempdir");
@@ -1622,7 +1622,7 @@ proptest! {
         .. ProptestConfig::default()
     })]
 
-    // spec: ING-064, ING-067, GQL-040
+    // spec: ING-064, ING-067, GQL-040, ING-084, ING-085
     #[test]
     fn ing_067_weighted_zero_and_positive_weights_sorted_by_cost_id_and_paging_matches(
         n_nodes in 2usize..=16,

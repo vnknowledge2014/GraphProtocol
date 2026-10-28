@@ -897,7 +897,7 @@ mod tests {
     use super::run_context_store_suite;
     use crate::sqlite::{Durability, SqliteConfig, SqliteContextStore};
 
-    // spec: INV-09, INV-19, ING-062, ING-064, ING-065, ING-066, ING-067
+    // spec: INV-09, INV-19, ING-062, ING-064, ING-065, ING-066, ING-067, ING-080, ING-081, ING-082, ING-083, ING-084, ING-085, ING-086, ING-087
     #[test]
     fn sqlite_passes_reusable_conformance_suite() {
         let dir = TempDir::new().expect("tempdir");

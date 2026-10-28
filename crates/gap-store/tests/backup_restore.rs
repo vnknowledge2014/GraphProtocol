@@ -356,7 +356,7 @@ fn edge_id(s: &str) -> gap_store::EdgeId {
     gap_store::EdgeId::new(s).expect("edge id")
 }
 
-// spec: ING-064, INV-15
+// spec: ING-064, INV-15, ING-087
 #[test]
 fn restore_and_backup_refuse_existing_targets_and_reject_corrupted_or_future_backups() {
     let dir = TempDir::new().expect("tempdir");

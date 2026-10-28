@@ -1253,7 +1253,7 @@ mod tests {
         }
     }
 
-    // spec: ING-064, ING-065, ING-066
+    // spec: ING-064, ING-065, ING-066, ING-087
     #[test]
     fn write_field_limits_exact_boundary_and_one_past() {
         let now_us: i64 = 1_700_000_000_000_000;
@@ -1403,7 +1403,7 @@ mod tests {
         );
     }
 
-    // spec: ING-064
+    // spec: ING-064, ING-087
     #[test]
     fn props_size_64kib_and_depth_16_boundaries() {
         let depth_16 = build_nested_props(16);
@@ -1449,7 +1449,7 @@ mod tests {
         );
     }
 
-    // spec: GQL-040, GQL-043, ING-064, ING-067
+    // spec: GQL-040, GQL-043, ING-064, ING-067, ING-087
     #[test]
     fn traverse_and_search_query_limit_boundaries() {
         let start = NodeId::new("start").expect("id");

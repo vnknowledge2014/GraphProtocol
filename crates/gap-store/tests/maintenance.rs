@@ -252,7 +252,7 @@ fn tombstone_task_nodes_isolates_tenant_and_task_preserves_as_of_and_reclaims_qu
         .expect("reclaimed edge 2");
 }
 
-// spec: ING-066, ING-064, ING-065, INV-09
+// spec: ING-066, ING-064, ING-065, INV-09, ING-083
 #[test]
 fn purge_expired_enforces_exact_microsecond_boundaries_cleans_fts_and_edges_and_reclaims_quota() {
     let dir = TempDir::new().expect("tempdir");

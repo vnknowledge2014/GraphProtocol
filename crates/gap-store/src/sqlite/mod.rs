@@ -505,7 +505,7 @@ mod tests {
 
     use super::*;
 
-    // spec: ING-064, INV-02 (ADR-020)
+    // spec: ING-064, INV-02, ING-087 (ADR-020)
     #[test]
     fn fresh_and_version_0_databases_migrate_to_format_version() {
         let dir = TempDir::new().expect("tempdir");
@@ -672,7 +672,7 @@ mod tests {
         assert_eq!(v2_idx_count, 3);
     }
 
-    // spec: INV-09, INV-19, ING-064 (ADR-020)
+    // spec: INV-09, INV-19, ING-064, ING-086, ING-087 (ADR-020)
     #[test]
     fn previous_version_v2_raw_sql_database_migrates_to_v3_per_tenant_fts_and_preserves_search() {
         let dir = TempDir::new().expect("tempdir");
@@ -828,7 +828,7 @@ mod tests {
         );
     }
 
-    // spec: ING-064 (ADR-020)
+    // spec: ING-064, ING-087 (ADR-020)
     #[test]
     fn higher_user_version_fails_with_format_too_new_and_stays_byte_identical() {
         let dir = TempDir::new().expect("tempdir");
@@ -1090,7 +1090,7 @@ mod tests {
         assert!(u1 < u2, "monotonic UUIDv7 sequence under fixed ManualClock");
     }
 
-    // spec: ING-064, INV-15
+    // spec: ING-064, INV-15, ING-087
     #[test]
     fn header_prefix_check_maps_corrupt_not_found_and_backend_on_literal_entries() {
         let dir = TempDir::new().expect("tempdir");

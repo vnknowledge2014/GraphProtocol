@@ -97,7 +97,7 @@ fn search_bm25_ranking_id_tie_breaking_and_limit_boundaries() {
     assert_eq!(ids, vec!["doc:strong", "doc:tie_a", "doc:tie_b"]);
 }
 
-// spec: INV-09, ING-065
+// spec: INV-09, ING-065, ING-086
 #[test]
 fn hostile_fts5_syntax_never_errors_and_never_acts_as_operators() {
     let dir = TempDir::new().expect("tempdir");
@@ -382,7 +382,7 @@ fn search_tenant_isolation_scope_indistinguishability_and_temporal_as_of() {
     );
 }
 
-// spec: INV-09, INV-19, ING-065
+// spec: INV-09, INV-19, ING-065, ING-086
 #[test]
 fn inv_09_bm25_ranking_is_isolated_per_tenant_and_unaffected_by_other_tenant_corpus() {
     let dir = TempDir::new().expect("tempdir");
@@ -481,7 +481,7 @@ fn inv_09_bm25_ranking_is_isolated_per_tenant_and_unaffected_by_other_tenant_cor
     );
 }
 
-// spec: INV-09, INV-19, ING-065, ING-066
+// spec: INV-09, INV-19, ING-065, ING-066, ING-086
 #[test]
 fn inv_09_delete_purge_hex_shards_and_punctuation_tenant_ids_isolate_fts_tables() {
     // Two distinct tenants produce distinct 16-hex shards, and punctuation like `a-b_c` never leaks
