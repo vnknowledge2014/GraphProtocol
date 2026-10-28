@@ -1736,3 +1736,183 @@ proptest! {
         }
     }
 }
+
+// spec: ING-062, ING-082, ING-084 (ADR-020)
+#[test]
+fn ing_082_traverse_edge_valid_to_boundary_excludes_at_exact_valid_to_and_includes_one_us_before() {
+    let dir = TempDir::new().expect("tempdir");
+    let manual = Arc::new(ManualClock::new(1_700_000_000_000));
+    let clock: Arc<dyn Clock> = manual.clone();
+    let store =
+        SqliteContextStore::open(SqliteConfig::new(dir.path().join("t4_edge_vt.db")), clock)
+            .expect("open");
+
+    let tenant = TenantId::new("acme").expect("tenant").scope();
+    let caller = Caller::new("alice");
+
+    store
+        .put_batch(
+            &tenant,
+            &caller,
+            &[global_node("n1"), global_node("n2")],
+            &[plain_edge("e1", "CALLS", "n1", "n2")],
+        )
+        .expect("seed n1, n2, e1");
+
+    // Advance 10s to `t_close`, tombstone `n2` (closing `n2` v1 AND `e1` with `valid_to = t_close`),
+    // and immediately re-put `n2` at `t_close` so BOTH endpoints `n1` and `n2` are valid at
+    // `t_close` while `e1` has `valid_to == t_close` with no active replacement edge!
+    manual.advance(Duration::from_secs(10));
+    let t_close = manual.now_timestamp();
+    let n2 = NodeId::new("n2").expect("n2");
+    store
+        .tombstone_node(&tenant, &caller, &n2)
+        .expect("tombstone n2 to close e1");
+    store
+        .put_node(&tenant, &caller, global_node("n2"))
+        .expect("reopen n2 at t_close");
+
+    let one_us_before =
+        gap_store::types::micros_to_timestamp(t_close.unix_micros() - 1).expect("ts - 1us");
+    let n1 = NodeId::new("n1").expect("n1");
+
+    for strategy in [
+        TraverseStrategy::Bfs,
+        TraverseStrategy::Dfs,
+        TraverseStrategy::Shortest,
+        TraverseStrategy::Weighted,
+    ] {
+        let mut q_before = TraverseQuery::new(n1.clone());
+        q_before.strategy = strategy;
+        q_before.max_depth = 2;
+        q_before.as_of = Some(one_us_before);
+        let res_before = store
+            .traverse(&tenant, &caller, &q_before)
+            .expect("traverse 1us before valid_to");
+        assert_eq!(
+            node_ids(&res_before),
+            vec!["n1", "n2"],
+            "{strategy:?} 1us before edge valid_to must traverse e1"
+        );
+        assert_eq!(edge_ids(&res_before), vec!["e1"]);
+
+        let mut q_at = q_before.clone();
+        q_at.as_of = Some(t_close);
+        let res_at = store
+            .traverse(&tenant, &caller, &q_at)
+            .expect("traverse at exact valid_to");
+        assert_eq!(
+            node_ids(&res_at),
+            vec!["n1"],
+            "{strategy:?} at exact edge valid_to must NOT traverse e1"
+        );
+        assert!(res_at.edges.is_empty());
+    }
+}
+
+// spec: ING-064, ING-067, ING-084
+#[test]
+fn ing_084_weighted_max_depth_2_chain_excludes_deeper_nodes() {
+    let dir = TempDir::new().expect("tempdir");
+    let clock: Arc<dyn Clock> = Arc::new(ManualClock::new(1_700_000_000_000));
+    let store = SqliteContextStore::open(SqliteConfig::new(dir.path().join("t4_wdepth.db")), clock)
+        .expect("open");
+
+    let tenant = TenantId::new("acme").expect("tenant").scope();
+    let caller = Caller::new("alice");
+
+    // 5-node chain `c0 -> c1 -> c2 -> c3 -> c4` (4 edges, each weight 0.5).
+    store
+        .put_batch(
+            &tenant,
+            &caller,
+            &[
+                global_node("c0"),
+                global_node("c1"),
+                global_node("c2"),
+                global_node("c3"),
+                global_node("c4"),
+            ],
+            &[
+                weighted_edge("e01", "c0", "c1", json!(0.5)),
+                weighted_edge("e12", "c1", "c2", json!(0.5)),
+                weighted_edge("e23", "c2", "c3", json!(0.5)),
+                weighted_edge("e34", "c3", "c4", json!(0.5)),
+            ],
+        )
+        .expect("seed chain");
+
+    let mut q = TraverseQuery::new(NodeId::new("c0").expect("c0"));
+    q.strategy = TraverseStrategy::Weighted;
+    q.max_depth = 2;
+    let res = store
+        .traverse(&tenant, &caller, &q)
+        .expect("weighted max_depth=2");
+
+    assert_eq!(node_ids(&res), vec!["c0", "c1", "c2"]);
+    assert_eq!(edge_ids(&res), vec!["e01", "e12"]);
+    assert_eq!(
+        res.stats,
+        TraverseStats {
+            visited: 3,
+            returned: 3,
+            depth_reached: 2,
+        }
+    );
+    assert!(!res.truncated);
+}
+
+// spec: ING-064, ING-084
+#[test]
+fn ing_084_bfs_visited_cap_does_not_expand_nodes_at_cutoff_depth() {
+    let dir = TempDir::new().expect("tempdir");
+    let clock: Arc<dyn Clock> = Arc::new(ManualClock::new(1_700_000_000_000));
+    let store = SqliteContextStore::open(SqliteConfig::new(dir.path().join("t4_bfscap.db")), clock)
+        .expect("open");
+
+    let tenant = TenantId::new("acme").expect("tenant").scope();
+    let caller = Caller::new("alice");
+
+    // `s` at depth 0 connects to `a`, `b`, `c` at depth 1, and `a -> b` (`e_ab`) connects two
+    // nodes at depth 1.
+    store
+        .put_batch(
+            &tenant,
+            &caller,
+            &[
+                global_node("s"),
+                global_node("a"),
+                global_node("b"),
+                global_node("c"),
+            ],
+            &[
+                plain_edge("e_sa", "CALLS", "s", "a"),
+                plain_edge("e_sb", "CALLS", "s", "b"),
+                plain_edge("e_sc", "CALLS", "s", "c"),
+                plain_edge("e_ab", "CALLS", "a", "b"),
+            ],
+        )
+        .expect("seed graph");
+
+    // Without cap: `a` at depth 1 IS expanded (`max_depth = 3`), so `e_ab` IS returned.
+    let mut q_uncapped = TraverseQuery::new(NodeId::new("s").expect("s"));
+    q_uncapped.strategy = TraverseStrategy::Bfs;
+    q_uncapped.max_depth = 3;
+    let uncapped = store
+        .traverse(&tenant, &caller, &q_uncapped)
+        .expect("uncapped bfs");
+    assert_eq!(node_ids(&uncapped), vec!["s", "a", "b", "c"]);
+    assert_eq!(edge_ids(&uncapped), vec!["e_sa", "e_sb", "e_sc", "e_ab"]);
+    assert!(!uncapped.truncated);
+
+    // With `visited_cap = 3`: BFS visits `["s", "a", "b"]` and cuts at depth 1 (`"c"` dropped).
+    // Per ING-084, nodes at the cut depth (`1`) are NOT expanded, so `e_ab` MUST be absent!
+    let mut q_capped = q_uncapped;
+    q_capped.visited_cap = Some(3);
+    let capped = store
+        .traverse(&tenant, &caller, &q_capped)
+        .expect("capped bfs");
+    assert_eq!(node_ids(&capped), vec!["s", "a", "b"]);
+    assert_eq!(edge_ids(&capped), vec!["e_sa", "e_sb"]);
+    assert!(capped.truncated);
+}

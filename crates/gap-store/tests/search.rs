@@ -607,3 +607,121 @@ fn inv_09_delete_purge_hex_shards_and_punctuation_tenant_ids_isolate_fts_tables(
         1
     );
 }
+
+// spec: ING-065, ING-066, ING-082, ING-083, ING-086
+#[test]
+fn ing_066_ephemeral_expiry_enforces_both_now_and_as_of_in_get_node_and_search_nodes() {
+    let dir = TempDir::new().expect("tempdir");
+    let manual = Arc::new(ManualClock::new(1_700_000_000_000));
+    let clock: Arc<dyn Clock> = manual.clone();
+    let store =
+        SqliteContextStore::open(SqliteConfig::new(dir.path().join("t4_eph_asof.db")), clock)
+            .expect("open");
+
+    let tenant = TenantId::new("acme").expect("tenant").scope();
+    let caller = Caller::new("alice");
+
+    let t0 = manual.now_timestamp();
+    let t0_ns = t0.unix_nanos();
+    let exp_60s = Timestamp::from_unix_nanos(t0_ns + 60 * 1_000_000_000).expect("exp_60s");
+    let exp_60s_minus_1us =
+        gap_store::types::micros_to_timestamp(exp_60s.unix_micros() - 1).expect("exp - 1us");
+    let future_120s = Timestamp::from_unix_nanos(t0_ns + 120 * 1_000_000_000).expect("future_120s");
+
+    let eph_id = store
+        .put_node(
+            &tenant,
+            &caller,
+            doc_node(
+                None,
+                "ephemeraltemporalalpha",
+                Some("ttl check"),
+                ScopeSpec::ephemeral(BaseScope::Global, exp_60s),
+            ),
+        )
+        .expect("put eph");
+
+    // 1. Not expired at `now = t0`, queried at `as_of` before expiry (`exp_60s - 1us`) -> returned;
+    //    queried at `as_of = exp_60s` or `future_120s` (>= `expires_at`) -> NOT returned (Mutant [5])!
+    assert!(
+        store
+            .get_node(&tenant, &caller, &eph_id, Some(exp_60s_minus_1us))
+            .expect("get 1us before exp")
+            .is_some()
+    );
+    assert_eq!(
+        store
+            .search_nodes(
+                &tenant,
+                &caller,
+                "ephemeraltemporalalpha",
+                10,
+                Some(exp_60s_minus_1us),
+            )
+            .expect("search 1us before exp")
+            .len(),
+        1
+    );
+    assert_eq!(
+        store
+            .get_node(&tenant, &caller, &eph_id, Some(exp_60s))
+            .expect("get at exact exp_60s"),
+        None
+    );
+    assert_eq!(
+        store
+            .get_node(&tenant, &caller, &eph_id, Some(future_120s))
+            .expect("get at future as_of past expires_at"),
+        None
+    );
+    assert!(
+        store
+            .search_nodes(
+                &tenant,
+                &caller,
+                "ephemeraltemporalalpha",
+                10,
+                Some(exp_60s),
+            )
+            .expect("search at exact exp_60s")
+            .is_empty()
+    );
+    assert!(
+        store
+            .search_nodes(
+                &tenant,
+                &caller,
+                "ephemeraltemporalalpha",
+                10,
+                Some(future_120s),
+            )
+            .expect("search at future as_of past expires_at")
+            .is_empty()
+    );
+
+    // 2. Advance to `as_of_earlier = t0 + 30s` (still valid then), then advance `now` to `t0 + 90s`
+    //    (expired after `as_of_earlier` and before `now`). Per ING-066 ("never returned once expired"),
+    //    BOTH `get_node` and `search_nodes` at `Some(as_of_earlier)` MUST return nothing (Mutant [87])!
+    manual.advance(Duration::from_secs(30));
+    let as_of_earlier = manual.now_timestamp();
+    manual.advance(Duration::from_secs(60));
+
+    assert_eq!(
+        store
+            .get_node(&tenant, &caller, &eph_id, Some(as_of_earlier))
+            .expect("get expired node at earlier as_of"),
+        None
+    );
+    assert!(
+        store
+            .search_nodes(
+                &tenant,
+                &caller,
+                "ephemeraltemporalalpha",
+                10,
+                Some(as_of_earlier),
+            )
+            .expect("search expired node at earlier as_of")
+            .is_empty()
+    );
+}
