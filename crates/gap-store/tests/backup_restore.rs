@@ -474,6 +474,16 @@ fn restore_and_backup_refuse_existing_targets_and_reject_corrupted_or_future_bac
         }
     );
     assert!(!bad_target_5.exists());
+
+    // 9. Directory source (non-NotFound I/O error on bounded header read) -> `Backend`.
+    let src_dir = dir.path().join("src_is_directory");
+    fs::create_dir(&src_dir).expect("create src_dir");
+    let bad_target_6 = dir.path().join("never_created_6.db");
+    assert_eq!(
+        SqliteContextStore::restore_from(&src_dir, &bad_target_6).expect_err("directory src"),
+        StoreError::Backend
+    );
+    assert!(!bad_target_6.exists());
 }
 
 // spec: INV-02, ING-064

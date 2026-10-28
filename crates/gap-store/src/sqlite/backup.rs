@@ -13,8 +13,8 @@ use uuid::Uuid;
 
 use crate::error::StoreError;
 use crate::sqlite::{
-    DEFAULT_BUSY_TIMEOUT_MS, FORMAT_VERSION, SQLITE_MAGIC_HEADER, SqliteContextStore,
-    map_sqlite_err, schema,
+    DEFAULT_BUSY_TIMEOUT_MS, FORMAT_VERSION, SqliteContextStore, map_sqlite_err,
+    read_sqlite_header_prefix, schema,
 };
 
 const SQLITE_HEADER_MIN_BYTES: usize = 100;
@@ -73,15 +73,10 @@ fn ensure_parent_dir(path: &Path) -> Result<PathBuf, StoreError> {
     Ok(parent)
 }
 
+/// Verifies the 100-byte SQLite 3 file header without reading the rest of the backup file into
+/// memory (`R-3`: production backups can be multi-gigabyte files).
 fn verify_sqlite_header(path: &Path) -> Result<(), StoreError> {
-    let bytes = fs::read(path).map_err(|e| match e.kind() {
-        ErrorKind::NotFound => StoreError::NotFound,
-        _ => StoreError::Backend,
-    })?;
-    if bytes.len() < SQLITE_HEADER_MIN_BYTES || &bytes[..16] != SQLITE_MAGIC_HEADER {
-        return Err(StoreError::Corrupt);
-    }
-    Ok(())
+    read_sqlite_header_prefix(path, SQLITE_HEADER_MIN_BYTES)
 }
 
 fn map_verify_err(err: rusqlite::Error) -> StoreError {
@@ -219,9 +214,7 @@ impl SqliteContextStore {
         if path_or_wal_exists(target_path) {
             return Err(StoreError::Conflict);
         }
-        if !src_path.exists() {
-            return Err(StoreError::NotFound);
-        }
+        verify_sqlite_header(src_path)?;
 
         let parent = ensure_parent_dir(target_path)?;
         let staging_path = parent.join(format!(".gap-restore-{}.tmp", Uuid::new_v4()));

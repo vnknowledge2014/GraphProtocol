@@ -8,6 +8,7 @@ pub(crate) mod search;
 pub(crate) mod traverse;
 
 use std::fs;
+use std::io::{self, Read};
 use std::num::NonZeroUsize;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -205,19 +206,45 @@ pub(crate) fn open_configured_reader(config: &SqliteConfig) -> Result<Connection
     Ok(conn)
 }
 
+/// Reads only the bounded SQLite 3 file-header prefix (`min_bytes`, at least 16 bytes) without
+/// loading the entire file into memory.
+///
+/// Never call `fs::read(path)` on a database or backup file: default tenant ceilings are 5M nodes
+/// and 20M edges (`ING-064`), so production database files are gigabytes in size and reading the
+/// whole file just to inspect its 16/100-byte header would spike RAM by the full database size on
+/// every `open` and `restore_from`.
+pub(crate) fn read_sqlite_header_prefix(path: &Path, min_bytes: usize) -> Result<(), StoreError> {
+    let required = min_bytes.max(SQLITE_MAGIC_HEADER.len());
+    let file = fs::File::open(path).map_err(|err| match err.kind() {
+        io::ErrorKind::NotFound => StoreError::NotFound,
+        _ => StoreError::Backend,
+    })?;
+    let mut header = Vec::with_capacity(required);
+    let take_len = u64::try_from(required).unwrap_or(100);
+    file.take(take_len)
+        .read_to_end(&mut header)
+        .map_err(|_| StoreError::Backend)?;
+    if header.len() < required || &header[..SQLITE_MAGIC_HEADER.len()] != SQLITE_MAGIC_HEADER {
+        return Err(StoreError::Corrupt);
+    }
+    Ok(())
+}
+
 /// Probes an existing non-empty file read-only so `user_version > FORMAT_VERSION` or non-SQLite
 /// files fail *before* any write handle or WAL header mutation occurs (`m2-01-design.md` §8).
 fn probe_existing_file_readonly(path: &Path) -> Result<(), StoreError> {
-    let Ok(meta) = fs::metadata(path) else {
-        return Ok(());
+    let meta = match fs::metadata(path) {
+        Ok(m) => m,
+        Err(err) if err.kind() == io::ErrorKind::NotFound => return Ok(()),
+        Err(_) => return Err(StoreError::Backend),
     };
+    if meta.is_dir() {
+        return Err(StoreError::Backend);
+    }
     if meta.len() == 0 {
         return Ok(());
     }
-    let header = fs::read(path).map_err(|_| StoreError::Backend)?;
-    if header.len() < SQLITE_MAGIC_HEADER.len() || &header[..16] != SQLITE_MAGIC_HEADER {
-        return Err(StoreError::Corrupt);
-    }
+    read_sqlite_header_prefix(path, SQLITE_MAGIC_HEADER.len())?;
     let flags = OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX;
     let conn = Connection::open_with_flags(path, flags).map_err(map_sqlite_err)?;
     conn.execute_batch(
@@ -894,5 +921,58 @@ mod tests {
         assert_eq!(u1.get_version_num(), 7);
         assert_eq!(u2.get_version_num(), 7);
         assert!(u1 < u2, "monotonic UUIDv7 sequence under fixed ManualClock");
+    }
+
+    // spec: ING-064, INV-15
+    #[test]
+    fn header_prefix_check_maps_corrupt_not_found_and_backend_on_literal_entries() {
+        let dir = TempDir::new().expect("tempdir");
+        let clock: Arc<dyn Clock> = Arc::new(ManualClock::new(1_700_000_000_000));
+
+        // 1a. Short file (< 16 bytes) -> `Corrupt`.
+        let short_path = dir.path().join("short.db");
+        fs::write(&short_path, b"SQLite").expect("write short");
+        assert_eq!(
+            read_sqlite_header_prefix(&short_path, 16),
+            Err(StoreError::Corrupt)
+        );
+        assert_eq!(
+            SqliteContextStore::open(SqliteConfig::new(&short_path), Arc::clone(&clock))
+                .expect_err("short file must fail"),
+            StoreError::Corrupt
+        );
+
+        // 1b. Wrong header (>= 16 bytes) -> `Corrupt`.
+        let wrong_path = dir.path().join("wrong_magic.db");
+        fs::write(&wrong_path, b"not-sqlite-header-with-extra-payload").expect("write wrong");
+        assert_eq!(
+            read_sqlite_header_prefix(&wrong_path, 16),
+            Err(StoreError::Corrupt)
+        );
+        assert_eq!(
+            SqliteContextStore::open(SqliteConfig::new(&wrong_path), Arc::clone(&clock))
+                .expect_err("wrong header must fail"),
+            StoreError::Corrupt
+        );
+
+        // 2. Missing path -> `NotFound` in header reader (`open` creates a new store).
+        let missing_path = dir.path().join("missing.db");
+        assert_eq!(
+            read_sqlite_header_prefix(&missing_path, 16),
+            Err(StoreError::NotFound)
+        );
+
+        // 3. Directory path (non-NotFound I/O error: `EISDIR` on read) -> `Backend`.
+        let dir_path = dir.path().join("as_directory");
+        fs::create_dir(&dir_path).expect("mkdir");
+        assert_eq!(
+            read_sqlite_header_prefix(&dir_path, 16),
+            Err(StoreError::Backend)
+        );
+        assert_eq!(
+            SqliteContextStore::open(SqliteConfig::new(&dir_path), clock)
+                .expect_err("directory must fail with Backend"),
+            StoreError::Backend
+        );
     }
 }
