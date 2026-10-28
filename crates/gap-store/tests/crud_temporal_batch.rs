@@ -4,10 +4,11 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use gap_core::clock::{Clock, ManualClock};
+use gap_core::clock::{Clock, ManualClock, Timestamp};
 use gap_store::{
-    Caller, ContextStore, EdgeId, EdgeResolution, EdgeType, GraphCounts, NewEdge, NewNode, NodeId,
-    NodeType, Provenance, ScopeSpec, SqliteConfig, SqliteContextStore, StoreError, TenantId,
+    BaseScope, Caller, ContextStore, EdgeId, EdgeResolution, EdgeType, GraphCounts, NewEdge,
+    NewNode, NodeId, NodeType, Provenance, Scope, ScopeSpec, SqliteConfig, SqliteContextStore,
+    StoreError, TaskId, TenantId,
 };
 use rusqlite::Connection;
 use serde_json::{Map as JsonMap, json};
@@ -471,4 +472,535 @@ fn hostile_sql_injection_strings_stored_and_returned_verbatim() {
         store.counts(&tenant, &caller, None).expect("counts"),
         GraphCounts { nodes: 2, edges: 0 }
     );
+}
+
+// spec: ING-062, ING-065, ING-066, ING-082 (ADR-020, ADR-025)
+#[test]
+fn ing_082_content_hash_single_field_reput_versions_every_hashed_node_and_edge_field() {
+    let dir = TempDir::new().expect("tempdir");
+    let db_path = dir.path().join("t2_hash_fields.db");
+    let manual = Arc::new(ManualClock::new(1_700_000_000_000));
+    let clock: Arc<dyn Clock> = manual.clone();
+    let store = SqliteContextStore::open(SqliteConfig::new(&db_path), clock).expect("open store");
+
+    let tenant = TenantId::new("acme").expect("tenant").scope();
+    let task_1 = TaskId::from_unix_ms(1_700_000_000_000, [0x11; 10]);
+    let task_2 = TaskId::from_unix_ms(1_700_000_000_001, [0x22; 10]);
+
+    let mut alice = Caller::new("alice").with_groups(["g_old", "g_new"]);
+    alice.task_chain = vec![task_1, task_2];
+    let old_group_member = Caller::new("old_member").with_groups(["g_old"]);
+    let new_group_member = Caller::new("new_member").with_groups(["g_new"]);
+    let outsider = Caller::new("outsider");
+
+    let t0_ns = manual.now_timestamp().unix_nanos();
+    let exp_fixed = Timestamp::from_unix_nanos(t0_ns + 3_600 * 1_000_000_000).expect("exp_fixed");
+    let exp_short = Timestamp::from_unix_nanos(t0_ns + 120 * 1_000_000_000).expect("exp_short");
+    let exp_long = Timestamp::from_unix_nanos(t0_ns + 600 * 1_000_000_000).expect("exp_long");
+
+    let base_node = |id: Option<NodeId>, scope: ScopeSpec| NewNode {
+        id,
+        node_type: NodeType::new("Symbol").expect("type"),
+        label: "FixedLabel".to_owned(),
+        summary: Some("FixedSummary".to_owned()),
+        props: JsonMap::new(),
+        scope,
+        provenance: Provenance::new("hash-test"),
+    };
+
+    let t_v1 = manual.now_timestamp();
+
+    // Create v1 of every single-field test entity at `t_v1`.
+    let id_label = store
+        .put_node(
+            &tenant,
+            &alice,
+            base_node(Some(NodeId::new("n:label").expect("id")), ScopeSpec::Global),
+        )
+        .expect("put label v1");
+    let id_summary = store
+        .put_node(
+            &tenant,
+            &alice,
+            base_node(
+                Some(NodeId::new("n:summary").expect("id")),
+                ScopeSpec::Global,
+            ),
+        )
+        .expect("put summary v1");
+
+    let mut n_props_v1 = base_node(Some(NodeId::new("n:props").expect("id")), ScopeSpec::Global);
+    n_props_v1.props.insert("k".to_owned(), json!(1));
+    let id_props = store
+        .put_node(&tenant, &alice, n_props_v1)
+        .expect("put props v1");
+
+    let id_scope_kind = store
+        .put_node(&tenant, &alice, base_node(None, ScopeSpec::Private))
+        .expect("put scope_kind v1");
+
+    let id_group = store
+        .put_node(
+            &tenant,
+            &alice,
+            base_node(
+                None,
+                ScopeSpec::Group {
+                    group: "g_old".to_owned(),
+                },
+            ),
+        )
+        .expect("put group v1");
+
+    let id_eph_base = store
+        .put_node(
+            &tenant,
+            &alice,
+            base_node(None, ScopeSpec::ephemeral(BaseScope::Private, exp_fixed)),
+        )
+        .expect("put eph_base v1");
+
+    let id_eph_exp = store
+        .put_node(
+            &tenant,
+            &alice,
+            base_node(None, ScopeSpec::ephemeral(BaseScope::Global, exp_short)),
+        )
+        .expect("put eph_exp v1");
+
+    let id_task = store
+        .put_node(
+            &tenant,
+            &alice,
+            base_node(None, ScopeSpec::Task { task_id: task_1 }),
+        )
+        .expect("put task v1");
+
+    // Edges v1 (`e_props`, `e_res`, `e_conf`) between `n:label` and `n:summary`.
+    let mut e_props_v1 = make_edge(Some("e:props"), "CALLS", "n:label", "n:summary");
+    e_props_v1.props.insert("weight".to_owned(), json!(1.0));
+    let eid_props = store
+        .put_edge(&tenant, &alice, e_props_v1)
+        .expect("put edge props v1");
+
+    let mut e_res_v1 = make_edge(Some("e:res"), "IMPORTS", "n:label", "n:summary");
+    e_res_v1.confidence = Some(1.0);
+    e_res_v1.resolution = EdgeResolution::Exact;
+    let eid_res = store
+        .put_edge(&tenant, &alice, e_res_v1)
+        .expect("put edge res v1");
+
+    let mut e_conf_v1 = make_edge(Some("e:conf"), "REFERENCES", "n:label", "n:summary");
+    e_conf_v1.confidence = Some(0.9);
+    e_conf_v1.resolution = EdgeResolution::Heuristic;
+    let eid_conf = store
+        .put_edge(&tenant, &alice, e_conf_v1)
+        .expect("put edge conf v1");
+
+    // Verify pre-change visibility of group and ephemeral-base nodes at `t_v1`.
+    assert!(
+        store
+            .get_node(&tenant, &old_group_member, &id_group, Some(t_v1))
+            .expect("old group v1")
+            .is_some()
+    );
+    assert!(
+        store
+            .get_node(&tenant, &new_group_member, &id_group, Some(t_v1))
+            .expect("new group v1")
+            .is_none()
+    );
+    assert!(
+        store
+            .get_node(&tenant, &outsider, &id_eph_base, Some(t_v1))
+            .expect("outsider eph_base v1")
+            .is_none()
+    );
+
+    // Advance clock to `t_v2` and re-put each entity changing ONLY ONE hashed field!
+    manual.advance(Duration::from_secs(10));
+    let t_v2 = manual.now_timestamp();
+
+    // 1. Node `label` only
+    let mut n_label_v2 = base_node(Some(id_label.clone()), ScopeSpec::Global);
+    n_label_v2.label = "ChangedLabel".to_owned();
+    store
+        .put_node(&tenant, &alice, n_label_v2)
+        .expect("reput label");
+
+    // 2. Node `summary` only
+    let mut n_sum_v2 = base_node(Some(id_summary.clone()), ScopeSpec::Global);
+    n_sum_v2.summary = Some("ChangedSummary".to_owned());
+    store
+        .put_node(&tenant, &alice, n_sum_v2)
+        .expect("reput summary");
+
+    // 3. Node `props` only (Mutant [28])
+    let mut n_props_v2 = base_node(Some(id_props.clone()), ScopeSpec::Global);
+    n_props_v2.props.insert("k".to_owned(), json!(2));
+    store
+        .put_node(&tenant, &alice, n_props_v2)
+        .expect("reput props");
+
+    // 4. Node `scope` kind (`PRIVATE` -> `GROUP`)
+    store
+        .put_node(
+            &tenant,
+            &alice,
+            base_node(
+                Some(id_scope_kind.clone()),
+                ScopeSpec::Group {
+                    group: "g_new".to_owned(),
+                },
+            ),
+        )
+        .expect("reput scope_kind");
+
+    // 5. Node `group` only (`g_old` -> `g_new`, Mutant [25])
+    store
+        .put_node(
+            &tenant,
+            &alice,
+            base_node(
+                Some(id_group.clone()),
+                ScopeSpec::Group {
+                    group: "g_new".to_owned(),
+                },
+            ),
+        )
+        .expect("reput group");
+
+    // 6. Ephemeral `base` scope only (`Private` -> `Global`, identical `exp_fixed`, Mutant [24])
+    store
+        .put_node(
+            &tenant,
+            &alice,
+            base_node(
+                Some(id_eph_base.clone()),
+                ScopeSpec::ephemeral(BaseScope::Global, exp_fixed),
+            ),
+        )
+        .expect("reput eph_base");
+
+    // 7. Ephemeral `expires_at` only (`exp_short` -> `exp_long`, identical `BaseScope::Global`, Mutant [26])
+    store
+        .put_node(
+            &tenant,
+            &alice,
+            base_node(
+                Some(id_eph_exp.clone()),
+                ScopeSpec::ephemeral(BaseScope::Global, exp_long),
+            ),
+        )
+        .expect("reput eph_exp");
+
+    // 8. Node `task_id` only (`task_1` -> `task_2`)
+    store
+        .put_node(
+            &tenant,
+            &alice,
+            base_node(Some(id_task.clone()), ScopeSpec::Task { task_id: task_2 }),
+        )
+        .expect("reput task_id");
+
+    // 9. Edge `props` only (Mutant [29])
+    let mut e_props_v2 = make_edge(Some("e:props"), "CALLS", "n:label", "n:summary");
+    e_props_v2.props.insert("weight".to_owned(), json!(2.5));
+    store
+        .put_edge(&tenant, &alice, e_props_v2)
+        .expect("reput edge props");
+
+    // 10. Edge `resolution` only (`Exact` -> `Heuristic` with identical `confidence: Some(1.0)`, Mutant [31])
+    let mut e_res_v2 = make_edge(Some("e:res"), "IMPORTS", "n:label", "n:summary");
+    e_res_v2.confidence = Some(1.0);
+    e_res_v2.resolution = EdgeResolution::Heuristic;
+    store
+        .put_edge(&tenant, &alice, e_res_v2)
+        .expect("reput edge res");
+
+    // 11. Edge `confidence` only (`0.9` -> `0.4` with identical `Heuristic`)
+    let mut e_conf_v2 = make_edge(Some("e:conf"), "REFERENCES", "n:label", "n:summary");
+    e_conf_v2.confidence = Some(0.4);
+    e_conf_v2.resolution = EdgeResolution::Heuristic;
+    store
+        .put_edge(&tenant, &alice, e_conf_v2)
+        .expect("reput edge conf");
+
+    // Assert two temporal versions (`as_of = t_v1` vs `as_of = t_v2`) and updated semantics for EVERY field!
+    let label_v1 = store
+        .get_node(&tenant, &alice, &id_label, Some(t_v1))
+        .expect("get")
+        .expect("v1");
+    let label_v2 = store
+        .get_node(&tenant, &alice, &id_label, Some(t_v2))
+        .expect("get")
+        .expect("v2");
+    assert_eq!(
+        (label_v1.label.as_str(), label_v1.valid_to),
+        ("FixedLabel", Some(t_v2))
+    );
+    assert_eq!(
+        (
+            label_v2.label.as_str(),
+            label_v2.valid_from,
+            label_v2.valid_to
+        ),
+        ("ChangedLabel", t_v2, None)
+    );
+
+    let sum_v1 = store
+        .get_node(&tenant, &alice, &id_summary, Some(t_v1))
+        .expect("get")
+        .expect("v1");
+    let sum_v2 = store
+        .get_node(&tenant, &alice, &id_summary, Some(t_v2))
+        .expect("get")
+        .expect("v2");
+    assert_eq!(
+        (sum_v1.summary.as_deref(), sum_v1.valid_to),
+        (Some("FixedSummary"), Some(t_v2))
+    );
+    assert_eq!(
+        (
+            sum_v2.summary.as_deref(),
+            sum_v2.valid_from,
+            sum_v2.valid_to
+        ),
+        (Some("ChangedSummary"), t_v2, None)
+    );
+
+    let props_v1 = store
+        .get_node(&tenant, &alice, &id_props, Some(t_v1))
+        .expect("get")
+        .expect("v1");
+    let props_v2 = store
+        .get_node(&tenant, &alice, &id_props, Some(t_v2))
+        .expect("get")
+        .expect("v2");
+    assert_eq!(
+        (props_v1.props.get("k"), props_v1.valid_to),
+        (Some(&json!(1)), Some(t_v2))
+    );
+    assert_eq!(
+        (
+            props_v2.props.get("k"),
+            props_v2.valid_from,
+            props_v2.valid_to
+        ),
+        (Some(&json!(2)), t_v2, None)
+    );
+
+    let sk_v1 = store
+        .get_node(&tenant, &alice, &id_scope_kind, Some(t_v1))
+        .expect("get")
+        .expect("v1");
+    let sk_v2 = store
+        .get_node(&tenant, &new_group_member, &id_scope_kind, Some(t_v2))
+        .expect("get")
+        .expect("v2");
+    assert_eq!((sk_v1.scope, sk_v1.valid_to), (Scope::Private, Some(t_v2)));
+    assert_eq!((sk_v2.scope, sk_v2.valid_from), (Scope::Group, t_v2));
+
+    // Group change: old member loses current access; new member gains current access; v1 closed at t_v2.
+    assert!(
+        store
+            .get_node(&tenant, &old_group_member, &id_group, Some(t_v2))
+            .expect("old member lost access")
+            .is_none()
+    );
+    let grp_v1 = store
+        .get_node(&tenant, &old_group_member, &id_group, Some(t_v1))
+        .expect("old member v1")
+        .expect("v1");
+    let grp_v2 = store
+        .get_node(&tenant, &new_group_member, &id_group, Some(t_v2))
+        .expect("new member gained access")
+        .expect("v2");
+    assert_eq!(
+        (grp_v1.group.as_deref(), grp_v1.valid_to),
+        (Some("g_old"), Some(t_v2))
+    );
+    assert_eq!(
+        (grp_v2.group.as_deref(), grp_v2.valid_from, grp_v2.valid_to),
+        (Some("g_new"), t_v2, None)
+    );
+
+    // Ephemeral base scope change (`Private` -> `Global`): outsider gains access at `t_v2`, v1 closed at `t_v2`.
+    let eb_v1 = store
+        .get_node(&tenant, &alice, &id_eph_base, Some(t_v1))
+        .expect("alice eb v1")
+        .expect("v1");
+    assert_eq!(eb_v1.valid_to, Some(t_v2));
+    assert!(
+        store
+            .get_node(&tenant, &outsider, &id_eph_base, Some(t_v1))
+            .expect("outsider eb v1")
+            .is_none()
+    );
+    let eb_v2 = store
+        .get_node(&tenant, &outsider, &id_eph_base, Some(t_v2))
+        .expect("outsider eb v2")
+        .expect("outsider must see Global ephemeral v2");
+    assert_eq!((eb_v2.valid_from, eb_v2.valid_to), (t_v2, None));
+
+    // Ephemeral expiry change (`exp_short` -> `exp_long`): v1 closed at `t_v2`, v2 carries `exp_long`.
+    let ex_v1 = store
+        .get_node(&tenant, &alice, &id_eph_exp, Some(t_v1))
+        .expect("ex v1")
+        .expect("v1");
+    let ex_v2 = store
+        .get_node(&tenant, &alice, &id_eph_exp, Some(t_v2))
+        .expect("ex v2")
+        .expect("v2");
+    assert_eq!(
+        (ex_v1.expires_at, ex_v1.valid_to),
+        (Some(exp_short), Some(t_v2))
+    );
+    assert_eq!(
+        (ex_v2.expires_at, ex_v2.valid_from, ex_v2.valid_to),
+        (Some(exp_long), t_v2, None)
+    );
+
+    // Task id change (`task_1` -> `task_2`)
+    let tk_v1 = store
+        .get_node(&tenant, &alice, &id_task, Some(t_v1))
+        .expect("tk v1")
+        .expect("v1");
+    let tk_v2 = store
+        .get_node(&tenant, &alice, &id_task, Some(t_v2))
+        .expect("tk v2")
+        .expect("v2");
+    assert_eq!((tk_v1.task_id, tk_v1.valid_to), (Some(task_1), Some(t_v2)));
+    assert_eq!(
+        (tk_v2.task_id, tk_v2.valid_from, tk_v2.valid_to),
+        (Some(task_2), t_v2, None)
+    );
+
+    // Edge props, resolution, and confidence versions
+    let ep_v1 = store
+        .get_edge(&tenant, &alice, &eid_props, Some(t_v1))
+        .expect("ep v1")
+        .expect("v1");
+    let ep_v2 = store
+        .get_edge(&tenant, &alice, &eid_props, Some(t_v2))
+        .expect("ep v2")
+        .expect("v2");
+    assert_eq!(
+        (ep_v1.props.get("weight"), ep_v1.valid_to),
+        (Some(&json!(1.0)), Some(t_v2))
+    );
+    assert_eq!(
+        (ep_v2.props.get("weight"), ep_v2.valid_from, ep_v2.valid_to),
+        (Some(&json!(2.5)), t_v2, None)
+    );
+
+    let er_v1 = store
+        .get_edge(&tenant, &alice, &eid_res, Some(t_v1))
+        .expect("er v1")
+        .expect("v1");
+    let er_v2 = store
+        .get_edge(&tenant, &alice, &eid_res, Some(t_v2))
+        .expect("er v2")
+        .expect("v2");
+    assert_eq!(
+        (er_v1.resolution, er_v1.valid_to),
+        (EdgeResolution::Exact, Some(t_v2))
+    );
+    assert_eq!(
+        (er_v2.resolution, er_v2.valid_from, er_v2.valid_to),
+        (EdgeResolution::Heuristic, t_v2, None)
+    );
+
+    let ec_v1 = store
+        .get_edge(&tenant, &alice, &eid_conf, Some(t_v1))
+        .expect("ec v1")
+        .expect("v1");
+    let ec_v2 = store
+        .get_edge(&tenant, &alice, &eid_conf, Some(t_v2))
+        .expect("ec v2")
+        .expect("v2");
+    assert_eq!((ec_v1.confidence, ec_v1.valid_to), (Some(0.9), Some(t_v2)));
+    assert_eq!(
+        (ec_v2.confidence, ec_v2.valid_from, ec_v2.valid_to),
+        (Some(0.4), t_v2, None)
+    );
+
+    // Advance past `exp_short` (to t0 + 200s < exp_long) to prove the updated expiry took effect!
+    manual.advance(Duration::from_secs(190));
+    assert!(
+        store
+            .get_node(&tenant, &alice, &id_eph_exp, None)
+            .expect("after exp_short")
+            .is_some(),
+        "ephemeral node whose expires_at was extended to exp_long must still be visible"
+    );
+}
+
+// spec: ING-065, ING-082 (ADR-020, ADR-025)
+#[test]
+fn ing_082_group_member_reput_with_unchanged_payload_transfers_owner_and_creates_version() {
+    let dir = TempDir::new().expect("tempdir");
+    let db_path = dir.path().join("t2_owner_change.db");
+    let manual = Arc::new(ManualClock::new(1_700_000_000_000));
+    let clock: Arc<dyn Clock> = manual.clone();
+    let store = SqliteContextStore::open(SqliteConfig::new(&db_path), clock).expect("open store");
+
+    let tenant = TenantId::new("acme").expect("tenant").scope();
+    let alice = Caller::new("alice").with_groups(["eng"]);
+    let bob = Caller::new("bob").with_groups(["eng"]);
+
+    let t_v1 = manual.now_timestamp();
+    let gid = store
+        .put_node(
+            &tenant,
+            &alice,
+            NewNode {
+                id: None,
+                node_type: NodeType::new("Doc").expect("type"),
+                label: "SharedRunbook".to_owned(),
+                summary: Some("identical summary".to_owned()),
+                props: JsonMap::new(),
+                scope: ScopeSpec::Group {
+                    group: "eng".to_owned(),
+                },
+                provenance: Provenance::new("team-sync"),
+            },
+        )
+        .expect("alice put group node");
+
+    manual.advance(Duration::from_secs(10));
+    let t_v2 = manual.now_timestamp();
+
+    // `bob` (in group `eng`) updates `gid` with 100% identical hashed payload; ONLY `writer` differs!
+    store
+        .put_node(
+            &tenant,
+            &bob,
+            NewNode {
+                id: Some(gid.clone()),
+                node_type: NodeType::new("Doc").expect("type"),
+                label: "SharedRunbook".to_owned(),
+                summary: Some("identical summary".to_owned()),
+                props: JsonMap::new(),
+                scope: ScopeSpec::Group {
+                    group: "eng".to_owned(),
+                },
+                provenance: Provenance::new("team-sync"),
+            },
+        )
+        .expect("bob update group node");
+
+    let v1 = store
+        .get_node(&tenant, &alice, &gid, Some(t_v1))
+        .expect("get v1")
+        .expect("v1 exists");
+    let v2 = store
+        .get_node(&tenant, &bob, &gid, Some(t_v2))
+        .expect("get v2")
+        .expect("v2 exists");
+    assert_eq!(v1.owner_principal, "alice");
+    assert_eq!(v1.valid_to, Some(t_v2));
+    assert_eq!(v2.owner_principal, "bob");
+    assert_eq!(v2.valid_from, t_v2);
+    assert_eq!(v2.valid_to, None);
 }
