@@ -3,6 +3,8 @@
 pub(crate) mod backup;
 pub(crate) mod crud;
 pub(crate) mod maintenance;
+#[cfg(test)]
+mod plan_tests;
 pub mod schema;
 pub(crate) mod search;
 pub(crate) mod traverse;
@@ -1209,5 +1211,184 @@ mod tests {
                 "pooled reader {idx} must enforce query_only = 1"
             );
         }
+    }
+
+    // spec: ING-064, ING-087, ING-088, INV-09 (ADR-020)
+    #[test]
+    fn ing_088_previous_version_v3_database_migrates_to_v4_task_purge_index_and_restores() {
+        use crate::store::ContextMaintenance;
+        use crate::types::PurgePolicy;
+
+        let dir = TempDir::new().expect("tempdir");
+        let v3_path = dir.path().join("v3.db");
+        let v3_backup_path = dir.path().join("v3_backup.db");
+        let restored_path = dir.path().join("restored_from_v3.db");
+
+        let shard_ta = schema::tenant_fts_table_name("ta");
+        let shard_tb = schema::tenant_fts_table_name("tb");
+        let task_uuid = "018f0000-0000-7000-8000-000000000001";
+
+        {
+            let raw = Connection::open(&v3_path).expect("open raw v3");
+            raw.execute_batch(&format!(
+                "PRAGMA journal_mode = DELETE;
+                 CREATE TABLE tenant_stats (
+                     tenant TEXT NOT NULL,
+                     node_count INTEGER NOT NULL DEFAULT 0,
+                     edge_count INTEGER NOT NULL DEFAULT 0,
+                     PRIMARY KEY (tenant)
+                 ) WITHOUT ROWID;
+                 CREATE TABLE nodes (
+                     fts_rowid INTEGER PRIMARY KEY,
+                     tenant TEXT NOT NULL,
+                     id TEXT NOT NULL,
+                     node_type TEXT NOT NULL,
+                     label TEXT NOT NULL,
+                     summary TEXT,
+                     props_json TEXT NOT NULL,
+                     scope TEXT NOT NULL,
+                     base_scope TEXT NOT NULL,
+                     owner_principal TEXT NOT NULL,
+                     task_id TEXT,
+                     group_name TEXT,
+                     expires_at INTEGER,
+                     prov_source TEXT NOT NULL,
+                     prov_desc_hash TEXT,
+                     prov_confidence REAL,
+                     prov_extracted_at INTEGER,
+                     prov_agent TEXT,
+                     valid_from INTEGER NOT NULL,
+                     valid_to INTEGER,
+                     content_hash BLOB NOT NULL
+                 );
+                 CREATE UNIQUE INDEX idx_nodes_current ON nodes (tenant, id) WHERE valid_to IS NULL;
+                 CREATE INDEX idx_nodes_temporal ON nodes (tenant, id, valid_from, valid_to);
+                 CREATE INDEX idx_nodes_task ON nodes (tenant, scope, task_id, valid_to);
+                 CREATE INDEX idx_nodes_base_task ON nodes (tenant, base_scope, task_id, valid_to);
+                 CREATE INDEX idx_nodes_ephemeral ON nodes (tenant, scope, expires_at);
+                 CREATE TABLE edges (
+                     edge_rowid INTEGER PRIMARY KEY,
+                     tenant TEXT NOT NULL,
+                     id TEXT NOT NULL,
+                     edge_type TEXT NOT NULL,
+                     from_id TEXT NOT NULL,
+                     to_id TEXT NOT NULL,
+                     props_json TEXT NOT NULL,
+                     confidence REAL,
+                     resolution TEXT NOT NULL,
+                     prov_source TEXT NOT NULL,
+                     prov_desc_hash TEXT,
+                     prov_confidence REAL,
+                     prov_extracted_at INTEGER,
+                     prov_agent TEXT,
+                     valid_from INTEGER NOT NULL,
+                     valid_to INTEGER,
+                     content_hash BLOB NOT NULL
+                 );
+                 CREATE UNIQUE INDEX idx_edges_current_quad ON edges (tenant, edge_type, from_id, to_id) WHERE valid_to IS NULL;
+                 CREATE UNIQUE INDEX idx_edges_current_id ON edges (tenant, id) WHERE valid_to IS NULL;
+                 CREATE INDEX idx_edges_from ON edges (tenant, from_id, valid_from, valid_to);
+                 CREATE INDEX idx_edges_to ON edges (tenant, to_id, valid_from, valid_to);
+                 CREATE INDEX idx_edges_id_temporal ON edges (tenant, id, valid_from, valid_to);
+                 CREATE VIRTUAL TABLE {shard_ta} USING fts5(label, summary);
+                 CREATE VIRTUAL TABLE {shard_tb} USING fts5(label, summary);
+                 PRAGMA user_version = 3;"
+            ))
+            .expect("apply raw v3 ddl");
+
+            // Populate `ta` with `tenant_stats`, and `tb` without `tenant_stats` so v4 backfill is exercised.
+            raw.execute(
+                "INSERT INTO tenant_stats (tenant, node_count, edge_count) VALUES ('ta', 1, 0)",
+                [],
+            )
+            .expect("insert ta stats");
+            raw.execute(
+                "INSERT INTO nodes VALUES
+                 (1, 'ta', 'n:ta', 'Doc', 'v3alpha', 'sta', '{}', 'GLOBAL', 'GLOBAL', 'alice', NULL, NULL, NULL,
+                  'v3', NULL, NULL, NULL, NULL, 1700000000000000, NULL, X'01'),
+                 (2, 'tb', 'n:tb1', 'Doc', 'v3beta1', 'stb1', '{}', 'GLOBAL', 'GLOBAL', 'bob', NULL, NULL, NULL,
+                  'v3', NULL, NULL, NULL, NULL, 1700000000000000, NULL, X'02'),
+                 (3, 'tb', 'n:tb2', 'Doc', 'v3beta2', 'stb2', '{}', 'GLOBAL', 'GLOBAL', 'bob', NULL, NULL, NULL,
+                  'v3', NULL, NULL, NULL, NULL, 1700000000000000, NULL, X'03'),
+                 (4, 'tb', 'n:task_closed', 'Note', 'v3closedtask', 'stask', '{}', 'TASK', 'TASK', 'bob', ?1, NULL, NULL,
+                  'v3', NULL, NULL, NULL, NULL, 1700000000000000, 1700000001000000, X'04')",
+                params![task_uuid],
+            )
+            .expect("insert v3 nodes");
+            raw.execute(
+                "INSERT INTO edges VALUES
+                 (1, 'tb', 'e:tb12', 'LINKS', 'n:tb1', 'n:tb2', '{}', 1.0, 'EXACT',
+                  'v3', NULL, NULL, NULL, NULL, 1700000000000000, NULL, X'11')",
+                [],
+            )
+            .expect("insert v3 edge");
+            raw.execute(
+                &format!(
+                    "INSERT INTO {shard_ta} (rowid, label, summary) VALUES (1, 'v3alpha', 'sta')"
+                ),
+                [],
+            )
+            .expect("insert ta fts");
+            raw.execute(
+                &format!(
+                    "INSERT INTO {shard_tb} (rowid, label, summary)
+                     VALUES (2, 'v3beta1', 'stb1'),
+                            (3, 'v3beta2', 'stb2'),
+                            (4, 'v3closedtask', 'stask')"
+                ),
+                [],
+            )
+            .expect("insert tb fts");
+        }
+
+        fs::copy(&v3_path, &v3_backup_path).expect("copy v3 backup");
+
+        // `restore_from` must accept a valid v3 backup (`user_version == 3` lacks `idx_nodes_task_purge`),
+        // and opening the restored file must migrate it cleanly to `FORMAT_VERSION` (4).
+        SqliteContextStore::restore_from(&v3_backup_path, &restored_path)
+            .expect("restore v3 backup");
+        let clock: Arc<dyn Clock> = Arc::new(ManualClock::new(1_700_000_010_000));
+        let restored_store =
+            SqliteContextStore::open(SqliteConfig::new(&restored_path), Arc::clone(&clock))
+                .expect("open restored v3 -> v4");
+        assert_eq!(
+            restored_store.format_version().expect("ver"),
+            FORMAT_VERSION
+        );
+        drop(restored_store);
+
+        let store =
+            SqliteContextStore::open(SqliteConfig::new(&v3_path), clock).expect("migrate v3 -> v4");
+        assert_eq!(store.format_version().expect("ver"), 4);
+        assert_eq!(FORMAT_VERSION, 4);
+
+        {
+            let guard = store.readers.checkout();
+            let reader = guard.conn().expect("reader");
+            let has_idx: bool = reader
+                .query_row(
+                    "SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type = 'index' AND name = 'idx_nodes_task_purge')",
+                    [],
+                    |r| r.get(0),
+                )
+                .expect("check idx_nodes_task_purge");
+            assert!(has_idx, "v4 migration must create idx_nodes_task_purge");
+
+            let tb_stats: (i64, i64) = reader
+                .query_row(
+                    "SELECT node_count, edge_count FROM tenant_stats WHERE tenant = 'tb'",
+                    [],
+                    |r| Ok((r.get(0)?, r.get(1)?)),
+                )
+                .expect("backfilled tb tenant_stats");
+            assert_eq!(tb_stats, (2, 1));
+        }
+
+        let report = store
+            .purge_expired(&PurgePolicy {
+                task_retention: Duration::from_secs(5),
+            })
+            .expect("purge on migrated v4 store");
+        assert_eq!(report.purged_task_nodes, 1);
     }
 }
