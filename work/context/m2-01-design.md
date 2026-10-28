@@ -1,7 +1,7 @@
 # WP-M2-01 design notes (reviewer decisions)
 
 Written 2026-10-27 by the reviewer (Claude Code) before dispatching WP-M2-01 (`gap-store`).
-Status: **non-normative until promoted.** The spec (ING-060…067, INV-09, INV-19, ADR-020, ADR-025) fixes the
+Status: **promoted on 2026-10-28.** The rules that survived the WP-M2-01 review are now normative in `spec/05-ingestion.md` §11 (ING-080..ING-088, with tests); where this file and the spec differ the spec wins (known differences: §7 FTS is one table per tenant since review round 1 / R-4, the format version is 4, and ING-088 bounds the work of every hot-path statement). Original status: **non-normative until promoted.** The spec (ING-060…067, INV-09, INV-19, ADR-020, ADR-025) fixes the
 behaviour of scopes and limits but not the store API. This file resolves what the spec leaves open so that the
 implementing agent does not have to guess. After the WP is reviewed, the rules that survive become spec bullets
 (new ING bullets) in the same change set as their tests. A deviation from this file is allowed only if it is listed
