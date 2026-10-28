@@ -186,7 +186,6 @@ impl TelemetrySlot {
     }
 
     /// Resets stale EWMAs (`> 5` half-lives) and stale breaker buckets (`RTE-077`, `RTE-084`).
-    #[allow(dead_code)]
     pub(crate) fn maintain(&self, now: Now) {
         let _ = self.latency_us.reset_if_stale(now.q, LATENCY_HALF_LIFE_MS);
         let _ = self.error_rate.reset_if_stale(now.q, ERROR_HALF_LIFE_MS);

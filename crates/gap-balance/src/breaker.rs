@@ -933,7 +933,6 @@ impl Breaker {
     }
 
     /// Clears buckets outside the active `30 s` window or belonging to prior `Closed` generations (`RTE-084`).
-    #[allow(dead_code)]
     pub(crate) fn clear_stale_buckets(&self, now: Now) {
         // Acquire reads the current generation so live buckets of the active generation are preserved.
         let s = unpack_state(self.inner.state_word.load(Ordering::Acquire));
