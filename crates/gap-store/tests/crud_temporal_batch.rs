@@ -1004,3 +1004,143 @@ fn ing_082_group_member_reput_with_unchanged_payload_transfers_owner_and_creates
     assert_eq!(v2.valid_from, t_v2);
     assert_eq!(v2.valid_to, None);
 }
+
+// spec: ING-065, ING-080, ING-081
+#[test]
+fn ing_081_global_put_colliding_with_invisible_node_fails_with_conflict_and_rolls_back_batch() {
+    let dir = TempDir::new().expect("tempdir");
+    let db_path = dir.path().join("t3_conflict.db");
+    let clock: Arc<dyn Clock> = Arc::new(ManualClock::new(1_700_000_000_000));
+    let store = SqliteContextStore::open(SqliteConfig::new(&db_path), clock).expect("open store");
+
+    let tenant = TenantId::new("acme").expect("tenant").scope();
+    let alice = Caller::new("alice");
+    let bob = Caller::new("bob");
+
+    // `alice` creates a `PRIVATE` node (`secret_id`), invisible to `bob`.
+    let secret_id = store
+        .put_node(
+            &tenant,
+            &alice,
+            NewNode {
+                id: None,
+                node_type: NodeType::new("Note").expect("type"),
+                label: "AliceSecret".to_owned(),
+                summary: Some("private payload".to_owned()),
+                props: JsonMap::new(),
+                scope: ScopeSpec::Private,
+                provenance: Provenance::new("alice"),
+            },
+        )
+        .expect("alice put private");
+
+    // `bob` attempts an atomic `put_batch` containing a fresh GLOBAL node followed by a GLOBAL
+    // put whose caller-chosen ID collides with `secret_id` (which `bob` cannot see).
+    let batch_nodes = vec![
+        make_global_node("bob:first_in_batch", "ShouldRollBack"),
+        NewNode {
+            id: Some(secret_id.clone()),
+            node_type: NodeType::new("Symbol").expect("type"),
+            label: "HijackAttempt".to_owned(),
+            summary: None,
+            props: JsonMap::new(),
+            scope: ScopeSpec::Global,
+            provenance: Provenance::new("bob"),
+        },
+    ];
+    assert_eq!(
+        store
+            .put_batch(&tenant, &bob, &batch_nodes, &[])
+            .expect_err("global collision with invisible node must fail with Conflict"),
+        StoreError::Conflict
+    );
+
+    // Nothing from `bob`'s batch was written, and `alice`'s private node is untouched.
+    assert!(
+        store
+            .get_node(
+                &tenant,
+                &bob,
+                &NodeId::new("bob:first_in_batch").expect("id"),
+                None,
+            )
+            .expect("get rolled-back node")
+            .is_none()
+    );
+    assert_eq!(
+        store.counts(&tenant, &bob, None).expect("bob counts"),
+        GraphCounts { nodes: 0, edges: 0 }
+    );
+    let alice_still_private = store
+        .get_node(&tenant, &alice, &secret_id, None)
+        .expect("alice get")
+        .expect("alice node intact");
+    assert_eq!(alice_still_private.scope, Scope::Private);
+    assert_eq!(alice_still_private.label, "AliceSecret");
+    assert_eq!(alice_still_private.owner_principal, "alice");
+}
+
+// spec: ING-064, ING-081, ING-087
+#[test]
+fn ing_087_minted_node_quota_allows_exact_ceiling_and_rejects_fourth_with_quota_exceeded() {
+    let dir = TempDir::new().expect("tempdir");
+    let db_path = dir.path().join("t3_minted_quota.db");
+    let mut cfg = SqliteConfig::new(&db_path);
+    cfg.max_nodes_per_tenant = 3;
+
+    let clock: Arc<dyn Clock> = Arc::new(ManualClock::new(1_700_000_000_000));
+    let store = SqliteContextStore::open(cfg, clock).expect("open store");
+
+    let tenant = TenantId::new("acme").expect("tenant").scope();
+    let writer = Caller::new("alice").with_groups(["eng"]);
+
+    let minted = |label: &str, scope: ScopeSpec| NewNode {
+        id: None,
+        node_type: NodeType::new("Note").expect("type"),
+        label: label.to_owned(),
+        summary: None,
+        props: JsonMap::new(),
+        scope,
+        provenance: Provenance::new("quota-test"),
+    };
+
+    // First 3 store-minted (`id: None`) nodes succeed up to the exact ceiling `3`.
+    let m1 = store
+        .put_node(&tenant, &writer, minted("m1", ScopeSpec::Private))
+        .expect("1st minted node");
+    let m2 = store
+        .put_node(
+            &tenant,
+            &writer,
+            minted(
+                "m2",
+                ScopeSpec::Group {
+                    group: "eng".to_owned(),
+                },
+            ),
+        )
+        .expect("2nd minted node");
+    let m3 = store
+        .put_node(&tenant, &writer, minted("m3", ScopeSpec::Global))
+        .expect("3rd minted node at ceiling");
+    assert_ne!(m1, m2);
+    assert_ne!(m2, m3);
+    assert_eq!(
+        store.counts(&tenant, &writer, None).expect("counts at 3"),
+        GraphCounts { nodes: 3, edges: 0 }
+    );
+
+    // 4th store-minted node MUST fail with `QuotaExceeded`.
+    assert_eq!(
+        store
+            .put_node(&tenant, &writer, minted("m4", ScopeSpec::Private))
+            .expect_err("4th minted node must exceed max_nodes_per_tenant=3"),
+        StoreError::QuotaExceeded
+    );
+    assert_eq!(
+        store
+            .counts(&tenant, &writer, None)
+            .expect("counts stay at 3"),
+        GraphCounts { nodes: 3, edges: 0 }
+    );
+}
