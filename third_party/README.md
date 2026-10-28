@@ -13,6 +13,7 @@
 | `graphql-September2025` | GraphQL Specification (`September 2025 Edition`) | `September2025` (`89d93ebbe05db06787646d76a696ead8de117b2b`) | 14 |
 | `graphql-over-http` | GraphQL over HTTP Specification (`Current Working Draft`) | `d438b209d60fa3d34b0530b605e60d5640c7ef9b` | 3 |
 | `graphql-sse-v2.6.3` | GraphQL over Server-Sent Events Protocol (`v2.6.3`) | `v2.6.3` (`4cced455cb7a23beda9e9bf7a403aab270bd4e66`) | 3 |
+| `googleapis-646596e286b4` | Google APIs protobuf includes needed by `a2a.proto` (`google/api/{annotations,http,client,field_behavior,launch_stage}.proto`) | `646596e286b464ca2c2cca6f4c767e7c19046489` | 6 |
 
 Layout:
 

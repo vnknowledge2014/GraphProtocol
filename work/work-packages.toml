@@ -101,11 +101,12 @@ role = "coder"
 size = "M"
 depends_on = ["WP-M0-02", "WP-M0-03"]
 owns = ["crates/gap-proto/**", "proto/**"]
-spec_refs = ["NGC-001", "NGC-004", "ADR-002"]
+spec_refs = ["NGC-001", "NGC-004", "CMP-020", "CMP-021", "CMP-022", "ADR-002"]
 deliverables = [
   "build.rs using protox + tonic-prost-build compiling proto/gap/ngc/v1/ngc.proto and proto/gap/gateway/v1/gateway.proto (no system protoc required); vendored A2A proto compiled behind feature a2a",
   "descriptor golden test: SHA-256 of the FileDescriptorSet committed; changing a field number or name fails the test unless the golden is updated in the same commit with a CHANGELOG entry",
   "wire-compat test: encode/decode round-trip for every message with proptest-generated values",
+  "Follow work/context/m0-06-brief.md (binding): the build tooling is vendored offline (protox, tonic-prost-build, prost-reflect, sha2), the A2A proto is compiled from third_party/specs/a2a-v1.0.1 with the googleapis includes of third_party/specs/googleapis-646596e286b4, the golden is coupled to crates/gap-proto/CHANGELOG.md, the round-trip test covers every message through a registry, and the handoff lists the required mutation checks",
 ]
 acceptance = ["cargo nextest run -p gap-proto", "cargo clippy -p gap-proto --all-targets -- -D warnings"]
 

@@ -1407,3 +1407,52 @@ path = "package.json"
 sha256 = "985757623ffa9faeb93a62d447d032ddfada410f3d02f5494e0b9cd051bb1359"
 size = 3985
 url = "https://raw.githubusercontent.com/enisdenjo/graphql-sse/4cced455cb7a23beda9e9bf7a403aab270bd4e66/package.json"
+
+[[spec]]
+id = "googleapis-646596e286b4"
+title = "Google APIs protobuf definitions (google/api annotations, http, client, field_behavior, launch_stage)"
+upstream_repo = "https://github.com/googleapis/googleapis"
+ref = "646596e286b464ca2c2cca6f4c767e7c19046489"
+commit_sha = "646596e286b464ca2c2cca6f4c767e7c19046489"
+site_url = "https://github.com/googleapis/googleapis"
+retrieved_at = "2026-10-28T16:04:21Z"
+license = "Apache-2.0"
+license_files = ["third_party/specs/googleapis-646596e286b4/LICENSE"]
+used_by = ["NGC-001", "CMP-020", "CMP-021", "CMP-022", "ADR-016"]
+excluded = []
+
+[[spec.files]]
+path = "LICENSE"
+sha256 = "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4"
+size = 11357
+url = "https://raw.githubusercontent.com/googleapis/googleapis/646596e286b464ca2c2cca6f4c767e7c19046489/LICENSE"
+
+[[spec.files]]
+path = "google/api/annotations.proto"
+sha256 = "e79ea741cb605a65e78ca322174764a4af9fde1962c1631e12b84c4934ba9a6c"
+size = 1045
+url = "https://raw.githubusercontent.com/googleapis/googleapis/646596e286b464ca2c2cca6f4c767e7c19046489/google/api/annotations.proto"
+
+[[spec.files]]
+path = "google/api/client.proto"
+sha256 = "5e9fc117290fe7d3472791543c979bec7cf4497f3fe6ffaf9de9ae99cc4f1804"
+size = 21460
+url = "https://raw.githubusercontent.com/googleapis/googleapis/646596e286b464ca2c2cca6f4c767e7c19046489/google/api/client.proto"
+
+[[spec.files]]
+path = "google/api/field_behavior.proto"
+sha256 = "e2a1ac88c49909d4579bacbb18519085e82da32c2c7bb15c31037f3be19f667f"
+size = 4289
+url = "https://raw.githubusercontent.com/googleapis/googleapis/646596e286b464ca2c2cca6f4c767e7c19046489/google/api/field_behavior.proto"
+
+[[spec.files]]
+path = "google/api/http.proto"
+sha256 = "ead99129aa15dd5f6233942030c72eec33bc0d7b1c7c260dc143293ef66c5b78"
+size = 15059
+url = "https://raw.githubusercontent.com/googleapis/googleapis/646596e286b464ca2c2cca6f4c767e7c19046489/google/api/http.proto"
+
+[[spec.files]]
+path = "google/api/launch_stage.proto"
+sha256 = "68e22c9821227b4e84c7029569fce1055c21e6ccab991e0986bc75f12ef4dd82"
+size = 3083
+url = "https://raw.githubusercontent.com/googleapis/googleapis/646596e286b464ca2c2cca6f4c767e7c19046489/google/api/launch_stage.proto"

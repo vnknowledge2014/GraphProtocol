@@ -61,8 +61,19 @@ Each crate declares these as `name.workspace = true` (features as shown); anythi
 | WP-M0-09 `gap-testkit` | gap-core, gap-ngc-sdk, gap-proto, serde (`derive`), serde_json, thiserror, tokio (`macros`, `rt`, `sync`, `test-util`, `time`), tracing, tracing-subscriber, uuid (`v4`) | proptest, tempfile |
 | WP-M2-01 `gap-store` | gap-core, blake3, rusqlite (`backup`, `blob`, `bundled`, `functions`, `limits`, `serde_json`, `uuid`), serde (`derive`), serde_json, thiserror, tokio (`rt`, `sync`), tracing, uuid (`serde`, `v4`, `v7`) | proptest, tempfile, tokio (`macros`, `rt-multi-thread`) |
 | WP-M3-01 `gap-balance` | gap-core, arc-swap, crossbeam-utils, metrics, thiserror, tokio (`rt`, `sync`, `time`), tracing | criterion (`cargo_bench_support`), hdrhistogram, loom, proptest, shuttle, tokio (`macros`, `rt-multi-thread`, `test-util`, `time`) |
+| WP-M0-06 `gap-proto` | gap-core, prost, prost-types, tonic, tonic-prost; `[build-dependencies]` protox, tonic-prost-build | proptest, prost-reflect, sha2 |
 
 Result: 328 crates (199 before; 129 added, none removed), `Cargo.lock` of the scratch copy 359 packages.
+
+Revised 2026-10-28 for WP-M0-06 (user approved the crates.io access for it): 356 crates (328 before; 28 added: protox, protox-parse,
+prost-build, prost-reflect, tonic-build 0.14.8, tonic-prost-build 0.14.8, sha2 0.11.1 and its `digest` family, miette, logos, petgraph,
+fixedbitset, multimap, pulldown-cmark, prettyplease, unicase, unicode-width 0.1.14, foldhash, hashbrown 0.15.5, typenum). Three
+crates of the old set (`loom`, `generator`, `windows-result`) are kept in the vendor directory although no manifest uses them any more.
+`cargo deny --offline check bans licenses sources` ok, `cargo build --workspace --all-targets --all-features --locked --offline` ok with an empty
+`CARGO_HOME`, and a probe `build.rs` compiled `proto/gap/ngc/v1/ngc.proto`, `proto/gap/gateway/v1/gateway.proto` and the vendored `a2a.proto`
+(with the five `google/api/*.proto` files of `third_party/specs/googleapis-646596e286b4/`) through `protox::compile` +
+`tonic_prost_build::configure().compile_fds(..)` without any system `protoc`. The real `Cargo.lock` is unchanged by the vendoring itself;
+the agent extends it offline (28 new packages). Root catalogue gained `prost-reflect = "0.16.5"` and `prost-types = "0.14.4"`.
 
 ## Probes that were run offline on the vendored set (scratch copy, 2026-10-27)
 
@@ -87,8 +98,8 @@ Result: 328 crates (199 before; 129 added, none removed), `Cargo.lock` of the sc
   licences are not in the `deny.toml` allow-list. The first WP that needs HTTPS must pick a backend and settle the licence gate.
 - A crate that is not vendored cannot be resolved offline; the agent must stop and ask. Not vendored
   today (pinned in the root catalogue): `candle-*`, `cedar-policy`, `dashmap`, `ed25519-dalek`, `fastembed`, `governor`,
-  `hnsw_rs`, `im`, `jsonschema`, `jsonwebtoken`, `llguidance`, `moka`, `ort`, `petgraph`, `protox`, `redb`, `rmcp`,
-  `rustls`, `safetensors`, `sha2`, `sqlparser`, `tokenizers`, `tower-http` (as a direct dependency), `tree-sitter`,
+  `hnsw_rs`, `im`, `jsonschema`, `jsonwebtoken`, `llguidance`, `moka`, `ort`, `redb`, `rmcp`,
+  `rustls`, `safetensors`, `sqlparser`, `tokenizers`, `tower-http` (as a direct dependency), `tree-sitter`,
   `usearch` and others. Re-vendor with the union of the old and new sets (steps above).
 - Seatbelt sandbox: the agent cannot read `~/.cargo/config.toml` or `~/.config/git/config`; it works around this with
   `CARGO_HOME=.git/tmp-cargo-home` and `GIT_CONFIG_GLOBAL=/dev/null`. Whether binding `127.0.0.1` is allowed inside it
