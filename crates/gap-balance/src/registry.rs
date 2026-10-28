@@ -361,10 +361,7 @@ mod tests {
             reg.register(k3.clone(), default_params("b-3", 16)),
             Err(RegistryError::Full { max_slots: 3 })
         );
-        assert_eq!(
-            reg.register(k1.clone(), default_params("b-1", 16)),
-            Ok(s1)
-        );
+        assert_eq!(reg.register(k1.clone(), default_params("b-1", 16)), Ok(s1));
         assert_eq!(reg.find(&k3), None);
         assert!(reg.get(BranchSlot::from_raw_for_test(3)).is_none());
 
@@ -408,7 +405,11 @@ mod tests {
         for (idx, bad) in bad_labels.iter().enumerate() {
             let key = TelemetrySlotKey::new(tenant.clone(), make_uid(idx as u64 + 1));
             let res = reg.register(key, default_params(bad, 10));
-            assert_eq!(res, Err(RegistryError::InvalidLabel), "label {bad:?} must fail");
+            assert_eq!(
+                res,
+                Err(RegistryError::InvalidLabel),
+                "label {bad:?} must fail"
+            );
         }
         assert_eq!(reg.len(), 0);
 
@@ -502,7 +503,8 @@ mod tests {
             race_handles.push(std::thread::spawn(move || {
                 let params = default_params("race-branch", 10 + tid);
                 barrier.wait();
-                reg.register(key, params).expect("concurrent idempotent register")
+                reg.register(key, params)
+                    .expect("concurrent idempotent register")
             }));
         }
         for h in race_handles {
@@ -628,7 +630,13 @@ mod tests {
 
         // Both registered slots remain in place in the slab.
         assert_eq!(reg.len(), 2);
-        assert!(Arc::ptr_eq(&reg.get(stale_id).expect("still there"), &stale_slot));
-        assert!(Arc::ptr_eq(&reg.get(fresh_id).expect("still there"), &fresh_slot));
+        assert!(Arc::ptr_eq(
+            &reg.get(stale_id).expect("still there"),
+            &stale_slot
+        ));
+        assert!(Arc::ptr_eq(
+            &reg.get(fresh_id).expect("still there"),
+            &fresh_slot
+        ));
     }
 }

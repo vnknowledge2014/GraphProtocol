@@ -275,7 +275,14 @@ impl BreakerInner {
         }
     }
 
-    fn emit_transition(&self, from: BreakerState, to: BreakerState, k: u8, reason: &'static str, now: Now) {
+    fn emit_transition(
+        &self,
+        from: BreakerState,
+        to: BreakerState,
+        k: u8,
+        reason: &'static str,
+        now: Now,
+    ) {
         // Relaxed fetch_add suffices to assign each concurrent transition a distinct ring slot.
         let seq = self.transition_seq.fetch_add(1, Ordering::Relaxed);
         let slot = (seq as usize) % TRANSITION_RING_LEN;
@@ -628,7 +635,10 @@ impl Breaker {
         for slot in &self.inner.transitions {
             // Acquire pairs with the Release store in `emit_transition`.
             let ts = slot.load(Ordering::Acquire);
-            if ts != TRANSITION_UNSET && ts <= now.ms && now.ms.saturating_sub(ts) < FLAPPING_WINDOW_MS {
+            if ts != TRANSITION_UNSET
+                && ts <= now.ms
+                && now.ms.saturating_sub(ts) < FLAPPING_WINDOW_MS
+            {
                 recent += 1;
             }
         }
@@ -637,7 +647,6 @@ impl Breaker {
 
     /// Read-only eligibility check for P2C selection that NEVER mutates breaker state or probe
     /// tallies (`RTE-073`, `RTE-079(e)`).
-    #[allow(dead_code)]
     #[must_use]
     pub(crate) fn is_selectable_readonly(&self, now: Now) -> bool {
         // Acquire observes the latest state transition and probe reservation count without writing.
@@ -671,8 +680,8 @@ impl Breaker {
             Outcome::Ok | Outcome::ClientError => (1_u64, 0_u64),
             Outcome::Failure => (0_u64, 1_u64),
         };
-        let is_slow = latency.as_millis().saturating_mul(5)
-            > u128::from(self.inner.default_timeout_ms) * 4;
+        let is_slow =
+            latency.as_millis().saturating_mul(5) > u128::from(self.inner.default_timeout_ms) * 4;
         let inc_slow = u64::from(is_slow);
 
         let bucket = &self.inner.buckets[idx];
@@ -759,8 +768,8 @@ impl Breaker {
         }
 
         let calls = total_ok + total_fail;
-        let should_trip = calls >= MIN_WINDOW_CALLS
-            && (total_fail * 2 >= calls || total_slow * 5 >= calls * 4);
+        let should_trip =
+            calls >= MIN_WINDOW_CALLS && (total_fail * 2 >= calls || total_slow * 5 >= calls * 4);
         if !should_trip {
             return;
         }
@@ -1026,14 +1035,16 @@ mod tests {
 
     impl Visit for EventVisitor {
         fn record_str(&mut self, field: &Field, value: &str) {
-            self.fields.insert(field.name().to_owned(), value.to_owned());
+            self.fields
+                .insert(field.name().to_owned(), value.to_owned());
         }
 
         fn record_u64(&mut self, field: &Field, value: u64) {
             if field.name() == "k" {
                 self.k = Some(value);
             }
-            self.fields.insert(field.name().to_owned(), value.to_string());
+            self.fields
+                .insert(field.name().to_owned(), value.to_string());
         }
 
         fn record_debug(&mut self, field: &Field, value: &dyn fmt::Debug) {
@@ -1613,7 +1624,9 @@ mod tests {
 
         // 14..21. Open durations for k = 0..6 and exact boundary ms (open_until - 1 vs open_until),
         // plus saturation at k = 6 (60_000 ms).
-        let expected_open_ms: [u64; 8] = [5_000, 10_000, 20_000, 40_000, 60_000, 60_000, 60_000, 60_000];
+        let expected_open_ms: [u64; 8] = [
+            5_000, 10_000, 20_000, 40_000, 60_000, 60_000, 60_000, 60_000,
+        ];
         for (level_idx, &dur_ms) in expected_open_ms.iter().enumerate() {
             // Before boundary (open_until - 1): still Open with retry_after = 1 ms.
             let mut steps_before = vec![trip_20_failures(1_000)];
@@ -1661,9 +1674,18 @@ mod tests {
             timeout_ms: 1_000,
             steps: vec![
                 trip_20_failures(0),
-                Step::AdmitProbe { slot: 0, at_ms: 5_000 },
-                Step::AdmitProbe { slot: 1, at_ms: 5_000 },
-                Step::AdmitProbe { slot: 2, at_ms: 5_000 },
+                Step::AdmitProbe {
+                    slot: 0,
+                    at_ms: 5_000,
+                },
+                Step::AdmitProbe {
+                    slot: 1,
+                    at_ms: 5_000,
+                },
+                Step::AdmitProbe {
+                    slot: 2,
+                    at_ms: 5_000,
+                },
             ],
             check_ms: 5_000,
             expected_state: BreakerState::HalfOpen,
@@ -1678,7 +1700,10 @@ mod tests {
             timeout_ms: 1_000,
             steps: vec![
                 trip_20_failures(0),
-                Step::AdmitProbe { slot: 0, at_ms: 5_000 },
+                Step::AdmitProbe {
+                    slot: 0,
+                    at_ms: 5_000,
+                },
                 Step::ResolveProbe {
                     slot: 0,
                     outcome: Outcome::Ok,
@@ -1699,9 +1724,18 @@ mod tests {
             timeout_ms: 1_000,
             steps: vec![
                 trip_20_failures(0),
-                Step::AdmitProbe { slot: 0, at_ms: 5_000 },
-                Step::AdmitProbe { slot: 1, at_ms: 5_000 },
-                Step::AdmitProbe { slot: 2, at_ms: 5_000 },
+                Step::AdmitProbe {
+                    slot: 0,
+                    at_ms: 5_000,
+                },
+                Step::AdmitProbe {
+                    slot: 1,
+                    at_ms: 5_000,
+                },
+                Step::AdmitProbe {
+                    slot: 2,
+                    at_ms: 5_000,
+                },
                 Step::ResolveProbe {
                     slot: 0,
                     outcome: Outcome::Failure,
@@ -1734,9 +1768,18 @@ mod tests {
             timeout_ms: 1_000,
             steps: vec![
                 trip_20_failures(0),
-                Step::AdmitProbe { slot: 0, at_ms: 5_000 },
-                Step::AdmitProbe { slot: 1, at_ms: 5_000 },
-                Step::AdmitProbe { slot: 2, at_ms: 5_000 },
+                Step::AdmitProbe {
+                    slot: 0,
+                    at_ms: 5_000,
+                },
+                Step::AdmitProbe {
+                    slot: 1,
+                    at_ms: 5_000,
+                },
+                Step::AdmitProbe {
+                    slot: 2,
+                    at_ms: 5_000,
+                },
                 Step::DropProbe { slot: 1 },
                 Step::ResolveProbe {
                     slot: 0,
@@ -1987,20 +2030,29 @@ mod tests {
                             Step::Health { status, at_ms } => {
                                 breaker.on_health(status, Now::from_ms(at_ms));
                             }
-                            Step::AdmitProbe { slot, at_ms } => match breaker.admit(Now::from_ms(at_ms)) {
-                                Admission::Probe(p) => permits[slot] = Some(p),
-                                other => panic!("{}: expected Probe at {at_ms}, got {other:?}", case.name),
-                            },
+                            Step::AdmitProbe { slot, at_ms } => {
+                                match breaker.admit(Now::from_ms(at_ms)) {
+                                    Admission::Probe(p) => permits[slot] = Some(p),
+                                    other => panic!(
+                                        "{}: expected Probe at {at_ms}, got {other:?}",
+                                        case.name
+                                    ),
+                                }
+                            }
                             Step::ResolveProbe {
                                 slot,
                                 outcome,
                                 latency_ms,
                                 at_ms,
                             } => {
-                                let p = permits[slot]
-                                    .take()
-                                    .unwrap_or_else(|| panic!("{}: missing permit {slot}", case.name));
-                                p.record(outcome, Duration::from_millis(latency_ms), Now::from_ms(at_ms));
+                                let p = permits[slot].take().unwrap_or_else(|| {
+                                    panic!("{}: missing permit {slot}", case.name)
+                                });
+                                p.record(
+                                    outcome,
+                                    Duration::from_millis(latency_ms),
+                                    Now::from_ms(at_ms),
+                                );
                             }
                             Step::DropProbe { slot } => {
                                 let _ = permits[slot].take();

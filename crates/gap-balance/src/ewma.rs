@@ -128,10 +128,12 @@ impl DecayedEwma {
             ) {
                 return false;
             }
-            match self
-                .0
-                .compare_exchange_weak(cur, Self::UNSET, Ordering::Relaxed, Ordering::Relaxed)
-            {
+            match self.0.compare_exchange_weak(
+                cur,
+                Self::UNSET,
+                Ordering::Relaxed,
+                Ordering::Relaxed,
+            ) {
                 Ok(_) => return true,
                 Err(actual) => cur = actual,
             }

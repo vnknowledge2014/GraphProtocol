@@ -41,12 +41,10 @@ impl RetryBudget {
             if next == cur {
                 return;
             }
-            match self.millis.compare_exchange_weak(
-                cur,
-                next,
-                Ordering::AcqRel,
-                Ordering::Relaxed,
-            ) {
+            match self
+                .millis
+                .compare_exchange_weak(cur, next, Ordering::AcqRel, Ordering::Relaxed)
+            {
                 Ok(_) => return,
                 Err(actual) => cur = actual,
             }

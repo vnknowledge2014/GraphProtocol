@@ -103,7 +103,9 @@ impl TelemetrySlot {
             Outcome::Failure => 1.0_f32,
             Outcome::Ok | Outcome::ClientError => 0.0_f32,
         };
-        let _ = self.error_rate.update(err_sample, now.q, ERROR_HALF_LIFE_MS);
+        let _ = self
+            .error_rate
+            .update(err_sample, now.q, ERROR_HALF_LIFE_MS);
 
         if matches!(outcome, Outcome::Ok | Outcome::Failure) {
             let micros = (latency.as_secs_f64() * 1_000_000.0).min(f64::from(f32::MAX)) as f32;
