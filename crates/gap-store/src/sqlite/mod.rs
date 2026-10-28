@@ -1142,4 +1142,69 @@ mod tests {
             StoreError::Backend
         );
     }
+
+    // spec: ING-064, INV-02, ING-087 (ADR-020)
+    #[test]
+    fn ing_064_default_sqlite_config_enforces_full_synchronous_writer_and_hardened_reader_pool_pragmas()
+     {
+        let dir = TempDir::new().expect("tempdir");
+        let db_path = dir.path().join("default_pragmas.db");
+        let clock: Arc<dyn Clock> = Arc::new(ManualClock::new(1_700_000_000_000));
+        let store = SqliteContextStore::open(SqliteConfig::new(&db_path), clock)
+            .expect("open default store");
+
+        assert_eq!(store.config.durability, Durability::Full);
+        assert_eq!(
+            store.config.reader_pool_size.get(),
+            DEFAULT_READER_POOL_SIZE
+        );
+
+        {
+            let writer = lock_unpoisoned(&store.writer);
+            let sync_mode: i64 = writer
+                .query_row("PRAGMA synchronous;", [], |r| r.get(0))
+                .expect("writer PRAGMA synchronous");
+            assert_eq!(sync_mode, 2, "default writer must enforce FULL (2)");
+            let writer_cell_check: i64 = writer
+                .query_row("PRAGMA cell_size_check;", [], |r| r.get(0))
+                .expect("writer PRAGMA cell_size_check");
+            assert_eq!(writer_cell_check, 1);
+            let writer_trusted: i64 = writer
+                .query_row("PRAGMA trusted_schema;", [], |r| r.get(0))
+                .expect("writer PRAGMA trusted_schema");
+            assert_eq!(writer_trusted, 0);
+        }
+
+        // Hold all pooled reader guards simultaneously so every connection in the pool is checked.
+        let mut guards = Vec::with_capacity(DEFAULT_READER_POOL_SIZE);
+        for _ in 0..DEFAULT_READER_POOL_SIZE {
+            guards.push(store.readers.checkout());
+        }
+        assert_eq!(guards.len(), 4);
+
+        for (idx, guard) in guards.iter().enumerate() {
+            let conn = guard.conn().expect("pooled reader conn");
+            let cell_size_check: i64 = conn
+                .query_row("PRAGMA cell_size_check;", [], |r| r.get(0))
+                .expect("reader PRAGMA cell_size_check");
+            let trusted_schema: i64 = conn
+                .query_row("PRAGMA trusted_schema;", [], |r| r.get(0))
+                .expect("reader PRAGMA trusted_schema");
+            let query_only: i64 = conn
+                .query_row("PRAGMA query_only;", [], |r| r.get(0))
+                .expect("reader PRAGMA query_only");
+            assert_eq!(
+                cell_size_check, 1,
+                "pooled reader {idx} must enforce cell_size_check = 1"
+            );
+            assert_eq!(
+                trusted_schema, 0,
+                "pooled reader {idx} must enforce trusted_schema = 0"
+            );
+            assert_eq!(
+                query_only, 1,
+                "pooled reader {idx} must enforce query_only = 1"
+            );
+        }
+    }
 }
