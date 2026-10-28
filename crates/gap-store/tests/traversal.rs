@@ -851,16 +851,17 @@ impl ReferenceGraph {
                 let mut best_hops: HashMap<NodeId, [f64; 17]> = HashMap::new();
                 let mut traversed_edges: BTreeMap<EdgeId, Edge> = BTreeMap::new();
                 let mut skipped_invalid: BTreeSet<EdgeId> = BTreeSet::new();
-                let mut truncated = false;
+                let mut cap_cost_bits: Option<u64> = None;
+                let mut more_beyond_cap = false;
 
                 let mut init = [f64::INFINITY; 17];
                 init[0] = 0.0;
                 best_hops.insert(query.from.clone(), init);
 
-                let mut heap: BinaryHeap<Reverse<(u64, NodeId, u8)>> = BinaryHeap::new();
-                heap.push(Reverse((0.0_f64.to_bits(), query.from.clone(), 0)));
+                let mut heap: BinaryHeap<Reverse<(u64, u8, NodeId)>> = BinaryHeap::new();
+                heap.push(Reverse((0.0_f64.to_bits(), 0, query.from.clone())));
 
-                while let Some(Reverse((bits, u, hops))) = heap.pop() {
+                while let Some(Reverse((bits, hops, u))) = heap.pop() {
                     let cost = f64::from_bits(bits);
                     let h = usize::from(hops);
                     if let Some(tbl) = best_hops.get(&u)
@@ -868,13 +869,50 @@ impl ReferenceGraph {
                     {
                         continue;
                     }
-                    if !settled_depth.contains_key(&u) {
-                        if settled_order.len() == visited_cap {
-                            truncated = true;
+
+                    let in_post_cap_probe =
+                        cap_cost_bits.is_some_and(|limit_bits| bits > limit_bits);
+                    if in_post_cap_probe {
+                        if settled_order.len() > visited_cap || !settled_depth.contains_key(&u) {
+                            more_beyond_cap = true;
                             break;
                         }
+                        if u32::from(hops) < query.max_depth {
+                            for (v, e) in steps_from(&u, query.direction) {
+                                let w_opt = match e.props.get("weight") {
+                                    None => Some(1.0),
+                                    Some(JsonValue::Number(num)) => num
+                                        .as_f64()
+                                        .filter(|w| w.is_finite() && *w >= 0.0)
+                                        .map(|w| if w == 0.0 { 0.0 } else { w }),
+                                    Some(_) => None,
+                                };
+                                let Some(w) = w_opt else {
+                                    continue;
+                                };
+                                let raw_next = cost + w;
+                                if !raw_next.is_finite() {
+                                    continue;
+                                }
+                                let next = if raw_next == 0.0 { 0.0 } else { raw_next };
+                                let nh = h + 1;
+                                let v_tbl =
+                                    best_hops.entry(v.clone()).or_insert([f64::INFINITY; 17]);
+                                if (0..=nh).all(|hp| next < v_tbl[hp]) {
+                                    v_tbl[nh] = next;
+                                    heap.push(Reverse((next.to_bits(), hops + 1, v)));
+                                }
+                            }
+                        }
+                        continue;
+                    }
+
+                    if !settled_depth.contains_key(&u) {
                         settled_depth.insert(u.clone(), u32::from(hops));
                         settled_order.push((u.clone(), bits, u32::from(hops)));
+                        if settled_order.len() == visited_cap {
+                            cap_cost_bits = Some(bits);
+                        }
                     }
                     if u32::from(hops) < query.max_depth {
                         for (v, e) in steps_from(&u, query.direction) {
@@ -902,10 +940,16 @@ impl ReferenceGraph {
                             let v_tbl = best_hops.entry(v.clone()).or_insert([f64::INFINITY; 17]);
                             if (0..=nh).all(|hp| next < v_tbl[hp]) {
                                 v_tbl[nh] = next;
-                                heap.push(Reverse((next.to_bits(), v, hops + 1)));
+                                heap.push(Reverse((next.to_bits(), hops + 1, v)));
                             }
                         }
                     }
+                }
+
+                settled_order.sort_by(|a, b| (a.1, &a.0).cmp(&(b.1, &b.0)));
+                let truncated = settled_order.len() > visited_cap || more_beyond_cap;
+                if settled_order.len() > visited_cap {
+                    settled_order.truncate(visited_cap);
                 }
 
                 let warnings = if skipped_invalid.is_empty() {
@@ -1314,6 +1358,381 @@ proptest! {
                 }
             }
             prop_assert_eq!(paged_nodes, actual_full.nodes);
+        }
+    }
+}
+
+fn collect_pages_strict(
+    store: &SqliteContextStore,
+    tenant: &gap_core::ids::TenantScope,
+    caller: &Caller,
+    base_query: &TraverseQuery,
+    first: u32,
+    max_pages: usize,
+) -> (Vec<String>, usize) {
+    let mut concatenated = Vec::new();
+    let mut seen_ids = BTreeSet::new();
+    let mut seen_pages: Vec<Vec<String>> = Vec::new();
+    let mut cursor = None;
+    let mut pages = 0usize;
+
+    loop {
+        pages += 1;
+        assert!(
+            pages <= max_pages,
+            "paging exceeded {max_pages} pages (infinite loop on resume cursor {cursor:?})"
+        );
+        let mut pq = base_query.clone();
+        pq.first = first;
+        pq.after = cursor.clone();
+        let page = store.traverse(tenant, caller, &pq).expect("page traverse");
+        let ids: Vec<String> = page
+            .nodes
+            .iter()
+            .map(|n| n.id.as_str().to_owned())
+            .collect();
+        assert!(
+            !seen_pages.contains(&ids),
+            "repeated page {ids:?} on page {pages}"
+        );
+        for id in &ids {
+            assert!(
+                seen_ids.insert(id.clone()),
+                "duplicate node `{id}` across pages"
+            );
+        }
+        seen_pages.push(ids.clone());
+        concatenated.extend(ids);
+        match page.resume {
+            Some(tok) => cursor = Some(tok),
+            None => break,
+        }
+    }
+    (concatenated, pages)
+}
+
+// spec: ING-064, ING-067, GQL-040
+#[test]
+fn ing_067_weighted_repro_1_zero_weight_edge_sorts_by_cost_then_node_id_and_pages_cleanly() {
+    let dir = TempDir::new().expect("tempdir");
+    let clock: Arc<dyn Clock> = Arc::new(ManualClock::new(1_700_000_000_000));
+    let store = SqliteContextStore::open(SqliteConfig::new(dir.path().join("r2_repro1.db")), clock)
+        .expect("open");
+    let tenant = TenantId::new("acme").expect("t").scope();
+    let caller = Caller::new("alice");
+
+    // Repro 1 (R-2): `a -> z` weight 1.0, `z -> m` weight 0.0, start `a`, Outbound, max_depth 2.
+    let nodes: Vec<NewNode> = ["a", "m", "z"].into_iter().map(global_node).collect();
+    let edges = vec![
+        weighted_edge("e_az", "a", "z", json!(1.0)),
+        weighted_edge("e_zm", "z", "m", json!(0.0)),
+    ];
+    store
+        .put_batch(&tenant, &caller, &nodes, &edges)
+        .expect("seed repro 1");
+
+    let mut q = TraverseQuery::new(NodeId::new("a").expect("id"));
+    q.direction = Direction::Outbound;
+    q.max_depth = 2;
+    q.strategy = TraverseStrategy::Weighted;
+    q.first = 100;
+
+    let full = store.traverse(&tenant, &caller, &q).expect("unpaged");
+    assert_eq!(node_ids(&full), vec!["a", "m", "z"]);
+
+    let (paged_f1, count_f1) = collect_pages_strict(&store, &tenant, &caller, &q, 1, 10);
+    assert_eq!(count_f1, 3);
+    assert_eq!(paged_f1, vec!["a", "m", "z"]);
+
+    let (paged_f2, count_f2) = collect_pages_strict(&store, &tenant, &caller, &q, 2, 10);
+    assert_eq!(count_f2, 2);
+    assert_eq!(paged_f2, vec!["a", "m", "z"]);
+}
+
+// spec: ING-064, ING-067, GQL-040
+#[test]
+fn ing_067_weighted_repro_2_direction_both_zero_weight_does_not_loop_on_resume() {
+    let dir = TempDir::new().expect("tempdir");
+    let clock: Arc<dyn Clock> = Arc::new(ManualClock::new(1_700_000_000_000));
+    let store = SqliteContextStore::open(SqliteConfig::new(dir.path().join("r2_repro2.db")), clock)
+        .expect("open");
+    let tenant = TenantId::new("acme").expect("t").scope();
+    let caller = Caller::new("alice");
+
+    // Repro 2 (R-2): ids `n4` (start), `n11`, `n1`, `n0`, `s1`, Direction::Both.
+    let nodes: Vec<NewNode> = ["n4", "n11", "n1", "n0", "s1"]
+        .into_iter()
+        .map(global_node)
+        .collect();
+    let edges = vec![
+        weighted_edge("e1", "n11", "n4", json!(0.5)),
+        plain_edge("e2", "CALLS", "n4", "n11"),
+        weighted_edge("e3", "n1", "n4", json!(1.0)),
+        weighted_edge("e4", "n11", "n1", json!(0.5)),
+        weighted_edge("e5", "n0", "n1", json!(0.0)),
+        plain_edge("e6", "CALLS", "s1", "n1"),
+        weighted_edge("e7", "n11", "n0", json!(3.0)),
+    ];
+    store
+        .put_batch(&tenant, &caller, &nodes, &edges)
+        .expect("seed repro 2");
+
+    let mut q = TraverseQuery::new(NodeId::new("n4").expect("id"));
+    q.direction = Direction::Both;
+    q.max_depth = 16;
+    q.strategy = TraverseStrategy::Weighted;
+    q.first = 100;
+
+    let full = store.traverse(&tenant, &caller, &q).expect("unpaged");
+    assert_eq!(node_ids(&full), vec!["n4", "n11", "n0", "n1", "s1"]);
+
+    let (paged_f1, count_f1) = collect_pages_strict(&store, &tenant, &caller, &q, 1, 10);
+    assert_eq!(count_f1, 5);
+    assert_eq!(paged_f1, vec!["n4", "n11", "n0", "n1", "s1"]);
+
+    let (paged_f2, count_f2) = collect_pages_strict(&store, &tenant, &caller, &q, 2, 10);
+    assert_eq!(count_f2, 3);
+    assert_eq!(paged_f2, vec!["n4", "n11", "n0", "n1", "s1"]);
+}
+
+// spec: ING-064, ING-067, GQL-040
+#[test]
+fn ing_067_weighted_zero_weight_cycle_terminates_without_duplicates() {
+    let dir = TempDir::new().expect("tempdir");
+    let clock: Arc<dyn Clock> = Arc::new(ManualClock::new(1_700_000_000_000));
+    let store = SqliteContextStore::open(
+        SqliteConfig::new(dir.path().join("r2_zero_cycle.db")),
+        clock,
+    )
+    .expect("open");
+    let tenant = TenantId::new("acme").expect("t").scope();
+    let caller = Caller::new("alice");
+
+    // 4-node zero-weight cycle + zero-weight self-loop, starting from `d` (largest id) so every
+    // reachable node has cost 0.0 and `(cost, id)` tie-breaking orders `[a, b, c, d]`.
+    let nodes: Vec<NewNode> = ["a", "b", "c", "d"].into_iter().map(global_node).collect();
+    let edges = vec![
+        weighted_edge("e_dc", "d", "c", json!(0.0)),
+        weighted_edge("e_cb", "c", "b", json!(0.0)),
+        weighted_edge("e_ba", "b", "a", json!(0.0)),
+        weighted_edge("e_ad", "a", "d", json!(0.0)),
+        weighted_edge("e_dd", "d", "d", json!(0.0)),
+    ];
+    store
+        .put_batch(&tenant, &caller, &nodes, &edges)
+        .expect("seed zero cycle");
+
+    let mut q = TraverseQuery::new(NodeId::new("d").expect("id"));
+    q.direction = Direction::Outbound;
+    q.max_depth = 16;
+    q.strategy = TraverseStrategy::Weighted;
+    q.first = 100;
+
+    let full = store.traverse(&tenant, &caller, &q).expect("unpaged");
+    assert_eq!(node_ids(&full), vec!["a", "b", "c", "d"]);
+    assert_eq!(full.stats.visited, 4);
+    assert_eq!(full.stats.depth_reached, 3);
+    assert!(!full.truncated);
+
+    let (paged_f1, count_f1) = collect_pages_strict(&store, &tenant, &caller, &q, 1, 10);
+    assert_eq!(count_f1, 4);
+    assert_eq!(paged_f1, vec!["a", "b", "c", "d"]);
+
+    let (paged_f2, count_f2) = collect_pages_strict(&store, &tenant, &caller, &q, 2, 10);
+    assert_eq!(count_f2, 2);
+    assert_eq!(paged_f2, vec!["a", "b", "c", "d"]);
+}
+
+// spec: ING-064, ING-067, GQL-040
+#[test]
+fn ing_067_weighted_equal_cost_group_straddling_visited_cap_keeps_smallest_ids_and_min_hop_depth() {
+    let dir = TempDir::new().expect("tempdir");
+    let clock: Arc<dyn Clock> = Arc::new(ManualClock::new(1_700_000_000_000));
+    let store =
+        SqliteContextStore::open(SqliteConfig::new(dir.path().join("r2_cap_tie.db")), clock)
+            .expect("open");
+    let tenant = TenantId::new("acme").expect("t").scope();
+    let caller = Caller::new("alice");
+
+    // `n20` (cost 0.0, hops 0) -> `n0` (cost 0.5, hops 1)
+    // `n20` -> `s3` (cost 1.0, hops 1) -> `s2` (cost 1.0, hops 2 via weight 0.0)
+    // Also a longer equal-cost path `n20 -> s4 (1.0) -> s3_mid (0.0) -> s2 (0.0)` (3 hops) to verify
+    // `s2`'s depth is the smallest hop count (2, not 3) among its minimum-cost paths.
+    let nodes: Vec<NewNode> = ["n20", "n0", "s2", "s3", "s4", "z9"]
+        .into_iter()
+        .map(global_node)
+        .collect();
+    let edges = vec![
+        weighted_edge("e_20_0", "n20", "n0", json!(0.5)),
+        weighted_edge("e_20_s3", "n20", "s3", json!(1.0)),
+        weighted_edge("e_s3_s2", "s3", "s2", json!(0.0)),
+        weighted_edge("e_20_s4", "n20", "s4", json!(1.0)),
+        weighted_edge("e_s4_z9", "s4", "z9", json!(0.0)),
+        weighted_edge("e_z9_s2", "z9", "s2", json!(0.0)),
+    ];
+    store
+        .put_batch(&tenant, &caller, &nodes, &edges)
+        .expect("seed cap tie");
+
+    let mut q = TraverseQuery::new(NodeId::new("n20").expect("id"));
+    q.direction = Direction::Outbound;
+    q.max_depth = 6;
+    q.strategy = TraverseStrategy::Weighted;
+    q.first = 100;
+    q.visited_cap = Some(3);
+
+    // Equal-cost group at cost 1.0 has `{s2, s3, s4, z9}`; first 3 overall by `(cost, id)` is
+    // `[n20 (0.0), n0 (0.5), s2 (1.0)]` (NOT `[n20, n0, s3]`), with `depth_reached == 2` from `s2`.
+    let capped = store.traverse(&tenant, &caller, &q).expect("capped=3");
+    assert_eq!(node_ids(&capped), vec!["n20", "n0", "s2"]);
+    assert!(capped.truncated);
+    assert_eq!(
+        capped.stats,
+        TraverseStats {
+            visited: 3,
+            returned: 3,
+            depth_reached: 2,
+        }
+    );
+
+    // Paging the capped query with `first = 1` and `first = 2` returns the exact same 3-node prefix.
+    let (paged_f1, count_f1) = collect_pages_strict(&store, &tenant, &caller, &q, 1, 10);
+    assert_eq!(count_f1, 3);
+    assert_eq!(paged_f1, vec!["n20", "n0", "s2"]);
+
+    let (paged_f2, count_f2) = collect_pages_strict(&store, &tenant, &caller, &q, 2, 10);
+    assert_eq!(count_f2, 2);
+    assert_eq!(paged_f2, vec!["n20", "n0", "s2"]);
+
+    // When `visited_cap` equals total reachable nodes (6), `truncated` must be `false`.
+    q.visited_cap = Some(6);
+    let exact_cap = store.traverse(&tenant, &caller, &q).expect("capped=6");
+    assert_eq!(
+        node_ids(&exact_cap),
+        vec!["n20", "n0", "s2", "s3", "s4", "z9"]
+    );
+    assert!(!exact_cap.truncated);
+}
+
+proptest! {
+    #![proptest_config(ProptestConfig {
+        cases: 64,
+        max_shrink_iters: 128,
+        failure_persistence: None,
+        .. ProptestConfig::default()
+    })]
+
+    // spec: ING-064, ING-067, GQL-040
+    #[test]
+    fn ing_067_weighted_zero_and_positive_weights_sorted_by_cost_id_and_paging_matches(
+        n_nodes in 2usize..=16,
+        raw_edges in prop::collection::vec((0usize..16, 0usize..16, 0usize..4), 0..=45),
+        start_raw in 0usize..16,
+        direction in prop_oneof![
+            Just(Direction::Outbound),
+            Just(Direction::Inbound),
+            Just(Direction::Both),
+        ],
+        max_depth in 1u32..=8,
+        visited_cap in 1u32..=20,
+        rand_first in 3u32..=7,
+    ) {
+        const WEIGHTS: [f64; 4] = [0.0, 0.5, 1.0, 2.0];
+
+        let dir = TempDir::new().expect("tempdir");
+        let mut cfg = SqliteConfig::new(dir.path().join("r2_weighted_prop.db"));
+        cfg.durability = Durability::Off;
+        let clock: Arc<dyn Clock> = Arc::new(ManualClock::new(1_700_000_000_000));
+        let store = SqliteContextStore::open(cfg, clock).expect("open");
+        let tenant = TenantId::new("prop-weighted").expect("t").scope();
+        let caller = Caller::new("alice");
+
+        // Deliberately non-padded + varied prefixes so lexicographic order differs from index order.
+        let ids: Vec<String> = (0..n_nodes)
+            .map(|i| if i % 2 == 0 { format!("n{i}") } else { format!("s{i}") })
+            .collect();
+        let new_nodes: Vec<NewNode> = ids.iter().map(|s| global_node(s)).collect();
+
+        let mut new_edges = Vec::new();
+        let mut bellman_steps: Vec<(usize, usize, f64)> = Vec::new();
+        // Deduplicate `(from, to)` so `put_batch` writes one canonical weight per directed pair.
+        let mut seen_pairs: BTreeMap<(usize, usize), f64> = BTreeMap::new();
+        for (f_raw, t_raw, w_idx) in raw_edges {
+            let f = f_raw % n_nodes;
+            let t = t_raw % n_nodes;
+            seen_pairs.entry((f, t)).or_insert(WEIGHTS[w_idx]);
+        }
+        for (idx, ((f, t), w)) in seen_pairs.into_iter().enumerate() {
+            new_edges.push(weighted_edge(&format!("we{idx}"), &ids[f], &ids[t], json!(w)));
+            match direction {
+                Direction::Outbound => bellman_steps.push((f, t, w)),
+                Direction::Inbound => bellman_steps.push((t, f, w)),
+                Direction::Both => {
+                    bellman_steps.push((f, t, w));
+                    bellman_steps.push((t, f, w));
+                }
+            }
+        }
+        store
+            .put_batch(&tenant, &caller, &new_nodes, &new_edges)
+            .expect("seed weighted prop");
+
+        let start_idx = start_raw % n_nodes;
+        // Independent Bellman-Ford hop-bounded DP (`0..=max_depth` relaxations).
+        let depth_usize = max_depth as usize;
+        let mut dp = vec![vec![f64::INFINITY; n_nodes]; depth_usize + 1];
+        dp[0][start_idx] = 0.0;
+        for h in 0..depth_usize {
+            for &(u, v, w) in &bellman_steps {
+                let c = dp[h][u];
+                if c.is_finite() {
+                    let cand = if c + w == 0.0 { 0.0 } else { c + w };
+                    if cand < dp[h + 1][v] {
+                        dp[h + 1][v] = cand;
+                    }
+                }
+            }
+        }
+        let mut expected_all: Vec<(u64, String)> = Vec::new();
+        for (i, id) in ids.iter().enumerate() {
+            let best = (0..=depth_usize)
+                .map(|h| dp[h][i])
+                .fold(f64::INFINITY, f64::min);
+            if best.is_finite() {
+                let norm = if best == 0.0 { 0.0 } else { best };
+                expected_all.push((norm.to_bits(), id.clone()));
+            }
+        }
+        expected_all.sort();
+        let expected_truncated = expected_all.len() > visited_cap as usize;
+        expected_all.truncate(visited_cap as usize);
+        let expected_ids: Vec<String> = expected_all.iter().map(|(_, id)| id.clone()).collect();
+
+        let mut q = TraverseQuery::new(NodeId::new(&ids[start_idx]).expect("id"));
+        q.direction = direction;
+        q.max_depth = max_depth;
+        q.strategy = TraverseStrategy::Weighted;
+        q.first = 1_000;
+        q.visited_cap = Some(visited_cap);
+
+        let full = store.traverse(&tenant, &caller, &q).expect("unpaged");
+        let actual_ids: Vec<String> = full.nodes.iter().map(|n| n.id.as_str().to_owned()).collect();
+
+        // (a) Returned order equals the `(cost, id)`-sorted reachable prefix.
+        prop_assert_eq!(&actual_ids, &expected_ids);
+        prop_assert_eq!(full.truncated, expected_truncated);
+
+        // (b) Paging concatenation with `first = 1`, `first = 2`, and `rand_first` equals unpaged.
+        for page_size in [1u32, 2u32, rand_first] {
+            let (paged_ids, page_count) =
+                collect_pages_strict(&store, &tenant, &caller, &q, page_size, n_nodes + 2);
+            let expected_pages = if actual_ids.is_empty() {
+                1
+            } else {
+                actual_ids.len().div_ceil(page_size as usize)
+            };
+            prop_assert_eq!(page_count, expected_pages);
+            prop_assert_eq!(&paged_ids, &actual_ids);
         }
     }
 }

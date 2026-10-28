@@ -604,7 +604,8 @@ fn run_weighted(env: &TraverseEnv<'_>) -> Result<WalkOutput, StoreError> {
     let mut settled_depth: HashMap<String, u32> = HashMap::new();
     let mut best_cost_by_hops: HashMap<String, [f64; 17]> = HashMap::new();
     let mut traversed_edges: HashMap<EdgeId, Edge> = HashMap::new();
-    let mut truncated = false;
+    let mut cap_cost_bits: Option<u64> = None;
+    let mut more_beyond_cap = false;
 
     let cap_usize = env.visited_cap as usize;
     let start_id = env.query.from.as_str().to_owned();
@@ -612,10 +613,17 @@ fn run_weighted(env: &TraverseEnv<'_>) -> Result<WalkOutput, StoreError> {
     init_hops[0] = 0.0;
     best_cost_by_hops.insert(start_id.clone(), init_hops);
 
-    let mut heap: BinaryHeap<Reverse<(u64, String, u8)>> = BinaryHeap::new();
-    heap.push(Reverse((0.0_f64.to_bits(), start_id, 0)));
+    // Order heap by `(cost_bits, hops, node_id)` (`ING-067`, `R-2`):
+    // 1. For finite non-negative `f64` (`-0.0` normalized to `+0.0`), `u64` bit order equals `f64` order.
+    // 2. Ordering `hops` before `node_id` guarantees the first pop of `u` achieves the smallest
+    //    hop count among all minimum-cost paths of length `<= max_depth`.
+    // 3. Do not cut immediately at `cap_usize`: zero-weight edges (`weight == 0.0`) can settle
+    //    additional nodes at the exact same `cap_cost_bits` with smaller `node_id`s. Finish the
+    //    full equal-cost group, sort settled nodes by `(cost_bits, node_id)`, then take `cap_usize`.
+    let mut heap: BinaryHeap<Reverse<(u64, u8, String)>> = BinaryHeap::new();
+    heap.push(Reverse((0.0_f64.to_bits(), 0, start_id)));
 
-    while let Some(Reverse((cost_bits, u, hops))) = heap.pop() {
+    while let Some(Reverse((cost_bits, hops, u))) = heap.pop() {
         let cost = f64::from_bits(cost_bits);
         let h = usize::from(hops);
         if let Some(u_table) = best_cost_by_hops.get(&u)
@@ -624,14 +632,43 @@ fn run_weighted(env: &TraverseEnv<'_>) -> Result<WalkOutput, StoreError> {
             continue;
         }
 
-        if !settled_depth.contains_key(&u) {
-            if settled_nodes.len() == cap_usize {
-                truncated = true;
+        let in_post_cap_probe = cap_cost_bits.is_some_and(|limit_bits| cost_bits > limit_bits);
+        if in_post_cap_probe {
+            if settled_nodes.len() > cap_usize || !settled_depth.contains_key(&u) {
+                more_beyond_cap = true;
                 break;
             }
+            if u32::from(hops) < env.query.max_depth {
+                let raw_steps = query_eligible_neighbours(&mut step_stmt, env, &u)?;
+                for (v, edge) in raw_steps {
+                    let Some(weight) = parse_edge_weight(&edge) else {
+                        continue;
+                    };
+                    let raw_next = cost + weight;
+                    if !raw_next.is_finite() {
+                        continue;
+                    }
+                    let next_cost = if raw_next == 0.0 { 0.0 } else { raw_next };
+                    let nh = h + 1;
+                    let v_table = best_cost_by_hops
+                        .entry(v.clone())
+                        .or_insert([f64::INFINITY; 17]);
+                    if (0..=nh).all(|hp| next_cost < v_table[hp]) {
+                        v_table[nh] = next_cost;
+                        heap.push(Reverse((next_cost.to_bits(), hops + 1, v)));
+                    }
+                }
+            }
+            continue;
+        }
+
+        if !settled_depth.contains_key(&u) {
             let d = u32::from(hops);
             settled_depth.insert(u.clone(), d);
             settled_nodes.push((u.clone(), cost_bits, d));
+            if settled_nodes.len() == cap_usize {
+                cap_cost_bits = Some(cost_bits);
+            }
         }
 
         if u32::from(hops) < env.query.max_depth {
@@ -663,10 +700,16 @@ fn run_weighted(env: &TraverseEnv<'_>) -> Result<WalkOutput, StoreError> {
                     .or_insert([f64::INFINITY; 17]);
                 if (0..=nh).all(|hp| next_cost < v_table[hp]) {
                     v_table[nh] = next_cost;
-                    heap.push(Reverse((next_cost.to_bits(), v.clone(), hops + 1)));
+                    heap.push(Reverse((next_cost.to_bits(), hops + 1, v.clone())));
                 }
             }
         }
+    }
+
+    settled_nodes.sort_by(|a, b| (a.1, a.0.as_str()).cmp(&(b.1, b.0.as_str())));
+    let truncated = settled_nodes.len() > cap_usize || more_beyond_cap;
+    if settled_nodes.len() > cap_usize {
+        settled_nodes.truncate(cap_usize);
     }
 
     let warnings = if skipped_invalid_edges.is_empty() {
