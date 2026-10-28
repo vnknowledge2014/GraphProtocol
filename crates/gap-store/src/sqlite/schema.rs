@@ -9,7 +9,7 @@ use crate::error::StoreError;
 use crate::sqlite::map_sqlite_err;
 
 /// Current on-disk SQLite schema version stored in `PRAGMA user_version` (`m2-01-design.md` §8).
-pub const FORMAT_VERSION: u32 = 3;
+pub const FORMAT_VERSION: u32 = 4;
 
 /// Derives the per-tenant FTS5 virtual table name `nodes_fts_<shard>`, where `<shard>` is the
 /// 16-character lowercase hex encoding of the first 8 bytes of `blake3(tenant_id)` (`INV-09`,
@@ -261,13 +261,53 @@ impl Migration for SplitFtsPerTenantV3 {
     }
 }
 
+const MIGRATION_V4_DDL: &str = "
+CREATE INDEX idx_nodes_task_purge
+    ON nodes (tenant, scope, valid_to);
+
+INSERT OR IGNORE INTO tenant_stats (tenant, node_count, edge_count)
+SELECT
+    n.tenant,
+    COALESCE(SUM(CASE WHEN n.valid_to IS NULL THEN 1 ELSE 0 END), 0),
+    COALESCE((
+        SELECT COUNT(*)
+        FROM edges e
+        WHERE e.tenant = n.tenant AND e.valid_to IS NULL
+    ), 0)
+FROM nodes n
+GROUP BY n.tenant;
+
+PRAGMA user_version = 4;
+";
+
+struct AddTaskPurgeIndexV4;
+
+impl Migration for AddTaskPurgeIndexV4 {
+    fn target_version(&self) -> u32 {
+        4
+    }
+
+    fn name(&self) -> &'static str {
+        "add_task_purge_index_v4"
+    }
+
+    fn up(&self, tx: &Transaction<'_>) -> Result<(), StoreError> {
+        tx.execute_batch(MIGRATION_V4_DDL).map_err(map_sqlite_err)
+    }
+}
+
 static MIGRATION_STEP_1: CreateBaseSchemaV1 = CreateBaseSchemaV1;
 static MIGRATION_STEP_2: AddLifecycleIndexesV2 = AddLifecycleIndexesV2;
 static MIGRATION_STEP_3: SplitFtsPerTenantV3 = SplitFtsPerTenantV3;
+static MIGRATION_STEP_4: AddTaskPurgeIndexV4 = AddTaskPurgeIndexV4;
 
 /// Ordered built-in schema migrations (`1..=FORMAT_VERSION`).
-pub static MIGRATIONS: &[&dyn Migration] =
-    &[&MIGRATION_STEP_1, &MIGRATION_STEP_2, &MIGRATION_STEP_3];
+pub static MIGRATIONS: &[&dyn Migration] = &[
+    &MIGRATION_STEP_1,
+    &MIGRATION_STEP_2,
+    &MIGRATION_STEP_3,
+    &MIGRATION_STEP_4,
+];
 
 /// Reads `PRAGMA user_version` as `u32` (treating negative values as corrupt).
 pub fn read_user_version(conn: &Connection) -> Result<u32, StoreError> {
@@ -343,6 +383,18 @@ pub fn verify_required_tables(conn: &Connection) -> Result<(), StoreError> {
     // must have its per-tenant `nodes_fts_<shard>` virtual table.
     if fts_table_exists(conn, "nodes_fts")? {
         return Err(StoreError::Corrupt);
+    }
+    if version >= 4 {
+        let has_purge_idx: bool = conn
+            .query_row(
+                "SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type = 'index' AND name = 'idx_nodes_task_purge')",
+                [],
+                |row| row.get(0),
+            )
+            .map_err(map_sqlite_err)?;
+        if !has_purge_idx {
+            return Err(StoreError::Corrupt);
+        }
     }
     let mut stmt = conn
         .prepare("SELECT DISTINCT tenant FROM nodes")

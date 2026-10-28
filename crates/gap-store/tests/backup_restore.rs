@@ -675,7 +675,7 @@ fn ing_087_verify_required_tables_and_restore_reject_v3_database_with_leftover_s
         .expect("reintroduce leftover shared nodes_fts");
         assert_eq!(
             gap_store::sqlite::schema::read_user_version(&raw).expect("user_version"),
-            3
+            FORMAT_VERSION
         );
         assert_eq!(
             gap_store::sqlite::schema::verify_required_tables(&raw)

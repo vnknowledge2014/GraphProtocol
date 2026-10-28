@@ -7,94 +7,70 @@ use gap_core::ids::{TaskId, TenantScope};
 use rusqlite::{TransactionBehavior, params};
 
 use crate::error::StoreError;
-use crate::sqlite::crud::{read_tenant_stats, write_tenant_stats};
+use crate::sqlite::crud::{
+    CLOSE_INBOUND_EDGES_SQL, CLOSE_OUTBOUND_EDGES_SQL, COUNT_ACTIVE_INCIDENT_EDGES_SQL,
+    DELETE_INBOUND_EDGES_SQL, DELETE_OUTBOUND_EDGES_SQL, build_delete_fts_row_sql,
+    read_tenant_stats, write_tenant_stats,
+};
 use crate::sqlite::{SqliteContextStore, lock_unpoisoned, map_sqlite_err, schema};
 use crate::store::ContextMaintenance;
 use crate::types::{PurgePolicy, PurgeReport, normalize_timestamp, timestamp_to_micros};
 
-const SELECT_ACTIVE_TASK_NODES_SQL: &str = "
+pub(crate) const SELECT_ACTIVE_TASK_NODES_SQL: &str = "
     SELECT fts_rowid, id, valid_from
-    FROM nodes
+    FROM nodes INDEXED BY idx_nodes_base_task
     WHERE tenant = ?1
       AND base_scope = 'TASK'
       AND task_id = ?2
       AND valid_to IS NULL
 ";
 
-const CLOSE_TASK_NODE_ROW_SQL: &str = "
+pub(crate) const CLOSE_TASK_NODE_ROW_SQL: &str = "
     UPDATE nodes
     SET valid_to = ?1
     WHERE tenant = ?2 AND fts_rowid = ?3 AND valid_to IS NULL
 ";
 
-const CLOSE_TASK_INCIDENT_EDGES_SQL: &str = "
-    UPDATE edges
-    SET valid_to = MAX(?1, valid_from)
-    WHERE tenant = ?2
-      AND (from_id = ?3 OR to_id = ?3)
-      AND valid_to IS NULL
+pub(crate) const LIST_KNOWN_TENANTS_SQL: &str = "
+    SELECT tenant FROM tenant_stats ORDER BY tenant ASC
 ";
 
-const LIST_KNOWN_TENANTS_SQL: &str = "
-    SELECT tenant FROM tenant_stats
-    UNION
-    SELECT DISTINCT tenant FROM nodes
-";
-
-const SELECT_EXPIRED_EPHEMERAL_ROWS_SQL: &str = "
-    SELECT fts_rowid, id
-    FROM nodes
+pub(crate) const SELECT_EXPIRED_EPHEMERAL_ROWS_SQL: &str = "
+    SELECT fts_rowid, id, valid_to IS NULL
+    FROM nodes INDEXED BY idx_nodes_ephemeral
     WHERE tenant = ?1
       AND scope = 'EPHEMERAL'
       AND expires_at IS NOT NULL
       AND expires_at <= ?2
 ";
 
-const SELECT_EXPIRED_TASK_ROWS_SQL: &str = "
+pub(crate) const SELECT_EXPIRED_TASK_ROWS_SQL: &str = "
     SELECT n.fts_rowid, n.id
-    FROM nodes n
+    FROM nodes n INDEXED BY idx_nodes_task_purge
     WHERE n.tenant = ?1
       AND n.scope = 'TASK'
       AND n.valid_to IS NOT NULL
       AND n.valid_to <= ?2
       AND NOT EXISTS (
           SELECT 1
-          FROM nodes other
+          FROM nodes other INDEXED BY idx_nodes_temporal
           WHERE other.tenant = n.tenant
             AND other.id = n.id
             AND (other.valid_to IS NULL OR other.valid_to > ?2)
       )
 ";
 
-const DELETE_PURGED_NODE_ROW_SQL: &str = "
+pub(crate) const DELETE_PURGED_NODE_ROW_SQL: &str = "
     DELETE FROM nodes
     WHERE tenant = ?1 AND fts_rowid = ?2
 ";
 
-const NODE_HAS_ANY_REMAINING_VERSION_SQL: &str = "
+pub(crate) const NODE_HAS_ANY_REMAINING_VERSION_SQL: &str = "
     SELECT EXISTS (
         SELECT 1
-        FROM nodes
+        FROM nodes INDEXED BY idx_nodes_temporal
         WHERE tenant = ?1 AND id = ?2
     )
-";
-
-const DELETE_PURGED_INCIDENT_EDGES_SQL: &str = "
-    DELETE FROM edges
-    WHERE tenant = ?1
-      AND (from_id = ?2 OR to_id = ?2)
-";
-
-const COUNT_ACTIVE_TENANT_NODES_SQL: &str = "
-    SELECT COUNT(*)
-    FROM nodes
-    WHERE tenant = ?1 AND valid_to IS NULL
-";
-
-const COUNT_ACTIVE_TENANT_EDGES_SQL: &str = "
-    SELECT COUNT(*)
-    FROM edges
-    WHERE tenant = ?1 AND valid_to IS NULL
 ";
 
 impl SqliteContextStore {
@@ -143,8 +119,11 @@ impl SqliteContextStore {
             let mut close_node_stmt = tx
                 .prepare_cached(CLOSE_TASK_NODE_ROW_SQL)
                 .map_err(map_sqlite_err)?;
-            let mut close_edges_stmt = tx
-                .prepare_cached(CLOSE_TASK_INCIDENT_EDGES_SQL)
+            let mut close_out_stmt = tx
+                .prepare_cached(CLOSE_OUTBOUND_EDGES_SQL)
+                .map_err(map_sqlite_err)?;
+            let mut close_in_stmt = tx
+                .prepare_cached(CLOSE_INBOUND_EDGES_SQL)
                 .map_err(map_sqlite_err)?;
 
             for (fts_rowid, node_id, valid_from_us) in &active_rows {
@@ -155,9 +134,13 @@ impl SqliteContextStore {
                 closed_nodes =
                     closed_nodes.saturating_add(u64::try_from(changed_node).unwrap_or(0));
 
-                let changed_edges = close_edges_stmt
+                let changed_out = close_out_stmt
                     .execute(params![eff_now, tenant_str, node_id])
                     .map_err(map_sqlite_err)?;
+                let changed_in = close_in_stmt
+                    .execute(params![eff_now, tenant_str, node_id])
+                    .map_err(map_sqlite_err)?;
+                let changed_edges = changed_out.saturating_add(changed_in);
                 closed_edges =
                     closed_edges.saturating_add(u64::try_from(changed_edges).unwrap_or(0));
             }
@@ -222,24 +205,29 @@ impl SqliteContextStore {
             let mut has_remaining_ver = tx
                 .prepare_cached(NODE_HAS_ANY_REMAINING_VERSION_SQL)
                 .map_err(map_sqlite_err)?;
-            let mut del_edges = tx
-                .prepare_cached(DELETE_PURGED_INCIDENT_EDGES_SQL)
+            let mut cnt_active_edges = tx
+                .prepare_cached(COUNT_ACTIVE_INCIDENT_EDGES_SQL)
                 .map_err(map_sqlite_err)?;
-            let mut cnt_nodes = tx
-                .prepare_cached(COUNT_ACTIVE_TENANT_NODES_SQL)
+            let mut del_out_edges = tx
+                .prepare_cached(DELETE_OUTBOUND_EDGES_SQL)
                 .map_err(map_sqlite_err)?;
-            let mut cnt_edges = tx
-                .prepare_cached(COUNT_ACTIVE_TENANT_EDGES_SQL)
+            let mut del_in_edges = tx
+                .prepare_cached(DELETE_INBOUND_EDGES_SQL)
                 .map_err(map_sqlite_err)?;
 
             for tenant_str in &tenants {
                 let mut candidate_node_ids: BTreeSet<String> = BTreeSet::new();
-                let mut touched_tenant = false;
+                let mut purged_active_nodes: u64 = 0;
+                let mut purged_active_edges: u64 = 0;
 
-                let ephemeral_rows: Vec<(i64, String)> = {
+                let ephemeral_rows: Vec<(i64, String, bool)> = {
                     let mapped = sel_ephemeral
                         .query_map(params![tenant_str, now_us], |row| {
-                            Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?))
+                            Ok((
+                                row.get::<_, i64>(0)?,
+                                row.get::<_, String>(1)?,
+                                row.get::<_, bool>(2)?,
+                            ))
                         })
                         .map_err(map_sqlite_err)?;
                     let mut out = Vec::new();
@@ -263,7 +251,7 @@ impl SqliteContextStore {
                 };
 
                 let fts_table = schema::tenant_fts_table_name(tenant_str);
-                let del_fts_sql = format!("DELETE FROM {fts_table} WHERE rowid = ?1");
+                let del_fts_sql = build_delete_fts_row_sql(&fts_table);
                 let mut del_fts = if (!ephemeral_rows.is_empty() || !task_rows.is_empty())
                     && schema::fts_table_exists(&tx, &fts_table)?
                 {
@@ -272,7 +260,7 @@ impl SqliteContextStore {
                     None
                 };
 
-                for (fts_rowid, node_id) in ephemeral_rows {
+                for (fts_rowid, node_id, is_active) in ephemeral_rows {
                     if let Some(stmt) = &mut del_fts {
                         stmt.execute(params![fts_rowid]).map_err(map_sqlite_err)?;
                     }
@@ -280,11 +268,13 @@ impl SqliteContextStore {
                         .execute(params![tenant_str, fts_rowid])
                         .map_err(map_sqlite_err)?;
                     if deleted > 0 {
-                        report.purged_ephemeral_nodes = report
-                            .purged_ephemeral_nodes
-                            .saturating_add(u64::try_from(deleted).unwrap_or(0));
+                        let del_u64 = u64::try_from(deleted).unwrap_or(0);
+                        report.purged_ephemeral_nodes =
+                            report.purged_ephemeral_nodes.saturating_add(del_u64);
+                        if is_active {
+                            purged_active_nodes = purged_active_nodes.saturating_add(del_u64);
+                        }
                         candidate_node_ids.insert(node_id);
-                        touched_tenant = true;
                     }
                 }
 
@@ -300,7 +290,6 @@ impl SqliteContextStore {
                             .purged_task_nodes
                             .saturating_add(u64::try_from(deleted).unwrap_or(0));
                         candidate_node_ids.insert(node_id);
-                        touched_tenant = true;
                     }
                 }
 
@@ -309,27 +298,32 @@ impl SqliteContextStore {
                         .query_row(params![tenant_str, node_id], |row| row.get(0))
                         .map_err(map_sqlite_err)?;
                     if !still_exists {
-                        let deleted_edges = del_edges
+                        let active_incident: i64 = cnt_active_edges
+                            .query_row(params![tenant_str, node_id], |row| row.get(0))
+                            .map_err(map_sqlite_err)?;
+                        purged_active_edges = purged_active_edges
+                            .saturating_add(u64::try_from(active_incident.max(0)).unwrap_or(0));
+
+                        let del_out = del_out_edges
                             .execute(params![tenant_str, node_id])
                             .map_err(map_sqlite_err)?;
+                        let del_in = del_in_edges
+                            .execute(params![tenant_str, node_id])
+                            .map_err(map_sqlite_err)?;
+                        let deleted_edges = del_out.saturating_add(del_in);
                         report.purged_edges = report
                             .purged_edges
                             .saturating_add(u64::try_from(deleted_edges).unwrap_or(0));
                     }
                 }
 
-                if touched_tenant {
-                    let active_nodes_i64: i64 = cnt_nodes
-                        .query_row(params![tenant_str], |row| row.get(0))
-                        .map_err(map_sqlite_err)?;
-                    let active_edges_i64: i64 = cnt_edges
-                        .query_row(params![tenant_str], |row| row.get(0))
-                        .map_err(map_sqlite_err)?;
+                if purged_active_nodes > 0 || purged_active_edges > 0 {
+                    let (cur_nodes, cur_edges) = read_tenant_stats(&tx, tenant_str)?;
                     write_tenant_stats(
                         &tx,
                         tenant_str,
-                        u64::try_from(active_nodes_i64.max(0)).unwrap_or(0),
-                        u64::try_from(active_edges_i64.max(0)).unwrap_or(0),
+                        cur_nodes.saturating_sub(purged_active_nodes),
+                        cur_edges.saturating_sub(purged_active_edges),
                     )?;
                 }
             }

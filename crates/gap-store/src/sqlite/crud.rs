@@ -401,13 +401,13 @@ fn compute_edge_content_hash(
     *hasher.finalize().as_bytes()
 }
 
-const SELECT_TENANT_STATS_SQL: &str = "
+pub(crate) const SELECT_TENANT_STATS_SQL: &str = "
     SELECT node_count, edge_count
     FROM tenant_stats
     WHERE tenant = ?1
 ";
 
-const UPSERT_TENANT_STATS_SQL: &str = "
+pub(crate) const UPSERT_TENANT_STATS_SQL: &str = "
     INSERT INTO tenant_stats (tenant, node_count, edge_count)
     VALUES (?1, ?2, ?3)
     ON CONFLICT(tenant) DO UPDATE SET
@@ -415,46 +415,46 @@ const UPSERT_TENANT_STATS_SQL: &str = "
         edge_count = excluded.edge_count
 ";
 
-const SELECT_CURRENT_NODE_META_SQL: &str = "
+pub(crate) const SELECT_CURRENT_NODE_META_SQL: &str = "
     SELECT
         fts_rowid, scope, base_scope, owner_principal, task_id, group_name,
         expires_at, valid_from, content_hash
-    FROM nodes
+    FROM nodes INDEXED BY idx_nodes_current
     WHERE tenant = ?1 AND id = ?2 AND valid_to IS NULL
 ";
 
-const SELECT_NODE_AS_OF_SQL: &str = "
+pub(crate) const SELECT_NODE_AS_OF_SQL: &str = "
     SELECT
         id, node_type, label, summary, props_json,
         scope, base_scope, owner_principal, task_id, group_name, expires_at,
         prov_source, prov_desc_hash, prov_confidence, prov_extracted_at, prov_agent,
         valid_from, valid_to
-    FROM nodes
+    FROM nodes INDEXED BY idx_nodes_temporal
     WHERE tenant = ?1
       AND id = ?2
       AND valid_from <= ?3
       AND (valid_to IS NULL OR ?3 < valid_to)
 ";
 
-const SELECT_LATEST_NODE_VERSION_SQL: &str = "
+pub(crate) const SELECT_LATEST_NODE_VERSION_SQL: &str = "
     SELECT
         id, node_type, label, summary, props_json,
         scope, base_scope, owner_principal, task_id, group_name, expires_at,
         prov_source, prov_desc_hash, prov_confidence, prov_extracted_at, prov_agent,
         valid_from, valid_to
-    FROM nodes
+    FROM nodes INDEXED BY idx_nodes_temporal
     WHERE tenant = ?1 AND id = ?2
     ORDER BY fts_rowid DESC
     LIMIT 1
 ";
 
-const CLOSE_NODE_BY_ROWID_SQL: &str = "
+pub(crate) const CLOSE_NODE_BY_ROWID_SQL: &str = "
     UPDATE nodes
     SET valid_to = ?1
     WHERE tenant = ?2 AND fts_rowid = ?3 AND valid_to IS NULL
 ";
 
-const INSERT_NODE_SQL: &str = "
+pub(crate) const INSERT_NODE_SQL: &str = "
     INSERT INTO nodes (
         tenant, id, node_type, label, summary, props_json,
         scope, base_scope, owner_principal, task_id, group_name, expires_at,
@@ -468,9 +468,9 @@ const INSERT_NODE_SQL: &str = "
     )
 ";
 
-const SELECT_CURRENT_EDGE_META_SQL: &str = "
+pub(crate) const SELECT_CURRENT_EDGE_META_SQL: &str = "
     SELECT edge_rowid, id, valid_from, content_hash
-    FROM edges
+    FROM edges INDEXED BY idx_edges_current_quad
     WHERE tenant = ?1
       AND edge_type = ?2
       AND from_id = ?3
@@ -478,26 +478,26 @@ const SELECT_CURRENT_EDGE_META_SQL: &str = "
       AND valid_to IS NULL
 ";
 
-const SELECT_EDGE_AS_OF_SQL: &str = "
+pub(crate) const SELECT_EDGE_AS_OF_SQL: &str = "
     SELECT
         id, edge_type, from_id, to_id, props_json,
         confidence, resolution,
         prov_source, prov_desc_hash, prov_confidence, prov_extracted_at, prov_agent,
         valid_from, valid_to
-    FROM edges
+    FROM edges INDEXED BY idx_edges_id_temporal
     WHERE tenant = ?1
       AND id = ?2
       AND valid_from <= ?3
       AND (valid_to IS NULL OR ?3 < valid_to)
 ";
 
-const CLOSE_EDGE_BY_ROWID_SQL: &str = "
+pub(crate) const CLOSE_EDGE_BY_ROWID_SQL: &str = "
     UPDATE edges
     SET valid_to = ?1
     WHERE tenant = ?2 AND edge_rowid = ?3 AND valid_to IS NULL
 ";
 
-const INSERT_EDGE_SQL: &str = "
+pub(crate) const INSERT_EDGE_SQL: &str = "
     INSERT INTO edges (
         tenant, id, edge_type, from_id, to_id, props_json,
         confidence, resolution,
@@ -511,39 +511,63 @@ const INSERT_EDGE_SQL: &str = "
     )
 ";
 
-const CLOSE_INCIDENT_EDGES_SQL: &str = "
-    UPDATE edges
+pub(crate) const CLOSE_OUTBOUND_EDGES_SQL: &str = "
+    UPDATE edges INDEXED BY idx_edges_from
     SET valid_to = MAX(?1, valid_from)
     WHERE tenant = ?2
-      AND (from_id = ?3 OR to_id = ?3)
+      AND from_id = ?3
       AND valid_to IS NULL
 ";
 
-const SELECT_NODE_VERSIONS_FOR_DELETE_SQL: &str = "
+pub(crate) const CLOSE_INBOUND_EDGES_SQL: &str = "
+    UPDATE edges INDEXED BY idx_edges_to
+    SET valid_to = MAX(?1, valid_from)
+    WHERE tenant = ?2
+      AND to_id = ?3
+      AND from_id != ?3
+      AND valid_to IS NULL
+";
+
+pub(crate) const SELECT_NODE_VERSIONS_FOR_DELETE_SQL: &str = "
     SELECT fts_rowid, valid_to IS NULL
-    FROM nodes
+    FROM nodes INDEXED BY idx_nodes_temporal
     WHERE tenant = ?1 AND id = ?2
 ";
 
-const COUNT_ACTIVE_INCIDENT_EDGES_SQL: &str = "
-    SELECT COUNT(*)
-    FROM edges
-    WHERE tenant = ?1
-      AND (from_id = ?2 OR to_id = ?2)
-      AND valid_to IS NULL
+pub(crate) const COUNT_ACTIVE_INCIDENT_EDGES_SQL: &str = "
+    SELECT
+        (
+            SELECT COUNT(*)
+            FROM edges INDEXED BY idx_edges_from
+            WHERE tenant = ?1
+              AND from_id = ?2
+              AND valid_to IS NULL
+        ) + (
+            SELECT COUNT(*)
+            FROM edges INDEXED BY idx_edges_to
+            WHERE tenant = ?1
+              AND to_id = ?2
+              AND from_id != ?2
+              AND valid_to IS NULL
+        )
 ";
 
-const DELETE_INCIDENT_EDGES_SQL: &str = "
-    DELETE FROM edges
-    WHERE tenant = ?1 AND (from_id = ?2 OR to_id = ?2)
+pub(crate) const DELETE_OUTBOUND_EDGES_SQL: &str = "
+    DELETE FROM edges INDEXED BY idx_edges_from
+    WHERE tenant = ?1 AND from_id = ?2
 ";
 
-const DELETE_NODE_VERSIONS_SQL: &str = "
-    DELETE FROM nodes
+pub(crate) const DELETE_INBOUND_EDGES_SQL: &str = "
+    DELETE FROM edges INDEXED BY idx_edges_to
+    WHERE tenant = ?1 AND to_id = ?2 AND from_id != ?2
+";
+
+pub(crate) const DELETE_NODE_VERSIONS_SQL: &str = "
+    DELETE FROM nodes INDEXED BY idx_nodes_temporal
     WHERE tenant = ?1 AND id = ?2
 ";
 
-const COUNTS_AS_OF_SQL: &str = "
+pub(crate) const COUNTS_AS_OF_SQL: &str = "
     SELECT
         (
             SELECT COUNT(*)
@@ -687,12 +711,18 @@ struct TenantFtsWriter<'a, 'conn> {
     stmt: Option<CachedStatement<'a>>,
 }
 
+pub(crate) fn build_insert_fts_row_sql(fts_table: &str) -> String {
+    format!("INSERT INTO {fts_table} (rowid, label, summary) VALUES (?1, ?2, COALESCE(?3, ''))")
+}
+
+pub(crate) fn build_delete_fts_row_sql(fts_table: &str) -> String {
+    format!("DELETE FROM {fts_table} WHERE rowid = ?1")
+}
+
 impl<'a, 'conn> TenantFtsWriter<'a, 'conn> {
     fn new(tx: &'a Transaction<'conn>, tenant_str: &str) -> Self {
         let fts_table = schema::tenant_fts_table_name(tenant_str);
-        let insert_sql = format!(
-            "INSERT INTO {fts_table} (rowid, label, summary) VALUES (?1, ?2, COALESCE(?3, ''))"
-        );
+        let insert_sql = build_insert_fts_row_sql(&fts_table);
         Self {
             tx,
             fts_table,
@@ -1213,12 +1243,19 @@ impl SqliteContextStore {
                 .map_err(map_sqlite_err)?;
         }
         let closed_edges = {
-            let mut close_edges = tx
-                .prepare_cached(CLOSE_INCIDENT_EDGES_SQL)
+            let mut close_out = tx
+                .prepare_cached(CLOSE_OUTBOUND_EDGES_SQL)
                 .map_err(map_sqlite_err)?;
-            close_edges
+            let mut close_in = tx
+                .prepare_cached(CLOSE_INBOUND_EDGES_SQL)
+                .map_err(map_sqlite_err)?;
+            let out_n = close_out
                 .execute(params![eff_now, tenant_str, id.as_str()])
-                .map_err(map_sqlite_err)?
+                .map_err(map_sqlite_err)?;
+            let in_n = close_in
+                .execute(params![eff_now, tenant_str, id.as_str()])
+                .map_err(map_sqlite_err)?;
+            out_n.saturating_add(in_n)
         };
 
         let (active_nodes, active_edges) = read_tenant_stats(&tx, tenant_str)?;
@@ -1294,7 +1331,7 @@ impl SqliteContextStore {
         if !fts_rowids.is_empty() {
             let fts_table = schema::tenant_fts_table_name(tenant_str);
             if schema::fts_table_exists(&tx, &fts_table)? {
-                let del_fts_sql = format!("DELETE FROM {fts_table} WHERE rowid = ?1");
+                let del_fts_sql = build_delete_fts_row_sql(&fts_table);
                 let mut del_fts = tx.prepare_cached(&del_fts_sql).map_err(map_sqlite_err)?;
                 for rowid in fts_rowids {
                     del_fts.execute(params![rowid]).map_err(map_sqlite_err)?;
@@ -1302,10 +1339,16 @@ impl SqliteContextStore {
             }
         }
         {
-            let mut del_edges = tx
-                .prepare_cached(DELETE_INCIDENT_EDGES_SQL)
+            let mut del_out = tx
+                .prepare_cached(DELETE_OUTBOUND_EDGES_SQL)
                 .map_err(map_sqlite_err)?;
-            del_edges
+            del_out
+                .execute(params![tenant_str, id.as_str()])
+                .map_err(map_sqlite_err)?;
+            let mut del_in = tx
+                .prepare_cached(DELETE_INBOUND_EDGES_SQL)
+                .map_err(map_sqlite_err)?;
+            del_in
                 .execute(params![tenant_str, id.as_str()])
                 .map_err(map_sqlite_err)?;
         }

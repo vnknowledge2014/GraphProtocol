@@ -12,7 +12,7 @@ use crate::types::{
     Caller, Node, normalize_timestamp, timestamp_to_micros, validate_caller, validate_search_limit,
 };
 
-fn build_search_nodes_fts_sql(fts_table: &str) -> String {
+pub(crate) fn build_search_nodes_fts_sql(fts_table: &str) -> String {
     format!(
         "WITH
             caller_groups(val) AS (SELECT value FROM json_each(?5)),
@@ -23,7 +23,7 @@ fn build_search_nodes_fts_sql(fts_table: &str) -> String {
             n.prov_source, n.prov_desc_hash, n.prov_confidence, n.prov_extracted_at, n.prov_agent,
             n.valid_from, n.valid_to
         FROM {fts_table}
-        JOIN nodes n
+        CROSS JOIN nodes n
           ON n.fts_rowid = {fts_table}.rowid
         WHERE {fts_table} MATCH ?1
           AND n.tenant = ?2

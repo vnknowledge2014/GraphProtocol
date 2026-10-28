@@ -641,10 +641,13 @@ mod tests {
 
         let clock: Arc<dyn Clock> = Arc::new(ManualClock::new(1_700_000_000_000));
         let store = SqliteContextStore::open(SqliteConfig::new(&v1_path), clock)
-            .expect("migrate v1 -> v2 -> v3");
+            .expect("migrate v1 -> FORMAT_VERSION");
         let reader_guard = store.readers.checkout();
         let reader = reader_guard.conn().expect("conn");
-        assert_eq!(schema::read_user_version(reader).expect("ver"), 3);
+        assert_eq!(
+            schema::read_user_version(reader).expect("ver"),
+            FORMAT_VERSION
+        );
 
         let preserved_label: String = reader
             .query_row(
@@ -776,9 +779,9 @@ mod tests {
         }
 
         let clock: Arc<dyn Clock> = Arc::new(ManualClock::new(1_700_000_000_000));
-        let store =
-            SqliteContextStore::open(SqliteConfig::new(&v2_path), clock).expect("migrate v2 -> v3");
-        assert_eq!(store.format_version().expect("ver"), 3);
+        let store = SqliteContextStore::open(SqliteConfig::new(&v2_path), clock)
+            .expect("migrate v2 -> FORMAT_VERSION");
+        assert_eq!(store.format_version().expect("ver"), FORMAT_VERSION);
 
         let shard_ta = schema::tenant_fts_table_name("ta");
         let shard_punct = schema::tenant_fts_table_name("a-b_c");

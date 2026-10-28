@@ -20,121 +20,157 @@ use crate::types::{
     timestamp_to_micros, validate_caller, validate_traverse_query,
 };
 
-const SELECT_START_NODE_SQL: &str = "
+pub(crate) const SELECT_START_NODE_SQL: &str = "
     SELECT
         id, node_type, label, summary, props_json,
         scope, base_scope, owner_principal, task_id, group_name, expires_at,
         prov_source, prov_desc_hash, prov_confidence, prov_extracted_at, prov_agent,
         valid_from, valid_to
-    FROM nodes
+    FROM nodes INDEXED BY idx_nodes_temporal
     WHERE tenant = ?1
       AND id = ?2
       AND valid_from <= ?3
       AND (valid_to IS NULL OR ?3 < valid_to)
 ";
 
-macro_rules! bfs_cte_sql {
-    ($next_expr:expr, $edge_join_pred:expr) => {
+macro_rules! bfs_cte_anchor_sql {
+    () => {
+        "WITH RECURSIVE
+            caller_groups(val) AS (SELECT value FROM json_each(?6)),
+            caller_tasks(val) AS (SELECT value FROM json_each(?7)),
+            allowed_scopes(val) AS (SELECT value FROM json_each(?9)),
+            allowed_edge_types(val) AS (SELECT value FROM json_each(?11)),
+            bfs(node_id, depth) AS (
+                SELECT n0.id, 0
+                FROM nodes n0 INDEXED BY idx_nodes_temporal
+                WHERE n0.tenant = ?1
+                  AND n0.id = ?2
+                  AND n0.valid_from <= ?3
+                  AND (n0.valid_to IS NULL OR ?3 < n0.valid_to)
+                  AND (?8 = 0 OR n0.scope IN (SELECT val FROM allowed_scopes))
+                  AND (
+                      n0.scope != 'EPHEMERAL'
+                      OR (n0.expires_at IS NOT NULL AND n0.expires_at > ?4 AND n0.expires_at > ?3)
+                  )
+                  AND (
+                      n0.base_scope = 'GLOBAL'
+                      OR (n0.base_scope = 'PRIVATE' AND n0.owner_principal = ?5)
+                      OR (
+                          n0.base_scope = 'GROUP'
+                          AND n0.group_name IS NOT NULL
+                          AND n0.group_name IN (SELECT val FROM caller_groups)
+                      )
+                      OR (
+                          n0.base_scope = 'TASK'
+                          AND n0.task_id IS NOT NULL
+                          AND n0.task_id IN (SELECT val FROM caller_tasks)
+                      )
+                  )"
+    };
+}
+
+macro_rules! bfs_cte_arm_sql {
+    ($next_expr:expr, $edge_idx:expr, $edge_join_pred:expr) => {
         concat!(
-            "WITH RECURSIVE
-                caller_groups(val) AS (SELECT value FROM json_each(?6)),
-                caller_tasks(val) AS (SELECT value FROM json_each(?7)),
-                allowed_scopes(val) AS (SELECT value FROM json_each(?9)),
-                allowed_edge_types(val) AS (SELECT value FROM json_each(?11)),
-                bfs(node_id, depth) AS (
-                    SELECT n0.id, 0
-                    FROM nodes n0
-                    WHERE n0.tenant = ?1
-                      AND n0.id = ?2
-                      AND n0.valid_from <= ?3
-                      AND (n0.valid_to IS NULL OR ?3 < n0.valid_to)
-                      AND (?8 = 0 OR n0.scope IN (SELECT val FROM allowed_scopes))
-                      AND (
-                          n0.scope != 'EPHEMERAL'
-                          OR (n0.expires_at IS NOT NULL AND n0.expires_at > ?4 AND n0.expires_at > ?3)
-                      )
-                      AND (
-                          n0.base_scope = 'GLOBAL'
-                          OR (n0.base_scope = 'PRIVATE' AND n0.owner_principal = ?5)
-                          OR (
-                              n0.base_scope = 'GROUP'
-                              AND n0.group_name IS NOT NULL
-                              AND n0.group_name IN (SELECT val FROM caller_groups)
-                          )
-                          OR (
-                              n0.base_scope = 'TASK'
-                              AND n0.task_id IS NOT NULL
-                              AND n0.task_id IN (SELECT val FROM caller_tasks)
-                          )
-                      )
-                    UNION
-                    SELECT ",
+            "
+                UNION
+                SELECT ",
             $next_expr,
             ", bfs.depth + 1
-                    FROM bfs
-                    JOIN edges e
-                      ON e.tenant = ?1
-                     AND ",
+                FROM bfs
+                CROSS JOIN edges e INDEXED BY ",
+            $edge_idx,
+            "
+                  ON e.tenant = ?1
+                 AND ",
             $edge_join_pred,
             "
-                     AND e.valid_from <= ?3
-                     AND (e.valid_to IS NULL OR ?3 < e.valid_to)
-                     AND (?10 = 0 OR e.edge_type IN (SELECT val FROM allowed_edge_types))
-                    JOIN nodes nv
-                      ON nv.tenant = ?1
-                     AND nv.id = ",
+                 AND e.valid_from <= ?3
+                 AND (e.valid_to IS NULL OR ?3 < e.valid_to)
+                 AND (?10 = 0 OR e.edge_type IN (SELECT val FROM allowed_edge_types))
+                CROSS JOIN nodes nv INDEXED BY idx_nodes_temporal
+                  ON nv.tenant = ?1
+                 AND nv.id = ",
             $next_expr,
             "
-                     AND nv.valid_from <= ?3
-                     AND (nv.valid_to IS NULL OR ?3 < nv.valid_to)
-                     AND (?8 = 0 OR nv.scope IN (SELECT val FROM allowed_scopes))
-                     AND (
-                         nv.scope != 'EPHEMERAL'
-                         OR (nv.expires_at IS NOT NULL AND nv.expires_at > ?4 AND nv.expires_at > ?3)
+                 AND nv.valid_from <= ?3
+                 AND (nv.valid_to IS NULL OR ?3 < nv.valid_to)
+                 AND (?8 = 0 OR nv.scope IN (SELECT val FROM allowed_scopes))
+                 AND (
+                     nv.scope != 'EPHEMERAL'
+                     OR (nv.expires_at IS NOT NULL AND nv.expires_at > ?4 AND nv.expires_at > ?3)
+                 )
+                 AND (
+                     nv.base_scope = 'GLOBAL'
+                     OR (nv.base_scope = 'PRIVATE' AND nv.owner_principal = ?5)
+                     OR (
+                         nv.base_scope = 'GROUP'
+                         AND nv.group_name IS NOT NULL
+                         AND nv.group_name IN (SELECT val FROM caller_groups)
                      )
-                     AND (
-                         nv.base_scope = 'GLOBAL'
-                         OR (nv.base_scope = 'PRIVATE' AND nv.owner_principal = ?5)
-                         OR (
-                             nv.base_scope = 'GROUP'
-                             AND nv.group_name IS NOT NULL
-                             AND nv.group_name IN (SELECT val FROM caller_groups)
-                         )
-                         OR (
-                             nv.base_scope = 'TASK'
-                             AND nv.task_id IS NOT NULL
-                             AND nv.task_id IN (SELECT val FROM caller_tasks)
-                         )
+                     OR (
+                         nv.base_scope = 'TASK'
+                         AND nv.task_id IS NOT NULL
+                         AND nv.task_id IN (SELECT val FROM caller_tasks)
                      )
-                    WHERE bfs.depth < ?12
-                    ORDER BY 2 ASC, 1 ASC
-                    LIMIT ?13
-                )
-            SELECT node_id, MIN(depth) AS min_depth
-            FROM bfs
-            GROUP BY node_id
-            ORDER BY min_depth ASC, node_id ASC
-            LIMIT ?14"
+                 )
+                WHERE bfs.depth < ?12"
         )
     };
 }
 
-const CTE_OUTBOUND_SQL: &str = bfs_cte_sql!("e.to_id", "e.from_id = bfs.node_id");
-const CTE_INBOUND_SQL: &str = bfs_cte_sql!("e.from_id", "e.to_id = bfs.node_id");
-const CTE_BOTH_SQL: &str = bfs_cte_sql!(
-    "CASE WHEN e.from_id = bfs.node_id THEN e.to_id ELSE e.from_id END",
-    "(e.from_id = bfs.node_id OR e.to_id = bfs.node_id)"
+macro_rules! bfs_cte_footer_sql {
+    () => {
+        "
+                ORDER BY 2 ASC, 1 ASC
+                LIMIT ?13
+            )
+        SELECT node_id, MIN(depth) AS min_depth
+        FROM bfs
+        GROUP BY node_id
+        ORDER BY min_depth ASC, node_id ASC
+        LIMIT ?14"
+    };
+}
+
+pub(crate) const CTE_OUTBOUND_SQL: &str = concat!(
+    bfs_cte_anchor_sql!(),
+    bfs_cte_arm_sql!("e.to_id", "idx_edges_from", "e.from_id = bfs.node_id"),
+    bfs_cte_footer_sql!(),
 );
 
-macro_rules! step_neighbours_sql {
-    ($next_expr:expr, $edge_pred:expr) => {
+pub(crate) const CTE_INBOUND_SQL: &str = concat!(
+    bfs_cte_anchor_sql!(),
+    bfs_cte_arm_sql!("e.from_id", "idx_edges_to", "e.to_id = bfs.node_id"),
+    bfs_cte_footer_sql!(),
+);
+
+pub(crate) const CTE_BOTH_SQL: &str = concat!(
+    bfs_cte_anchor_sql!(),
+    bfs_cte_arm_sql!("e.to_id", "idx_edges_from", "e.from_id = bfs.node_id"),
+    bfs_cte_arm_sql!(
+        "e.from_id",
+        "idx_edges_to",
+        "e.to_id = bfs.node_id AND e.from_id != bfs.node_id"
+    ),
+    bfs_cte_footer_sql!(),
+);
+
+macro_rules! step_neighbours_with_ctes_sql {
+    () => {
+        "WITH
+            caller_groups(val) AS (SELECT value FROM json_each(?6)),
+            caller_tasks(val) AS (SELECT value FROM json_each(?7)),
+            allowed_scopes(val) AS (SELECT value FROM json_each(?9)),
+            allowed_edge_types(val) AS (SELECT value FROM json_each(?11))
+        "
+    };
+}
+
+macro_rules! step_neighbours_arm_sql {
+    ($next_expr:expr, $edge_idx:expr, $edge_pred:expr) => {
         concat!(
-            "WITH
-                caller_groups(val) AS (SELECT value FROM json_each(?6)),
-                caller_tasks(val) AS (SELECT value FROM json_each(?7)),
-                allowed_scopes(val) AS (SELECT value FROM json_each(?9)),
-                allowed_edge_types(val) AS (SELECT value FROM json_each(?11))
-            SELECT
+            "SELECT
                 e.id, e.edge_type, e.from_id, e.to_id, e.props_json,
                 e.confidence, e.resolution,
                 e.prov_source, e.prov_desc_hash, e.prov_confidence, e.prov_extracted_at, e.prov_agent,
@@ -142,8 +178,10 @@ macro_rules! step_neighbours_sql {
                 ",
             $next_expr,
             " AS neighbour_id
-            FROM edges e
-            JOIN nodes nv
+            FROM edges e INDEXED BY ",
+            $edge_idx,
+            "
+            CROSS JOIN nodes nv INDEXED BY idx_nodes_temporal
               ON nv.tenant = ?1
              AND nv.id = ",
             $next_expr,
@@ -175,17 +213,38 @@ macro_rules! step_neighbours_sql {
             "
               AND e.valid_from <= ?3
               AND (e.valid_to IS NULL OR ?3 < e.valid_to)
-              AND (?10 = 0 OR e.edge_type IN (SELECT val FROM allowed_edge_types))
-            ORDER BY neighbour_id ASC, e.id ASC"
+              AND (?10 = 0 OR e.edge_type IN (SELECT val FROM allowed_edge_types))"
         )
     };
 }
 
-const NEIGHBOURS_OUTBOUND_SQL: &str = step_neighbours_sql!("e.to_id", "e.from_id = ?2");
-const NEIGHBOURS_INBOUND_SQL: &str = step_neighbours_sql!("e.from_id", "e.to_id = ?2");
-const NEIGHBOURS_BOTH_SQL: &str = step_neighbours_sql!(
-    "CASE WHEN e.from_id = ?2 THEN e.to_id ELSE e.from_id END",
-    "(e.from_id = ?2 OR e.to_id = ?2)"
+pub(crate) const NEIGHBOURS_OUTBOUND_SQL: &str = concat!(
+    step_neighbours_with_ctes_sql!(),
+    step_neighbours_arm_sql!("e.to_id", "idx_edges_from", "e.from_id = ?2"),
+    "
+            ORDER BY 15 ASC, 1 ASC"
+);
+
+pub(crate) const NEIGHBOURS_INBOUND_SQL: &str = concat!(
+    step_neighbours_with_ctes_sql!(),
+    step_neighbours_arm_sql!("e.from_id", "idx_edges_to", "e.to_id = ?2"),
+    "
+            ORDER BY 15 ASC, 1 ASC"
+);
+
+pub(crate) const NEIGHBOURS_BOTH_SQL: &str = concat!(
+    step_neighbours_with_ctes_sql!(),
+    step_neighbours_arm_sql!("e.to_id", "idx_edges_from", "e.from_id = ?2"),
+    "
+            UNION ALL
+            ",
+    step_neighbours_arm_sql!(
+        "e.from_id",
+        "idx_edges_to",
+        "e.to_id = ?2 AND e.from_id != ?2"
+    ),
+    "
+            ORDER BY 15 ASC, 1 ASC"
 );
 
 struct TraverseEnv<'a> {
@@ -204,7 +263,15 @@ struct TraverseEnv<'a> {
     edge_types_json: String,
 }
 
-fn step_sql_for_direction(direction: Direction) -> &'static str {
+pub(crate) fn cte_sql_for_direction(direction: Direction) -> &'static str {
+    match direction {
+        Direction::Outbound => CTE_OUTBOUND_SQL,
+        Direction::Inbound => CTE_INBOUND_SQL,
+        Direction::Both => CTE_BOTH_SQL,
+    }
+}
+
+pub(crate) fn step_sql_for_direction(direction: Direction) -> &'static str {
     match direction {
         Direction::Outbound => NEIGHBOURS_OUTBOUND_SQL,
         Direction::Inbound => NEIGHBOURS_INBOUND_SQL,
@@ -322,11 +389,7 @@ struct WalkOutput {
 }
 
 fn run_bfs_or_shortest(env: &TraverseEnv<'_>) -> Result<WalkOutput, StoreError> {
-    let cte_sql = match env.query.direction {
-        Direction::Outbound => CTE_OUTBOUND_SQL,
-        Direction::Inbound => CTE_INBOUND_SQL,
-        Direction::Both => CTE_BOTH_SQL,
-    };
+    let cte_sql = cte_sql_for_direction(env.query.direction);
     let cte_row_limit =
         (i64::from(env.visited_cap) + 1).saturating_mul(i64::from(env.query.max_depth) + 1);
     let visited_plus_one = i64::from(env.visited_cap) + 1;

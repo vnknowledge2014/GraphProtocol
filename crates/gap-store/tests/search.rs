@@ -958,9 +958,12 @@ fn inv_09_v2_to_v3_migration_populates_each_tenant_fts_shard_with_exact_tenant_r
     }
 
     let clock: Arc<dyn Clock> = Arc::new(ManualClock::new(1_700_000_020_000));
-    let store =
-        SqliteContextStore::open(SqliteConfig::new(&v2_path), clock).expect("migrate v2 -> v3");
-    assert_eq!(store.format_version().expect("version"), 3);
+    let store = SqliteContextStore::open(SqliteConfig::new(&v2_path), clock)
+        .expect("migrate v2 -> FORMAT_VERSION");
+    assert_eq!(
+        store.format_version().expect("version"),
+        gap_store::FORMAT_VERSION
+    );
 
     let shard_ta = tenant_fts_table_name("ta");
     let shard_tb = tenant_fts_table_name("tb");
