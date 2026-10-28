@@ -6,5 +6,35 @@ rust-version.workspace = true
 license.workspace = true
 description = "Deterministic telemetry slots, time-decayed EWMA, circuit breakers, retry budgets, and P2C load balancing (L1)."
 
+[lib]
+bench = false                       # otherwise `cargo bench -- --quick` reaches libtest and fails
+
 [dependencies]
+arc-swap.workspace = true
+crossbeam-utils.workspace = true
 gap-core.workspace = true
+metrics.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+
+[target.'cfg(gap_shuttle)'.dependencies]
+shuttle.workspace = true            # only when built with RUSTFLAGS="--cfg gap_shuttle"
+
+[dev-dependencies]
+criterion = { workspace = true, features = ["cargo_bench_support"] }
+hdrhistogram.workspace = true
+proptest.workspace = true
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "test-util", "time"] }
+
+[[bench]]
+name = "update"
+harness = false
+[[bench]]
+name = "selection"
+harness = false
+[[bench]]
+name = "percentiles"
+harness = false
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ["cfg(gap_shuttle)"] }
