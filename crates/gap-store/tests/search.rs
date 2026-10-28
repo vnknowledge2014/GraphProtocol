@@ -11,6 +11,7 @@ use gap_store::{
     BaseScope, Caller, ContextMaintenance, ContextStore, NewNode, NodeId, NodeType, Provenance,
     PurgePolicy, ScopeSpec, SqliteConfig, SqliteContextStore, StoreError, TaskId, TenantId,
 };
+use rusqlite::{Connection, OpenFlags, params};
 use serde_json::Map as JsonMap;
 use tempfile::TempDir;
 
@@ -724,4 +725,308 @@ fn ing_066_ephemeral_expiry_enforces_both_now_and_as_of_in_get_node_and_search_n
             .expect("search expired node at earlier as_of")
             .is_empty()
     );
+}
+
+// spec: INV-09, ING-065, ING-082, ING-086
+#[test]
+fn ing_086_delete_node_removes_all_version_rows_from_tenant_fts_shard() {
+    let dir = TempDir::new().expect("tempdir");
+    let db_path = dir.path().join("t5_delete_fts.db");
+    let manual = Arc::new(ManualClock::new(1_700_000_000_000));
+    let clock: Arc<dyn Clock> = manual.clone();
+    let store = SqliteContextStore::open(SqliteConfig::new(&db_path), clock).expect("open");
+
+    let ta = TenantId::new("ta").expect("ta").scope();
+    let tb = TenantId::new("tb").expect("tb").scope();
+    let caller = Caller::new("alice");
+
+    // `doc:victim` in `ta` gets two versions (`v1` and `v2`), plus `doc:survivor` (`1` version).
+    let victim_id = store
+        .put_node(
+            &ta,
+            &caller,
+            doc_node(
+                Some("doc:victim"),
+                "victimv1tok",
+                Some("victimsum1tok"),
+                ScopeSpec::Global,
+            ),
+        )
+        .expect("put victim v1");
+    manual.advance(Duration::from_secs(10));
+    store
+        .put_node(
+            &ta,
+            &caller,
+            doc_node(
+                Some("doc:victim"),
+                "victimv2tok",
+                Some("victimsum2tok"),
+                ScopeSpec::Global,
+            ),
+        )
+        .expect("put victim v2");
+    store
+        .put_node(
+            &ta,
+            &caller,
+            doc_node(
+                Some("doc:survivor"),
+                "survivortok",
+                Some("survivorsumtok"),
+                ScopeSpec::Global,
+            ),
+        )
+        .expect("put survivor");
+
+    // `tb` reuses the same id and tokens in its own shard.
+    store
+        .put_node(
+            &tb,
+            &caller,
+            doc_node(
+                Some("doc:victim"),
+                "victimv1tok",
+                Some("victimsum1tok"),
+                ScopeSpec::Global,
+            ),
+        )
+        .expect("put tb victim");
+
+    let shard_ta = tenant_fts_table_name("ta");
+    let shard_tb = tenant_fts_table_name("tb");
+
+    {
+        let raw = Connection::open_with_flags(&db_path, OpenFlags::SQLITE_OPEN_READ_ONLY)
+            .expect("open readonly before delete");
+        let fts_before: i64 = raw
+            .query_row(&format!("SELECT COUNT(*) FROM {shard_ta}"), [], |r| {
+                r.get(0)
+            })
+            .expect("ta fts count before");
+        assert_eq!(fts_before, 3);
+    }
+
+    store
+        .delete_node(&ta, &caller, &victim_id)
+        .expect("delete victim in ta");
+
+    let raw = Connection::open_with_flags(&db_path, OpenFlags::SQLITE_OPEN_READ_ONLY)
+        .expect("open readonly after delete");
+    let remaining_ta_versions: i64 = raw
+        .query_row("SELECT COUNT(*) FROM nodes WHERE tenant = 'ta'", [], |r| {
+            r.get(0)
+        })
+        .expect("remaining ta node versions");
+    assert_eq!(remaining_ta_versions, 1);
+
+    let fts_after: i64 = raw
+        .query_row(&format!("SELECT COUNT(*) FROM {shard_ta}"), [], |r| {
+            r.get(0)
+        })
+        .expect("ta fts count after");
+    assert_eq!(fts_after, remaining_ta_versions);
+    assert_eq!(fts_after, 1);
+
+    for deleted_term in [
+        "\"victimv1tok\"",
+        "\"victimsum1tok\"",
+        "\"victimv2tok\"",
+        "\"victimsum2tok\"",
+    ] {
+        let hits: i64 = raw
+            .query_row(
+                &format!("SELECT COUNT(*) FROM {shard_ta} WHERE {shard_ta} MATCH ?1"),
+                params![deleted_term],
+                |r| r.get(0),
+            )
+            .expect("raw fts match deleted term");
+        assert_eq!(
+            hits, 0,
+            "deleted term {deleted_term} must leave zero rows in {shard_ta}"
+        );
+    }
+
+    let survivor_hits: i64 = raw
+        .query_row(
+            &format!("SELECT COUNT(*) FROM {shard_ta} WHERE {shard_ta} MATCH '\"survivortok\"'"),
+            [],
+            |r| r.get(0),
+        )
+        .expect("survivor raw match");
+    assert_eq!(survivor_hits, 1);
+
+    let tb_hits: i64 = raw
+        .query_row(
+            &format!("SELECT COUNT(*) FROM {shard_tb} WHERE {shard_tb} MATCH '\"victimv1tok\"'"),
+            [],
+            |r| r.get(0),
+        )
+        .expect("tb raw match intact");
+    assert_eq!(tb_hits, 1);
+}
+
+// spec: INV-09, INV-19, ING-064, ING-086, ING-087 (ADR-020)
+#[test]
+fn inv_09_v2_to_v3_migration_populates_each_tenant_fts_shard_with_exact_tenant_rows_only() {
+    let dir = TempDir::new().expect("tempdir");
+    let v2_path = dir.path().join("t5_mig_v2.db");
+    {
+        let raw = Connection::open(&v2_path).expect("open raw v2");
+        raw.execute_batch(
+            "CREATE TABLE tenant_stats (
+                tenant TEXT NOT NULL,
+                node_count INTEGER NOT NULL DEFAULT 0,
+                edge_count INTEGER NOT NULL DEFAULT 0,
+                PRIMARY KEY (tenant)
+            ) WITHOUT ROWID;
+            CREATE TABLE nodes (
+                fts_rowid INTEGER PRIMARY KEY,
+                tenant TEXT NOT NULL,
+                id TEXT NOT NULL,
+                node_type TEXT NOT NULL,
+                label TEXT NOT NULL,
+                summary TEXT,
+                props_json TEXT NOT NULL,
+                scope TEXT NOT NULL,
+                base_scope TEXT NOT NULL,
+                owner_principal TEXT NOT NULL,
+                task_id TEXT,
+                group_name TEXT,
+                expires_at INTEGER,
+                prov_source TEXT NOT NULL,
+                prov_desc_hash TEXT,
+                prov_confidence REAL,
+                prov_extracted_at INTEGER,
+                prov_agent TEXT,
+                valid_from INTEGER NOT NULL,
+                valid_to INTEGER,
+                content_hash BLOB NOT NULL
+            );
+            CREATE UNIQUE INDEX idx_nodes_current ON nodes (tenant, id) WHERE valid_to IS NULL;
+            CREATE INDEX idx_nodes_temporal ON nodes (tenant, id, valid_from, valid_to);
+            CREATE INDEX idx_nodes_task ON nodes (tenant, scope, task_id, valid_to);
+            CREATE INDEX idx_nodes_base_task ON nodes (tenant, base_scope, task_id, valid_to);
+            CREATE INDEX idx_nodes_ephemeral ON nodes (tenant, scope, expires_at);
+            CREATE TABLE edges (
+                edge_rowid INTEGER PRIMARY KEY,
+                tenant TEXT NOT NULL,
+                id TEXT NOT NULL,
+                edge_type TEXT NOT NULL,
+                from_id TEXT NOT NULL,
+                to_id TEXT NOT NULL,
+                props_json TEXT NOT NULL,
+                confidence REAL,
+                resolution TEXT NOT NULL,
+                prov_source TEXT NOT NULL,
+                prov_desc_hash TEXT,
+                prov_confidence REAL,
+                prov_extracted_at INTEGER,
+                prov_agent TEXT,
+                valid_from INTEGER NOT NULL,
+                valid_to INTEGER,
+                content_hash BLOB NOT NULL
+            );
+            CREATE UNIQUE INDEX idx_edges_current_quad ON edges (tenant, edge_type, from_id, to_id) WHERE valid_to IS NULL;
+            CREATE UNIQUE INDEX idx_edges_current_id ON edges (tenant, id) WHERE valid_to IS NULL;
+            CREATE INDEX idx_edges_from ON edges (tenant, from_id, valid_from, valid_to);
+            CREATE INDEX idx_edges_to ON edges (tenant, to_id, valid_from, valid_to);
+            CREATE INDEX idx_edges_id_temporal ON edges (tenant, id, valid_from, valid_to);
+            CREATE VIRTUAL TABLE nodes_fts USING fts5(tenant UNINDEXED, label, summary);
+            PRAGMA user_version = 2;",
+        )
+        .expect("apply raw v2 ddl");
+
+        // `ta` has 2 versions (fts_rowid 1, 2); `tb` has 3 versions (fts_rowid 3, 4, 5).
+        raw.execute_batch(
+            "INSERT INTO tenant_stats (tenant, node_count, edge_count)
+             VALUES ('ta', 1, 0), ('tb', 2, 0);
+             INSERT INTO nodes VALUES
+                (1, 'ta', 'doc:1', 'Doc', 'alphaoldtok', 'alphasum1', '{}', 'GLOBAL', 'GLOBAL', 'alice', NULL, NULL, NULL, 'v2', NULL, NULL, NULL, NULL, 1700000000000000, 1700000010000000, X'01'),
+                (2, 'ta', 'doc:1', 'Doc', 'alphanewtok', 'alphasum2', '{}', 'GLOBAL', 'GLOBAL', 'alice', NULL, NULL, NULL, 'v2', NULL, NULL, NULL, NULL, 1700000010000000, NULL, X'02'),
+                (3, 'tb', 'doc:1', 'Doc', 'betaonetok', 'betasum1', '{}', 'GLOBAL', 'GLOBAL', 'bob', NULL, NULL, NULL, 'v2', NULL, NULL, NULL, NULL, 1700000000000000, 1700000010000000, X'03'),
+                (4, 'tb', 'doc:1', 'Doc', 'betatwotok', 'betasum2', '{}', 'GLOBAL', 'GLOBAL', 'bob', NULL, NULL, NULL, 'v2', NULL, NULL, NULL, NULL, 1700000010000000, NULL, X'04'),
+                (5, 'tb', 'doc:2', 'Doc', 'betathreetok', 'betasum3', '{}', 'GLOBAL', 'GLOBAL', 'bob', NULL, NULL, NULL, 'v2', NULL, NULL, NULL, NULL, 1700000010000000, NULL, X'05');
+             INSERT INTO nodes_fts (rowid, tenant, label, summary) VALUES
+                (1, 'ta', 'alphaoldtok', 'alphasum1'),
+                (2, 'ta', 'alphanewtok', 'alphasum2'),
+                (3, 'tb', 'betaonetok', 'betasum1'),
+                (4, 'tb', 'betatwotok', 'betasum2'),
+                (5, 'tb', 'betathreetok', 'betasum3');",
+        )
+        .expect("seed v2 two-tenant rows");
+    }
+
+    let clock: Arc<dyn Clock> = Arc::new(ManualClock::new(1_700_000_020_000));
+    let store =
+        SqliteContextStore::open(SqliteConfig::new(&v2_path), clock).expect("migrate v2 -> v3");
+    assert_eq!(store.format_version().expect("version"), 3);
+
+    let shard_ta = tenant_fts_table_name("ta");
+    let shard_tb = tenant_fts_table_name("tb");
+
+    let raw = Connection::open_with_flags(&v2_path, OpenFlags::SQLITE_OPEN_READ_ONLY)
+        .expect("open readonly after v3 migration");
+
+    let ta_node_versions: i64 = raw
+        .query_row("SELECT COUNT(*) FROM nodes WHERE tenant = 'ta'", [], |r| {
+            r.get(0)
+        })
+        .expect("ta node versions");
+    let tb_node_versions: i64 = raw
+        .query_row("SELECT COUNT(*) FROM nodes WHERE tenant = 'tb'", [], |r| {
+            r.get(0)
+        })
+        .expect("tb node versions");
+    assert_eq!(ta_node_versions, 2);
+    assert_eq!(tb_node_versions, 3);
+
+    let ta_fts_count: i64 = raw
+        .query_row(&format!("SELECT COUNT(*) FROM {shard_ta}"), [], |r| {
+            r.get(0)
+        })
+        .expect("ta shard count");
+    let tb_fts_count: i64 = raw
+        .query_row(&format!("SELECT COUNT(*) FROM {shard_tb}"), [], |r| {
+            r.get(0)
+        })
+        .expect("tb shard count");
+    assert_eq!(ta_fts_count, ta_node_versions);
+    assert_eq!(tb_fts_count, tb_node_versions);
+
+    let ta_rowids: Vec<i64> = raw
+        .prepare(&format!("SELECT rowid FROM {shard_ta} ORDER BY rowid ASC"))
+        .expect("prep ta rowids")
+        .query_map([], |r| r.get(0))
+        .expect("query ta rowids")
+        .collect::<Result<Vec<_>, _>>()
+        .expect("collect ta rowids");
+    assert_eq!(ta_rowids, vec![1, 2]);
+
+    let tb_rowids: Vec<i64> = raw
+        .prepare(&format!("SELECT rowid FROM {shard_tb} ORDER BY rowid ASC"))
+        .expect("prep tb rowids")
+        .query_map([], |r| r.get(0))
+        .expect("query tb rowids")
+        .collect::<Result<Vec<_>, _>>()
+        .expect("collect tb rowids");
+    assert_eq!(tb_rowids, vec![3, 4, 5]);
+
+    let cross_in_ta: i64 = raw
+        .query_row(
+            &format!("SELECT COUNT(*) FROM {shard_ta} WHERE {shard_ta} MATCH '\"betaonetok\"'"),
+            [],
+            |r| r.get(0),
+        )
+        .expect("cross match in ta");
+    assert_eq!(cross_in_ta, 0);
+
+    let cross_in_tb: i64 = raw
+        .query_row(
+            &format!("SELECT COUNT(*) FROM {shard_tb} WHERE {shard_tb} MATCH '\"alphanewtok\"'"),
+            [],
+            |r| r.get(0),
+        )
+        .expect("cross match in tb");
+    assert_eq!(cross_in_tb, 0);
 }

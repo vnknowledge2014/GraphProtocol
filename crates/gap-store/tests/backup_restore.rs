@@ -633,3 +633,194 @@ fn online_backup_is_safe_under_concurrent_writer_and_readers_with_barriers() {
         .expect("restored counts");
     assert!(restored_counts.nodes >= 20 && restored_counts.nodes <= 100);
 }
+
+// spec: INV-09, ING-064, ING-086, ING-087
+#[test]
+fn ing_087_verify_required_tables_and_restore_reject_v3_database_with_leftover_shared_nodes_fts() {
+    let dir = TempDir::new().expect("tempdir");
+    let live_path = dir.path().join("v3_live.db");
+    let backup_path = dir.path().join("v3_backup.db");
+    let leftover_fts_src = dir.path().join("v3_with_leftover_shared_fts.db");
+    let restore_target = dir.path().join("must_not_be_created.db");
+
+    let clock: Arc<dyn Clock> = Arc::new(ManualClock::new(1_700_000_000_000));
+    let store = SqliteContextStore::open(SqliteConfig::new(&live_path), Arc::clone(&clock))
+        .expect("open v3 store");
+    let tenant = TenantId::new("acme").expect("acme").scope();
+    let writer = Caller::new("alice");
+
+    store
+        .put_node(
+            &tenant,
+            &writer,
+            NewNode {
+                id: Some(NodeId::new("doc:1").expect("id")),
+                node_type: NodeType::new("Doc").expect("type"),
+                label: "clean v3 node".to_owned(),
+                summary: Some("per tenant shard".to_owned()),
+                props: JsonMap::new(),
+                scope: ScopeSpec::Global,
+                provenance: Provenance::new("test"),
+            },
+        )
+        .expect("put node");
+    store.backup_to(&backup_path).expect("backup v3");
+
+    fs::copy(&backup_path, &leftover_fts_src).expect("copy backup");
+    {
+        let raw = Connection::open(&leftover_fts_src).expect("open raw v3 copy");
+        raw.execute_batch(
+            "CREATE VIRTUAL TABLE nodes_fts USING fts5(tenant UNINDEXED, label, summary);",
+        )
+        .expect("reintroduce leftover shared nodes_fts");
+        assert_eq!(
+            gap_store::sqlite::schema::read_user_version(&raw).expect("user_version"),
+            3
+        );
+        assert_eq!(
+            gap_store::sqlite::schema::verify_required_tables(&raw)
+                .expect_err("v3 database with shared nodes_fts must be rejected"),
+            StoreError::Corrupt
+        );
+    }
+
+    assert_eq!(
+        SqliteContextStore::restore_from(&leftover_fts_src, &restore_target)
+            .expect_err("restore_from must reject leftover shared nodes_fts in v3"),
+        StoreError::Corrupt
+    );
+    assert!(!restore_target.exists());
+}
+
+// spec: ING-064, INV-15, ING-087
+#[test]
+fn inv_15_restore_from_rejects_data_page_corruption_caught_by_integrity_check_with_header_and_page1_intact()
+ {
+    let dir = TempDir::new().expect("tempdir");
+    let live_path = dir.path().join("integrity_live.db");
+    let backup_path = dir.path().join("integrity_backup.db");
+    let corrupted_src = dir.path().join("integrity_single_byte_corrupt.db");
+    let restore_target = dir.path().join("integrity_target_never_created.db");
+
+    let clock: Arc<dyn Clock> = Arc::new(ManualClock::new(1_700_000_000_000));
+    let store =
+        SqliteContextStore::open(SqliteConfig::new(&live_path), clock).expect("open live store");
+    let tenant = TenantId::new("acme").expect("acme").scope();
+    let writer = Caller::new("alice");
+
+    // Seed endpoint nodes and 5 edges (fitting on `edges`'s single data page with zero page splits).
+    let mut seed_nodes = Vec::with_capacity(6);
+    seed_nodes.push(NewNode {
+        id: Some(NodeId::new("hub").expect("hub")),
+        node_type: NodeType::new("Service").expect("type"),
+        label: "Hub".to_owned(),
+        summary: None,
+        props: JsonMap::new(),
+        scope: ScopeSpec::Global,
+        provenance: Provenance::new("seed"),
+    });
+    for i in 0..5 {
+        seed_nodes.push(NewNode {
+            id: Some(NodeId::new(format!("leaf:{i:04}")).expect("leaf id")),
+            node_type: NodeType::new("Service").expect("type"),
+            label: format!("Leaf {i:04}"),
+            summary: None,
+            props: JsonMap::new(),
+            scope: ScopeSpec::Global,
+            provenance: Provenance::new("seed"),
+        });
+    }
+
+    let mut seed_edges = Vec::with_capacity(5);
+    for i in 0..5 {
+        seed_edges.push(NewEdge {
+            id: Some(edge_id(&format!("edge-integrity-key-{i:04}-alpha"))),
+            edge_type: EdgeType::new("CALLS").expect("etype"),
+            from: NodeId::new("hub").expect("hub"),
+            to: NodeId::new(format!("leaf:{i:04}")).expect("leaf"),
+            props: JsonMap::new(),
+            confidence: Some(1.0),
+            resolution: EdgeResolution::Exact,
+            provenance: Provenance::new("seed"),
+        });
+    }
+    store
+        .put_batch(&tenant, &writer, &seed_nodes, &seed_edges)
+        .expect("seed populated table");
+
+    store.backup_to(&backup_path).expect("backup_to");
+
+    let edges_rootpage: usize = {
+        let raw = Connection::open_with_flags(&backup_path, OpenFlags::SQLITE_OPEN_READ_ONLY)
+            .expect("open clean backup");
+        let rp: i64 = raw
+            .query_row(
+                "SELECT rootpage FROM sqlite_master WHERE type = 'table' AND name = 'edges'",
+                [],
+                |r| r.get(0),
+            )
+            .expect("query edges rootpage");
+        usize::try_from(rp).expect("positive rootpage")
+    };
+    assert!(
+        edges_rootpage >= 2,
+        "edges table data page must be distinct from page 1"
+    );
+
+    let clean_bytes = fs::read(&backup_path).expect("read clean backup");
+    let page_size = u16::from_be_bytes([clean_bytes[16], clean_bytes[17]]) as usize;
+    assert!(page_size >= 4096);
+    let edges_page_start = (edges_rootpage - 1) * page_size;
+    let edges_page_end = edges_page_start + page_size;
+
+    // Corrupt ONE byte inside `edges`'s populated data page (`edges_page_start >= page_size`,
+    // leaving the SQLite header and all of page 1 untouched) so the `edges` table row disagrees
+    // with `idx_edges_current_id` / `idx_edges_id_temporal` under `PRAGMA integrity_check`.
+    let needle = b"edge-integrity-key-0002-alpha";
+    let rel_pos = clean_bytes[edges_page_start..edges_page_end]
+        .windows(needle.len())
+        .position(|w| w == needle)
+        .expect("live edge id must reside in edges data page");
+    let corrupt_offset = edges_page_start + rel_pos + "edge-integrity-key-0002-".len();
+
+    let mut mutated_bytes = clean_bytes.clone();
+    assert_eq!(mutated_bytes[corrupt_offset], b'a');
+    mutated_bytes[corrupt_offset] = b'z';
+
+    // Header and entire page 1 are byte-for-byte identical; exactly 1 byte changed overall.
+    assert_eq!(&clean_bytes[..page_size], &mutated_bytes[..page_size]);
+    let diff_bytes = clean_bytes
+        .iter()
+        .zip(mutated_bytes.iter())
+        .filter(|(a, b)| a != b)
+        .count();
+    assert_eq!(diff_bytes, 1);
+
+    fs::write(&corrupted_src, &mutated_bytes).expect("write single-byte corrupted backup");
+
+    // Confirm raw `PRAGMA integrity_check` fails on `corrupted_src` while schema verification passes.
+    {
+        let raw = Connection::open_with_flags(&corrupted_src, OpenFlags::SQLITE_OPEN_READ_ONLY)
+            .expect("open readonly corrupted_src");
+        let findings: Vec<String> = raw
+            .prepare("PRAGMA integrity_check(10);")
+            .expect("prep integrity_check")
+            .query_map([], |r| r.get(0))
+            .expect("run integrity_check")
+            .collect::<Result<Vec<_>, _>>()
+            .expect("collect findings");
+        assert!(
+            findings.len() != 1 || !findings[0].eq_ignore_ascii_case("ok"),
+            "single-byte data page corruption must fail PRAGMA integrity_check, got {findings:?}"
+        );
+        gap_store::sqlite::schema::verify_required_tables(&raw)
+            .expect("schema tables on page 1 remain intact");
+    }
+
+    assert_eq!(
+        SqliteContextStore::restore_from(&corrupted_src, &restore_target)
+            .expect_err("restore_from must reject failed integrity_check with Corrupt"),
+        StoreError::Corrupt
+    );
+    assert!(!restore_target.exists());
+}
