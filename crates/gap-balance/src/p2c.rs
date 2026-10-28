@@ -21,8 +21,11 @@ const UNKNOWN_GROUP_LATENCY_FALLBACK: f64 = 1.0;
 /// Non-zero default state if SplitMix64 ever outputs `0`.
 const NONZERO_FALLBACK_STATE: u64 = 0x9e37_79b9_7f4a_7c15;
 
+/// Process-wide seed counter mixed via SplitMix64 so each thread's local RNG draws an independent stream (`RTE-079(d)`).
+static NEXT_TLS_SEED: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+
 thread_local! {
-    static TLS_RNG: Cell<XorShift64> = const { Cell::new(XorShift64 { state: NONZERO_FALLBACK_STATE }) };
+    static TLS_RNG: Cell<u64> = const { Cell::new(0) };
 }
 
 /// Deterministic `xorshift64` pseudo-random generator for unbiased P2C candidate sampling (`RTE-074`, `RTE-079(d)`).
@@ -74,12 +77,20 @@ impl XorShift64 {
         }
     }
 
-    /// Runs `f` with a fast thread-local [`XorShift64`] (`RTE-079(d)`).
+    /// Runs `f` with a fast thread-local [`XorShift64`] lazily seeded per thread from a process-wide
+    /// counter passed through SplitMix64 (`RTE-079(d)`).
     pub fn with_thread_local<R>(f: impl FnOnce(&mut Self) -> R) -> R {
         TLS_RNG.with(|cell| {
-            let mut rng = cell.get();
+            let state = cell.get();
+            let mut rng = if state == 0 {
+                // Relaxed fetch_add suffices because each thread only needs a unique initial seed.
+                let seed = NEXT_TLS_SEED.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                Self::new(seed)
+            } else {
+                Self { state }
+            };
             let out = f(&mut rng);
-            cell.set(rng);
+            cell.set(rng.state);
             out
         })
     }
@@ -277,22 +288,52 @@ pub fn select_excluding(
     let (idx_a, idx_b) = if eligible_count <= STACK_CAP {
         (stack_elig[first_rank], stack_elig[second_rank])
     } else {
-        let mut found_a = 0_usize;
-        let mut found_b = 0_usize;
+        let mut found_a: Option<usize> = None;
+        let mut found_b: Option<usize> = None;
         let mut seen = 0_usize;
         for (idx, cand) in cands.iter().enumerate() {
             if is_excluded(idx, excluded) || !cand.slot.breaker.is_selectable_readonly(now) {
                 continue;
             }
+            if seen < STACK_CAP {
+                stack_elig[seen] = idx;
+            }
             if seen == first_rank {
-                found_a = idx;
+                found_a = Some(idx);
             }
             if seen == second_rank {
-                found_b = idx;
+                found_b = Some(idx);
             }
             seen += 1;
         }
-        (found_a, found_b)
+        if seen == 0 {
+            return None;
+        }
+        if seen == 1 {
+            return Some(stack_elig[0]);
+        }
+        match (found_a, found_b) {
+            (Some(a), Some(b)) => (a, b),
+            (Some(a), None) | (None, Some(a)) => {
+                let pool = seen.min(STACK_CAP);
+                let pick = stack_elig[rng.gen_index(pool)];
+                let b = if pick != a {
+                    pick
+                } else if stack_elig[0] != a {
+                    stack_elig[0]
+                } else {
+                    stack_elig[1]
+                };
+                (a, b)
+            }
+            (None, None) => {
+                let pool = seen.min(STACK_CAP);
+                let r1 = rng.gen_index(pool);
+                let r2_raw = rng.gen_index(pool - 1);
+                let r2 = if r2_raw >= r1 { r2_raw + 1 } else { r2_raw };
+                (stack_elig[r1], stack_elig[r2])
+            }
+        }
     };
 
     let cand_a = &cands[idx_a];
@@ -1006,5 +1047,96 @@ mod tests {
                 p2c_slow.total_counts[0]
             );
         }
+    }
+
+    // spec: RTE-074, RTE-079
+    #[test]
+    fn p2c_thread_local_rng_distinct_across_eight_threads_and_seed_deterministic() {
+        let barrier = std::sync::Arc::new(std::sync::Barrier::new(8));
+        let mut handles = Vec::with_capacity(8);
+        for _ in 0..8 {
+            let b = std::sync::Arc::clone(&barrier);
+            handles.push(std::thread::spawn(move || {
+                b.wait();
+                let mut seq = [0_u64; 16];
+                for out in &mut seq {
+                    *out = XorShift64::with_thread_local(XorShift64::next_u64);
+                }
+                seq
+            }));
+        }
+
+        let mut seqs = Vec::with_capacity(8);
+        for h in handles {
+            seqs.push(h.join().expect("tls rng worker"));
+        }
+        for i in 0..seqs.len() {
+            for j in (i + 1)..seqs.len() {
+                assert_ne!(
+                    seqs[i], seqs[j],
+                    "threads {i} and {j} produced identical thread-local RNG streams"
+                );
+            }
+        }
+
+        // Explicit XorShift64::new(seed) remains strictly deterministic across runs and threads.
+        for seed in [0_u64, 1, 42, 0xdead_beef_cafe_babe] {
+            let mut r1 = XorShift64::new(seed);
+            let mut r2 = XorShift64::new(seed);
+            for _ in 0..32 {
+                assert_eq!(r1.next_u64(), r2.next_u64());
+            }
+        }
+    }
+
+    // spec: RTE-079
+    #[test]
+    fn p2c_select_excluding_over_64_concurrent_eligibility_never_returns_excluded() {
+        let t0 = Now::from_ms(0);
+        let now = Now::from_ms(5_000);
+        let slots: Vec<Arc<TelemetrySlot>> = (0..100).map(|_| make_slot(16)).collect();
+        for s in &slots {
+            for _ in 0..20 {
+                s.record(Outcome::Failure, Duration::from_millis(10), t0);
+            }
+        }
+
+        let toggler_slots: Vec<Arc<TelemetrySlot>> =
+            slots[50..100].iter().map(Arc::clone).collect();
+        let stop = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let stop_bg = std::sync::Arc::clone(&stop);
+
+        let toggler = std::thread::spawn(move || {
+            while !stop_bg.load(std::sync::atomic::Ordering::Relaxed) {
+                for s in &toggler_slots {
+                    // Use `t0` (< open_until = 5,000) so `s` stays `Open(open_until = 5_000)` while
+                    // toggling `not_serving` between `true` (49 eligible at `now`) and `false` (99 > 64 eligible at `now`).
+                    s.apply_health(HealthStatus::NotServing, None, t0);
+                }
+                for s in &toggler_slots {
+                    s.apply_health(HealthStatus::Serving, None, t0);
+                }
+            }
+        });
+
+        let cands: Vec<Candidate<'_>> = slots
+            .iter()
+            .enumerate()
+            .map(|(i, s)| Candidate {
+                uid: uid_with_byte(i as u8),
+                slot: s,
+            })
+            .collect();
+
+        let mut rng = XorShift64::new(0x55aa_1234_9876_fedc);
+        for _ in 0..200_000 {
+            let picked = select_excluding(&cands, &[0], now, &mut rng);
+            let idx = picked.expect("members 1..50 stay eligible");
+            assert_ne!(idx, 0, "excluded index 0 must never be returned");
+            assert!(idx < 100);
+        }
+
+        stop.store(true, std::sync::atomic::Ordering::Relaxed);
+        toggler.join().expect("toggler thread clean");
     }
 }

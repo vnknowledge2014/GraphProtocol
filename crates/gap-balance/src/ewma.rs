@@ -52,8 +52,9 @@ fn classify_tick(stored_t: u32, now_q: u32, half_life_ms: f32) -> TickRelation {
 
 #[inline]
 fn pack(value: f32, tick_q: u32) -> u64 {
-    // Normalize `-0.0` to `+0.0` so non-negative finite floats always have sign bit 0,
-    // guaranteeing `pack(value, tick_q) != DecayedEwma::UNSET` (`u64::MAX`) for all `tick_q`.
+    // Normalize `-0.0` to `+0.0` so zero has a single canonical bit pattern (`0x0000_0000`).
+    // Finite `f32` values never set all exponent bits (`0xFF`), so `to_bits() != u32::MAX` and
+    // `pack(value, tick_q) != DecayedEwma::UNSET` (`u64::MAX`) for all `tick_q`.
     let canonical = if value == 0.0 { 0.0_f32 } else { value };
     (u64::from(canonical.to_bits()) << 32) | u64::from(tick_q)
 }
@@ -158,8 +159,8 @@ impl DecayedEwma {
                     TickRelation::StaleOrInvalidAhead => pack(sample, now_q),
                     TickRelation::FreshAdvance { age_ticks } => {
                         let dt_ms = (age_ticks as f32) * TICK_MS;
-                        let alpha = (1.0 - (-dt_ms * core::f32::consts::LN_2 / half_life_ms).exp())
-                            .clamp(0.0, 1.0);
+                        let x = dt_ms * core::f32::consts::LN_2 / half_life_ms;
+                        let alpha = (-(-x).exp_m1()).clamp(0.0, 1.0);
                         let low = value.min(sample);
                         let high = value.max(sample);
                         let blended = (value + alpha * (sample - value)).clamp(low, high);
@@ -224,11 +225,39 @@ mod tests {
         assert!(ewma.update(42.5, 100, 10_000.0));
         assert_eq!(ewma.read(100, 10_000.0), Some(42.5));
 
-        // Verify `-0.0` at `u32::MAX` normalizes and never collides with `UNSET`.
+        // Verify `-0.0` normalizes to canonical `+0.0` and `u32::MAX` tick never collides with `UNSET`.
         let zero_max = DecayedEwma::new();
         assert!(zero_max.update(-0.0, u32::MAX, 10_000.0));
         assert_ne!(zero_max.raw(), DecayedEwma::UNSET);
+        assert_eq!(zero_max.raw() >> 32, 0);
         assert_eq!(zero_max.read(u32::MAX, 10_000.0), Some(0.0));
+    }
+
+    // spec: RTE-070, RTE-077
+    #[test]
+    fn ewma_small_step_exp_m1_precision() {
+        let ewma = DecayedEwma::new();
+        assert!(ewma.update(0.0, 0, 500_000.0));
+        assert!(ewma.update(1_000.0, 1, 500_000.0));
+
+        let got = f64::from(ewma.read(1, 500_000.0).expect("value must be known"));
+        let expected = 1_000.0_f64 * (1.0 - 2.0_f64.powf(-4.0 / 500_000.0));
+        let rel_err = (got - expected).abs() / expected;
+        assert!(
+            rel_err <= 1e-4,
+            "expected {expected} within relative 1e-4, got {got} (rel_err={rel_err})"
+        );
+
+        // Exact 1 and 2 half-life steps with 500,000 ms half-life stay exact.
+        let hl1 = DecayedEwma::new();
+        assert!(hl1.update(0.0, 0, 500_000.0));
+        assert!(hl1.update(1_000.0, 125_000, 500_000.0));
+        assert_eq!(hl1.read(125_000, 500_000.0), Some(500.0));
+
+        let hl2 = DecayedEwma::new();
+        assert!(hl2.update(0.0, 0, 500_000.0));
+        assert!(hl2.update(1_000.0, 250_000, 500_000.0));
+        assert_eq!(hl2.read(250_000, 500_000.0), Some(750.0));
     }
 
     // spec: RTE-070, RTE-077

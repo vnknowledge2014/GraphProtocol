@@ -42,6 +42,13 @@ const PROBE_MAJORITY: u8 = 2;
 /// `retry_after` returned when `HalfOpen` has all probe slots occupied (`1 s`, `RTE-085`).
 const HALF_OPEN_RETRY_AFTER: Duration = Duration::from_secs(1);
 
+/// `retry_after` returned when `NotServing` holds the breaker `Open` past `open_until` (`1 s`, `RTE-085`).
+const NOT_SERVING_HOLD_RETRY_AFTER: Duration = Duration::from_millis(1_000);
+
+/// Maximum out-of-order lag in `30 s` cycles (`2` cycles = `60 s`) treated as behind a newer
+/// concurrent bucket write rather than a wrapped newer epoch (`RTE-084`).
+const MAX_OUT_OF_ORDER_CYCLES: u64 = 2;
+
 /// Flapping window duration (`10 min`, `RTE-082`, `RTE-085`).
 const FLAPPING_WINDOW_MS: u64 = 600_000;
 
@@ -144,6 +151,21 @@ fn unpack_bucket(word: u64) -> Option<UnpackedBucket> {
         fail: (word >> 12) & BUCKET_COUNTER_MASK,
         slow: word & BUCKET_COUNTER_MASK,
     })
+}
+
+/// Returns `true` iff a bucket at `slot_idx` (`0..10`) carrying 22-bit `bucket_cycle_tag` lies
+/// within the active 10-epoch window `[cur_epoch.saturating_sub(9), cur_epoch]` (`RTE-084`).
+#[inline]
+fn is_bucket_in_window(slot_idx: usize, bucket_cycle_tag: u64, cur_epoch: u64) -> bool {
+    let cur_full_cycle = cur_epoch / (NUM_BUCKETS as u64);
+    let cur_idx = (cur_epoch % (NUM_BUCKETS as u64)) as usize;
+    let cur_cycle_tag = cur_full_cycle & BUCKET_CYCLE_MASK;
+    let cycle_dist = cur_cycle_tag.wrapping_sub(bucket_cycle_tag) & BUCKET_CYCLE_MASK;
+    if slot_idx <= cur_idx {
+        cycle_dist == 0
+    } else {
+        cur_full_cycle > 0 && cycle_dist == 1
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -580,9 +602,12 @@ impl Breaker {
                         continue;
                     }
                     let rem_ms = cur.timestamp_ms.saturating_sub(now.ms);
-                    return Admission::Rejected {
-                        retry_after: Duration::from_millis(rem_ms),
+                    let retry_after = if rem_ms == 0 {
+                        NOT_SERVING_HOLD_RETRY_AFTER
+                    } else {
+                        Duration::from_millis(rem_ms)
                     };
+                    return Admission::Rejected { retry_after };
                 }
                 BreakerState::HalfOpen => {
                     let used = cur
@@ -674,14 +699,14 @@ impl Breaker {
 
         let epoch = now.ms / BUCKET_MS;
         let idx = (epoch % (NUM_BUCKETS as u64)) as usize;
-        let cycle = epoch / (NUM_BUCKETS as u64);
+        let cycle = (epoch / (NUM_BUCKETS as u64)) & BUCKET_CYCLE_MASK;
 
         let (inc_ok, inc_fail) = match outcome {
             Outcome::Ok | Outcome::ClientError => (1_u64, 0_u64),
             Outcome::Failure => (0_u64, 1_u64),
         };
-        let is_slow =
-            latency.as_millis().saturating_mul(5) > u128::from(self.inner.default_timeout_ms) * 4;
+        let is_slow = latency.as_nanos().saturating_mul(5)
+            > u128::from(self.inner.default_timeout_ms) * 4_000_000;
         let inc_slow = u64::from(is_slow);
 
         let bucket = &self.inner.buckets[idx];
@@ -696,11 +721,11 @@ impl Breaker {
 
             let next_b = match unpack_bucket(cur_b) {
                 Some(b) if b.closed_gen == my_gen => {
-                    let stored_epoch = b.cycle * (NUM_BUCKETS as u64) + (idx as u64);
-                    if stored_epoch > epoch {
+                    let cycle_dist = cycle.wrapping_sub(b.cycle) & BUCKET_CYCLE_MASK;
+                    if cycle_dist > BUCKET_CYCLE_MASK - MAX_OUT_OF_ORDER_CYCLES {
                         return;
                     }
-                    if stored_epoch == epoch {
+                    if cycle_dist == 0 {
                         let (mut ok, mut fail, mut slow) = (b.ok, b.fail, b.slow);
                         if ok >= BUCKET_COUNTER_CAP
                             || fail >= BUCKET_COUNTER_CAP
@@ -748,8 +773,7 @@ impl Breaker {
             }
         }
 
-        // Sum buckets belonging to `my_gen` within `[epoch.saturating_sub(9), epoch]`.
-        let min_epoch = epoch.saturating_sub((NUM_BUCKETS as u64) - 1);
+        // Sum buckets belonging to `my_gen` within `[epoch.saturating_sub(9), epoch]` modulo 2^22 cycles.
         let mut total_ok = 0_u64;
         let mut total_fail = 0_u64;
         let mut total_slow = 0_u64;
@@ -757,13 +781,11 @@ impl Breaker {
             // Acquire observes all committed increments before evaluating the trip threshold.
             if let Some(b) = unpack_bucket(b_atom.load(Ordering::Acquire))
                 && b.closed_gen == my_gen
+                && is_bucket_in_window(slot_idx, b.cycle, epoch)
             {
-                let b_epoch = b.cycle * (NUM_BUCKETS as u64) + (slot_idx as u64);
-                if b_epoch >= min_epoch && b_epoch <= epoch {
-                    total_ok += b.ok;
-                    total_fail += b.fail;
-                    total_slow += b.slow;
-                }
+                total_ok += b.ok;
+                total_fail += b.fail;
+                total_slow += b.slow;
             }
         }
 
@@ -946,17 +968,14 @@ impl Breaker {
         // Acquire reads the current generation so live buckets of the active generation are preserved.
         let s = unpack_state(self.inner.state_word.load(Ordering::Acquire));
         let cur_epoch = now.ms / BUCKET_MS;
-        let min_epoch = cur_epoch.saturating_sub((NUM_BUCKETS as u64) - 1);
 
         for (slot_idx, bucket) in self.inner.buckets.iter().enumerate() {
             // Acquire observes bucket state before attempting stale cleanup.
             let mut cur = bucket.load(Ordering::Acquire);
             while let Some(b) = unpack_bucket(cur) {
-                let b_epoch = b.cycle * (NUM_BUCKETS as u64) + (slot_idx as u64);
                 let is_live = s.state == BreakerState::Closed
                     && b.closed_gen == s.closed_gen
-                    && b_epoch >= min_epoch
-                    && b_epoch <= cur_epoch;
+                    && is_bucket_in_window(slot_idx, b.cycle, cur_epoch);
                 if is_live {
                     break;
                 }
@@ -984,7 +1003,6 @@ impl Breaker {
             return (0, 0, 0);
         }
         let epoch = now.ms / BUCKET_MS;
-        let min_epoch = epoch.saturating_sub((NUM_BUCKETS as u64) - 1);
         let mut ok = 0;
         let mut fail = 0;
         let mut slow = 0;
@@ -992,13 +1010,11 @@ impl Breaker {
             // Acquire pairs with AcqRel bucket updates.
             if let Some(b) = unpack_bucket(bucket.load(Ordering::Acquire))
                 && b.closed_gen == s.closed_gen
+                && is_bucket_in_window(slot_idx, b.cycle, epoch)
             {
-                let b_epoch = b.cycle * (NUM_BUCKETS as u64) + (slot_idx as u64);
-                if b_epoch >= min_epoch && b_epoch <= epoch {
-                    ok += b.ok;
-                    fail += b.fail;
-                    slow += b.slow;
-                }
+                ok += b.ok;
+                fail += b.fail;
+                slow += b.slow;
             }
         }
         (ok, fail, slow)
@@ -1891,7 +1907,8 @@ mod tests {
             expected_transitions: 6,
         });
 
-        // 31. Health = NotServing from Closed opens immediately and withholds Open -> HalfOpen past 5,000 ms.
+        // 31. Health = NotServing from Closed opens immediately and withholds Open -> HalfOpen past 5,000 ms,
+        // returning retry_after = 1,000 ms once the open timer has elapsed (`RTE-085`).
         cases.push(FsmCase {
             name: "31_not_serving_opens_and_withholds_half_open",
             timeout_ms: 1_000,
@@ -1901,7 +1918,7 @@ mod tests {
             }],
             check_ms: 20_000,
             expected_state: BreakerState::Open,
-            expected_admit: ExpectedAdmit::RejectedMs(0),
+            expected_admit: ExpectedAdmit::RejectedMs(1_000),
             expected_flapping: false,
             expected_transitions: 1,
         });
@@ -2143,7 +2160,7 @@ mod tests {
     struct RefEvent {
         ms: u64,
         outcome: Outcome,
-        latency_ms: u64,
+        latency: Duration,
     }
 
     #[derive(Debug, Clone)]
@@ -2208,7 +2225,7 @@ mod tests {
             }
         }
 
-        fn record_call(&mut self, outcome: Outcome, latency_ms: u64, ms: u64) {
+        fn record_call(&mut self, outcome: Outcome, latency: Duration, ms: u64) {
             self.advance_timer(ms);
             if self.state != BreakerState::Closed {
                 return;
@@ -2216,7 +2233,7 @@ mod tests {
             self.events.push(RefEvent {
                 ms,
                 outcome,
-                latency_ms,
+                latency,
             });
             let cur_epoch = ms / 3_000;
             let min_epoch = cur_epoch.saturating_sub(9);
@@ -2230,7 +2247,9 @@ mod tests {
                         Outcome::Ok | Outcome::ClientError => ok += 1,
                         Outcome::Failure => fail += 1,
                     }
-                    if u128::from(ev.latency_ms) * 5 > u128::from(self.timeout_ms) * 4 {
+                    if ev.latency.as_nanos().saturating_mul(5)
+                        > u128::from(self.timeout_ms) * 4_000_000
+                    {
                         slow += 1;
                     }
                 }
@@ -2250,7 +2269,13 @@ mod tests {
             match self.state {
                 BreakerState::Closed => RefAdmit::Allowed,
                 BreakerState::Open => {
-                    RefAdmit::Rejected(Duration::from_millis(self.open_until_ms.saturating_sub(ms)))
+                    let rem_ms = self.open_until_ms.saturating_sub(ms);
+                    let wait = if rem_ms == 0 {
+                        Duration::from_millis(1_000)
+                    } else {
+                        Duration::from_millis(rem_ms)
+                    };
+                    RefAdmit::Rejected(wait)
                 }
                 BreakerState::HalfOpen => {
                     if self.in_flight_probes + self.ok_probes + self.fail_probes >= 3 {
@@ -2337,7 +2362,7 @@ mod tests {
         RecordBatch {
             n: u8,
             outcome: Outcome,
-            latency_ms: u64,
+            latency_us: u64,
         },
         Admit,
         ResolvePermit {
@@ -2378,8 +2403,20 @@ mod tests {
                 59_998_u64..=60_002,
                 299_998_u64..=300_002,
             ].prop_map(DiffOp::Advance),
-            4 => (1_u8..=8, arb_outcome(), prop_oneof![50_u64..=799, 800_u64..=802, 850_u64..=1_500])
-                .prop_map(|(n, outcome, latency_ms)| DiffOp::RecordBatch { n, outcome, latency_ms }),
+            4 => (
+                1_u8..=8,
+                arb_outcome(),
+                prop_oneof![
+                    50_000_u64..=799_000,
+                    799_999_u64..=801_000,
+                    850_000_u64..=1_500_000,
+                ],
+            )
+                .prop_map(|(n, outcome, latency_us)| DiffOp::RecordBatch {
+                    n,
+                    outcome,
+                    latency_us,
+                }),
             3 => Just(DiffOp::Admit),
             2 => (0_usize..8, arb_outcome(), 10_u64..=1_200)
                 .prop_map(|(idx, outcome, latency_ms)| DiffOp::ResolvePermit { idx, outcome, latency_ms }),
@@ -2417,13 +2454,13 @@ mod tests {
                     DiffOp::RecordBatch {
                         n,
                         outcome,
-                        latency_ms,
+                        latency_us,
                     } => {
                         let now = Now::from_ms(ms);
-                        let dur = Duration::from_millis(*latency_ms);
+                        let dur = Duration::from_micros(*latency_us);
                         for _ in 0..*n {
                             real.record_call(*outcome, dur, now);
-                            model.record_call(*outcome, *latency_ms, ms);
+                            model.record_call(*outcome, dur, ms);
                         }
                     }
                     DiffOp::Admit => {
@@ -2523,5 +2560,150 @@ mod tests {
             b.record_call(Outcome::Failure, Duration::from_millis(5), now);
         }
         assert_eq!(b.state(now), BreakerState::Open);
+    }
+
+    // spec: RTE-080, RTE-084
+    #[test]
+    fn breaker_slow_threshold_exact_submillisecond_duration() {
+        let now = Now::from_ms(0);
+        for timeout_ms in [100_u32, 1_000_u32, 30_000_u32] {
+            let exact_us = u64::from(timeout_ms) * 800; // 0.8 * timeout_ms in microseconds
+            let cases: [(Duration, u64); 5] = [
+                (Duration::from_micros(exact_us - 1), 0),
+                (Duration::from_micros(exact_us), 0),
+                (Duration::from_micros(exact_us + 1), 1),
+                (Duration::from_micros(exact_us + 500), 1),
+                (Duration::from_micros(exact_us + 1_000), 1),
+            ];
+            for (dur, expected_slow) in cases {
+                let b = Breaker::new(timeout_ms, Arc::from("subms-slow"));
+                b.record_call(Outcome::Ok, dur, now);
+                assert_eq!(
+                    b.window_totals(now),
+                    (1, 0, expected_slow),
+                    "timeout_ms={timeout_ms} dur={dur:?}"
+                );
+            }
+        }
+    }
+
+    // spec: RTE-080, RTE-084
+    #[test]
+    fn breaker_bucket_cycle_wrap_after_2_pow_22_cycles() {
+        const WRAP_MS: u64 = (1_u64 << 22) * 30_000;
+        let bases = [
+            0_u64,
+            WRAP_MS - 100,
+            WRAP_MS,
+            WRAP_MS + 100,
+            2 * WRAP_MS,
+            2 * WRAP_MS + 5_000,
+        ];
+
+        for base in bases {
+            let b = Breaker::new(1_000, Arc::from("cycle-wrap"));
+            let before = Now::from_ms(base.saturating_sub(3_000));
+            let after = Now::from_ms(base + 6_000);
+
+            for _ in 0..10 {
+                b.record_call(Outcome::Failure, Duration::from_millis(10), before);
+            }
+            assert_eq!(b.state(before), BreakerState::Closed);
+            assert_eq!(b.window_totals(before), (0, 10, 0));
+
+            for _ in 0..9 {
+                b.record_call(Outcome::Failure, Duration::from_millis(10), after);
+            }
+            assert_eq!(b.state(after), BreakerState::Closed);
+            assert_eq!(
+                b.window_totals(after),
+                (0, 19, 0),
+                "base={base}: expected 19 failures across wrap"
+            );
+
+            b.record_call(Outcome::Failure, Duration::from_millis(10), after);
+            assert_eq!(
+                b.state(after),
+                BreakerState::Open,
+                "base={base}: 20th failure straddling wrap must trip Open"
+            );
+        }
+
+        // Verify window_totals sums across the wrap and drops buckets once > 30 s old.
+        let b_win = Breaker::new(1_000, Arc::from("wrap-aging"));
+        let pre_wrap = Now::from_ms(WRAP_MS - 3_000); // epoch = 2^22 * 10 - 1 (bucket 9, cycle 2^22 - 1)
+        let post_wrap = Now::from_ms(WRAP_MS + 6_000); // epoch = 2^22 * 10 + 2 (bucket 2, cycle 0)
+
+        for _ in 0..4 {
+            b_win.record_call(Outcome::Ok, Duration::from_millis(900), pre_wrap);
+        }
+        for _ in 0..3 {
+            b_win.record_call(Outcome::Failure, Duration::from_millis(10), pre_wrap);
+        }
+        for _ in 0..5 {
+            b_win.record_call(Outcome::Ok, Duration::from_millis(10), post_wrap);
+        }
+        for _ in 0..2 {
+            b_win.record_call(Outcome::Failure, Duration::from_millis(10), post_wrap);
+        }
+
+        assert_eq!(b_win.window_totals(post_wrap), (9, 5, 4));
+        // 27 s after `pre_wrap` (WRAP_MS + 24,000, 9 epochs later): `pre_wrap` is still inside window.
+        assert_eq!(
+            b_win.window_totals(Now::from_ms(WRAP_MS + 24_000)),
+            (9, 5, 4)
+        );
+        // 30 s after `pre_wrap` (WRAP_MS + 27,000, 10 epochs later): `pre_wrap` aged out; only `post_wrap` counts.
+        assert_eq!(
+            b_win.window_totals(Now::from_ms(WRAP_MS + 27_000)),
+            (5, 2, 0)
+        );
+        // 30 s after `post_wrap` (WRAP_MS + 36,000): both aged out.
+        assert_eq!(
+            b_win.window_totals(Now::from_ms(WRAP_MS + 36_000)),
+            (0, 0, 0)
+        );
+    }
+
+    // spec: RTE-083, RTE-085
+    #[test]
+    fn breaker_not_serving_hold_past_open_timer_rejects_with_1000ms() {
+        let b = Breaker::new(1_000, Arc::from("hold-branch"));
+        let t0 = Now::from_ms(0);
+        for _ in 0..20 {
+            b.record_call(Outcome::Failure, Duration::from_millis(10), t0);
+        }
+        assert_eq!(b.state(t0), BreakerState::Open);
+
+        b.on_health(HealthStatus::NotServing, t0);
+
+        // Before timer (open_until = 5,000 ms), retry_after is the exact remaining open time.
+        match b.admit(Now::from_ms(1_800)) {
+            Admission::Rejected { retry_after } => {
+                assert_eq!(retry_after, Duration::from_millis(3_200));
+            }
+            other => panic!("expected Rejected(3_200 ms), got {other:?}"),
+        }
+
+        // At open_until (5,000 ms) and open_until + 10,000 (15,000 ms), NotServing hold keeps state Open
+        // and rejects with 1,000 ms (never 0).
+        for check_ms in [5_000_u64, 15_000_u64] {
+            let t = Now::from_ms(check_ms);
+            assert_eq!(b.state(t), BreakerState::Open);
+            match b.admit(t) {
+                Admission::Rejected { retry_after } => {
+                    assert_eq!(retry_after, Duration::from_millis(1_000));
+                }
+                other => panic!("expected Rejected(1_000 ms) at {check_ms}, got {other:?}"),
+            }
+        }
+
+        // Once Serving arrives, admit transitions Open -> HalfOpen and issues a ProbePermit.
+        let t_recover = Now::from_ms(15_000);
+        b.on_health(HealthStatus::Serving, t_recover);
+        match b.admit(t_recover) {
+            Admission::Probe(permit) => drop(permit),
+            other => panic!("expected Probe after Serving, got {other:?}"),
+        }
     }
 }
