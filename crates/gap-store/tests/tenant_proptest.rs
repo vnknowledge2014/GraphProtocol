@@ -8,11 +8,11 @@ use std::num::NonZeroUsize;
 use std::sync::Arc;
 use std::time::Duration;
 
-use gap_core::clock::{Clock, ManualClock};
+use gap_core::clock::{Clock, ManualClock, Timestamp};
 use gap_store::{
     Caller, ContextMaintenance, ContextStore, Direction, Durability, EdgeId, EdgeResolution,
     EdgeType, GraphCounts, NewEdge, NewNode, NodeId, NodeType, Provenance, ScopeSpec, SqliteConfig,
-    SqliteContextStore, TaskId, TenantId, TraverseQuery, TraverseStrategy,
+    SqliteContextStore, StoreError, TaskId, TenantId, TraverseQuery, TraverseStrategy,
 };
 use proptest::prelude::*;
 use serde_json::Map as JsonMap;
@@ -120,6 +120,7 @@ struct ModelEdge {
 #[derive(Debug, Default)]
 struct IsolatedTenantModel {
     nodes: BTreeMap<String, ModelNode>,
+    tombstoned: BTreeMap<String, ModelNode>,
     edges: BTreeMap<(String, String), ModelEdge>,
 }
 
@@ -143,6 +144,13 @@ impl IsolatedTenantModel {
         }
     }
 
+    fn can_delete_node(&self, id: &str, caller_idx: u8) -> bool {
+        self.nodes
+            .get(id)
+            .or_else(|| self.tombstoned.get(id))
+            .is_some_and(|n| self.is_visible(n, caller_idx))
+    }
+
     fn upsert_node(&mut self, node: ModelNode) {
         if node.scope == ModelScope::Global
             && let Some(existing) = self.nodes.get(&node.id)
@@ -154,6 +162,7 @@ impl IsolatedTenantModel {
             // new version and preserves the existing row verbatim.
             return;
         }
+        self.tombstoned.remove(&node.id);
         self.nodes.insert(node.id.clone(), node);
     }
 
@@ -162,10 +171,17 @@ impl IsolatedTenantModel {
             .insert((edge.from.clone(), edge.to.clone()), edge);
     }
 
-    fn remove_node_and_incident_edges(&mut self, id: &str) {
-        if self.nodes.remove(id).is_some() {
+    fn tombstone_node(&mut self, id: &str) {
+        if let Some(removed) = self.nodes.remove(id) {
             self.edges.retain(|(f, t), _| f != id && t != id);
+            self.tombstoned.insert(id.to_owned(), removed);
         }
+    }
+
+    fn hard_delete_node(&mut self, id: &str) {
+        self.nodes.remove(id);
+        self.tombstoned.remove(id);
+        self.edges.retain(|(f, t), _| f != id && t != id);
     }
 
     fn tombstone_task(&mut self, task_idx: u8) {
@@ -176,7 +192,7 @@ impl IsolatedTenantModel {
             .map(|n| n.id.clone())
             .collect();
         for id in doomed {
-            self.remove_node_and_incident_edges(&id);
+            self.tombstone_node(&id);
         }
     }
 
@@ -489,22 +505,22 @@ proptest! {
                     let existed = models[t_idx].visible_node(id.as_str(), caller_idx).is_some();
                     let res = store.tombstone_node(scope, &caller, &id);
                     if existed {
-                        prop_assert!(res.is_ok());
-                        models[t_idx].remove_node_and_incident_edges(id.as_str());
+                        prop_assert_eq!(res, Ok(()));
+                        models[t_idx].tombstone_node(id.as_str());
                     } else {
-                        prop_assert!(res.is_err());
+                        prop_assert_eq!(res, Err(StoreError::NotFound));
                     }
                 }
                 FuzzOp::DeleteGlobal { slot, caller_idx } => {
                     let caller = build_caller(caller_idx, &tasks);
                     let id = slot_id(slot);
-                    let existed = models[t_idx].visible_node(id.as_str(), caller_idx).is_some();
+                    let deletable = models[t_idx].can_delete_node(id.as_str(), caller_idx);
                     let res = store.delete_node(scope, &caller, &id);
-                    if existed {
-                        prop_assert!(res.is_ok());
-                        models[t_idx].remove_node_and_incident_edges(id.as_str());
+                    if deletable {
+                        prop_assert_eq!(res, Ok(()));
+                        models[t_idx].hard_delete_node(id.as_str());
                     } else {
-                        prop_assert!(res.is_err());
+                        prop_assert_eq!(res, Err(StoreError::NotFound));
                     }
                 }
                 FuzzOp::TombstoneTask { task_idx } => {
@@ -602,4 +618,151 @@ proptest! {
             }
         }
     }
+}
+
+// spec: ING-062, ING-065, ING-066, INV-09
+#[test]
+fn ing_066_delete_after_tombstone_purges_as_of_history_and_second_delete_is_not_found() {
+    let dir = TempDir::new().expect("tempdir");
+    let mut cfg = SqliteConfig::new(dir.path().join("r1_delete_after_tombstone.db"));
+    cfg.durability = Durability::Off;
+    cfg.reader_pool_size = NonZeroUsize::new(1).expect("nonzero");
+
+    let clock = Arc::new(ManualClock::new(1_700_000_000_000));
+    let store = SqliteContextStore::open(cfg, clock.clone()).expect("open");
+
+    let alpha = TenantId::new("tenant-alpha").expect("t0").scope();
+    let bravo = TenantId::new("tenant-bravo").expect("t1").scope();
+    let alice = Caller::new("alice");
+
+    // Deleting a never-written node id must return `NotFound`.
+    let never_written = slot_id(5);
+    assert_eq!(
+        store.delete_node(&alpha, &alice, &never_written),
+        Err(StoreError::NotFound)
+    );
+
+    // Exact minimal sequence from R-1: PutGlobal{slot 4}, TombstoneGlobal{slot 4}, DeleteGlobal{slot 4}.
+    let g4 = slot_id(4);
+    store
+        .put_node(
+            &alpha,
+            &alice,
+            NewNode {
+                id: Some(g4.clone()),
+                node_type: NodeType::new("Item").expect("type"),
+                label: "Global s4 r0".to_owned(),
+                summary: Some("history payload".to_owned()),
+                props: JsonMap::new(),
+                scope: ScopeSpec::Global,
+                provenance: Provenance::new("r1"),
+            },
+        )
+        .expect("put g4");
+
+    let before_tombstone = Timestamp::from_unix_millis(1_700_000_005_000).expect("ts");
+    clock.advance(Duration::from_secs(10));
+    assert_eq!(store.tombstone_node(&alpha, &alice, &g4), Ok(()));
+
+    // Before hard delete: current read is `None`, historical `as_of` read still sees `g4`.
+    assert!(
+        store
+            .get_node(&alpha, &alice, &g4, None)
+            .expect("get current")
+            .is_none()
+    );
+    let historical = store
+        .get_node(&alpha, &alice, &g4, Some(before_tombstone))
+        .expect("get as_of before delete")
+        .expect("historical version exists before delete_node");
+    assert_eq!(historical.label, "Global s4 r0");
+
+    // Another tenant deleting `g4` must fail with `NotFound` and leave `alpha`'s history intact.
+    assert_eq!(
+        store.delete_node(&bravo, &alice, &g4),
+        Err(StoreError::NotFound)
+    );
+    assert!(
+        store
+            .get_node(&alpha, &alice, &g4, Some(before_tombstone))
+            .expect("get as_of after cross-tenant delete")
+            .is_some()
+    );
+
+    // Hard delete after tombstone purges historical versions and returns `Ok(())`.
+    clock.advance(Duration::from_secs(10));
+    assert_eq!(store.delete_node(&alpha, &alice, &g4), Ok(()));
+    assert!(
+        store
+            .get_node(&alpha, &alice, &g4, Some(before_tombstone))
+            .expect("get as_of after delete")
+            .is_none()
+    );
+
+    // A second delete on the already-purged id must return `NotFound`.
+    assert_eq!(
+        store.delete_node(&alpha, &alice, &g4),
+        Err(StoreError::NotFound)
+    );
+}
+
+// spec: ING-062, ING-065, ING-066
+#[test]
+fn ing_065_delete_after_tombstone_enforces_caller_visibility_before_purging_history() {
+    let dir = TempDir::new().expect("tempdir");
+    let mut cfg = SqliteConfig::new(dir.path().join("r1_private_delete_after_tombstone.db"));
+    cfg.durability = Durability::Off;
+    cfg.reader_pool_size = NonZeroUsize::new(1).expect("nonzero");
+
+    let clock = Arc::new(ManualClock::new(1_700_000_000_000));
+    let store = SqliteContextStore::open(cfg, clock.clone()).expect("open");
+
+    let alpha = TenantId::new("tenant-alpha").expect("t0").scope();
+    let alice = Caller::new("alice");
+    let bob = Caller::new("bob");
+
+    let secret_id = store
+        .put_node(
+            &alpha,
+            &alice,
+            NewNode {
+                id: None,
+                node_type: NodeType::new("Secret").expect("type"),
+                label: "Alice private note".to_owned(),
+                summary: None,
+                props: JsonMap::new(),
+                scope: ScopeSpec::Private,
+                provenance: Provenance::new("r1"),
+            },
+        )
+        .expect("put private");
+
+    let before_tombstone = Timestamp::from_unix_millis(1_700_000_005_000).expect("ts");
+    clock.advance(Duration::from_secs(10));
+    assert_eq!(store.tombstone_node(&alpha, &alice, &secret_id), Ok(()));
+
+    // Bob cannot see Alice's tombstoned node and cannot hard-delete its history.
+    assert_eq!(
+        store.delete_node(&alpha, &bob, &secret_id),
+        Err(StoreError::NotFound)
+    );
+    assert!(
+        store
+            .get_node(&alpha, &alice, &secret_id, Some(before_tombstone))
+            .expect("alice still sees historical private node")
+            .is_some()
+    );
+
+    // Alice (owner) can hard-delete the tombstoned history; a second delete returns `NotFound`.
+    assert_eq!(store.delete_node(&alpha, &alice, &secret_id), Ok(()));
+    assert!(
+        store
+            .get_node(&alpha, &alice, &secret_id, Some(before_tombstone))
+            .expect("alice history purged")
+            .is_none()
+    );
+    assert_eq!(
+        store.delete_node(&alpha, &alice, &secret_id),
+        Err(StoreError::NotFound)
+    );
 }
