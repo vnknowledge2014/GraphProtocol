@@ -218,11 +218,12 @@ role = "coder"
 size = "L"
 depends_on = ["WP-M0-06", "WP-M0-08"]
 owns = ["crates/gap-ngc-sdk/**"]
-spec_refs = ["NGC-001", "NGC-002", "NGC-003", "NGC-020", "NGC-025", "NGC-026", "NGC-090"]
+spec_refs = ["NGC-001", "NGC-002", "NGC-003", "NGC-020", "NGC-025", "NGC-026", "NGC-060", "NGC-061", "NGC-062", "NGC-063", "NGC-071", "NGC-090", "NGC-093", "NGC-094", "NGC-095", "NGC-096"]
 deliverables = [
   "async Connector trait (Describe, Query stream, Mutate, Subscribe, Task*, Sketch, Health, Explain) with default UNIMPLEMENTED for optional RPCs",
   "gRPC server+client adapters (tonic 0.14), HTTP/JSON+NDJSON mapping (axum), stdio JSON-RPC adapter; deadline/cancellation helpers",
   "foreach helper: dedupe keys, chunk, bounded concurrency, order/independence preserved, honest upstream_calls accounting",
+  "Follow work/context/m1-03-brief.md (binding): shared server core (NGC-093), protobuf JSON mapping via prost-reflect serde, NgcErrorInfo <-> NgcError/Status conversions (NGC-063), socket-free transport-matrix tests, mock and in-memory test transport; no TLS in this work package",
 ]
 acceptance = ["cargo nextest run -p gap-ngc-sdk", "cargo clippy -p gap-ngc-sdk --all-targets -- -D warnings"]
 

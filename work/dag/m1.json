@@ -21,10 +21,10 @@
     },
     {
       "id": 3,
-      "title": "WP-M1-03 gap-ngc-sdk: Connector trait, gRPC/HTTP/stdio servers, foreach helper, mock. Deliverables: async Connector trait (Describe, Query stream, Mutate, Subscribe, Task*, Sketch, Health, Explain) with default UNIMPLEMENTED for optional RPCs; gRPC server+client adapters (tonic 0.14), HTTP/JSON+NDJSON mapping (axum), stdio JSON-RPC adapter; deadline/cancellation helpers; foreach helper: dedupe keys, chunk, bounded concurrency, order/independence preserved, honest upstream_calls accounting. Acceptance (must pass): cargo nextest run -p gap-ngc-sdk && cargo clippy -p gap-ngc-sdk --all-targets -- -D warnings",
+      "title": "WP-M1-03 gap-ngc-sdk: Connector trait, gRPC/HTTP/stdio servers, foreach helper, mock. Deliverables: async Connector trait (Describe, Query stream, Mutate, Subscribe, Task*, Sketch, Health, Explain) with default UNIMPLEMENTED for optional RPCs; gRPC server+client adapters (tonic 0.14), HTTP/JSON+NDJSON mapping (axum), stdio JSON-RPC adapter; deadline/cancellation helpers; foreach helper: dedupe keys, chunk, bounded concurrency, order/independence preserved, honest upstream_calls accounting; Follow work/context/m1-03-brief.md (binding): shared server core (NGC-093), protobuf JSON mapping via prost-reflect serde, NgcErrorInfo <-> NgcError/Status conversions (NGC-063), socket-free transport-matrix tests, mock and in-memory test transport; no TLS in this work package. Acceptance (must pass): cargo nextest run -p gap-ngc-sdk && cargo clippy -p gap-ngc-sdk --all-targets -- -D warnings",
       "role": "coder",
       "depends_on": [],
-      "system_prompt": "Read AGENTS.md and docs/AGENT-GUIDE.md first. Work ONLY inside these paths: crates/gap-ngc-sdk/**. Spec refs: NGC-001, NGC-002, NGC-003, NGC-020, NGC-025, NGC-026, NGC-090. Expand this work package into 2-5 minute steps before coding."
+      "system_prompt": "Read AGENTS.md and docs/AGENT-GUIDE.md first. Work ONLY inside these paths: crates/gap-ngc-sdk/**. Spec refs: NGC-001, NGC-002, NGC-003, NGC-020, NGC-025, NGC-026, NGC-060, NGC-061, NGC-062, NGC-063, NGC-071, NGC-090, NGC-093, NGC-094, NGC-095, NGC-096. Expand this work package into 2-5 minute steps before coding."
     },
     {
       "id": 4,

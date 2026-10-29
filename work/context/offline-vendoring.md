@@ -75,6 +75,18 @@ crates of the old set (`loom`, `generator`, `windows-result`) are kept in the ve
 `tonic_prost_build::configure().compile_fds(..)` without any system `protoc`. The real `Cargo.lock` is unchanged by the vendoring itself;
 the agent extends it offline (28 new packages). Root catalogue gained `prost-reflect = "0.16.5"` and `prost-types = "0.14.4"`.
 
+Revised 2026-10-29 for WP-M1-03 (user approved the crates.io access for it): only 2 packages were missing, `serde-value 0.7.0` and
+`ordered-float 2.10.1` (the optional dependencies behind prost-reflect's `serde` feature, which the SDK needs for the protobuf JSON mapping
+of NGC-002/003). Vendored from a scratch copy of the workspace with the intended `gap-ngc-sdk` manifest (`cargo metadata`, then `cargo vendor
+--locked` with a throw-away `CARGO_HOME`): the scratch lock gained exactly those 2 packages and lost none. The two crate directories were added
+to `.local/vendor` (358 crates; the three unused old ones `loom`, `generator`, `windows-result` are still kept). Root catalogue gained
+`futures-util 0.3.34`, `http-body-util 0.1.5`, `hyper-util 0.1.21`, `tokio-util 0.7.20` (all already in the lockfile). Not vendored and not needed:
+`async-stream`, `tokio-test`, `rustls` (TLS is out of scope for M1-03; the server refuses plaintext off-host instead, NGC-093 g).
+
+| WP / crate | `[dependencies]` | `[dev-dependencies]` |
+|---|---|---|
+| WP-M1-03 `gap-ngc-sdk` | axum, bytes, futures-util, gap-core, gap-proto, http, hyper-util (`tokio`), prost, prost-reflect (`serde`), prost-types, serde (`derive`), serde_json, thiserror, tokio (`io-std`, `io-util`, `macros`, `net`, `rt`, `sync`, `time`), tokio-stream (`net`), tokio-util, tonic, tonic-prost, tracing | http-body-util, proptest, tokio (`macros`, `rt-multi-thread`, `test-util`, `time`), tower (`util`) |
+
 ## Probes that were run offline on the vendored set (scratch copy, 2026-10-27)
 
 - bundled SQLite (rusqlite `bundled`): FTS5 `MATCH`, recursive CTE, `json_extract`, `PRAGMA journal_mode=WAL` on a
