@@ -533,33 +533,37 @@ async fn inv_12_matrix_past_deadline_midstream_deadline_and_midstream_cancel() {
     let mut midstream_deadline_outcomes = Vec::new();
 
     for kind in ALL_TRANSPORTS {
-        // 1. Deadline already in the past: connector MUST NOT be invoked (`total_calls() == 0`).
+        // 1. Deadline already in the past (`< now_ms` and `== now_ms`): connector MUST NOT be invoked (`total_calls() == 0`).
         let clock = Arc::new(ManualClock::new(1_700_000_000_000));
         let mock_past = MockConnector::new();
         let cfg = ServerConfig::default().with_clock(clock.clone());
         let core_past = Arc::new(ServerCore::new(mock_past.clone(), cfg));
         let harness_past = Harness::new(kind, core_past);
 
-        let past_out = harness_past
-            .query_all(QueryRequest {
-                ctx: Some(CallContext {
-                    deadline_unix_ms: 1_700_000_000_000, // <= now_ms
-                    ..CallContext::default()
-                }),
-                operation: "neverCalled".to_owned(),
-                ..QueryRequest::default()
-            })
-            .await;
-        assert_eq!(
-            mock_past.total_calls(),
-            0,
-            "connector must not be invoked on {kind:?} when deadline already passed"
-        );
-        assert_eq!(
-            past_out.terminal_error.as_ref().expect("deadline err").code,
-            NgcErrorCode::DeadlineExceeded
-        );
-        past_outcomes.push(past_out);
+        for expired_deadline in [1_699_999_999_500_i64, 1_700_000_000_000_i64] {
+            let past_out = harness_past
+                .query_all(QueryRequest {
+                    ctx: Some(CallContext {
+                        deadline_unix_ms: expired_deadline,
+                        ..CallContext::default()
+                    }),
+                    operation: "neverCalled".to_owned(),
+                    ..QueryRequest::default()
+                })
+                .await;
+            assert_eq!(
+                mock_past.total_calls(),
+                0,
+                "connector must not be invoked on {kind:?} when deadline ({expired_deadline}) already passed"
+            );
+            assert_eq!(
+                past_out.terminal_error.as_ref().expect("deadline err").code,
+                NgcErrorCode::DeadlineExceeded
+            );
+            if expired_deadline == 1_700_000_000_000 {
+                past_outcomes.push(past_out);
+            }
+        }
 
         // 2. Deadline passing mid-stream: emits 1 chunk, stalls, drops connector stream, ends DEADLINE_EXCEEDED.
         let clock_mid = Arc::new(ManualClock::new(1_700_000_000_000));
@@ -592,8 +596,10 @@ async fn inv_12_matrix_past_deadline_midstream_deadline_and_midstream_cancel() {
             })
             .await;
 
-        mock_mid.wait_for_drops(1).await;
-        assert_eq!(mid_out.rows_by_index[&0].len(), 1);
+        assert_eq!(mid_out.rows_by_index.get(&0).map(Vec::len), Some(1));
+        tokio::time::timeout(Duration::from_secs(5), mock_mid.wait_for_drops(1))
+            .await
+            .expect("mid-stream deadline must drop connector stream");
         assert_eq!(
             mid_out
                 .terminal_error
@@ -656,7 +662,9 @@ async fn inv_12_matrix_past_deadline_midstream_deadline_and_midstream_cancel() {
                 drop(s); // StdioStream::drop sends gap.ngc.cancel notification!
             }
         }
-        mock_cancel.wait_for_drops(1).await;
+        tokio::time::timeout(Duration::from_secs(5), mock_cancel.wait_for_drops(1))
+            .await
+            .expect("client cancel must drop connector stream");
         assert_eq!(mock_cancel.in_flight(), 0);
     }
 

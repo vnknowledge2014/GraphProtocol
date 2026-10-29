@@ -482,7 +482,9 @@ async fn stdio_jsonrpc_error_codes_batch_rejection_interleaving_cancel_and_eof()
     assert_eq!(cancelled_resp["id"], "hang-1");
     assert_eq!(cancelled_resp["error"]["code"], -32001);
     assert_eq!(cancelled_resp["error"]["data"]["code"], "CANCELLED");
-    mock.wait_for_drops(1).await;
+    tokio::time::timeout(Duration::from_secs(5), mock.wait_for_drops(1))
+        .await
+        .expect("stdio cancel must drop connector stream");
     assert_eq!(mock.in_flight(), 0);
 
     // 7. EOF cancels everything in flight and `serve_stdio` returns cleanly!
@@ -494,7 +496,9 @@ async fn stdio_jsonrpc_error_codes_batch_rejection_interleaving_cancel_and_eof()
     assert_eq!(mock.in_flight(), 1);
 
     drop(stdin_tx); // trigger EOF on stdin
-    mock.wait_for_drops(2).await;
+    tokio::time::timeout(Duration::from_secs(5), mock.wait_for_drops(2))
+        .await
+        .expect("stdio EOF must drop in-flight connector stream");
     server_join
         .await
         .expect("join")
