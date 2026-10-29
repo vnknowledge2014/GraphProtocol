@@ -13,19 +13,21 @@ use futures_util::{StreamExt, stream};
 use gap_core::error::{NgcErrorCode, NgcErrorInfo};
 use gap_ngc_sdk::core::{ServerConfig, ServerCore};
 use gap_ngc_sdk::error::NGC_ERROR_METADATA_KEY;
-use gap_ngc_sdk::grpc::{GrpcClient, ServeError, serve_tcp};
+use gap_ngc_sdk::grpc::{DEFAULT_CLIENT_MAX_DECODING_BYTES, GrpcClient, ServeError, serve_tcp};
 use gap_ngc_sdk::http as ngc_http;
 use gap_ngc_sdk::mock::{MockConnector, RpcMethod};
 use gap_ngc_sdk::stdio::serve_stdio;
 use gap_ngc_sdk::testing::{in_memory_grpc, in_memory_raw_stdio};
 use gap_proto::ngc::v1::{
-    DescribeRequest, DescribeResponse, Event, HealthRequest, HealthResponse, QueryResponse,
-    RowSetChunk, SubscribeRequest, TaskState, TaskStatus, WatchTaskRequest,
+    ConnectorDescription, DescribeRequest, DescribeResponse, Event, HealthRequest, HealthResponse,
+    QueryRequest, QueryResponse, RowSetChunk, SubscribeRequest, TaskState, TaskStatus,
+    WatchTaskRequest,
     connector_server::{Connector as TonicConnector, ConnectorServer},
     query_response,
 };
 use http::{Method, Request, StatusCode};
 use http_body_util::BodyExt as _;
+use prost::Message as _;
 use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncWriteExt, BufReader, ReadBuf};
 use tokio::sync::Notify;
 use tower::ServiceExt as _;
@@ -972,4 +974,143 @@ async fn stdio_rejects_duplicate_in_flight_id_preserves_running_call_allows_reus
         .await
         .expect("join")
         .expect("clean stdio shutdown");
+}
+
+// spec: NGC-001, NGC-062, NGC-063, NGC-093
+#[tokio::test(start_paused = true)]
+async fn grpc_client_bounds_decoded_message_size_and_maps_overflow_to_resource_exhausted() {
+    assert_eq!(DEFAULT_CLIENT_MAX_DECODING_BYTES, 16 * 1024 * 1024);
+
+    let make_stream_item = |payload_len: usize| -> QueryResponse {
+        let mut fields = BTreeMap::new();
+        fields.insert(
+            "blob".to_owned(),
+            prost_types::Value {
+                kind: Some(prost_types::value::Kind::StringValue(
+                    "x".repeat(payload_len),
+                )),
+            },
+        );
+        QueryResponse {
+            chunk: Some(query_response::Chunk::Rows(RowSetChunk {
+                foreach_index: 0,
+                rows: vec![prost_types::Struct { fields }],
+                last_for_index: true,
+                error: None,
+            })),
+        }
+    };
+
+    let under_item = make_stream_item(980);
+    let under_len = under_item.encoded_len();
+    assert!(
+        under_len > 980 && under_len <= 1_024,
+        "expected under-bound encoded_len in (980, 1024], got {under_len}"
+    );
+
+    let over_item = make_stream_item(1_100);
+    let over_len = over_item.encoded_len();
+    assert!(
+        over_len > 1_024,
+        "expected over-bound encoded_len > 1024, got {over_len}"
+    );
+
+    let under_item_c = under_item.clone();
+    let over_item_c = over_item.clone();
+    let mock = MockConnector::new()
+        .on_query(move |req, _scope| {
+            let item = if req.operation == "over" {
+                over_item_c.clone()
+            } else {
+                under_item_c.clone()
+            };
+            Ok(Box::pin(stream::iter(vec![Ok(item)])))
+        })
+        .on_describe(|req, _scope| {
+            let sdl_len = if req.known_spec_hash == "over" {
+                1_100
+            } else {
+                960
+            };
+            Ok(DescribeResponse {
+                not_modified: false,
+                description: Some(ConnectorDescription {
+                    schema_sdl: "s".repeat(sdl_len),
+                    ..ConnectorDescription::default()
+                }),
+            })
+        });
+
+    let core = Arc::new(ServerCore::new(mock, ServerConfig::default()));
+    let (default_client, _handle) = in_memory_grpc(core);
+    assert_eq!(
+        default_client.max_decoding_message_size(),
+        DEFAULT_CLIENT_MAX_DECODING_BYTES
+    );
+
+    let bounded_client = default_client.clone().with_max_decoding_message_size(1_024);
+    assert_eq!(bounded_client.max_decoding_message_size(), 1_024);
+
+    // 1. Streaming message larger than configured client bound -> RESOURCE_EXHAUSTED (not InvalidArgument/Internal).
+    let mut over_stream = bounded_client
+        .query(QueryRequest {
+            operation: "over".to_owned(),
+            ..QueryRequest::default()
+        })
+        .await
+        .expect("stream headers open");
+    let stream_err = over_stream
+        .next()
+        .await
+        .expect("stream item")
+        .expect_err("oversized decoded stream item must fail");
+    assert_eq!(stream_err.code, NgcErrorCode::ResourceExhausted);
+
+    // 2. Streaming message just under the configured client bound -> passes!
+    let mut under_stream = bounded_client
+        .query(QueryRequest {
+            operation: "under".to_owned(),
+            ..QueryRequest::default()
+        })
+        .await
+        .expect("stream headers open");
+    let got_item = under_stream
+        .next()
+        .await
+        .expect("stream item")
+        .expect("under-bound stream item must pass");
+    assert_eq!(got_item, under_item);
+    assert!(under_stream.next().await.is_none());
+
+    // 3. Unary response larger than configured client bound -> RESOURCE_EXHAUSTED; just under -> passes!
+    let unary_err = bounded_client
+        .describe(DescribeRequest {
+            known_spec_hash: "over".to_owned(),
+        })
+        .await
+        .expect_err("oversized unary response must fail");
+    assert_eq!(unary_err.code, NgcErrorCode::ResourceExhausted);
+
+    let unary_ok = bounded_client
+        .describe(DescribeRequest {
+            known_spec_hash: "under".to_owned(),
+        })
+        .await
+        .expect("under-bound unary response must pass");
+    assert_eq!(unary_ok.description.expect("desc").schema_sdl.len(), 960);
+
+    // 4. Default client (16 MiB bound) decodes the 1,100-byte message cleanly.
+    let mut default_ok_stream = default_client
+        .query(QueryRequest {
+            operation: "over".to_owned(),
+            ..QueryRequest::default()
+        })
+        .await
+        .expect("default client stream open");
+    let default_got = default_ok_stream
+        .next()
+        .await
+        .expect("item")
+        .expect("1.1 KiB well within 16 MiB default");
+    assert_eq!(default_got, over_item);
 }

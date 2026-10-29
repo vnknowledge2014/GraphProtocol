@@ -17,6 +17,7 @@ use gap_proto::ngc::v1::{
     connector_client::ConnectorClient as TonicConnectorClient,
     connector_server::{Connector as TonicConnector, ConnectorServer},
 };
+use prost::Message as _;
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio_util::sync::CancellationToken;
 use tonic::metadata::{Ascii, MetadataKey, MetadataValue};
@@ -24,7 +25,10 @@ use tonic::transport::{Channel, Server, server::Connected};
 
 use crate::connector::{BoxStream, Connector, NgcResult};
 use crate::core::{ServerCore, headers_to_metadata};
-use crate::error::{ngc_error_to_status, status_to_ngc_error};
+use crate::error::{NGC_ERROR_METADATA_KEY, ngc_error_to_status, status_to_ngc_error};
+
+/// Default maximum decoded response message size (`16 MiB`) enforced by [`GrpcClient`] (`NGC-093` (i)).
+pub const DEFAULT_CLIENT_MAX_DECODING_BYTES: usize = 16 * 1024 * 1024;
 
 /// Error returned when starting or running a gRPC connector server (`NGC-001`, `NGC-093` (g)).
 #[derive(Debug, thiserror::Error)]
@@ -330,20 +334,61 @@ fn build_tonic_request<T>(
     Ok(req)
 }
 
+fn parse_decoded_too_large(msg: &str) -> Option<(usize, usize)> {
+    let rest = msg.strip_prefix("Error, decoded message length too large: found ")?;
+    let (found_str, tail) = rest.split_once(" bytes, the limit is: ")?;
+    let limit_str = tail.strip_suffix(" bytes")?;
+    Some((found_str.parse().ok()?, limit_str.parse().ok()?))
+}
+
+fn client_status_to_ngc_error(
+    status: &tonic::Status,
+    max_decoding_bytes: usize,
+    req_encoded_len: usize,
+) -> NgcErrorInfo {
+    if status.metadata().get_bin(NGC_ERROR_METADATA_KEY).is_none()
+        && status.code() == tonic::Code::OutOfRange
+        && let Some((found, limit)) = parse_decoded_too_large(status.message())
+        && limit == max_decoding_bytes
+        && (req_encoded_len <= max_decoding_bytes || found != req_encoded_len)
+    {
+        return NgcErrorInfo::new(NgcErrorCode::ResourceExhausted, status.message());
+    }
+    status_to_ngc_error(status)
+}
+
 /// Typed gRPC client mapping `tonic::Status` back to [`NgcErrorInfo`] via `ngc-error-bin` with
-/// code-table fallback (`NGC-062`, `NGC-063`).
+/// code-table fallback (`NGC-062`, `NGC-063`, `NGC-093` (i)).
 #[derive(Debug, Clone)]
 pub struct GrpcClient {
     inner: TonicConnectorClient<Channel>,
+    max_decoding_bytes: usize,
 }
 
 impl GrpcClient {
-    /// Wraps an existing `tonic` [`Channel`].
+    /// Wraps an existing `tonic` [`Channel`] with the default `16 MiB` decoded message limit
+    /// ([`DEFAULT_CLIENT_MAX_DECODING_BYTES`], `NGC-093` (i)).
     #[must_use]
     pub fn from_channel(channel: Channel) -> Self {
         Self {
-            inner: TonicConnectorClient::new(channel).max_decoding_message_size(usize::MAX),
+            inner: TonicConnectorClient::new(channel)
+                .max_decoding_message_size(DEFAULT_CLIENT_MAX_DECODING_BYTES),
+            max_decoding_bytes: DEFAULT_CLIENT_MAX_DECODING_BYTES,
         }
+    }
+
+    /// Overrides the maximum decoded response message size in bytes (`NGC-093` (i)).
+    #[must_use]
+    pub fn with_max_decoding_message_size(mut self, limit: usize) -> Self {
+        self.inner = self.inner.max_decoding_message_size(limit);
+        self.max_decoding_bytes = limit;
+        self
+    }
+
+    /// Returns the configured maximum decoded response message size in bytes (`NGC-093` (i)).
+    #[must_use]
+    pub const fn max_decoding_message_size(&self) -> usize {
+        self.max_decoding_bytes
     }
 
     /// Invokes `Describe`.
@@ -365,13 +410,15 @@ impl GrpcClient {
         request: DescribeRequest,
         metadata: &BTreeMap<String, String>,
     ) -> NgcResult<DescribeResponse> {
+        let req_encoded_len = request.encoded_len();
+        let max_dec = self.max_decoding_bytes;
         let req = build_tonic_request(request, metadata)?;
         self.inner
             .clone()
             .describe(req)
             .await
             .map(tonic::Response::into_inner)
-            .map_err(|s| status_to_ngc_error(&s))
+            .map_err(|s| client_status_to_ngc_error(&s, max_dec, req_encoded_len))
     }
 
     /// Invokes `Query` and returns a stream of [`QueryResponse`] items.
@@ -393,6 +440,8 @@ impl GrpcClient {
         request: QueryRequest,
         metadata: &BTreeMap<String, String>,
     ) -> NgcResult<BoxStream<QueryResponse>> {
+        let req_encoded_len = request.encoded_len();
+        let max_dec = self.max_decoding_bytes;
         let req = build_tonic_request(request, metadata)?;
         let streaming = self
             .inner
@@ -400,10 +449,10 @@ impl GrpcClient {
             .query(req)
             .await
             .map(tonic::Response::into_inner)
-            .map_err(|s| status_to_ngc_error(&s))?;
-        Ok(Box::pin(
-            streaming.map(|res| res.map_err(|s| status_to_ngc_error(&s))),
-        ))
+            .map_err(|s| client_status_to_ngc_error(&s, max_dec, req_encoded_len))?;
+        Ok(Box::pin(streaming.map(move |res| {
+            res.map_err(|s| client_status_to_ngc_error(&s, max_dec, req_encoded_len))
+        })))
     }
 
     /// Invokes `Mutate`.
@@ -425,13 +474,15 @@ impl GrpcClient {
         request: MutateRequest,
         metadata: &BTreeMap<String, String>,
     ) -> NgcResult<MutateResponse> {
+        let req_encoded_len = request.encoded_len();
+        let max_dec = self.max_decoding_bytes;
         let req = build_tonic_request(request, metadata)?;
         self.inner
             .clone()
             .mutate(req)
             .await
             .map(tonic::Response::into_inner)
-            .map_err(|s| status_to_ngc_error(&s))
+            .map_err(|s| client_status_to_ngc_error(&s, max_dec, req_encoded_len))
     }
 
     /// Invokes `Subscribe` and returns a stream of [`Event`] items.
@@ -454,6 +505,8 @@ impl GrpcClient {
         request: SubscribeRequest,
         metadata: &BTreeMap<String, String>,
     ) -> NgcResult<BoxStream<Event>> {
+        let req_encoded_len = request.encoded_len();
+        let max_dec = self.max_decoding_bytes;
         let req = build_tonic_request(request, metadata)?;
         let streaming = self
             .inner
@@ -461,10 +514,10 @@ impl GrpcClient {
             .subscribe(req)
             .await
             .map(tonic::Response::into_inner)
-            .map_err(|s| status_to_ngc_error(&s))?;
-        Ok(Box::pin(
-            streaming.map(|res| res.map_err(|s| status_to_ngc_error(&s))),
-        ))
+            .map_err(|s| client_status_to_ngc_error(&s, max_dec, req_encoded_len))?;
+        Ok(Box::pin(streaming.map(move |res| {
+            res.map_err(|s| client_status_to_ngc_error(&s, max_dec, req_encoded_len))
+        })))
     }
 
     /// Invokes `StartTask`.
@@ -473,13 +526,15 @@ impl GrpcClient {
     ///
     /// Returns [`NgcErrorInfo`] decoded from `tonic::Status`.
     pub async fn start_task(&self, request: StartTaskRequest) -> NgcResult<TaskStatus> {
+        let req_encoded_len = request.encoded_len();
+        let max_dec = self.max_decoding_bytes;
         let req = build_tonic_request(request, &BTreeMap::new())?;
         self.inner
             .clone()
             .start_task(req)
             .await
             .map(tonic::Response::into_inner)
-            .map_err(|s| status_to_ngc_error(&s))
+            .map_err(|s| client_status_to_ngc_error(&s, max_dec, req_encoded_len))
     }
 
     /// Invokes `GetTask`.
@@ -488,13 +543,15 @@ impl GrpcClient {
     ///
     /// Returns [`NgcErrorInfo`] decoded from `tonic::Status`.
     pub async fn get_task(&self, request: GetTaskRequest) -> NgcResult<TaskStatus> {
+        let req_encoded_len = request.encoded_len();
+        let max_dec = self.max_decoding_bytes;
         let req = build_tonic_request(request, &BTreeMap::new())?;
         self.inner
             .clone()
             .get_task(req)
             .await
             .map(tonic::Response::into_inner)
-            .map_err(|s| status_to_ngc_error(&s))
+            .map_err(|s| client_status_to_ngc_error(&s, max_dec, req_encoded_len))
     }
 
     /// Invokes `CancelTask`.
@@ -503,13 +560,15 @@ impl GrpcClient {
     ///
     /// Returns [`NgcErrorInfo`] decoded from `tonic::Status`.
     pub async fn cancel_task(&self, request: CancelTaskRequest) -> NgcResult<TaskStatus> {
+        let req_encoded_len = request.encoded_len();
+        let max_dec = self.max_decoding_bytes;
         let req = build_tonic_request(request, &BTreeMap::new())?;
         self.inner
             .clone()
             .cancel_task(req)
             .await
             .map(tonic::Response::into_inner)
-            .map_err(|s| status_to_ngc_error(&s))
+            .map_err(|s| client_status_to_ngc_error(&s, max_dec, req_encoded_len))
     }
 
     /// Invokes `WatchTask` and returns a stream of [`TaskStatus`] items.
@@ -518,6 +577,8 @@ impl GrpcClient {
     ///
     /// Returns [`NgcErrorInfo`] if opening the stream fails.
     pub async fn watch_task(&self, request: WatchTaskRequest) -> NgcResult<BoxStream<TaskStatus>> {
+        let req_encoded_len = request.encoded_len();
+        let max_dec = self.max_decoding_bytes;
         let req = build_tonic_request(request, &BTreeMap::new())?;
         let streaming = self
             .inner
@@ -525,10 +586,10 @@ impl GrpcClient {
             .watch_task(req)
             .await
             .map(tonic::Response::into_inner)
-            .map_err(|s| status_to_ngc_error(&s))?;
-        Ok(Box::pin(
-            streaming.map(|res| res.map_err(|s| status_to_ngc_error(&s))),
-        ))
+            .map_err(|s| client_status_to_ngc_error(&s, max_dec, req_encoded_len))?;
+        Ok(Box::pin(streaming.map(move |res| {
+            res.map_err(|s| client_status_to_ngc_error(&s, max_dec, req_encoded_len))
+        })))
     }
 
     /// Invokes `Sketch`.
@@ -537,13 +598,15 @@ impl GrpcClient {
     ///
     /// Returns [`NgcErrorInfo`] decoded from `tonic::Status`.
     pub async fn sketch(&self, request: SketchRequest) -> NgcResult<SketchResponse> {
+        let req_encoded_len = request.encoded_len();
+        let max_dec = self.max_decoding_bytes;
         let req = build_tonic_request(request, &BTreeMap::new())?;
         self.inner
             .clone()
             .sketch(req)
             .await
             .map(tonic::Response::into_inner)
-            .map_err(|s| status_to_ngc_error(&s))
+            .map_err(|s| client_status_to_ngc_error(&s, max_dec, req_encoded_len))
     }
 
     /// Invokes `Health`.
@@ -552,13 +615,15 @@ impl GrpcClient {
     ///
     /// Returns [`NgcErrorInfo`] decoded from `tonic::Status`.
     pub async fn health(&self, request: HealthRequest) -> NgcResult<HealthResponse> {
+        let req_encoded_len = request.encoded_len();
+        let max_dec = self.max_decoding_bytes;
         let req = build_tonic_request(request, &BTreeMap::new())?;
         self.inner
             .clone()
             .health(req)
             .await
             .map(tonic::Response::into_inner)
-            .map_err(|s| status_to_ngc_error(&s))
+            .map_err(|s| client_status_to_ngc_error(&s, max_dec, req_encoded_len))
     }
 
     /// Invokes `Explain`.
@@ -567,12 +632,14 @@ impl GrpcClient {
     ///
     /// Returns [`NgcErrorInfo`] decoded from `tonic::Status`.
     pub async fn explain(&self, request: QueryRequest) -> NgcResult<ExplainResponse> {
+        let req_encoded_len = request.encoded_len();
+        let max_dec = self.max_decoding_bytes;
         let req = build_tonic_request(request, &BTreeMap::new())?;
         self.inner
             .clone()
             .explain(req)
             .await
             .map(tonic::Response::into_inner)
-            .map_err(|s| status_to_ngc_error(&s))
+            .map_err(|s| client_status_to_ngc_error(&s, max_dec, req_encoded_len))
     }
 }
