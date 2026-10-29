@@ -21,9 +21,10 @@ use gap_ngc_sdk::testing::{
 };
 use gap_proto::NGC_WIRE_VERSION;
 use gap_proto::ngc::v1::{
-    CallContext, Complete, ConnectorDescription, DescribeRequest, DescribeResponse, HealthRequest,
-    HealthResponse, MutateRequest, MutateResponse, NgcError, Protocol, QueryRequest, QueryResponse,
-    RowSetChunk, SketchRequest, SketchResponse, VariableSet, query_response,
+    CallContext, Complete, ConnectorDescription, DescribeRequest, DescribeResponse, Event,
+    HealthRequest, HealthResponse, MutateRequest, MutateResponse, NgcError, Protocol, QueryRequest,
+    QueryResponse, RowSetChunk, SketchRequest, SketchResponse, SubscribeRequest, VariableSet,
+    query_response,
 };
 use http::{Method, Request, StatusCode};
 use http_body_util::BodyExt as _;
@@ -298,13 +299,17 @@ impl Harness {
                     if line.is_empty() {
                         continue;
                     }
+                    assert!(
+                        term.is_none(),
+                        "HTTP NDJSON emitted trailing line `{line}` after terminal error"
+                    );
                     let val: serde_json::Value =
                         serde_json::from_str(line).expect("NDJSON line JSON");
                     if let Some(err_obj) = val.get("error") {
                         let proto_err: NgcError =
                             from_json_value(err_obj.clone()).expect("decode NDJSON error");
                         term = Some(ngc_error_from_proto(&proto_err));
-                        break;
+                        continue;
                     }
                     let qr: QueryResponse =
                         from_json_value(val).expect("decode NDJSON QueryResponse");
@@ -970,4 +975,225 @@ async fn matrix_saturation_panic_oversized_all_14_codes_and_error_clamping() {
     assert_eq!(per_transport_14[1], per_transport_14[2]);
     assert_eq!(clamped_outcomes[0], clamped_outcomes[1]);
     assert_eq!(clamped_outcomes[1], clamped_outcomes[2]);
+}
+
+// spec: NGC-001, NGC-002, NGC-003, NGC-020, NGC-093, NGC-094, NGC-095
+#[tokio::test(start_paused = true)]
+async fn matrix_nan_stream_element_fails_closed_as_internal_without_placeholder() {
+    fn nan_struct() -> prost_types::Struct {
+        let mut fields = BTreeMap::new();
+        fields.insert(
+            "metric".to_owned(),
+            prost_types::Value {
+                kind: Some(prost_types::value::Kind::NumberValue(f64::NAN)),
+            },
+        );
+        prost_types::Struct { fields }
+    }
+
+    for kind in ALL_TRANSPORTS {
+        let mock = MockConnector::new()
+            .on_query(|_req, _scope| {
+                let items = vec![
+                    Ok(QueryResponse {
+                        chunk: Some(query_response::Chunk::Rows(RowSetChunk {
+                            foreach_index: 0,
+                            rows: vec![nan_struct()],
+                            last_for_index: true,
+                            error: None,
+                        })),
+                    }),
+                    Ok(QueryResponse {
+                        chunk: Some(query_response::Chunk::Complete(Complete {
+                            next_cursor: String::new(),
+                            truncated: false,
+                            rows_total: 1,
+                            upstream_calls: 1,
+                            latency_us: 5,
+                        })),
+                    }),
+                ];
+                Ok(Box::pin(stream::iter(items)))
+            })
+            .on_subscribe(|_req, _scope| {
+                let items = vec![
+                    Ok(Event {
+                        id: "ev-nan".to_owned(),
+                        at: None,
+                        payload: Some(nan_struct()),
+                        resume_token: "r1".to_owned(),
+                    }),
+                    Ok(Event {
+                        id: "ev-after-nan".to_owned(),
+                        at: None,
+                        payload: Some(make_row("ok", 1)),
+                        resume_token: "r2".to_owned(),
+                    }),
+                ];
+                Ok(Box::pin(stream::iter(items)))
+            });
+
+        let core = Arc::new(ServerCore::new(mock.clone(), ServerConfig::default()));
+        let harness = Harness::new(kind, core);
+
+        match &harness {
+            Harness::Grpc { client, .. } => {
+                // Binary protobuf carries IEEE-754 NaN intact on both Query and Subscribe.
+                let mut qs = client
+                    .clone()
+                    .query(QueryRequest::default())
+                    .await
+                    .expect("gRPC Query open");
+                let first = qs.next().await.expect("chunk 0").expect("chunk 0 ok");
+                let Some(query_response::Chunk::Rows(rc)) = first.chunk else {
+                    panic!("expected Rows chunk on gRPC");
+                };
+                assert!(rc.last_for_index);
+                let Some(prost_types::value::Kind::NumberValue(v)) =
+                    rc.rows[0].fields["metric"].kind
+                else {
+                    panic!("expected NumberValue");
+                };
+                assert!(v.is_nan(), "gRPC must preserve NaN row value");
+                let second = qs.next().await.expect("complete").expect("complete ok");
+                assert!(matches!(
+                    second.chunk,
+                    Some(query_response::Chunk::Complete(_))
+                ));
+                assert!(qs.next().await.is_none());
+
+                let mut ss = client
+                    .clone()
+                    .subscribe(SubscribeRequest::default())
+                    .await
+                    .expect("gRPC Subscribe open");
+                let ev1 = ss.next().await.expect("ev1").expect("ev1 ok");
+                assert_eq!(ev1.id, "ev-nan");
+                let ev2 = ss.next().await.expect("ev2").expect("ev2 ok");
+                assert_eq!(ev2.id, "ev-after-nan");
+                assert!(ss.next().await.is_none());
+            }
+            Harness::Http { router } => {
+                // 1. HTTP NDJSON (`Query`): exact 1 line `{"error": <NgcError INTERNAL>}`, no `{}`, nothing after!
+                let q_resp = router
+                    .clone()
+                    .oneshot(
+                        Request::builder()
+                            .method(Method::POST)
+                            .uri("/gap/ngc/v1/Query")
+                            .header(http::header::CONTENT_TYPE, "application/json")
+                            .body(Body::from("{}"))
+                            .expect("req"),
+                    )
+                    .await
+                    .expect("HTTP Query oneshot");
+                assert_eq!(q_resp.status(), StatusCode::OK);
+                let raw_ndjson = String::from_utf8(
+                    q_resp
+                        .into_body()
+                        .collect()
+                        .await
+                        .expect("collect NDJSON")
+                        .to_bytes()
+                        .to_vec(),
+                )
+                .expect("utf8");
+                assert!(
+                    !raw_ndjson.contains("{}"),
+                    "HTTP NDJSON must never emit `{{}}` placeholder, got: `{raw_ndjson}`"
+                );
+                let nd_lines: Vec<&str> = raw_ndjson.lines().collect();
+                assert_eq!(
+                    nd_lines.len(),
+                    1,
+                    "HTTP NDJSON must end immediately with 1 error line and nothing after, got: `{raw_ndjson}`"
+                );
+                let err_line: serde_json::Value =
+                    serde_json::from_str(nd_lines[0]).expect("NDJSON error JSON");
+                let proto_err: NgcError =
+                    from_json_value(err_line["error"].clone()).expect("NgcError JSON");
+                let info = ngc_error_from_proto(&proto_err);
+                assert_eq!(info.code, NgcErrorCode::Internal);
+
+                // 2. HTTP SSE (`Subscribe`): exact 1 `event: error` frame with INTERNAL and nothing after!
+                let s_resp = router
+                    .clone()
+                    .oneshot(
+                        Request::builder()
+                            .method(Method::POST)
+                            .uri("/gap/ngc/v1/Subscribe")
+                            .header(http::header::CONTENT_TYPE, "application/json")
+                            .body(Body::from("{}"))
+                            .expect("req"),
+                    )
+                    .await
+                    .expect("HTTP Subscribe oneshot");
+                assert_eq!(s_resp.status(), StatusCode::OK);
+                let raw_sse = String::from_utf8(
+                    s_resp
+                        .into_body()
+                        .collect()
+                        .await
+                        .expect("collect SSE")
+                        .to_bytes()
+                        .to_vec(),
+                )
+                .expect("utf8");
+                assert!(
+                    !raw_sse.contains("{}"),
+                    "HTTP SSE must never emit `{{}}` placeholder, got: `{raw_sse}`"
+                );
+                assert!(
+                    !raw_sse.contains("ev-after-nan"),
+                    "HTTP SSE must emit nothing after unrenderable element, got: `{raw_sse}`"
+                );
+                let blocks: Vec<&str> = raw_sse
+                    .split("\n\n")
+                    .filter(|b| !b.trim().is_empty())
+                    .collect();
+                assert_eq!(
+                    blocks.len(),
+                    1,
+                    "HTTP SSE must contain exact 1 error event block, got: `{raw_sse}`"
+                );
+                let data_json = blocks[0]
+                    .strip_prefix("event: error\ndata: ")
+                    .expect("SSE block must start with `event: error\\ndata: `");
+                let sse_proto_err: NgcError =
+                    from_json_slice(data_json.as_bytes()).expect("SSE NgcError JSON");
+                assert_eq!(
+                    ngc_error_from_proto(&sse_proto_err).code,
+                    NgcErrorCode::Internal
+                );
+            }
+            Harness::Stdio { client, .. } => {
+                // 1. stdio `Query`: ends with exact 1 INTERNAL error element and no rows/placeholders.
+                let mut qs = client
+                    .query(QueryRequest::default())
+                    .await
+                    .expect("stdio Query open");
+                let q_err = qs
+                    .next()
+                    .await
+                    .expect("stdio Query terminal item")
+                    .expect_err("stdio Query must fail with INTERNAL on NaN");
+                assert_eq!(q_err.code, NgcErrorCode::Internal);
+                assert!(qs.next().await.is_none());
+
+                // 2. stdio `Subscribe`: ends with exact 1 INTERNAL error element and nothing after.
+                let mut ss = client
+                    .subscribe(SubscribeRequest::default())
+                    .await
+                    .expect("stdio Subscribe open");
+                let s_err = ss
+                    .next()
+                    .await
+                    .expect("stdio Subscribe terminal item")
+                    .expect_err("stdio Subscribe must fail with INTERNAL on NaN");
+                assert_eq!(s_err.code, NgcErrorCode::Internal);
+                assert!(ss.next().await.is_none());
+            }
+        }
+        assert_eq!(mock.in_flight(), 0);
+    }
 }

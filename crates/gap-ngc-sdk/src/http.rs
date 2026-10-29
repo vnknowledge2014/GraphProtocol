@@ -84,15 +84,16 @@ fn json_response(
     extra_headers: &[(header::HeaderName, HeaderValue)],
     body: Vec<u8>,
 ) -> Response {
-    let mut builder = Response::builder()
-        .status(status)
-        .header(header::CONTENT_TYPE, "application/json");
+    let mut resp = Response::new(Body::from(body));
+    *resp.status_mut() = status;
+    resp.headers_mut().insert(
+        header::CONTENT_TYPE,
+        HeaderValue::from_static("application/json"),
+    );
     for (k, v) in extra_headers {
-        builder = builder.header(k, v);
+        resp.headers_mut().insert(k.clone(), v.clone());
     }
-    builder
-        .body(Body::from(body))
-        .unwrap_or_else(|_| Response::new(Body::empty()))
+    resp
 }
 
 fn ngc_error_response(
@@ -128,8 +129,8 @@ async fn read_bounded_body(
     if let Some(cl) = headers
         .get(header::CONTENT_LENGTH)
         .and_then(|v| v.to_str().ok())
-        .and_then(|s| s.parse::<usize>().ok())
-        && cl > max_bytes
+        .and_then(|s| s.parse::<u128>().ok())
+        && cl > u128::try_from(max_bytes).unwrap_or(u128::MAX)
     {
         let err = NgcErrorInfo::new(
             NgcErrorCode::InvalidArgument,
@@ -214,60 +215,93 @@ fn unary_ok_or_err<Resp: ProtoMessage>(
     }
 }
 
-fn ndjson_stream_response<Item: ProtoMessage + Send + 'static>(
-    stream: CoreStream<Item>,
-) -> Response {
-    let byte_stream = stream.map(|res| -> Result<Bytes, std::convert::Infallible> {
-        match res {
-            Ok(item) => {
-                let mut line = to_json_vec(&item).unwrap_or_else(|_| b"{}".to_vec());
-                line.push(b'\n');
-                Ok(Bytes::from(line))
-            }
-            Err(err) => {
-                let proto = ngc_error_to_proto(&err);
-                let err_val = to_json_value(&proto).unwrap_or_else(
-                    |_| serde_json::json!({"code": "INTERNAL", "message": "serialization error"}),
-                );
-                let wrapper = serde_json::json!({ "error": err_val });
-                let mut line = serde_json::to_vec(&wrapper)
-                    .unwrap_or_else(|_| b"{\"error\":{\"code\":\"INTERNAL\"}}".to_vec());
-                line.push(b'\n');
-                Ok(Bytes::from(line))
-            }
-        }
-    });
-
-    Response::builder()
-        .status(StatusCode::OK)
-        .header(header::CONTENT_TYPE, "application/x-ndjson")
-        .body(Body::from_stream(byte_stream))
-        .unwrap_or_else(|_| Response::new(Body::empty()))
+fn encode_ndjson_error_line(err: NgcErrorInfo, max_details_bytes: usize) -> Bytes {
+    let sanitized = sanitize_error_info(err, max_details_bytes);
+    let proto = ngc_error_to_proto(&sanitized);
+    let err_val = to_json_value(&proto).unwrap_or_else(
+        |_| serde_json::json!({"code": "INTERNAL", "message": "serialization error"}),
+    );
+    let wrapper = serde_json::json!({ "error": err_val });
+    let mut line = serde_json::to_vec(&wrapper)
+        .unwrap_or_else(|_| b"{\"error\":{\"code\":\"INTERNAL\"}}".to_vec());
+    line.push(b'\n');
+    Bytes::from(line)
 }
 
-fn sse_stream_response<Item: ProtoMessage + Send + 'static>(stream: CoreStream<Item>) -> Response {
-    let byte_stream = stream.map(|res| -> Result<Bytes, std::convert::Infallible> {
-        match res {
-            Ok(item) => {
-                let json = to_json_string(&item).unwrap_or_else(|_| "{}".to_owned());
-                Ok(Bytes::from(format!("data: {json}\n\n")))
+fn ndjson_stream_response<Item: ProtoMessage + Send + 'static>(
+    stream: CoreStream<Item>,
+    max_details_bytes: usize,
+) -> Response {
+    let byte_stream =
+        futures_util::stream::unfold(Some(stream), move |mut maybe_stream| async move {
+            let s = maybe_stream.as_mut()?;
+            match s.next().await {
+                None => None,
+                Some(Ok(item)) => match to_json_vec(&item) {
+                    Ok(mut line) => {
+                        line.push(b'\n');
+                        Some((
+                            Ok::<Bytes, std::convert::Infallible>(Bytes::from(line)),
+                            maybe_stream,
+                        ))
+                    }
+                    Err(err) => Some((Ok(encode_ndjson_error_line(err, max_details_bytes)), None)),
+                },
+                Some(Err(err)) => {
+                    Some((Ok(encode_ndjson_error_line(err, max_details_bytes)), None))
+                }
             }
-            Err(err) => {
-                let proto = ngc_error_to_proto(&err);
-                let json = to_json_string(&proto).unwrap_or_else(|_| {
-                    "{\"code\":\"INTERNAL\",\"message\":\"serialization error\"}".to_owned()
-                });
-                Ok(Bytes::from(format!("event: error\ndata: {json}\n\n")))
-            }
-        }
-    });
+        });
 
-    Response::builder()
-        .status(StatusCode::OK)
-        .header(header::CONTENT_TYPE, "text/event-stream")
-        .header(header::CACHE_CONTROL, "no-cache")
-        .body(Body::from_stream(byte_stream))
-        .unwrap_or_else(|_| Response::new(Body::empty()))
+    let mut resp = Response::new(Body::from_stream(byte_stream));
+    *resp.status_mut() = StatusCode::OK;
+    resp.headers_mut().insert(
+        header::CONTENT_TYPE,
+        HeaderValue::from_static("application/x-ndjson"),
+    );
+    resp
+}
+
+fn encode_sse_error_event(err: NgcErrorInfo, max_details_bytes: usize) -> Bytes {
+    let sanitized = sanitize_error_info(err, max_details_bytes);
+    let proto = ngc_error_to_proto(&sanitized);
+    let json = to_json_string(&proto).unwrap_or_else(|_| {
+        "{\"code\":\"INTERNAL\",\"message\":\"serialization error\"}".to_owned()
+    });
+    Bytes::from(format!("event: error\ndata: {json}\n\n"))
+}
+
+fn sse_stream_response<Item: ProtoMessage + Send + 'static>(
+    stream: CoreStream<Item>,
+    max_details_bytes: usize,
+) -> Response {
+    let byte_stream =
+        futures_util::stream::unfold(Some(stream), move |mut maybe_stream| async move {
+            let s = maybe_stream.as_mut()?;
+            match s.next().await {
+                None => None,
+                Some(Ok(item)) => match to_json_string(&item) {
+                    Ok(json) => Some((
+                        Ok::<Bytes, std::convert::Infallible>(Bytes::from(format!(
+                            "data: {json}\n\n"
+                        ))),
+                        maybe_stream,
+                    )),
+                    Err(err) => Some((Ok(encode_sse_error_event(err, max_details_bytes)), None)),
+                },
+                Some(Err(err)) => Some((Ok(encode_sse_error_event(err, max_details_bytes)), None)),
+            }
+        });
+
+    let mut resp = Response::new(Body::from_stream(byte_stream));
+    *resp.status_mut() = StatusCode::OK;
+    resp.headers_mut().insert(
+        header::CONTENT_TYPE,
+        HeaderValue::from_static("text/event-stream"),
+    );
+    resp.headers_mut()
+        .insert(header::CACHE_CONTROL, HeaderValue::from_static("no-cache"));
+    resp
 }
 
 async fn dispatch<C: Connector>(State(core): State<Arc<ServerCore<C>>>, req: Request) -> Response {
@@ -330,7 +364,7 @@ async fn dispatch<C: Connector>(State(core): State<Arc<ServerCore<C>>>, req: Req
         },
         HttpRpc::Query => match from_json_slice::<QueryRequest>(&raw_bytes) {
             Ok(msg) => match core.query(msg, metadata, cancel).await {
-                Ok(stream) => ndjson_stream_response(stream),
+                Ok(stream) => ndjson_stream_response(stream, max_details),
                 Err(err) => ngc_error_response(None, &[], &err, max_details),
             },
             Err(err) => ngc_error_response(None, &[], &err, max_details),
@@ -341,7 +375,7 @@ async fn dispatch<C: Connector>(State(core): State<Arc<ServerCore<C>>>, req: Req
         },
         HttpRpc::Subscribe => match from_json_slice::<SubscribeRequest>(&raw_bytes) {
             Ok(msg) => match core.subscribe(msg, metadata, cancel).await {
-                Ok(stream) => sse_stream_response(stream),
+                Ok(stream) => sse_stream_response(stream, max_details),
                 Err(err) => ngc_error_response(None, &[], &err, max_details),
             },
             Err(err) => ngc_error_response(None, &[], &err, max_details),
@@ -360,7 +394,7 @@ async fn dispatch<C: Connector>(State(core): State<Arc<ServerCore<C>>>, req: Req
         },
         HttpRpc::WatchTask => match from_json_slice::<WatchTaskRequest>(&raw_bytes) {
             Ok(msg) => match core.watch_task(msg, metadata, cancel).await {
-                Ok(stream) => sse_stream_response(stream),
+                Ok(stream) => sse_stream_response(stream, max_details),
                 Err(err) => ngc_error_response(None, &[], &err, max_details),
             },
             Err(err) => ngc_error_response(None, &[], &err, max_details),

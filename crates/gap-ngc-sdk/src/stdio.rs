@@ -160,19 +160,27 @@ fn encode_jsonrpc_error(
     })
 }
 
-fn encode_jsonrpc_result(id: serde_json::Value, result: serde_json::Value) -> String {
+fn encode_jsonrpc_result(
+    id: &serde_json::Value,
+    result: serde_json::Value,
+) -> Result<String, NgcErrorInfo> {
     let envelope = serde_json::json!({
         "jsonrpc": "2.0",
         "id": id,
         "result": result,
     });
-    serde_json::to_string(&envelope).unwrap_or_else(|_| {
-        "{\"jsonrpc\":\"2.0\",\"id\":null,\"error\":{\"code\":-32603,\"message\":\"internal error\"}}"
-            .to_owned()
+    serde_json::to_string(&envelope).map_err(|err| {
+        NgcErrorInfo::new(
+            NgcErrorCode::Internal,
+            format!("failed to serialize JSON-RPC result envelope: {err}"),
+        )
     })
 }
 
-fn encode_stream_item(id: &serde_json::Value, item: serde_json::Value) -> String {
+fn encode_stream_item(
+    id: &serde_json::Value,
+    item: serde_json::Value,
+) -> Result<String, NgcErrorInfo> {
     let envelope = serde_json::json!({
         "jsonrpc": "2.0",
         "method": "gap.ngc.item",
@@ -181,8 +189,11 @@ fn encode_stream_item(id: &serde_json::Value, item: serde_json::Value) -> String
             "item": item,
         }
     });
-    serde_json::to_string(&envelope).unwrap_or_else(|_| {
-        "{\"jsonrpc\":\"2.0\",\"method\":\"gap.ngc.item\",\"params\":{}}".to_owned()
+    serde_json::to_string(&envelope).map_err(|err| {
+        NgcErrorInfo::new(
+            NgcErrorCode::Internal,
+            format!("failed to serialize JSON-RPC stream item envelope: {err}"),
+        )
     })
 }
 
@@ -192,9 +203,9 @@ async fn send_unary<Resp: ProtoMessage>(
     res: Result<Resp, NgcErrorInfo>,
     max_details_bytes: usize,
 ) {
-    let line = match res {
-        Ok(resp) => match to_json_value(&resp) {
-            Ok(val) => encode_jsonrpc_result(id, val),
+    let line = match res.and_then(|resp| to_json_value(&resp)) {
+        Ok(val) => match encode_jsonrpc_result(&id, val) {
+            Ok(encoded) => encoded,
             Err(err) => encode_jsonrpc_error(id, JSONRPC_CONNECTOR_ERROR, &err, max_details_bytes),
         },
         Err(err) => encode_jsonrpc_error(id, JSONRPC_CONNECTOR_ERROR, &err, max_details_bytes),
@@ -218,10 +229,10 @@ async fn send_stream<Item: ProtoMessage>(
     };
 
     while let Some(item_res) = stream.next().await {
-        match item_res {
-            Ok(item) => match to_json_value(&item) {
-                Ok(val) => {
-                    if out_tx.send(encode_stream_item(&id, val)).await.is_err() {
+        match item_res.and_then(|item| to_json_value(&item)) {
+            Ok(val) => match encode_stream_item(&id, val) {
+                Ok(item_line) => {
+                    if out_tx.send(item_line).await.is_err() {
                         return;
                     }
                 }
@@ -241,7 +252,10 @@ async fn send_stream<Item: ProtoMessage>(
         }
     }
 
-    let end_line = encode_jsonrpc_result(id, serde_json::json!({ "end": true }));
+    let end_line = match encode_jsonrpc_result(&id, serde_json::json!({ "end": true })) {
+        Ok(line) => line,
+        Err(err) => encode_jsonrpc_error(id, JSONRPC_CONNECTOR_ERROR, &err, max_details_bytes),
+    };
     let _ = out_tx.send(end_line).await;
 }
 
