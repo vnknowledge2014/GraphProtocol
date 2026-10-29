@@ -1462,3 +1462,171 @@ async fn matrix_health_bypasses_max_in_flight_saturation_across_all_transports()
         );
     }
 }
+
+// spec: NGC-025, NGC-093, INV-12
+#[tokio::test(start_paused = true)]
+async fn inv_12_matrix_open_stream_expires_at_exact_wall_clock_deadline_boundary() {
+    for kind in ALL_TRANSPORTS {
+        let clock = Arc::new(ManualClock::new(1_700_000_000_000));
+        let step1 = Arc::new(Notify::new());
+        let step2 = Arc::new(Notify::new());
+        let step1_c = Arc::clone(&step1);
+        let step2_c = Arc::clone(&step2);
+
+        let mock = MockConnector::new().on_query(move |_req, _scope| {
+            let s1 = Arc::clone(&step1_c);
+            let s2 = Arc::clone(&step2_c);
+            let stream = stream::unfold(0_u8, move |phase| {
+                let s1 = Arc::clone(&s1);
+                let s2 = Arc::clone(&s2);
+                async move {
+                    match phase {
+                        0 => Some((
+                            Ok(QueryResponse {
+                                chunk: Some(query_response::Chunk::Rows(RowSetChunk {
+                                    foreach_index: 0,
+                                    rows: vec![make_row("t-0ms", 1)],
+                                    last_for_index: false,
+                                    error: None,
+                                })),
+                            }),
+                            1,
+                        )),
+                        1 => {
+                            s1.notified().await;
+                            Some((
+                                Ok(QueryResponse {
+                                    chunk: Some(query_response::Chunk::Rows(RowSetChunk {
+                                        foreach_index: 0,
+                                        rows: vec![make_row("t-499ms", 2)],
+                                        last_for_index: false,
+                                        error: None,
+                                    })),
+                                }),
+                                2,
+                            ))
+                        }
+                        2 => {
+                            s2.notified().await;
+                            Some((
+                                Ok(QueryResponse {
+                                    chunk: Some(query_response::Chunk::Rows(RowSetChunk {
+                                        foreach_index: 0,
+                                        rows: vec![make_row("past-exact-deadline", 3)],
+                                        last_for_index: true,
+                                        error: None,
+                                    })),
+                                }),
+                                3,
+                            ))
+                        }
+                        _ => None,
+                    }
+                }
+            });
+            Ok(Box::pin(stream))
+        });
+
+        let core = Arc::new(ServerCore::new(
+            mock.clone(),
+            ServerConfig::default().with_clock(clock.clone()),
+        ));
+        let harness = Harness::new(kind, core);
+        let req = QueryRequest {
+            ctx: Some(CallContext {
+                deadline_unix_ms: 1_700_000_000_500,
+                ..CallContext::default()
+            }),
+            operation: "exactWallBoundary".to_owned(),
+            ..QueryRequest::default()
+        };
+
+        let t0 = tokio::time::Instant::now();
+        match &harness {
+            Harness::Grpc { client, .. } => {
+                let mut s = client.clone().query(req).await.expect("open gRPC stream");
+                assert!(s.next().await.expect("item 0").is_ok());
+
+                // 499 ms (< 500 ms deadline): stream stays open and delivers item 1.
+                clock.advance(Duration::from_millis(499));
+                step1.notify_one();
+                assert!(s.next().await.expect("item 1 at 499ms").is_ok());
+
+                // +1 ms -> exact `clock.unix_millis() == deadline_unix_ms` while tokio Instant is still at t0!
+                clock.advance(Duration::from_millis(1));
+                step2.notify_one();
+                let err = s
+                    .next()
+                    .await
+                    .expect("terminal deadline item")
+                    .expect_err("open gRPC stream must fail at exact deadline_unix_ms");
+                assert_eq!(err.code, NgcErrorCode::DeadlineExceeded);
+                assert!(s.next().await.is_none());
+            }
+            Harness::Http { router } => {
+                let http_req = Request::builder()
+                    .method(Method::POST)
+                    .uri("/gap/ngc/v1/Query")
+                    .header(http::header::CONTENT_TYPE, "application/json")
+                    .body(Body::from(to_json_vec(&req).expect("req json")))
+                    .expect("HTTP req");
+                let resp = router.clone().oneshot(http_req).await.expect("HTTP open");
+                assert_eq!(resp.status(), StatusCode::OK);
+                let mut body = resp.into_body().into_data_stream();
+
+                let f0 = body.next().await.expect("frame 0").expect("bytes 0");
+                assert!(std::str::from_utf8(&f0).expect("utf8").contains("t-0ms"));
+
+                clock.advance(Duration::from_millis(499));
+                step1.notify_one();
+                let f1 = body.next().await.expect("frame 1").expect("bytes 1");
+                assert!(std::str::from_utf8(&f1).expect("utf8").contains("t-499ms"));
+
+                clock.advance(Duration::from_millis(1));
+                step2.notify_one();
+                let f2 = body.next().await.expect("frame 2").expect("bytes 2");
+                let line2: serde_json::Value = serde_json::from_str(
+                    std::str::from_utf8(&f2)
+                        .expect("utf8")
+                        .trim_end_matches('\n'),
+                )
+                .expect("json error line");
+                let proto_err: NgcError =
+                    from_json_value(line2["error"].clone()).expect("NgcError");
+                assert_eq!(
+                    ngc_error_from_proto(&proto_err).code,
+                    NgcErrorCode::DeadlineExceeded
+                );
+                assert!(body.next().await.is_none());
+            }
+            Harness::Stdio { client, .. } => {
+                let mut s = client.query(req).await.expect("open stdio stream");
+                assert!(s.next().await.expect("item 0").is_ok());
+
+                clock.advance(Duration::from_millis(499));
+                step1.notify_one();
+                assert!(s.next().await.expect("item 1 at 499ms").is_ok());
+
+                clock.advance(Duration::from_millis(1));
+                step2.notify_one();
+                let err = s
+                    .next()
+                    .await
+                    .expect("terminal deadline item")
+                    .expect_err("open stdio stream must fail at exact deadline_unix_ms");
+                assert_eq!(err.code, NgcErrorCode::DeadlineExceeded);
+                assert!(s.next().await.is_none());
+            }
+        }
+
+        assert_eq!(
+            tokio::time::Instant::now().duration_since(t0),
+            Duration::ZERO,
+            "paused monotonic clock must not advance; expiry came purely from ManualClock == deadline_unix_ms"
+        );
+        tokio::time::timeout(Duration::from_secs(5), mock.wait_for_drops(1))
+            .await
+            .expect("connector stream dropped on exact wall-clock deadline");
+        assert_eq!(mock.in_flight(), 0);
+    }
+}

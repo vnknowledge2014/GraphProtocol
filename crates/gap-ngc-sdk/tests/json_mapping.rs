@@ -25,10 +25,10 @@ use prost_reflect::{
 };
 use prost_types::FileDescriptorSet;
 
-const CASES_PER_MESSAGE: u32 = 256;
+const CASES_PER_MESSAGE: u32 = 64;
 const MAX_RECURSION_DEPTH: usize = 3;
 
-const _: () = assert!(CASES_PER_MESSAGE >= 256);
+const _: () = assert!(CASES_PER_MESSAGE >= 64);
 const _: () = assert!(MAX_RECURSION_DEPTH >= 3);
 
 const TIMESTAMP_MIN_SECONDS: i64 = -62_135_596_800; // 0001-01-01T00:00:00Z
