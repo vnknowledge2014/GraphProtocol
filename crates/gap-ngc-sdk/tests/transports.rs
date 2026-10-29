@@ -15,7 +15,7 @@ use gap_ngc_sdk::core::{ServerConfig, ServerCore};
 use gap_ngc_sdk::error::NGC_ERROR_METADATA_KEY;
 use gap_ngc_sdk::grpc::{GrpcClient, ServeError, serve_tcp};
 use gap_ngc_sdk::http as ngc_http;
-use gap_ngc_sdk::mock::MockConnector;
+use gap_ngc_sdk::mock::{MockConnector, RpcMethod};
 use gap_ngc_sdk::stdio::serve_stdio;
 use gap_ngc_sdk::testing::{in_memory_grpc, in_memory_raw_stdio};
 use gap_proto::ngc::v1::{
@@ -812,4 +812,164 @@ async fn grpc_metadata_forwarding_health_500ms_bound_bare_status_fallback_and_no
     assert_eq!(bare_err.code, NgcErrorCode::PermissionDenied);
     assert_eq!(bare_err.message(), "bare status without metadata");
     server_task.abort();
+}
+
+// spec: NGC-003, NGC-025, NGC-093, NGC-095, INV-15
+#[tokio::test(start_paused = true)]
+async fn stdio_rejects_duplicate_in_flight_id_preserves_running_call_allows_reuse_and_separates_num_vs_str()
+ {
+    let entered = Arc::new(Notify::new());
+    let entered_c = Arc::clone(&entered);
+
+    let mock = MockConnector::new()
+        .on_query(move |req, _scope| {
+            if req.operation.starts_with("hang") {
+                entered_c.notify_one();
+                return Ok(Box::pin(stream::pending()));
+            }
+            Ok(Box::pin(stream::iter(vec![Ok(QueryResponse {
+                chunk: Some(query_response::Chunk::Rows(RowSetChunk {
+                    foreach_index: 0,
+                    rows: Vec::new(),
+                    last_for_index: true,
+                    error: None,
+                })),
+            })])))
+        })
+        .on_describe(|req, _scope| {
+            Ok(DescribeResponse {
+                not_modified: req.known_spec_hash == "reused-ok",
+                description: None,
+            })
+        });
+
+    let core = Arc::new(ServerCore::new(mock.clone(), ServerConfig::default()));
+    let (mut stdin_tx, stdout_rx, server_join) = in_memory_raw_stdio(core);
+    let mut lines = BufReader::new(stdout_rx).lines();
+
+    let mut next_json = async || -> serde_json::Value {
+        let line = tokio::time::timeout(Duration::from_secs(5), lines.next_line())
+            .await
+            .expect("stdout timed out waiting for JSON-RPC line")
+            .expect("io")
+            .expect("expected JSON-RPC line before EOF");
+        let val: serde_json::Value = serde_json::from_str(&line).expect("valid JSON-RPC line");
+        assert_eq!(val["jsonrpc"], "2.0");
+        val
+    };
+
+    // 1. Start call `id: 91` on a stream that never ends.
+    stdin_tx
+        .write_all(b"{\"jsonrpc\":\"2.0\",\"id\":91,\"method\":\"gap.ngc.Query\",\"params\":{\"operation\":\"hang-first\"}}\n")
+        .await
+        .expect("write first 91");
+    entered.notified().await;
+    assert_eq!(mock.in_flight(), 1);
+    assert_eq!(mock.calls_for(RpcMethod::Query), 1);
+
+    // 2. Duplicate `id: 91` while first is running -> rejected with `-32600` (message without payload),
+    //    connector NOT invoked a second time, and running call `91` stays untouched!
+    let canary_payload = "canary-dup-payload-secret-999";
+    let dup_req = format!(
+        "{{\"jsonrpc\":\"2.0\",\"id\":91,\"method\":\"gap.ngc.Query\",\"params\":{{\"operation\":\"hang-{canary_payload}\"}}}}\n"
+    );
+    stdin_tx
+        .write_all(dup_req.as_bytes())
+        .await
+        .expect("write duplicate 91");
+
+    let dup_resp = next_json().await;
+    assert_eq!(dup_resp["id"], 91);
+    assert_eq!(dup_resp["error"]["code"], -32600);
+    assert_eq!(dup_resp["error"]["data"]["code"], "INVALID_ARGUMENT");
+    let err_msg = dup_resp["error"]["message"].as_str().expect("err msg str");
+    assert!(
+        !err_msg.contains(canary_payload) && !err_msg.contains("91"),
+        "duplicate-id error message must not echo request payload/id, got: `{err_msg}`"
+    );
+    assert_eq!(
+        mock.calls_for(RpcMethod::Query),
+        1,
+        "duplicate id must not invoke connector"
+    );
+    assert_eq!(
+        mock.in_flight(),
+        1,
+        "running call must stay untouched in flight"
+    );
+
+    // 3. Cancel `id: 91` -> first call answers with exact 1 `CANCELLED` response and drops its stream.
+    stdin_tx
+        .write_all(b"{\"jsonrpc\":\"2.0\",\"method\":\"gap.ngc.cancel\",\"params\":{\"id\":91}}\n")
+        .await
+        .expect("write cancel 91");
+    let cancel_resp = next_json().await;
+    assert_eq!(cancel_resp["id"], 91);
+    assert_eq!(cancel_resp["error"]["code"], -32001);
+    assert_eq!(cancel_resp["error"]["data"]["code"], "CANCELLED");
+    tokio::time::timeout(Duration::from_secs(5), mock.wait_for_drops(1))
+        .await
+        .expect("original call 91 stream dropped");
+    assert_eq!(mock.in_flight(), 0);
+
+    // 4. Reuse `id: 91` after first call finished -> succeeds cleanly (and proves no late 2nd response for 91 arrived)!
+    stdin_tx
+        .write_all(b"{\"jsonrpc\":\"2.0\",\"id\":91,\"method\":\"gap.ngc.Describe\",\"params\":{\"knownSpecHash\":\"reused-ok\"}}\n")
+        .await
+        .expect("write reused 91");
+    let reused_resp = next_json().await;
+    assert_eq!(reused_resp["id"], 91);
+    assert_eq!(reused_resp["result"]["notModified"], true);
+
+    // 5. Numeric `id: 1` and string `id: "1"` are distinct ids and can run & cancel independently.
+    stdin_tx
+        .write_all(b"{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"gap.ngc.Query\",\"params\":{\"operation\":\"hang-num\"}}\n")
+        .await
+        .expect("write num 1");
+    entered.notified().await;
+
+    stdin_tx
+        .write_all(b"{\"jsonrpc\":\"2.0\",\"id\":\"1\",\"method\":\"gap.ngc.Query\",\"params\":{\"operation\":\"hang-str\"}}\n")
+        .await
+        .expect("write str 1");
+    entered.notified().await;
+    assert_eq!(mock.in_flight(), 2);
+
+    // Cancel string `"1"` only -> numeric `1` remains in flight!
+    stdin_tx
+        .write_all(
+            b"{\"jsonrpc\":\"2.0\",\"method\":\"gap.ngc.cancel\",\"params\":{\"id\":\"1\"}}\n",
+        )
+        .await
+        .expect("cancel str 1");
+    let c_str = next_json().await;
+    assert_eq!(c_str["id"], "1");
+    assert_eq!(c_str["error"]["data"]["code"], "CANCELLED");
+    tokio::time::timeout(Duration::from_secs(5), mock.wait_for_drops(2))
+        .await
+        .expect("str 1 stream dropped");
+    assert_eq!(
+        mock.in_flight(),
+        1,
+        "numeric id 1 must still be in flight after cancelling string id \"1\""
+    );
+
+    // Cancel numeric `1` -> finishes cleanly.
+    stdin_tx
+        .write_all(b"{\"jsonrpc\":\"2.0\",\"method\":\"gap.ngc.cancel\",\"params\":{\"id\":1}}\n")
+        .await
+        .expect("cancel num 1");
+    let c_num = next_json().await;
+    assert_eq!(c_num["id"], 1);
+    assert_eq!(c_num["error"]["data"]["code"], "CANCELLED");
+    tokio::time::timeout(Duration::from_secs(5), mock.wait_for_drops(3))
+        .await
+        .expect("num 1 stream dropped");
+    assert_eq!(mock.in_flight(), 0);
+
+    drop(stdin_tx);
+    server_join
+        .await
+        .expect("join")
+        .expect("clean stdio shutdown");
 }

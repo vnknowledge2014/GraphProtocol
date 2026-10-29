@@ -48,19 +48,52 @@ impl RpcIdKey {
     }
 }
 
-type InFlightMap = Arc<Mutex<HashMap<RpcIdKey, CancellationToken>>>;
+type InFlightMap = Arc<Mutex<HashMap<RpcIdKey, (u64, CancellationToken)>>>;
 
 struct InFlightEntryGuard {
     map: InFlightMap,
     key: RpcIdKey,
+    call_seq: u64,
 }
 
 impl Drop for InFlightEntryGuard {
     fn drop(&mut self) {
-        if let Ok(mut guard) = self.map.lock() {
+        let mut guard = self
+            .map
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if guard
+            .get(&self.key)
+            .is_some_and(|(seq, _)| *seq == self.call_seq)
+        {
             guard.remove(&self.key);
         }
     }
+}
+
+fn try_register_in_flight(
+    map: &InFlightMap,
+    session_cancel: &CancellationToken,
+    key: RpcIdKey,
+    call_seq: u64,
+) -> Option<(CancellationToken, InFlightEntryGuard)> {
+    let mut guard = map
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    if guard.contains_key(&key) {
+        return None;
+    }
+    let tok = session_cancel.child_token();
+    guard.insert(key.clone(), (call_seq, tok.clone()));
+    drop(guard);
+    Some((
+        tok,
+        InFlightEntryGuard {
+            map: Arc::clone(map),
+            key,
+            call_seq,
+        },
+    ))
 }
 
 enum BoundedLine {
@@ -329,6 +362,7 @@ where
 
     let session_cancel = CancellationToken::new();
     let in_flight_map: InFlightMap = Arc::new(Mutex::new(HashMap::new()));
+    let mut next_call_seq: u64 = 1;
     let mut tasks: JoinSet<()> = JoinSet::new();
 
     loop {
@@ -487,8 +521,9 @@ where
                     {
                         let maybe_tok = in_flight_map
                             .lock()
-                            .ok()
-                            .and_then(|guard| guard.get(&cancel_id).cloned());
+                            .unwrap_or_else(std::sync::PoisonError::into_inner)
+                            .get(&cancel_id)
+                            .map(|(_, tok)| tok.clone());
                         if let Some(tok) = maybe_tok {
                             tok.cancel();
                         }
@@ -518,6 +553,26 @@ where
                     let _ = out_tx
                         .send(encode_jsonrpc_error(
                             serde_json::Value::Null,
+                            JSONRPC_INVALID_REQUEST,
+                            &err,
+                            max_details,
+                        ))
+                        .await;
+                    continue;
+                };
+
+                let call_seq = next_call_seq;
+                next_call_seq = next_call_seq.wrapping_add(1);
+                let Some((call_tok, entry_guard)) =
+                    try_register_in_flight(&in_flight_map, &session_cancel, id_key, call_seq)
+                else {
+                    let err = NgcErrorInfo::new(
+                        NgcErrorCode::InvalidArgument,
+                        "request id is already in flight",
+                    );
+                    let _ = out_tx
+                        .send(encode_jsonrpc_error(
+                            id_val,
                             JSONRPC_INVALID_REQUEST,
                             &err,
                             max_details,
@@ -566,11 +621,10 @@ where
                     method,
                     params_val,
                     id_val,
-                    id_key,
+                    call_tok,
+                    entry_guard,
                     &core,
                     &out_tx,
-                    &session_cancel,
-                    &in_flight_map,
                     &mut tasks,
                 )
                 .await;
@@ -584,11 +638,10 @@ async fn dispatch_rpc<C: Connector>(
     method: StdioMethod,
     params_val: serde_json::Value,
     id_val: serde_json::Value,
-    id_key: RpcIdKey,
+    tok: CancellationToken,
+    entry_guard: InFlightEntryGuard,
     core: &Arc<ServerCore<C>>,
     out_tx: &mpsc::Sender<String>,
-    session_cancel: &CancellationToken,
-    in_flight_map: &InFlightMap,
     tasks: &mut JoinSet<()>,
 ) {
     let max_details = core.config().max_error_details_bytes;
@@ -611,22 +664,9 @@ async fn dispatch_rpc<C: Connector>(
         };
     }
 
-    let register = |key: RpcIdKey| -> (CancellationToken, InFlightEntryGuard) {
-        let tok = session_cancel.child_token();
-        if let Ok(mut guard) = in_flight_map.lock() {
-            guard.insert(key.clone(), tok.clone());
-        }
-        let entry_guard = InFlightEntryGuard {
-            map: Arc::clone(in_flight_map),
-            key,
-        };
-        (tok, entry_guard)
-    };
-
     match method {
         StdioMethod::Describe => {
             let req = parse_or_invalid_params!(DescribeRequest);
-            let (tok, entry_guard) = register(id_key);
             let core = Arc::clone(core);
             let tx = out_tx.clone();
             tasks.spawn(async move {
@@ -637,7 +677,6 @@ async fn dispatch_rpc<C: Connector>(
         }
         StdioMethod::Query => {
             let req = parse_or_invalid_params!(QueryRequest);
-            let (tok, entry_guard) = register(id_key);
             let core = Arc::clone(core);
             let tx = out_tx.clone();
             tasks.spawn(async move {
@@ -648,7 +687,6 @@ async fn dispatch_rpc<C: Connector>(
         }
         StdioMethod::Mutate => {
             let req = parse_or_invalid_params!(MutateRequest);
-            let (tok, entry_guard) = register(id_key);
             let core = Arc::clone(core);
             let tx = out_tx.clone();
             tasks.spawn(async move {
@@ -659,7 +697,6 @@ async fn dispatch_rpc<C: Connector>(
         }
         StdioMethod::Subscribe => {
             let req = parse_or_invalid_params!(SubscribeRequest);
-            let (tok, entry_guard) = register(id_key);
             let core = Arc::clone(core);
             let tx = out_tx.clone();
             tasks.spawn(async move {
@@ -670,7 +707,6 @@ async fn dispatch_rpc<C: Connector>(
         }
         StdioMethod::StartTask => {
             let req = parse_or_invalid_params!(StartTaskRequest);
-            let (tok, entry_guard) = register(id_key);
             let core = Arc::clone(core);
             let tx = out_tx.clone();
             tasks.spawn(async move {
@@ -681,7 +717,6 @@ async fn dispatch_rpc<C: Connector>(
         }
         StdioMethod::GetTask => {
             let req = parse_or_invalid_params!(GetTaskRequest);
-            let (tok, entry_guard) = register(id_key);
             let core = Arc::clone(core);
             let tx = out_tx.clone();
             tasks.spawn(async move {
@@ -692,7 +727,6 @@ async fn dispatch_rpc<C: Connector>(
         }
         StdioMethod::CancelTask => {
             let req = parse_or_invalid_params!(CancelTaskRequest);
-            let (tok, entry_guard) = register(id_key);
             let core = Arc::clone(core);
             let tx = out_tx.clone();
             tasks.spawn(async move {
@@ -703,7 +737,6 @@ async fn dispatch_rpc<C: Connector>(
         }
         StdioMethod::WatchTask => {
             let req = parse_or_invalid_params!(WatchTaskRequest);
-            let (tok, entry_guard) = register(id_key);
             let core = Arc::clone(core);
             let tx = out_tx.clone();
             tasks.spawn(async move {
@@ -714,7 +747,6 @@ async fn dispatch_rpc<C: Connector>(
         }
         StdioMethod::Sketch => {
             let req = parse_or_invalid_params!(SketchRequest);
-            let (tok, entry_guard) = register(id_key);
             let core = Arc::clone(core);
             let tx = out_tx.clone();
             tasks.spawn(async move {
@@ -725,7 +757,6 @@ async fn dispatch_rpc<C: Connector>(
         }
         StdioMethod::Health => {
             let req = parse_or_invalid_params!(HealthRequest);
-            let (tok, entry_guard) = register(id_key);
             let core = Arc::clone(core);
             let tx = out_tx.clone();
             tasks.spawn(async move {
@@ -736,7 +767,6 @@ async fn dispatch_rpc<C: Connector>(
         }
         StdioMethod::Explain => {
             let req = parse_or_invalid_params!(QueryRequest);
-            let (tok, entry_guard) = register(id_key);
             let core = Arc::clone(core);
             let tx = out_tx.clone();
             tasks.spawn(async move {
