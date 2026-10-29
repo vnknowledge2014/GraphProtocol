@@ -10,4 +10,6 @@
 
 pub mod connector;
 pub mod error;
+pub mod foreach;
 pub mod json;
+pub mod mock;
