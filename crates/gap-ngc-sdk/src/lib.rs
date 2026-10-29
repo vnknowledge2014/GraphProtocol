@@ -1,4 +1,4 @@
-//! Native Graph Connector (`NGC`) SDK, traits, and in-process/gRPC connector utilities (`L2`).
+//! Native Graph Connector (`NGC`) SDK, traits, and in-process/gRPC/HTTP/stdio connector utilities (`L2`).
 #![forbid(unsafe_code)]
 #![deny(
     clippy::unwrap_used,
@@ -7,3 +7,7 @@
     clippy::todo,
     clippy::unimplemented
 )]
+
+pub mod connector;
+pub mod error;
+pub mod json;

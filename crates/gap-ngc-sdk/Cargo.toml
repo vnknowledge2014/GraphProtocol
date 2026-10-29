@@ -7,5 +7,28 @@ license.workspace = true
 description = "Native Graph Connector (NGC) Rust SDK, server traits, mock harness, and transport helpers (L2)."
 
 [dependencies]
+axum.workspace = true
+bytes.workspace = true
+futures-util.workspace = true
 gap-core.workspace = true
 gap-proto.workspace = true
+http.workspace = true
+hyper-util = { workspace = true, features = ["tokio"] }
+prost.workspace = true
+prost-reflect = { workspace = true, features = ["serde"] }
+prost-types.workspace = true
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
+thiserror.workspace = true
+tokio = { workspace = true, features = ["io-std", "io-util", "macros", "net", "rt", "sync", "time"] }
+tokio-stream = { workspace = true, features = ["net"] }
+tokio-util.workspace = true
+tonic.workspace = true
+tonic-prost.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+http-body-util.workspace = true
+proptest.workspace = true
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "test-util", "time"] }
+tower = { workspace = true, features = ["util"] }
