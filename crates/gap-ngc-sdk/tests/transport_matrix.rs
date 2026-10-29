@@ -15,7 +15,7 @@ use gap_ngc_sdk::foreach::{ForeachConfig, foreach};
 use gap_ngc_sdk::grpc::GrpcClient;
 use gap_ngc_sdk::http as ngc_http;
 use gap_ngc_sdk::json::{from_json_slice, from_json_value, to_json_vec};
-use gap_ngc_sdk::mock::MockConnector;
+use gap_ngc_sdk::mock::{MockConnector, RpcMethod};
 use gap_ngc_sdk::testing::{
     InMemoryGrpcHandle, InMemoryStdioHandle, StdioTestClient, in_memory_grpc, in_memory_stdio,
 };
@@ -702,12 +702,14 @@ async fn matrix_saturation_panic_oversized_all_14_codes_and_error_clamping() {
         let entered_c = Arc::clone(&entered);
         let release_c = Arc::clone(&release);
 
-        let mock_sat = MockConnector::new().on_describe_async(move |_req, _scope| {
+        let mock_sat = MockConnector::new().on_describe_async(move |req, _scope| {
             let entered = Arc::clone(&entered_c);
             let release = Arc::clone(&release_c);
             async move {
-                entered.notify_one();
-                release.notified().await;
+                if req.known_spec_hash != "after" {
+                    entered.notify_one();
+                    release.notified().await;
+                }
                 Ok(DescribeResponse {
                     not_modified: true,
                     description: None,
@@ -750,10 +752,13 @@ async fn matrix_saturation_panic_oversized_all_14_codes_and_error_clamping() {
                 .expect("first ok")
                 .not_modified
         );
-        let after_release = harness_sat.describe(DescribeRequest::default()).await;
-        // Note: notify_one only wakes 1 waiter, so let's not block a second time on `release`:
-        // instead test recovery with `health` which does not block on `release`!
-        let _ = after_release;
+        let after_release = harness_sat
+            .describe(DescribeRequest {
+                known_spec_hash: "after".to_owned(),
+            })
+            .await
+            .expect("permit must return to pool after first call completes");
+        assert!(after_release.not_modified);
     }
 
     // Dedicated permit-release check (`max_in_flight = 1`, 3 sequential calls MUST all succeed!)
@@ -765,11 +770,11 @@ async fn matrix_saturation_panic_oversized_all_14_codes_and_error_clamping() {
         ));
         let harness_seq = Harness::new(kind, core_seq);
         for _ in 0..3 {
-            let h = harness_seq
-                .health(HealthRequest {})
+            let d = harness_seq
+                .describe(DescribeRequest::default())
                 .await
                 .expect("sequential call succeeds when permit is released");
-            assert_eq!(h.status, 1);
+            assert!(!d.not_modified);
         }
     }
 
@@ -1195,5 +1200,265 @@ async fn matrix_nan_stream_element_fails_closed_as_internal_without_placeholder(
             }
         }
         assert_eq!(mock.in_flight(), 0);
+    }
+}
+
+// spec: NGC-070, NGC-071, NGC-093
+#[tokio::test(start_paused = true)]
+async fn matrix_health_bypasses_max_in_flight_saturation_across_all_transports() {
+    for kind in ALL_TRANSPORTS {
+        let stream_entered = Arc::new(Notify::new());
+        let stream_release = Arc::new(Notify::new());
+        let entered_c = Arc::clone(&stream_entered);
+        let release_c = Arc::clone(&stream_release);
+
+        let mock = MockConnector::new().on_query(move |_req, _scope| {
+            let entered = Arc::clone(&entered_c);
+            let release = Arc::clone(&release_c);
+            let s = stream::unfold(0_u8, move |step| {
+                let entered = Arc::clone(&entered);
+                let release = Arc::clone(&release);
+                async move {
+                    match step {
+                        0 => {
+                            entered.notify_one();
+                            Some((
+                                Ok(QueryResponse {
+                                    chunk: Some(query_response::Chunk::Rows(RowSetChunk {
+                                        foreach_index: 0,
+                                        rows: Vec::new(),
+                                        last_for_index: false,
+                                        error: None,
+                                    })),
+                                }),
+                                1,
+                            ))
+                        }
+                        1 => {
+                            release.notified().await;
+                            Some((
+                                Ok(QueryResponse {
+                                    chunk: Some(query_response::Chunk::Rows(RowSetChunk {
+                                        foreach_index: 0,
+                                        rows: Vec::new(),
+                                        last_for_index: true,
+                                        error: None,
+                                    })),
+                                }),
+                                2,
+                            ))
+                        }
+                        _ => None,
+                    }
+                }
+            });
+            Ok(Box::pin(s))
+        });
+
+        let core = Arc::new(ServerCore::new(
+            mock.clone(),
+            ServerConfig::default()
+                .with_max_in_flight(2)
+                .with_saturated_retry_after_ms(250),
+        ));
+        let harness = Harness::new(kind, Arc::clone(&core));
+
+        match &harness {
+            Harness::Grpc { client, .. } => {
+                let mut s1 = client
+                    .clone()
+                    .query(QueryRequest::default())
+                    .await
+                    .expect("open gRPC stream 1");
+                let mut s2 = client
+                    .clone()
+                    .query(QueryRequest::default())
+                    .await
+                    .expect("open gRPC stream 2");
+                assert!(s1.next().await.expect("s1 item 0").is_ok());
+                assert!(s2.next().await.expect("s2 item 0").is_ok());
+                assert_eq!(mock.in_flight(), 2);
+                assert_eq!(core.in_flight_count(), 2);
+
+                // Saturated: Health MUST still answer SERVING while a 3rd Query gets RESOURCE_EXHAUSTED!
+                let health = harness
+                    .health(HealthRequest {})
+                    .await
+                    .expect("gRPC Health must bypass max_in_flight saturation");
+                assert_eq!(health.status, 1);
+
+                let t0 = tokio::time::Instant::now();
+                let sat_out = harness.query_all(QueryRequest::default()).await;
+                assert_eq!(
+                    tokio::time::Instant::now().duration_since(t0),
+                    Duration::ZERO
+                );
+                let sat_err = sat_out
+                    .terminal_error
+                    .expect("3rd gRPC Query must fail with RESOURCE_EXHAUSTED");
+                assert_eq!(sat_err.code, NgcErrorCode::ResourceExhausted);
+                assert!(sat_err.retryable);
+                assert_eq!(sat_err.retry_after_ms, 250);
+                assert_eq!(mock.calls_for(RpcMethod::Query), 2);
+
+                stream_release.notify_waiters();
+                while let Some(res) = s1.next().await {
+                    res.expect("s1 finish");
+                }
+                while let Some(res) = s2.next().await {
+                    res.expect("s2 finish");
+                }
+            }
+            Harness::Http { router } => {
+                let make_query_req = || {
+                    Request::builder()
+                        .method(Method::POST)
+                        .uri("/gap/ngc/v1/Query")
+                        .header(http::header::CONTENT_TYPE, "application/json")
+                        .body(Body::from("{}"))
+                        .expect("HTTP Query req")
+                };
+                let r1 = router
+                    .clone()
+                    .oneshot(make_query_req())
+                    .await
+                    .expect("open HTTP stream 1");
+                let r2 = router
+                    .clone()
+                    .oneshot(make_query_req())
+                    .await
+                    .expect("open HTTP stream 2");
+                assert_eq!(r1.status(), StatusCode::OK);
+                assert_eq!(r2.status(), StatusCode::OK);
+                let mut b1 = r1.into_body();
+                let mut b2 = r2.into_body();
+                assert!(b1.frame().await.expect("b1 frame 0").is_ok());
+                assert!(b2.frame().await.expect("b2 frame 0").is_ok());
+                assert_eq!(mock.in_flight(), 2);
+                assert_eq!(core.in_flight_count(), 2);
+
+                // Saturated: Health MUST still answer SERVING while a 3rd Query gets RESOURCE_EXHAUSTED!
+                let health = harness
+                    .health(HealthRequest {})
+                    .await
+                    .expect("HTTP Health must bypass max_in_flight saturation");
+                assert_eq!(health.status, 1);
+
+                let t0 = tokio::time::Instant::now();
+                let sat_out = harness.query_all(QueryRequest::default()).await;
+                assert_eq!(
+                    tokio::time::Instant::now().duration_since(t0),
+                    Duration::ZERO
+                );
+                let sat_err = sat_out
+                    .terminal_error
+                    .expect("3rd HTTP Query must fail with RESOURCE_EXHAUSTED");
+                assert_eq!(sat_err.code, NgcErrorCode::ResourceExhausted);
+                assert!(sat_err.retryable);
+                assert_eq!(sat_err.retry_after_ms, 250);
+                assert_eq!(mock.calls_for(RpcMethod::Query), 2);
+
+                stream_release.notify_waiters();
+                let _ = b1.collect().await.expect("b1 finish");
+                let _ = b2.collect().await.expect("b2 finish");
+            }
+            Harness::Stdio { client, .. } => {
+                let mut s1 = client
+                    .query(QueryRequest::default())
+                    .await
+                    .expect("open stdio stream 1");
+                let mut s2 = client
+                    .query(QueryRequest::default())
+                    .await
+                    .expect("open stdio stream 2");
+                assert!(s1.next().await.expect("s1 item 0").is_ok());
+                assert!(s2.next().await.expect("s2 item 0").is_ok());
+                assert_eq!(mock.in_flight(), 2);
+                assert_eq!(core.in_flight_count(), 2);
+
+                // Saturated: Health MUST still answer SERVING while a 3rd Query gets RESOURCE_EXHAUSTED!
+                let health = harness
+                    .health(HealthRequest {})
+                    .await
+                    .expect("stdio Health must bypass max_in_flight saturation");
+                assert_eq!(health.status, 1);
+
+                let t0 = tokio::time::Instant::now();
+                let sat_out = harness.query_all(QueryRequest::default()).await;
+                assert_eq!(
+                    tokio::time::Instant::now().duration_since(t0),
+                    Duration::ZERO
+                );
+                let sat_err = sat_out
+                    .terminal_error
+                    .expect("3rd stdio Query must fail with RESOURCE_EXHAUSTED");
+                assert_eq!(sat_err.code, NgcErrorCode::ResourceExhausted);
+                assert!(sat_err.retryable);
+                assert_eq!(sat_err.retry_after_ms, 250);
+                assert_eq!(mock.calls_for(RpcMethod::Query), 2);
+
+                stream_release.notify_waiters();
+                while let Some(res) = s1.next().await {
+                    res.expect("s1 finish");
+                }
+                while let Some(res) = s2.next().await {
+                    res.expect("s2 finish");
+                }
+            }
+        }
+
+        assert_eq!(
+            mock.in_flight(),
+            0,
+            "connector in-flight count must return to zero on {kind:?}"
+        );
+        assert_eq!(
+            core.in_flight_count(),
+            0,
+            "ServerCore in-flight permit count must return to zero on {kind:?}"
+        );
+        // Verify all permits returned to ServerCore by running a fresh Describe call.
+        let desc = harness
+            .describe(DescribeRequest::default())
+            .await
+            .expect("Describe after closing streams");
+        assert!(!desc.not_modified);
+
+        // Even with max_in_flight = 0 (permanently saturated), Health still enforces its 500 ms bound and panic isolation.
+        let call_idx = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let idx_c = Arc::clone(&call_idx);
+        let mock_guard = MockConnector::new().on_health_async(move |_req, _scope| {
+            let n = idx_c.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            assert!(n != 0, "secret-health-panic-when-saturated");
+            async move {
+                tokio::time::sleep(Duration::from_secs(5)).await;
+                Ok(HealthResponse {
+                    status: 1,
+                    ..HealthResponse::default()
+                })
+            }
+        });
+        let core_zero = Arc::new(ServerCore::new(
+            mock_guard,
+            ServerConfig::default().with_max_in_flight(0),
+        ));
+        let h_zero = Harness::new(kind, core_zero);
+        let p_err = h_zero
+            .health(HealthRequest {})
+            .await
+            .expect_err("panicking Health under saturation must return INTERNAL");
+        assert_eq!(p_err.code, NgcErrorCode::Internal);
+        assert_eq!(p_err.message(), CONNECTOR_PANIC_MESSAGE);
+
+        let t_start = tokio::time::Instant::now();
+        let d_err = h_zero
+            .health(HealthRequest {})
+            .await
+            .expect_err("slow Health under saturation must still time out at 500 ms");
+        assert_eq!(d_err.code, NgcErrorCode::DeadlineExceeded);
+        assert_eq!(
+            tokio::time::Instant::now().duration_since(t_start),
+            Duration::from_millis(500)
+        );
     }
 }

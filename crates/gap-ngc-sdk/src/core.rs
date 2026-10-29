@@ -162,7 +162,7 @@ pub fn headers_to_metadata(headers: &http::HeaderMap) -> BTreeMap<String, String
 }
 
 struct PreparedCall {
-    permit: OwnedSemaphorePermit,
+    permit: Option<OwnedSemaphorePermit>,
     scope: CallScope,
     call_cancel: CancellationToken,
     cancel_guard: DropGuard,
@@ -311,6 +311,14 @@ impl<C: Connector> ServerCore<C> {
         &self.connector
     }
 
+    /// Returns the number of non-`Health` calls currently holding a `max_in_flight` permit (`NGC-093` (c)).
+    #[must_use]
+    pub fn in_flight_count(&self) -> usize {
+        self.config
+            .max_in_flight
+            .saturating_sub(self.in_flight.available_permits())
+    }
+
     fn sanitize_err(&self, err: NgcErrorInfo) -> NgcErrorInfo {
         sanitize_error_info(err, self.config.max_error_details_bytes)
     }
@@ -354,13 +362,10 @@ impl<C: Connector> ServerCore<C> {
                 }
                 let remaining_ms =
                     u64::try_from(c.deadline_unix_ms.saturating_sub(now_ms)).unwrap_or(u64::MAX);
-                let dur = Duration::from_millis(remaining_ms);
-                let effective = if is_health {
-                    dur.min(self.config.health_timeout)
-                } else {
-                    dur
-                };
-                (effective, Some(c.deadline_unix_ms))
+                (
+                    Duration::from_millis(remaining_ms),
+                    Some(c.deadline_unix_ms),
+                )
             }
             _ => (fallback_timeout, None),
         };
@@ -369,17 +374,23 @@ impl<C: Connector> ServerCore<C> {
             return Err(self.cancelled_err());
         }
 
-        let permit = Arc::clone(&self.in_flight)
-            .try_acquire_owned()
-            .map_err(|_| {
-                self.sanitize_err(
-                    NgcErrorInfo::new(
-                        NgcErrorCode::ResourceExhausted,
-                        "server max_in_flight saturated",
-                    )
-                    .with_retry(true, self.config.saturated_retry_after_ms.max(1)),
-                )
-            })?;
+        let permit = if is_health {
+            None
+        } else {
+            Some(
+                Arc::clone(&self.in_flight)
+                    .try_acquire_owned()
+                    .map_err(|_| {
+                        self.sanitize_err(
+                            NgcErrorInfo::new(
+                                NgcErrorCode::ResourceExhausted,
+                                "server max_in_flight saturated",
+                            )
+                            .with_retry(true, self.config.saturated_retry_after_ms.max(1)),
+                        )
+                    })?,
+            )
+        };
 
         let now_instant = Instant::now();
         let deadline_instant = now_instant
@@ -545,7 +556,7 @@ impl<C: Connector> ServerCore<C> {
         let stream = open_res?;
         Ok(CoreStream {
             inner: Some(stream),
-            _permit: Some(permit),
+            _permit: permit,
             call_cancel,
             _cancel_guard: cancel_guard,
             cancel_fut: Box::pin(transport_cancel.cancelled_owned()),
