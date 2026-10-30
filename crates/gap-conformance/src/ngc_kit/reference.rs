@@ -60,20 +60,58 @@ pub enum Flaw {
     DescribeBadSdl,
     /// An operation schema has a remote `$ref` (`NGC-013`).
     DescribeRemoteRef,
+    /// `connector_id` is empty.
+    DescribeEmptyId,
+    /// `ngc_version` is not `gap/<major>.<minor>`.
+    DescribeBadVersion,
+    /// An operation name is not `[A-Za-z_][A-Za-z0-9_]*` (`NGC-012`).
+    DescribeBadOperationName,
+    /// An operation is listed twice.
+    DescribeDuplicateOperation,
+    /// `foreach_batch` is advertised with `max_batch_size = 0` (`NGC-015`).
+    DescribeBatchMismatch,
+    /// `limits.max_in_flight` is 0 (`NGC-071`).
+    DescribeNoCapacity,
     /// `spec_hash` changes on every call (`NGC-010`).
     DescribeNondeterministic,
+    /// The description changes on every call while `spec_hash` stays (`NGC-010`).
+    DescribeContentDrifts,
     /// `not_modified` for any hash, even one never issued (`NGC-010`).
     DescribeIgnoresKnownHash,
+    /// With the current hash the connector returns a different description instead of `not_modified` (`NGC-010`).
+    DescribeKnownHashDiffers,
     /// `Health` reports `NOT_SERVING` (`NGC-070`).
     HealthNotServing,
+    /// `Health` takes 200 ms (only meaningful with a smaller `timing.health_budget_ms`; not in [`Flaw::ALL`]).
+    HealthSlow,
     /// The first index never receives its closing chunk (`NGC-020`).
     ForeachMissingClose,
     /// Rows of an index depend on which other indices share the batch (`NGC-020`).
     ForeachDependent,
+    /// Rows of an index depend on the caller's index value, high values (`NGC-020`).
+    ForeachIndexDependent,
+    /// Rows of an index depend on the caller's index value, low values (`NGC-020`).
+    ForeachLowIndexDependent,
+    /// With a key that has no rows in the batch, the other indices silently lose their rows (`NGC-020`).
+    ForeachAbsentKeyEmptiesOthers,
+    /// Rows do not belong to the key they are returned for, consistently (`NGC-020`).
+    ForeachWrongRows,
+    /// An index whose values equal an earlier index's receives no rows (`NGC-020`).
+    ForeachDuplicateDropped,
+    /// A key without rows fails its index instead of closing empty (`NGC-020`).
+    ForeachAbsentKeyError,
     /// One failing key fails every index of its batch (`NGC-020`).
     ForeachLeaksFailure,
+    /// One failing key fails the whole call (`NGC-020`).
+    ForeachFailureAbortsCall,
+    /// A failing key closes empty without an error (`NGC-020`).
+    ForeachFailureSwallowed,
+    /// With a failing key in the batch, the other indices silently lose their rows (`NGC-020`).
+    ForeachFailureEmptiesOthers,
     /// One upstream call per key (`NGC-026`, `INV-18`).
     ForeachNPlusOne,
+    /// Equal values are counted as separate upstream calls (`NGC-026`).
+    ForeachDuplicatesEvaluated,
     /// `order_by` is ignored (`NGC-021`).
     OrderIgnored,
     /// Row order rotates from call to call (`NGC-021`).
@@ -86,97 +124,210 @@ pub enum Flaw {
     IdempotencyBroken,
     /// The repeat returns the original result but is not flagged `was_replayed` (`NGC-030`).
     ReplayNotFlagged,
+    /// The replay returns a different result than the original call (`NGC-030`).
+    ReplayChangesResult,
+    /// The first fresh key is flagged `was_replayed` (`NGC-030`).
+    FreshKeyReplayed,
+    /// The second fresh key is flagged `was_replayed` (`NGC-030`).
+    SecondKeyReplayed,
     /// Idempotency keys are shared across tenants (`NGC-030`).
     IdempotencyIgnoresTenant,
     /// A dry run applies the effect (`NGC-031`).
     DryRunMutates,
     /// A dry run reports `APPLIED` (`NGC-031`).
     DryRunWrongOutcome,
+    /// A dry run carries no `dry_run_report` (`NGC-031`).
+    DryRunNoReport,
+    /// A dry run records the idempotency key, so the real call is a replay (`NGC-031`).
+    DryRunConsumesKey,
     /// Each page after the first repeats the last row of the previous one (`NGC-021`).
     PageOverlap,
+    /// Pages hold one row more than the limit (`NGC-021`).
+    PageTooLarge,
     /// The page size changes the order of the rows (`NGC-021`).
     PageUnstable,
-    /// A cursor works with other arguments and for other tenants (`NGC-022`).
-    CursorUnbound,
+    /// A cursor works with other arguments (`NGC-022`).
+    CursorIgnoresArguments,
+    /// A cursor works for other tenants (`NGC-022`).
+    CursorIgnoresTenant,
     /// A cursor nobody issued restarts the traversal (`NGC-022`).
     CursorGarbageAccepted,
+    /// A cursor nobody issued fails `NOT_FOUND` instead of `INVALID_ARGUMENT` (`NGC-022`).
+    CursorGarbageWrongCode,
     /// An unadvertised predicate operator is silently ignored (`NGC-023`).
     PredicateIgnored,
+    /// An unadvertised predicate operator fails `INTERNAL` (`NGC-023`).
+    PredicateWrongCode,
+    /// An unknown `Query` operation is served (`NGC-060`).
+    UnknownQueryServed,
+    /// An unknown `Mutate` operation is served (`NGC-060`).
+    UnknownMutationServed,
     /// Error messages echo the caller's `authorization` (`NGC-061`, `INV-15`).
     ErrorLeaksSecret,
+    /// Error `details` carry the caller's `authorization` (`NGC-061`, `INV-15`).
+    ErrorLeaksSecretInDetails,
+    /// Error messages carry a stack trace (`NGC-061`).
+    ErrorHasStackTrace,
     /// Invalid arguments fail `INTERNAL` (`NGC-060`).
     WrongErrorCode,
     /// The response cap is ignored (`NGC-027`).
     NoTruncation,
+    /// The answer is cut at twice the cap (`NGC-027`).
+    TruncatesAtDoubleCap,
     /// The answer is cut at the cap but not flagged `truncated` (`NGC-027`).
     TruncatedUnflagged,
+    /// `next_cursor` of a truncated answer repeats the last row (`NGC-027`).
+    ResumeRepeatsRow,
+    /// `next_cursor` of a truncated answer skips a row (`NGC-027`).
+    ResumeLosesRow,
+    /// A truncated answer carries no `next_cursor` although it is resumable (`NGC-027`).
+    ResumeNoCursor,
+    /// Not a flaw: a slot is given back 300 ms after the call ended. Prompt enough, so the kit must still pass it.
+    ReleasesSlowly,
+    /// Only with [`ReferenceConnector::minimal`]: an unadvertised dry run fails `INVALID_ARGUMENT`, not `UNIMPLEMENTED` (`NGC-031`).
+    DryRunWrongCodeWhenUnsupported,
+    /// Only with [`ReferenceConnector::minimal`]: an unadvertised dry run is served (`NGC-031`).
+    DryRunServedUnadvertised,
 }
 
 impl Flaw {
-    /// Every flaw except [`Flaw::None`].
-    pub const ALL: [Self; 27] = [
+    /// Every flaw the full-kit matrix runs against the standard (non-minimal) connector.
+    pub const ALL: &'static [Self] = &[
         Self::DescribeBadSdl,
         Self::DescribeRemoteRef,
+        Self::DescribeEmptyId,
+        Self::DescribeBadVersion,
+        Self::DescribeBadOperationName,
+        Self::DescribeDuplicateOperation,
+        Self::DescribeBatchMismatch,
+        Self::DescribeNoCapacity,
         Self::DescribeNondeterministic,
+        Self::DescribeContentDrifts,
         Self::DescribeIgnoresKnownHash,
+        Self::DescribeKnownHashDiffers,
         Self::HealthNotServing,
         Self::ForeachMissingClose,
         Self::ForeachDependent,
+        Self::ForeachIndexDependent,
+        Self::ForeachLowIndexDependent,
+        Self::ForeachAbsentKeyEmptiesOthers,
+        Self::ForeachWrongRows,
+        Self::ForeachDuplicateDropped,
+        Self::ForeachAbsentKeyError,
         Self::ForeachLeaksFailure,
+        Self::ForeachFailureAbortsCall,
+        Self::ForeachFailureSwallowed,
+        Self::ForeachFailureEmptiesOthers,
         Self::ForeachNPlusOne,
+        Self::ForeachDuplicatesEvaluated,
         Self::OrderIgnored,
         Self::OrderNondeterministic,
         Self::LeaksOnDeadline,
         Self::LeaksOnCancel,
         Self::IdempotencyBroken,
         Self::ReplayNotFlagged,
+        Self::ReplayChangesResult,
+        Self::FreshKeyReplayed,
+        Self::SecondKeyReplayed,
         Self::IdempotencyIgnoresTenant,
         Self::DryRunMutates,
         Self::DryRunWrongOutcome,
+        Self::DryRunNoReport,
+        Self::DryRunConsumesKey,
         Self::PageOverlap,
+        Self::PageTooLarge,
         Self::PageUnstable,
-        Self::CursorUnbound,
+        Self::CursorIgnoresArguments,
+        Self::CursorIgnoresTenant,
         Self::CursorGarbageAccepted,
+        Self::CursorGarbageWrongCode,
         Self::PredicateIgnored,
+        Self::PredicateWrongCode,
+        Self::UnknownQueryServed,
+        Self::UnknownMutationServed,
         Self::ErrorLeaksSecret,
+        Self::ErrorLeaksSecretInDetails,
+        Self::ErrorHasStackTrace,
         Self::WrongErrorCode,
         Self::NoTruncation,
+        Self::TruncatesAtDoubleCap,
         Self::TruncatedUnflagged,
+        Self::ResumeRepeatsRow,
+        Self::ResumeLosesRow,
+        Self::ResumeNoCursor,
     ];
 
     /// The checks that must fail, and no others, when this flaw is present.
     ///
     /// `LeaksOnDeadline` also fails `cancel`: a slot that is never given back leaves the connector without capacity for the
-    /// next slow call, which is exactly what `cancel` tries first.
+    /// next slow call, which is exactly what `cancel` tries first. [`Flaw::ReleasesSlowly`] is a control: it fails nothing.
     #[must_use]
     pub fn targets(self) -> &'static [&'static str] {
         match self {
-            Self::None => &[],
-            Self::DescribeBadSdl | Self::DescribeRemoteRef => &[id::DESCRIBE_VALID],
-            Self::DescribeNondeterministic | Self::DescribeIgnoresKnownHash => {
-                &[id::DESCRIBE_STABLE]
-            }
-            Self::HealthNotServing => &[id::HEALTH],
-            Self::ForeachMissingClose | Self::ForeachDependent | Self::ForeachLeaksFailure => {
-                &[id::FOREACH_CORRECTNESS]
-            }
-            Self::ForeachNPlusOne => &[id::FOREACH_N_PLUS_ONE],
+            Self::None | Self::ReleasesSlowly => &[],
+            Self::DescribeBadSdl
+            | Self::DescribeRemoteRef
+            | Self::DescribeEmptyId
+            | Self::DescribeBadVersion
+            | Self::DescribeBadOperationName
+            | Self::DescribeDuplicateOperation
+            | Self::DescribeBatchMismatch
+            | Self::DescribeNoCapacity => &[id::DESCRIBE_VALID],
+            Self::DescribeNondeterministic
+            | Self::DescribeContentDrifts
+            | Self::DescribeIgnoresKnownHash
+            | Self::DescribeKnownHashDiffers => &[id::DESCRIBE_STABLE],
+            Self::HealthNotServing | Self::HealthSlow => &[id::HEALTH],
+            Self::ForeachMissingClose
+            | Self::ForeachDependent
+            | Self::ForeachIndexDependent
+            | Self::ForeachLowIndexDependent
+            | Self::ForeachAbsentKeyEmptiesOthers
+            | Self::ForeachWrongRows
+            | Self::ForeachDuplicateDropped
+            | Self::ForeachAbsentKeyError
+            | Self::ForeachLeaksFailure
+            | Self::ForeachFailureAbortsCall
+            | Self::ForeachFailureSwallowed
+            | Self::ForeachFailureEmptiesOthers => &[id::FOREACH_CORRECTNESS],
+            Self::ForeachNPlusOne | Self::ForeachDuplicatesEvaluated => &[id::FOREACH_N_PLUS_ONE],
             Self::OrderIgnored => &[id::QUERY_ORDER],
             Self::OrderNondeterministic => &[id::QUERY_ORDER, id::PAGE_STABILITY],
             Self::LeaksOnDeadline => &[id::DEADLINE, id::CANCEL],
             Self::LeaksOnCancel => &[id::CANCEL],
-            Self::IdempotencyBroken | Self::ReplayNotFlagged | Self::IdempotencyIgnoresTenant => {
-                &[id::MUTATE_IDEMPOTENCY]
-            }
-            Self::DryRunMutates | Self::DryRunWrongOutcome => &[id::MUTATE_DRY_RUN],
+            Self::IdempotencyBroken
+            | Self::ReplayNotFlagged
+            | Self::ReplayChangesResult
+            | Self::FreshKeyReplayed
+            | Self::SecondKeyReplayed
+            | Self::IdempotencyIgnoresTenant => &[id::MUTATE_IDEMPOTENCY],
+            Self::DryRunMutates
+            | Self::DryRunWrongOutcome
+            | Self::DryRunNoReport
+            | Self::DryRunConsumesKey
+            | Self::DryRunWrongCodeWhenUnsupported
+            | Self::DryRunServedUnadvertised => &[id::MUTATE_DRY_RUN],
             Self::PageOverlap
+            | Self::PageTooLarge
             | Self::PageUnstable
-            | Self::CursorUnbound
-            | Self::CursorGarbageAccepted => &[id::PAGE_STABILITY],
-            Self::PredicateIgnored | Self::ErrorLeaksSecret | Self::WrongErrorCode => {
-                &[id::ERRORS_MAPPING]
-            }
-            Self::NoTruncation | Self::TruncatedUnflagged => &[id::LIMITS_RESPONSE_SIZE],
+            | Self::CursorIgnoresArguments
+            | Self::CursorIgnoresTenant
+            | Self::CursorGarbageAccepted
+            | Self::CursorGarbageWrongCode => &[id::PAGE_STABILITY],
+            Self::PredicateIgnored
+            | Self::PredicateWrongCode
+            | Self::UnknownQueryServed
+            | Self::UnknownMutationServed
+            | Self::ErrorLeaksSecret
+            | Self::ErrorLeaksSecretInDetails
+            | Self::ErrorHasStackTrace
+            | Self::WrongErrorCode => &[id::ERRORS_MAPPING],
+            Self::NoTruncation
+            | Self::TruncatesAtDoubleCap
+            | Self::TruncatedUnflagged
+            | Self::ResumeRepeatsRow
+            | Self::ResumeLosesRow
+            | Self::ResumeNoCursor => &[id::LIMITS_RESPONSE_SIZE],
         }
     }
 }
@@ -248,6 +399,8 @@ struct State {
     slow_gate: Arc<Semaphore>,
     describe_calls: AtomicU64,
     list_calls: AtomicU64,
+    /// Keyed `Mutate` calls that applied an effect (not replays).
+    fresh_keyed: AtomicU64,
 }
 
 fn lock<T>(mutex: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
@@ -282,6 +435,13 @@ impl Drop for SlowStream {
         };
         if leak {
             permit.forget();
+        } else if self.flaw == Flaw::ReleasesSlowly
+            && let Ok(runtime) = tokio::runtime::Handle::try_current()
+        {
+            runtime.spawn(async move {
+                tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+                drop(permit);
+            });
         }
     }
 }
@@ -338,10 +498,36 @@ fn description(flaw: Flaw, minimal: bool, describe_call: u64) -> ConnectorDescri
     let mut mutation = op("create_order", OpKind::Mutation);
     mutation.supports_dry_run = !minimal;
     mutation.idempotent_hint = !minimal;
+    let mut operations = vec![
+        op("customers", OpKind::Query),
+        op("customers_list", OpKind::Query),
+        op("orders", OpKind::Query),
+        op("blobs", OpKind::Query),
+        op("slow", OpKind::Query),
+        mutation,
+    ];
+    if flaw == Flaw::DescribeBadOperationName {
+        operations.push(op("bad-name!", OpKind::Query));
+    }
+    if flaw == Flaw::DescribeDuplicateOperation {
+        operations.push(op("customers", OpKind::Query));
+    }
     ConnectorDescription {
-        connector_id: "gap-ngc-reference".to_owned(),
-        connector_version: "0.1.0".to_owned(),
-        ngc_version: "gap/0.1".to_owned(),
+        connector_id: if flaw == Flaw::DescribeEmptyId {
+            String::new()
+        } else {
+            "gap-ngc-reference".to_owned()
+        },
+        connector_version: if flaw == Flaw::DescribeContentDrifts {
+            format!("0.1.{describe_call}")
+        } else {
+            "0.1.0".to_owned()
+        },
+        ngc_version: if flaw == Flaw::DescribeBadVersion {
+            "0.1".to_owned()
+        } else {
+            "gap/0.1".to_owned()
+        },
         protocol: Protocol::Custom as i32,
         spec_hash: if flaw == Flaw::DescribeNondeterministic {
             format!("ref-{describe_call}")
@@ -362,21 +548,22 @@ fn description(flaw: Flaw, minimal: bool, describe_call: u64) -> ConnectorDescri
             ..Capabilities::default()
         }),
         limits: Some(Limits {
-            max_batch_size: if minimal { 0 } else { MAX_BATCH_SIZE },
-            max_in_flight: MAX_IN_FLIGHT,
+            max_batch_size: if minimal || flaw == Flaw::DescribeBatchMismatch {
+                0
+            } else {
+                MAX_BATCH_SIZE
+            },
+            max_in_flight: if flaw == Flaw::DescribeNoCapacity {
+                0
+            } else {
+                MAX_IN_FLIGHT
+            },
             max_page_size: 100,
             default_timeout_ms: 60_000,
             max_response_bytes: if minimal { 0 } else { MAX_RESPONSE_BYTES },
         }),
         schema_sdl: sdl,
-        operations: vec![
-            op("customers", OpKind::Query),
-            op("customers_list", OpKind::Query),
-            op("orders", OpKind::Query),
-            op("blobs", OpKind::Query),
-            op("slow", OpKind::Query),
-            mutation,
-        ],
+        operations,
         ..ConnectorDescription::default()
     }
 }
@@ -390,15 +577,26 @@ fn invalid(flaw: Flaw, scope: &CallScope, message: &str) -> NgcErrorInfo {
     } else {
         NgcErrorCode::InvalidArgument
     };
-    if flaw == Flaw::ErrorLeaksSecret {
-        let auth = scope
-            .metadata
-            .get("authorization")
-            .cloned()
-            .unwrap_or_default();
-        return NgcErrorInfo::new(code, format!("{message} (credential presented: {auth})"));
+    let auth = scope
+        .metadata
+        .get("authorization")
+        .cloned()
+        .unwrap_or_default();
+    match flaw {
+        Flaw::ErrorLeaksSecret => {
+            NgcErrorInfo::new(code, format!("{message} (credential presented: {auth})"))
+        }
+        Flaw::ErrorLeaksSecretInDetails => {
+            let mut details = serde_json::Map::new();
+            details.insert("credential".to_owned(), serde_json::Value::String(auth));
+            NgcErrorInfo::new(code, message).with_details(details)
+        }
+        Flaw::ErrorHasStackTrace => NgcErrorInfo::new(
+            code,
+            format!("{message}\nstack backtrace:\n   0: reference::customers_op\n   1: main"),
+        ),
+        _ => NgcErrorInfo::new(code, message),
     }
-    NgcErrorInfo::new(code, message)
 }
 
 fn rows_stream(rows: Vec<Struct>, complete: Complete) -> BoxStream<QueryResponse> {
@@ -436,10 +634,17 @@ fn apply_predicate(
         ));
     };
     if cmp.op != PREDICATE_EQ {
-        if flaw == Flaw::PredicateIgnored {
-            return Ok(());
-        }
-        return Err(invalid(flaw, scope, "predicate operator is not supported"));
+        return match flaw {
+            Flaw::PredicateIgnored => Ok(()),
+            Flaw::PredicateWrongCode => Err(NgcErrorInfo::new(
+                NgcErrorCode::Internal,
+                "predicate operator is not supported",
+            )),
+            _ => Err(NgcErrorInfo::new(
+                NgcErrorCode::InvalidArgument,
+                "predicate operator is not supported",
+            )),
+        };
     }
     let want = cmp.value.as_ref().map(prost_value_to_json);
     rows.retain(|row| {
@@ -455,7 +660,7 @@ fn apply_predicate(
     Ok(())
 }
 
-fn lookup_customers(values: &Struct) -> NgcResult<Vec<Struct>> {
+fn lookup_customers(flaw: Flaw, values: &Struct) -> NgcResult<Vec<Struct>> {
     let Some(Kind::NumberValue(wanted)) = values.fields.get("id").and_then(|v| v.kind.as_ref())
     else {
         return Err(NgcErrorInfo::new(
@@ -463,10 +668,29 @@ fn lookup_customers(values: &Struct) -> NgcResult<Vec<Struct>> {
             "id must be a number",
         ));
     };
-    Ok((1..=CUSTOMER_COUNT)
+    let mut rows: Vec<Struct> = (1..=CUSTOMER_COUNT)
         .map(customer)
         .filter(|row| number_field(row, "id").is_some_and(|id| (id - wanted).abs() < f64::EPSILON))
-        .collect())
+        .collect();
+    if rows.is_empty() && flaw == Flaw::ForeachAbsentKeyError {
+        return Err(NgcErrorInfo::new(
+            NgcErrorCode::NotFound,
+            "no such customer",
+        ));
+    }
+    if flaw == Flaw::ForeachWrongRows {
+        for row in &mut rows {
+            let id = number_field(row, "id").unwrap_or(0.0);
+            row.fields.insert("id".to_owned(), num(id + 100.0));
+        }
+    }
+    Ok(rows)
+}
+
+fn canonical_values(values: Option<&Struct>) -> String {
+    values.map_or_else(String::new, |v| {
+        serde_json::Value::Object(prost_struct_to_json_map(v)).to_string()
+    })
 }
 
 fn customers_op(
@@ -476,6 +700,26 @@ fn customers_op(
 ) -> NgcResult<BoxStream<QueryResponse>> {
     if !req.foreach.is_empty() {
         let sets = req.foreach.clone();
+        if flaw == Flaw::ForeachFailureAbortsCall
+            && sets.iter().any(|set| {
+                set.values
+                    .as_ref()
+                    .is_none_or(|v| lookup_customers(flaw, v).is_err())
+            })
+        {
+            return Err(NgcErrorInfo::new(
+                NgcErrorCode::InvalidArgument,
+                "a key in the request is invalid",
+            ));
+        }
+        let mut seen = BTreeSet::new();
+        let mut duplicate_indexes = BTreeSet::new();
+        for set in &sets {
+            if !seen.insert(canonical_values(set.values.as_ref())) {
+                duplicate_indexes.insert(set.index);
+            }
+        }
+        let duplicate_count = u32::try_from(duplicate_indexes.len()).unwrap_or(0);
         let batch_size = if flaw == Flaw::ForeachNPlusOne {
             1
         } else {
@@ -486,44 +730,67 @@ fn customers_op(
             ForeachConfig::new(batch_size, 2),
             scope,
             move |batch: Vec<Struct>| async move {
-                if flaw == Flaw::ForeachLeaksFailure
-                    && batch.iter().any(|v| lookup_customers(v).is_err())
-                {
+                let mut results: Vec<NgcResult<Vec<Struct>>> =
+                    batch.iter().map(|v| lookup_customers(flaw, v)).collect();
+                let any_failed = results.iter().any(Result::is_err);
+                if flaw == Flaw::ForeachLeaksFailure && any_failed {
                     return Err(NgcErrorInfo::new(
                         NgcErrorCode::InvalidArgument,
                         "a key in the batch is invalid",
                     ));
                 }
-                let together = batch.len() >= 2;
-                Ok(batch
+                if flaw == Flaw::ForeachFailureSwallowed {
+                    results = results
+                        .into_iter()
+                        .map(|r| r.or_else(|_| Ok(Vec::new())))
+                        .collect();
+                }
+                let any_absent = results
                     .iter()
-                    .map(|values| {
-                        lookup_customers(values).map(|rows| {
-                            if flaw == Flaw::ForeachDependent && together {
-                                rows.into_iter()
-                                    .map(|mut row| {
-                                        let score = number_field(&row, "score").unwrap_or(0.0);
-                                        row.fields.insert("score".to_owned(), num(score + 1.0));
-                                        row
-                                    })
-                                    .collect()
-                            } else {
-                                rows
-                            }
-                        })
-                    })
-                    .collect())
+                    .any(|r| matches!(r, Ok(rows) if rows.is_empty()));
+                if flaw == Flaw::ForeachAbsentKeyEmptiesOthers && any_absent {
+                    results = results.into_iter().map(|r| r.map(|_| Vec::new())).collect();
+                }
+                if flaw == Flaw::ForeachFailureEmptiesOthers && any_failed {
+                    results = results.into_iter().map(|r| r.map(|_| Vec::new())).collect();
+                }
+                if flaw == Flaw::ForeachDependent && batch.len() >= 2 {
+                    for rows in results.iter_mut().flatten() {
+                        for row in rows.iter_mut() {
+                            let score = number_field(row, "score").unwrap_or(0.0);
+                            row.fields.insert("score".to_owned(), num(score + 1.0));
+                        }
+                    }
+                }
+                Ok(results)
             },
         )?;
         let first_index = req.foreach.first().map(|s| s.index);
         let inner = run.into_query_stream();
         return Ok(Box::pin(futures_util::StreamExt::map(inner, move |item| {
             item.map(|mut resp| {
-                if flaw == Flaw::ForeachMissingClose
-                    && let Some(query_response::Chunk::Rows(chunk)) = &mut resp.chunk
-                    && Some(chunk.foreach_index) == first_index
-                {
-                    chunk.last_for_index = false;
+                match &mut resp.chunk {
+                    Some(query_response::Chunk::Rows(chunk)) => {
+                        if flaw == Flaw::ForeachMissingClose
+                            && Some(chunk.foreach_index) == first_index
+                        {
+                            chunk.last_for_index = false;
+                        }
+                        if (flaw == Flaw::ForeachIndexDependent && chunk.foreach_index >= 1_000)
+                            || (flaw == Flaw::ForeachLowIndexDependent
+                                && (100..200).contains(&chunk.foreach_index))
+                            || (flaw == Flaw::ForeachDuplicateDropped
+                                && duplicate_indexes.contains(&chunk.foreach_index))
+                        {
+                            chunk.rows.clear();
+                        }
+                    }
+                    Some(query_response::Chunk::Complete(done))
+                        if flaw == Flaw::ForeachDuplicatesEvaluated =>
+                    {
+                        done.upstream_calls += duplicate_count;
+                    }
+                    _ => {}
                 }
                 resp
             })
@@ -537,7 +804,7 @@ fn customers_op(
             kind: Some(Kind::NumberValue(_)),
         }) => {
             let values = req.arguments.clone().unwrap_or_default();
-            lookup_customers(&values)?
+            lookup_customers(flaw, &values)?
         }
         Some(_) => return Err(invalid(flaw, scope, "id must be an integer")),
     };
@@ -553,15 +820,21 @@ fn customers_op(
     ))
 }
 
-fn args_digest(operation: &str, req: &QueryRequest, tenant: &str, bound: bool) -> u64 {
+fn args_digest(
+    operation: &str,
+    req: &QueryRequest,
+    tenant: &str,
+    bind_args: bool,
+    bind_tenant: bool,
+) -> u64 {
     let mut hasher = DefaultHasher::new();
     operation.hash(&mut hasher);
-    if bound {
-        if let Some(args) = &req.arguments {
-            serde_json::Value::Object(prost_struct_to_json_map(args))
-                .to_string()
-                .hash(&mut hasher);
-        }
+    if bind_args && let Some(args) = &req.arguments {
+        serde_json::Value::Object(prost_struct_to_json_map(args))
+            .to_string()
+            .hash(&mut hasher);
+    }
+    if bind_tenant {
         tenant.hash(&mut hasher);
     }
     hasher.finish()
@@ -620,8 +893,13 @@ fn list_op(
     }
 
     let tenant = req.ctx.as_ref().map_or("", |c| c.tenant_id.as_str());
-    let bound = flaw != Flaw::CursorUnbound;
-    let digest = args_digest("customers_list", &req, tenant, bound);
+    let digest = args_digest(
+        "customers_list",
+        &req,
+        tenant,
+        flaw != Flaw::CursorIgnoresArguments,
+        flaw != Flaw::CursorIgnoresTenant,
+    );
     let mut offset = 0_usize;
     if let Some(p) = &page
         && !p.cursor.is_empty()
@@ -642,6 +920,12 @@ fn list_op(
                 ));
             }
             None if flaw == Flaw::CursorGarbageAccepted => {}
+            None if flaw == Flaw::CursorGarbageWrongCode => {
+                return Err(NgcErrorInfo::new(
+                    NgcErrorCode::NotFound,
+                    "malformed cursor",
+                ));
+            }
             None => {
                 return Err(NgcErrorInfo::new(
                     NgcErrorCode::InvalidArgument,
@@ -655,10 +939,15 @@ fn list_op(
     if flaw == Flaw::PageOverlap && start > 0 {
         start -= 1;
     }
-    let end = if limit == 0 {
+    let effective_limit = if flaw == Flaw::PageTooLarge && limit > 0 {
+        limit + 1
+    } else {
+        limit
+    };
+    let end = if effective_limit == 0 {
         total
     } else {
-        (offset.min(total) + usize::try_from(limit).unwrap_or(usize::MAX)).min(total)
+        (offset.min(total) + usize::try_from(effective_limit).unwrap_or(usize::MAX)).min(total)
     };
     let next_cursor = if limit > 0 && end < total {
         format!("v1:{digest:016x}:{end}")
@@ -685,13 +974,18 @@ fn blobs_op(flaw: Flaw, req: &QueryRequest) -> BoxStream<QueryResponse> {
         .and_then(|p| p.cursor.strip_prefix("blob:"))
         .and_then(|n| n.parse::<i64>().ok())
         .unwrap_or(0);
+    let cap = if flaw == Flaw::TruncatesAtDoubleCap {
+        MAX_RESPONSE_BYTES * 2
+    } else {
+        MAX_RESPONSE_BYTES
+    };
     let mut rows = Vec::new();
     let mut bytes = 0_u64;
     let mut next = offset;
     while next < BLOB_ROWS {
         let row = blob(next);
         let size = row.encoded_len() as u64;
-        if flaw != Flaw::NoTruncation && bytes + size > MAX_RESPONSE_BYTES {
+        if flaw != Flaw::NoTruncation && bytes + size > cap {
             break;
         }
         bytes += size;
@@ -703,8 +997,13 @@ fn blobs_op(flaw: Flaw, req: &QueryRequest) -> BoxStream<QueryResponse> {
     rows_stream(
         rows,
         Complete {
-            next_cursor: if cut {
-                format!("blob:{next}")
+            next_cursor: if cut && flaw != Flaw::ResumeNoCursor {
+                let resume = match flaw {
+                    Flaw::ResumeRepeatsRow => next - 1,
+                    Flaw::ResumeLosesRow => next + 1,
+                    _ => next,
+                };
+                format!("blob:{resume}")
             } else {
                 String::new()
             },
@@ -740,7 +1039,7 @@ fn create_order(
     state: &State,
     req: &MutateRequest,
 ) -> NgcResult<MutateResponse> {
-    if req.operation != "create_order" {
+    if req.operation != "create_order" && flaw != Flaw::UnknownMutationServed {
         return Err(NgcErrorInfo::new(
             NgcErrorCode::NotFound,
             "unknown mutation",
@@ -763,14 +1062,33 @@ fn create_order(
     };
 
     if req.dry_run {
-        if minimal {
+        if minimal && flaw != Flaw::DryRunServedUnadvertised {
+            let code = if flaw == Flaw::DryRunWrongCodeWhenUnsupported {
+                NgcErrorCode::InvalidArgument
+            } else {
+                NgcErrorCode::Unimplemented
+            };
             return Err(NgcErrorInfo::new(
-                NgcErrorCode::Unimplemented,
+                code,
                 "dry_run is not supported by this connector",
             ));
         }
         if flaw == Flaw::DryRunMutates {
             apply(&item);
+        }
+        if flaw == Flaw::DryRunConsumesKey && !ctx.idempotency_key.is_empty() {
+            lock(&state.idempotency).insert(
+                (
+                    ctx.tenant_id.clone(),
+                    req.operation.clone(),
+                    ctx.idempotency_key.clone(),
+                ),
+                MutateResponse {
+                    result: Some(object(vec![("item", text(&item))])),
+                    outcome: MutationOutcome::OutcomeApplied as i32,
+                    ..MutateResponse::default()
+                },
+            );
         }
         return Ok(MutateResponse {
             outcome: if flaw == Flaw::DryRunWrongOutcome {
@@ -778,7 +1096,11 @@ fn create_order(
             } else {
                 MutationOutcome::OutcomeDryRun as i32
             },
-            dry_run_report: Some(object(vec![("would_create", text(&item))])),
+            dry_run_report: if flaw == Flaw::DryRunNoReport {
+                None
+            } else {
+                Some(object(vec![("would_create", text(&item))]))
+            },
             ..MutateResponse::default()
         });
     }
@@ -802,10 +1124,18 @@ fn create_order(
                 });
             }
             original.was_replayed = flaw != Flaw::ReplayNotFlagged;
+            if flaw == Flaw::ReplayChangesResult {
+                original.result = Some(object(vec![("n", num(999.0)), ("item", text("changed"))]));
+            }
             return Ok(original);
         }
     }
     let order = apply(&item);
+    let fresh_no = if key.is_empty() {
+        u64::MAX
+    } else {
+        state.fresh_keyed.fetch_add(1, Ordering::Relaxed)
+    };
     let response = MutateResponse {
         result: Some(order),
         outcome: MutationOutcome::OutcomeApplied as i32,
@@ -813,6 +1143,14 @@ fn create_order(
     };
     if !key.is_empty() {
         lock(&state.idempotency).insert(slot, response.clone());
+    }
+    if (flaw == Flaw::FreshKeyReplayed && fresh_no == 0)
+        || (flaw == Flaw::SecondKeyReplayed && fresh_no == 1)
+    {
+        return Ok(MutateResponse {
+            was_replayed: true,
+            ..response
+        });
     }
     Ok(response)
 }
@@ -840,6 +1178,7 @@ impl ReferenceConnector {
                 slow_gate: Arc::new(Semaphore::new(MAX_IN_FLIGHT as usize)),
                 describe_calls: AtomicU64::new(0),
                 list_calls: AtomicU64::new(0),
+                fresh_keyed: AtomicU64::new(0),
             }),
         }
     }
@@ -873,6 +1212,14 @@ impl ReferenceConnector {
                 }
                 let desc = description(flaw, minimal, call_no);
                 if !req.known_spec_hash.is_empty() && req.known_spec_hash == desc.spec_hash {
+                    if flaw == Flaw::DescribeKnownHashDiffers {
+                        let mut changed = desc;
+                        changed.connector_version = "0.1.1".to_owned();
+                        return Ok(DescribeResponse {
+                            not_modified: false,
+                            description: Some(changed),
+                        });
+                    }
                     return Ok(DescribeResponse {
                         not_modified: true,
                         description: None,
@@ -883,7 +1230,10 @@ impl ReferenceConnector {
                     description: Some(desc),
                 })
             })
-            .on_health(move |_req, _scope| {
+            .on_health_async(move |_req, _scope| async move {
+                if flaw == Flaw::HealthSlow {
+                    tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+                }
                 Ok(HealthResponse {
                     status: if flaw == Flaw::HealthNotServing {
                         ServingStatus::NotServing as i32
@@ -911,6 +1261,7 @@ impl ReferenceConnector {
                 }
                 "blobs" => Ok(blobs_op(flaw, &req)),
                 "slow" => slow_op(flaw, &s_query, &scope),
+                _ if flaw == Flaw::UnknownQueryServed => customers_op(flaw, &scope, req),
                 other => Err(NgcErrorInfo::new(
                     NgcErrorCode::NotFound,
                     format!("unknown operation `{other}`"),

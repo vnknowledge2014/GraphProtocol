@@ -49,6 +49,16 @@ fn index_of(position: usize) -> u32 {
     INDEX_BASE + INDEX_STRIDE * u32::try_from(position).unwrap_or(0)
 }
 
+/// Fails with every shape problem of a `foreach` call (`NGC-020`): one closing chunk per index, nothing stray, one `Complete`.
+fn shape(got: &Collected, expected: &[u32], what: &str) -> Result<(), String> {
+    let problems = got.foreach_problems(expected);
+    if problems.is_empty() {
+        Ok(())
+    } else {
+        Err(format!("{what}: {}", problems.join("; ")))
+    }
+}
+
 /// Rows of `index` as a sorted canonical list.
 fn rows_at(got: &Collected, index: u32) -> Vec<String> {
     canon_sorted(got.rows.get(&index).map(Vec::as_slice).unwrap_or_default())
@@ -73,13 +83,7 @@ pub(crate) async fn correctness(kit: &Kit<'_>, notes: &mut Vec<String>) -> Verdi
 
     // (a) one batch: every index closes exactly once, no stray chunks, one Complete.
     let together = run(kit, read, &picked).await;
-    let problems = together.foreach_problems(&indices);
-    if !problems.is_empty() {
-        return Err(format!(
-            "foreach stream shape (NGC-020): {}",
-            problems.join("; ")
-        ));
-    }
+    shape(&together, &indices, "foreach stream shape (NGC-020)")?;
     for (idx, key) in &picked {
         if let Some(err) = together.index_errors.get(idx) {
             return Err(format!(
@@ -108,9 +112,11 @@ pub(crate) async fn correctness(kit: &Kit<'_>, notes: &mut Vec<String>) -> Verdi
     let mut solo_rows = Vec::with_capacity(picked.len());
     for (idx, key) in &picked {
         let solo = run(kit, read, &[(0, *key)]).await;
-        let problems = solo.foreach_problems(&[0]);
-        if !problems.is_empty() || solo.index_errors.contains_key(&0) {
-            return Err(format!("key {key} alone: {}", problems.join("; ")));
+        shape(&solo, &[0], &format!("key {key} alone"))?;
+        if solo.index_errors.contains_key(&0) {
+            return Err(format!(
+                "key {key} alone: an existing key came back with an error"
+            ));
         }
         let alone = rows_at(&solo, 0);
         let batched = rows_at(&together, *idx);
@@ -138,10 +144,7 @@ pub(crate) async fn correctness(kit: &Kit<'_>, notes: &mut Vec<String>) -> Verdi
             .collect();
         let rev_indices: Vec<u32> = reversed.iter().map(|(i, _)| *i).collect();
         let got = run(kit, read, &reversed).await;
-        let problems = got.foreach_problems(&rev_indices);
-        if !problems.is_empty() {
-            return Err(format!("reversed foreach: {}", problems.join("; ")));
-        }
+        shape(&got, &rev_indices, "reversed foreach")?;
         for ((idx, key), position) in reversed.iter().zip((0..picked.len()).rev()) {
             if rows_at(&got, *idx) != solo_rows[position] {
                 return Err(format!(
@@ -153,10 +156,7 @@ pub(crate) async fn correctness(kit: &Kit<'_>, notes: &mut Vec<String>) -> Verdi
         // (d) two indices carrying equal values both receive the rows.
         let first = picked[0].1;
         let twice = run(kit, read, &[(1, first), (2, first)]).await;
-        let problems = twice.foreach_problems(&[1, 2]);
-        if !problems.is_empty() {
-            return Err(format!("duplicate values: {}", problems.join("; ")));
-        }
+        shape(&twice, &[1, 2], "duplicate values")?;
         for idx in [1, 2] {
             if rows_at(&twice, idx) != solo_rows[0] {
                 return Err(format!(
@@ -174,10 +174,7 @@ pub(crate) async fn correctness(kit: &Kit<'_>, notes: &mut Vec<String>) -> Verdi
         }
         let ids: Vec<u32> = items.iter().map(|(i, _)| *i).collect();
         let got = run(kit, read, &items).await;
-        let problems = got.foreach_problems(&ids);
-        if !problems.is_empty() {
-            return Err(format!("absent key: {}", problems.join("; ")));
-        }
+        shape(&got, &ids, "absent key")?;
         if got.index_errors.contains_key(&1) || got.rows.get(&1).is_some_and(|r| !r.is_empty()) {
             return Err(format!(
                 "absent key {absent}: expected an empty, error-free closing chunk"
@@ -210,10 +207,7 @@ pub(crate) async fn correctness(kit: &Kit<'_>, notes: &mut Vec<String>) -> Verdi
                 got.failure.as_ref().map(|f| f.code)
             ));
         }
-        let problems = got.foreach_problems(&ids);
-        if !problems.is_empty() {
-            return Err(format!("failing key: {}", problems.join("; ")));
-        }
+        shape(&got, &ids, "failing key")?;
         if !got.index_errors.contains_key(&1) {
             return Err(format!(
                 "failing key {bad}: its index closed without an error"
@@ -284,7 +278,7 @@ pub(crate) async fn n_plus_one(kit: &Kit<'_>, notes: &mut Vec<String>) -> Verdic
         ));
     }
 
-    let m = batch / 2;
+    let m = (batch / 2).min(1);
     if m >= 1 {
         let mut doubled: Vec<(u32, &toml::Value)> = Vec::new();
         for (position, (_, key)) in distinct.iter().take(m).enumerate() {
@@ -308,8 +302,8 @@ pub(crate) async fn n_plus_one(kit: &Kit<'_>, notes: &mut Vec<String>) -> Verdic
 fn upstream_calls(got: &Collected) -> Result<usize, String> {
     let complete = got.complete().ok_or_else(|| {
         format!(
-            "the foreach call did not end with exactly one Complete ({})",
-            got.foreach_problems(&[]).join("; ")
+            "the foreach call did not end with exactly one Complete (got {})",
+            got.completes.len()
         )
     })?;
     Ok(usize::try_from(complete.upstream_calls).unwrap_or(usize::MAX))

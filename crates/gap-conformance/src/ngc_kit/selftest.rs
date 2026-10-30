@@ -9,7 +9,7 @@ use gap_ngc_sdk::mock::MockConnector;
 use gap_ngc_sdk::testing::in_memory_grpc;
 
 use super::reference::{Flaw, ReferenceConnector};
-use super::{CHECKS, KitReport, Outcome, Profile, SkipReason, id, run_kit};
+use super::{CHECKS, KitReport, Outcome, Profile, SkipReason, id, run_kit, run_selected};
 
 fn reference_profile() -> Profile {
     Profile::from_toml_str(include_str!(
@@ -45,7 +45,7 @@ async fn ngc_kit_each_flaw_fails_exactly_its_checks() {
     let profile = reference_profile();
     let mut mismatches = Vec::new();
     let mut failed_somewhere = BTreeSet::new();
-    for flaw in Flaw::ALL {
+    for &flaw in Flaw::ALL {
         let report = run(ReferenceConnector::new(flaw), &profile).await;
         let got = names(report.failed());
         let want: BTreeSet<&str> = flaw.targets().iter().copied().collect();
@@ -205,4 +205,137 @@ async fn ngc_kit_cli_passes_the_reference_connector_over_real_loopback_tcp() {
     assert_eq!(checks.len(), CHECKS.len());
     assert!(checks.iter().all(|c| c["status"] == "pass"), "{json}");
     server.abort();
+}
+
+// spec: NGC-091, NGC-010, NGC-020, NGC-021, NGC-022, NGC-025, NGC-026, NGC-027, NGC-030, NGC-031, NGC-061
+#[tokio::test(start_paused = true)]
+async fn ngc_kit_each_flaw_alone_fails_its_targets_without_help_from_earlier_checks() {
+    // Running only the target checks on a fresh connector shows what each check proves by itself: an earlier check's side
+    // effect (a leaked slot, a consumed key) cannot be what makes it fail.
+    let profile = reference_profile();
+    let mut mismatches = Vec::new();
+    for &flaw in Flaw::ALL {
+        let (client, _handle) = ReferenceConnector::new(flaw).in_memory();
+        let report = run_selected(&client, &profile, Some(flaw.targets())).await;
+        let got = names(report.failed());
+        let want: BTreeSet<&str> = flaw.targets().iter().copied().collect();
+        if got != want {
+            mismatches.push(format!("{flaw:?}: failed {got:?}, expected {want:?}"));
+        }
+    }
+    assert!(mismatches.is_empty(), "{}", mismatches.join("\n"));
+}
+
+// spec: NGC-091, NGC-030, NGC-031
+#[tokio::test(start_paused = true)]
+async fn ngc_kit_idempotency_and_dry_run_flaws_are_caught_without_an_effect_probe() {
+    // Without mutate.probe only the flags and results can be compared; the kit must still catch these.
+    let mut profile = reference_profile();
+    profile.mutate.as_mut().expect("mutate section").probe = None;
+    for flaw in [
+        Flaw::IdempotencyBroken,
+        Flaw::ReplayNotFlagged,
+        Flaw::ReplayChangesResult,
+        Flaw::FreshKeyReplayed,
+        Flaw::IdempotencyIgnoresTenant,
+        Flaw::DryRunWrongOutcome,
+        Flaw::DryRunNoReport,
+        Flaw::DryRunConsumesKey,
+    ] {
+        let (client, _handle) = ReferenceConnector::new(flaw).in_memory();
+        let report = run_selected(&client, &profile, Some(flaw.targets())).await;
+        let got = names(report.failed());
+        let want: BTreeSet<&str> = flaw.targets().iter().copied().collect();
+        assert_eq!(got, want, "{flaw:?} without a probe");
+    }
+    // A dry run that applies the effect is invisible without a probe; the kit says so instead of passing silently.
+    let (client, _handle) = ReferenceConnector::new(Flaw::DryRunMutates).in_memory();
+    let report = run_selected(&client, &profile, Some(&[id::MUTATE_DRY_RUN])).await;
+    let result = report.result(id::MUTATE_DRY_RUN).expect("dry_run result");
+    assert_eq!(result.outcome, Outcome::Pass);
+    assert!(
+        result.notes.iter().any(|n| n.contains("mutate.probe")),
+        "{:?}",
+        result.notes
+    );
+}
+
+// spec: NGC-091, NGC-031
+#[tokio::test(start_paused = true)]
+async fn ngc_kit_unadvertised_dry_run_must_fail_unimplemented() {
+    for flaw in [
+        Flaw::DryRunWrongCodeWhenUnsupported,
+        Flaw::DryRunServedUnadvertised,
+    ] {
+        let (client, _handle) = ReferenceConnector::new(flaw).minimal().in_memory();
+        let report = run_selected(&client, &reference_profile(), Some(&[id::MUTATE_DRY_RUN])).await;
+        assert_eq!(
+            names(report.failed()),
+            BTreeSet::from([id::MUTATE_DRY_RUN]),
+            "{flaw:?}"
+        );
+    }
+}
+
+// spec: NGC-091, NGC-070
+#[tokio::test(start_paused = true)]
+async fn ngc_kit_health_budget_is_enforced() {
+    let mut profile = reference_profile();
+    profile.timing.health_budget_ms = 50;
+    let (client, _handle) = ReferenceConnector::new(Flaw::HealthSlow).in_memory();
+    let slow = run_selected(&client, &profile, Some(&[id::HEALTH])).await;
+    assert_eq!(names(slow.failed()), BTreeSet::from([id::HEALTH]));
+    // Control: the same budget passes a connector that answers at once.
+    let (client, _handle) = ReferenceConnector::new(Flaw::None).in_memory();
+    let fine = run_selected(&client, &profile, Some(&[id::HEALTH])).await;
+    assert!(fine.failed().is_empty(), "{}", fine.render_text());
+}
+
+// spec: NGC-091, NGC-027
+#[tokio::test(start_paused = true)]
+async fn ngc_kit_size_probe_that_fits_the_cap_is_a_profile_error() {
+    let mut profile = reference_profile();
+    profile
+        .size
+        .as_mut()
+        .expect("size section")
+        .expected_total_rows = 5;
+    let (client, _handle) = ReferenceConnector::new(Flaw::None).in_memory();
+    let report = run_selected(&client, &profile, Some(&[id::LIMITS_RESPONSE_SIZE])).await;
+    match &report
+        .result(id::LIMITS_RESPONSE_SIZE)
+        .expect("result")
+        .outcome
+    {
+        Outcome::Fail(why) => assert!(why.contains("profile must name"), "{why}"),
+        other => panic!("expected a profile error, got {other:?}"),
+    }
+}
+
+// spec: NGC-091, NGC-025, INV-12
+#[tokio::test(start_paused = true)]
+async fn ngc_kit_accepts_a_connector_that_gives_slots_back_a_little_late() {
+    // Control for the retry window: a slot returned 300 ms after the call ended is prompt (grace is 2 s), not a leak.
+    let report = run(
+        ReferenceConnector::new(Flaw::ReleasesSlowly),
+        &reference_profile(),
+    )
+    .await;
+    assert!(report.compatible(), "{}", report.render_text());
+    for r in &report.results {
+        assert_eq!(r.outcome, Outcome::Pass, "{}", r.info.id);
+    }
+}
+
+// spec: NGC-091, NGC-022
+#[tokio::test(start_paused = true)]
+async fn ngc_kit_page_limit_that_covers_the_data_set_is_a_profile_error() {
+    let mut profile = reference_profile();
+    profile.page.as_mut().expect("page section").limit = 100;
+    let (client, _handle) = ReferenceConnector::new(Flaw::None).in_memory();
+    let report = run_selected(&client, &profile, Some(&[id::PAGE_STABILITY])).await;
+    match &report.result(id::PAGE_STABILITY).expect("result").outcome {
+        Outcome::Fail(why) => assert!(why.contains("cannot be exercised"), "{why}"),
+        other => panic!("expected a profile error, got {other:?}"),
+    }
 }

@@ -65,6 +65,7 @@ Not checked (no way to observe them black-box): cursor expiry of >= 10 minutes (
 connector built on the SDK's `MockConnector`:
 
 * the correct connector passes all 13 checks, in memory and over a real loopback TCP socket through the CLI;
-* each of 27 deliberate flaws (`Flaw`) fails exactly the checks it targets, and every check is failed by at least one flaw;
+* each of 62 deliberate flaws (`Flaw::ALL`) fails exactly the checks it targets, both in a full run and when its target checks run alone on a fresh connector (no help from an earlier check's side effects), and every check is failed by at least one flaw;
+* controls: a connector that gives a slot back 300 ms late still passes (the retry window), idempotency and dry-run flaws are also caught without an effect probe, an unadvertised dry run must fail `UNIMPLEMENTED`, and a profile that cannot exercise a check (page limit covering the data set, a size probe that fits the cap) is reported as a profile error;
 * capability gating skips what a minimal connector does not advertise; a profile that cannot probe an advertised capability is
   reported as `not_covered`; a connector without a readable `Describe` fails `describe.valid` and nothing else runs.

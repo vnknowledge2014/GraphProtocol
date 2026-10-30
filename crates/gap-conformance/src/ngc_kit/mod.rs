@@ -102,6 +102,16 @@ fn describe_unavailable(profile: &Profile, why: &str) -> KitReport {
 ///
 /// Checks run one after the other: several of them change connector state (a mutation, held calls) and must not overlap.
 pub async fn run_kit(client: &GrpcClient, profile: &Profile) -> KitReport {
+    run_selected(client, profile, None).await
+}
+
+/// Like [`run_kit`], optionally restricted to the checks named in `only` (in [`CHECKS`] order); the report then holds only
+/// those. Running one check on a fresh connector shows what that check alone proves, without the damage earlier checks did.
+pub(crate) async fn run_selected(
+    client: &GrpcClient,
+    profile: &Profile,
+    only: Option<&[&str]>,
+) -> KitReport {
     let desc: ConnectorDescription = match client
         .describe_with_metadata(DescribeRequest::default(), &BTreeMap::new())
         .await
@@ -126,6 +136,9 @@ pub async fn run_kit(client: &GrpcClient, profile: &Profile) -> KitReport {
     let kit = kit::Kit::new(client, profile, &desc);
     let mut results = Vec::with_capacity(CHECKS.len());
     for info in &CHECKS {
+        if only.is_some_and(|ids| !ids.contains(&info.id)) {
+            continue;
+        }
         let started = Instant::now();
         let mut notes = Vec::new();
         let verdict = checks::run_one(&kit, info.id, &mut notes).await;

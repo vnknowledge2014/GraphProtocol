@@ -63,6 +63,12 @@ impl SlowCall {
 
     /// Cancel: drop the stream.
     fn cancel(self) {
+        drop(self);
+    }
+}
+
+impl Drop for SlowCall {
+    fn drop(&mut self) {
         self.handle.abort();
     }
 }
@@ -119,26 +125,41 @@ fn grace(kit: &Kit<'_>) -> Duration {
     Duration::from_millis(kit.profile.timing.grace_ms)
 }
 
-/// Opens `calls` slow calls with a long deadline until none is refused (or the grace period is over), then cancels them.
+/// Opens `calls` slow calls with a long deadline and returns them once none is refused.
 ///
-/// This is the capacity proof: if the connector still works for callers that left, it keeps its slots and refuses the new ones.
-async fn capacity_returns(kit: &Kit<'_>, slow: &SlowProbe, calls: usize) -> Result<(), String> {
+/// Refusals (`RESOURCE_EXHAUSTED`) are retried until the grace period is over: work the previous step cancelled may still be
+/// draining, and a transport needs a moment to tell the connector. A connector that keeps working for callers that left (or
+/// holds its own gate) never gives the slots back, so it is still refusing when the grace period ends. Dropping the returned
+/// calls cancels them.
+async fn open_all(kit: &Kit<'_>, slow: &SlowProbe, calls: usize) -> Result<Vec<SlowCall>, String> {
     let long = i64::try_from(kit.profile.timing.call_timeout_ms).unwrap_or(i64::MAX);
     let started = tokio::time::Instant::now();
     loop {
         let mut batch: Vec<SlowCall> = (0..calls).map(|_| spawn_slow(kit, slow, long)).collect();
         let mut refused = 0_usize;
         for call in &mut batch {
-            if matches!(call.first_within(SETTLE).await, Some(Event::Refused)) {
-                refused += 1;
+            match call.first_within(SETTLE).await {
+                Some(Event::Refused) => refused += 1,
+                Some(Event::Failed(err)) => {
+                    return Err(format!(
+                        "a slow call failed {:?}: {}",
+                        err.code,
+                        err.message()
+                    ));
+                }
+                Some(Event::Ended) => {
+                    return Err(format!(
+                        "operation `{}` ended by itself; the [slow] operation must stay open until cancelled",
+                        slow.operation
+                    ));
+                }
+                Some(Event::Streaming) | None => {}
             }
         }
-        for call in batch {
-            call.cancel();
-        }
         if refused == 0 {
-            return Ok(());
+            return Ok(batch);
         }
+        drop(batch);
         if started.elapsed() >= grace(kit) {
             return Err(format!(
                 "{refused} of {calls} slow calls were still refused (RESOURCE_EXHAUSTED) {} ms after the previous ones ended: the connector did not release the capacity",
@@ -146,6 +167,36 @@ async fn capacity_returns(kit: &Kit<'_>, slow: &SlowProbe, calls: usize) -> Resu
             ));
         }
         tokio::time::sleep(RETRY_PAUSE).await;
+    }
+}
+
+/// The capacity proof: a fresh batch of slow calls is accepted, then cancelled again.
+async fn capacity_returns(kit: &Kit<'_>, slow: &SlowProbe, calls: usize) -> Result<(), String> {
+    open_all(kit, slow, calls).await.map(drop)
+}
+
+/// A call whose deadline passed must have failed `DEADLINE_EXCEEDED` within `wait`; anything else is explained here.
+fn expect_deadline_exceeded(
+    event: Option<Event>,
+    what: &str,
+    wait: Duration,
+) -> Result<(), String> {
+    match event {
+        Some(Event::Failed(err)) if err.code == NgcErrorCode::DeadlineExceeded => Ok(()),
+        Some(Event::Failed(err)) => Err(format!(
+            "{what} failed {:?} instead of DEADLINE_EXCEEDED (NGC-025)",
+            err.code
+        )),
+        Some(Event::Refused) => Err(format!(
+            "{what} was refused (RESOURCE_EXHAUSTED) before the deadline test could start (is the connector busy?)"
+        )),
+        Some(other) => Err(format!(
+            "{what} was accepted ({other:?}) instead of failing DEADLINE_EXCEEDED (NGC-025)"
+        )),
+        None => Err(format!(
+            "{what} was still running {} ms later (NGC-025, INV-12)",
+            wait.as_millis()
+        )),
     }
 }
 
@@ -160,26 +211,11 @@ pub(crate) async fn deadline(kit: &Kit<'_>, notes: &mut Vec<String>) -> Verdict 
 
     // A deadline already in the past.
     let mut past = spawn_slow(kit, slow, -1_000);
-    match past.first_within(grace(kit)).await {
-        Some(Event::Failed(err)) if err.code == NgcErrorCode::DeadlineExceeded => {}
-        Some(Event::Failed(err)) => {
-            return Err(format!(
-                "a call whose deadline had passed failed {:?} instead of DEADLINE_EXCEEDED (NGC-025)",
-                err.code
-            ));
-        }
-        Some(other) => {
-            return Err(format!(
-                "a call whose deadline had passed was accepted ({other:?}) instead of failing DEADLINE_EXCEEDED (NGC-025)"
-            ));
-        }
-        None => {
-            return Err(
-                "a call whose deadline had passed was still running after the grace period (INV-12)"
-                    .to_owned(),
-            );
-        }
-    }
+    expect_deadline_exceeded(
+        past.first_within(grace(kit)).await,
+        "a call whose deadline had passed",
+        grace(kit),
+    )?;
     past.cancel();
 
     // A deadline that passes while the call runs, for as many calls as the proof uses.
@@ -187,28 +223,11 @@ pub(crate) async fn deadline(kit: &Kit<'_>, notes: &mut Vec<String>) -> Verdict 
     let mut batch: Vec<SlowCall> = (0..calls).map(|_| spawn_slow(kit, slow, short)).collect();
     let events = join_all(batch.iter_mut().map(|c| c.first_within(wait))).await;
     for event in events {
-        match event {
-            Some(Event::Failed(err)) if err.code == NgcErrorCode::DeadlineExceeded => {}
-            Some(Event::Refused) => {
-                return Err(
-                    "the connector refused a slow call before the deadline test could start (is it busy?)"
-                        .to_owned(),
-                );
-            }
-            Some(other) => {
-                return Err(format!(
-                    "a call with a {} ms deadline ended as {other:?} instead of DEADLINE_EXCEEDED (NGC-025)",
-                    timing.deadline_ms
-                ));
-            }
-            None => {
-                return Err(format!(
-                    "a call with a {} ms deadline was still running {} ms later (NGC-025, INV-12)",
-                    timing.deadline_ms,
-                    wait.as_millis()
-                ));
-            }
-        }
+        expect_deadline_exceeded(
+            event,
+            &format!("a call with a {} ms deadline", timing.deadline_ms),
+            wait,
+        )?;
     }
     for call in batch {
         call.cancel();
@@ -232,38 +251,62 @@ pub(crate) async fn cancel(kit: &Kit<'_>, _notes: &mut Vec<String>) -> Verdict {
         Ok(found) => found,
         Err(skip) => return skip,
     };
-    let long = i64::try_from(kit.profile.timing.call_timeout_ms).unwrap_or(i64::MAX);
-
-    let mut held: Vec<SlowCall> = (0..calls).map(|_| spawn_slow(kit, slow, long)).collect();
-    for call in &mut held {
-        match call.first_within(SETTLE).await {
-            Some(Event::Refused) => {
-                return Err(
-                    "the connector refused a slow call before anything was cancelled (is it busy?)"
-                        .to_owned(),
-                );
-            }
-            Some(Event::Failed(err)) => {
-                return Err(format!(
-                    "a slow call failed {:?} before it was cancelled: {}",
-                    err.code,
-                    err.message()
-                ));
-            }
-            Some(Event::Ended) => {
-                return Err(format!(
-                    "operation `{}` ended by itself; the [slow] operation must stay open until cancelled",
-                    slow.operation
-                ));
-            }
-            Some(Event::Streaming) | None => {}
-        }
-    }
-    for call in held {
-        call.cancel();
-    }
+    let held = open_all(kit, slow, calls)
+        .await
+        .map_err(|why| format!("before anything was cancelled, {why}"))?;
+    drop(held);
     capacity_returns(kit, slow, calls)
         .await
         .map_err(|why| format!("after the client cancelled, {why} (NGC-025, INV-12)"))?;
     pass()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const WAIT: Duration = Duration::from_millis(2_200);
+
+    // spec: NGC-025, INV-12
+    #[test]
+    fn ngc_kit_deadline_verdict_accepts_only_deadline_exceeded() {
+        let ok = expect_deadline_exceeded(
+            Some(Event::Failed(NgcErrorInfo::new(
+                NgcErrorCode::DeadlineExceeded,
+                "late",
+            ))),
+            "a call",
+            WAIT,
+        );
+        assert_eq!(ok, Ok(()));
+
+        for code in [
+            NgcErrorCode::Cancelled,
+            NgcErrorCode::Internal,
+            NgcErrorCode::Unavailable,
+        ] {
+            let err = expect_deadline_exceeded(
+                Some(Event::Failed(NgcErrorInfo::new(code, "x"))),
+                "a call",
+                WAIT,
+            )
+            .expect_err("a wrong code must fail");
+            assert!(err.contains("instead of DEADLINE_EXCEEDED"), "{err}");
+        }
+    }
+
+    // spec: NGC-025, INV-12
+    #[test]
+    fn ngc_kit_deadline_verdict_explains_refusal_acceptance_and_a_call_that_never_ends() {
+        let refused =
+            expect_deadline_exceeded(Some(Event::Refused), "a call", WAIT).expect_err("refusal");
+        assert!(refused.contains("refused"), "{refused}");
+        for event in [Event::Streaming, Event::Ended] {
+            let accepted =
+                expect_deadline_exceeded(Some(event), "a call", WAIT).expect_err("accepted");
+            assert!(accepted.contains("was accepted"), "{accepted}");
+        }
+        let hung = expect_deadline_exceeded(None, "a call", WAIT).expect_err("still running");
+        assert!(hung.contains("still running 2200 ms later"), "{hung}");
+    }
 }
