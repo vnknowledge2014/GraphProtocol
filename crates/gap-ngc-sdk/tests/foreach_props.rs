@@ -888,3 +888,277 @@ async fn mock_connector_records_counters_high_water_delays_and_dropped_futures_a
     assert_eq!(endless_mock.in_flight(), 0);
     assert_eq!(endless_mock.dropped_count(), 1);
 }
+
+// spec: NGC-025, NGC-096, INV-12
+#[tokio::test(start_paused = true)]
+async fn foreach_cancellation_stops_further_batches_under_bounded_in_flight() {
+    let sets: Vec<VariableSet> = (0..6_u32)
+        .map(|i| VariableSet {
+            index: i,
+            values: Some(make_struct([("k", num_kind(f64::from(i)))])),
+        })
+        .collect();
+
+    // 1. Synchronous cancel inside `upstream` when batch 0 starts with `max_in_flight = 3` (`6 > 3`),
+    // deadline far in the future (`60s`): `BufferUnordered`'s fill loop pulls batches 1..2 immediately,
+    // which MUST observe `cancel_for_map.is_cancelled()` and NOT invoke `upstream` or increment `upstream_calls`.
+    let scope_sync = CallScope::for_test(Instant::now() + Duration::from_secs(60));
+    let cancel_sync = scope_sync.cancel.clone();
+    let sync_invocations = Arc::new(AtomicUsize::new(0));
+    let sync_inv_c = Arc::clone(&sync_invocations);
+
+    let mut run_sync = foreach(
+        sets.clone(),
+        ForeachConfig::new(1, 3),
+        &scope_sync,
+        move |_batch| {
+            let n = sync_inv_c.fetch_add(1, Ordering::SeqCst);
+            if n == 0 {
+                cancel_sync.cancel();
+            }
+            async move { Ok(vec![Ok(vec![make_struct([("v", num_kind(1.0))])])]) }
+        },
+    )
+    .expect("foreach sync cancel");
+
+    let mut saw_cancel_err = false;
+    while let Some(item) = run_sync.stream_mut().next().await {
+        if let Err(err) = item {
+            assert_eq!(err.code, NgcErrorCode::Cancelled);
+            saw_cancel_err = true;
+            break;
+        }
+    }
+    assert!(saw_cancel_err, "expected Err(Cancelled)");
+    assert_eq!(
+        run_sync.upstream_calls(),
+        1,
+        "batches 1..5 must be gated by cancel check as soon as batch 0 cancels"
+    );
+    assert_eq!(sync_invocations.load(Ordering::SeqCst), 1);
+
+    // 2. Async cancel with `6` batches and `max_in_flight = 2` (`6 > 2`), deadline `60s` away:
+    // batches 0 and 1 start concurrently; cancel fires at `t = 0ms` (not a deadline!) before any batch completes.
+    let t0 = Instant::now();
+    let scope_async = CallScope::for_test(t0 + Duration::from_secs(60));
+    let cancel_async = scope_async.cancel.clone();
+    let first_polled = Arc::new(Notify::new());
+    let first_polled_c = Arc::clone(&first_polled);
+    let async_invocations = Arc::new(AtomicUsize::new(0));
+    let async_inv_c = Arc::clone(&async_invocations);
+
+    let mut run_async = foreach(
+        sets.clone(),
+        ForeachConfig::new(1, 2),
+        &scope_async,
+        move |_batch| {
+            async_inv_c.fetch_add(1, Ordering::SeqCst);
+            let notified = Arc::clone(&first_polled_c);
+            async move {
+                notified.notify_one();
+                tokio::time::sleep(Duration::from_secs(10)).await;
+                Ok(vec![Ok(vec![make_struct([("v", num_kind(1.0))])])])
+            }
+        },
+    )
+    .expect("foreach async cancel");
+
+    let driver = tokio::spawn(async move {
+        first_polled.notified().await;
+        cancel_async.cancel();
+    });
+
+    let first_item = run_async
+        .stream_mut()
+        .next()
+        .await
+        .expect("terminal cancel item")
+        .expect_err("must cancel immediately without waiting 10s for batch completion");
+    driver.await.expect("driver");
+    assert_eq!(first_item.code, NgcErrorCode::Cancelled);
+    assert_eq!(
+        Instant::now().duration_since(t0),
+        Duration::ZERO,
+        "cancellation must resolve immediately without advancing virtual clock"
+    );
+    assert!(run_async.stream_mut().next().await.is_none());
+    assert_eq!(
+        run_async.upstream_calls(),
+        2,
+        "only max_in_flight = 2 batches started; batches 2..5 must never be started"
+    );
+    assert_eq!(async_invocations.load(Ordering::SeqCst), 2);
+
+    // 3. Cancel right after batch 0 completes (`max_in_flight = 2`, `6` batches): counter stops growing at 2!
+    let scope_after_first = CallScope::for_test(Instant::now() + Duration::from_secs(60));
+    let cancel_after_first = scope_after_first.cancel.clone();
+    let seq_inv = Arc::new(AtomicUsize::new(0));
+    let seq_inv_c = Arc::clone(&seq_inv);
+
+    let mut run_after = foreach(
+        sets,
+        ForeachConfig::new(1, 2),
+        &scope_after_first,
+        move |_batch| {
+            let which = seq_inv_c.fetch_add(1, Ordering::SeqCst);
+            async move {
+                if which == 0 {
+                    tokio::time::sleep(Duration::from_millis(10)).await;
+                } else {
+                    tokio::time::sleep(Duration::from_secs(5)).await;
+                }
+                Ok(vec![Ok(vec![make_struct([("v", num_kind(1.0))])])])
+            }
+        },
+    )
+    .expect("foreach after-first cancel");
+
+    let batch0_chunk = run_after
+        .stream_mut()
+        .next()
+        .await
+        .expect("batch 0 chunk")
+        .expect("batch 0 ok");
+    assert_eq!(batch0_chunk.foreach_index, 0);
+    assert_eq!(run_after.upstream_calls(), 2);
+
+    cancel_after_first.cancel();
+    let next_err = run_after
+        .stream_mut()
+        .next()
+        .await
+        .expect("cancel item")
+        .expect_err("must cancel before pulling batch 2");
+    assert_eq!(next_err.code, NgcErrorCode::Cancelled);
+    assert!(run_after.stream_mut().next().await.is_none());
+    assert_eq!(
+        run_after.upstream_calls(),
+        2,
+        "upstream call counter must stop growing at 2 after cancel"
+    );
+}
+
+// spec: NGC-020, NGC-026, NGC-096, INV-18
+#[tokio::test(start_paused = true)]
+async fn foreach_into_query_stream_counts_total_rows_and_matches_upstream_calls_handle() {
+    let scope = CallScope::for_test(Instant::now() + Duration::from_secs(30));
+
+    // 4 indices, 3 distinct canonical keys (`max_batch_size = 2` -> 2 upstream batch calls),
+    // `max_rows_per_chunk = 2`:
+    // - index 0: key k=1 -> 5 rows -> 3 chunks (2 + 2 + 1)
+    // - index 1: key k=1 (duplicate!) -> 5 rows -> 3 chunks (2 + 2 + 1)
+    // - index 2: key k=2 -> 0 rows -> 1 closing chunk (0)
+    // - index 3: key k=3 -> 3 rows -> 2 chunks (2 + 1)
+    // Total chunks = 9, total rows = 5 + 5 + 0 + 3 = 13 (`13 != 9` and `13 != 8`).
+    let build_sets = || {
+        vec![
+            VariableSet {
+                index: 0,
+                values: Some(make_struct([("k", num_kind(1.0))])),
+            },
+            VariableSet {
+                index: 1,
+                values: Some(make_struct([("k", num_kind(1.0))])),
+            },
+            VariableSet {
+                index: 2,
+                values: Some(make_struct([("k", num_kind(2.0))])),
+            },
+            VariableSet {
+                index: 3,
+                values: Some(make_struct([("k", num_kind(3.0))])),
+            },
+        ]
+    };
+
+    let upstream_fn = |batch: Vec<prost_types::Struct>| async move {
+        let out = batch
+            .into_iter()
+            .map(|st| {
+                let k = st
+                    .fields
+                    .get("k")
+                    .and_then(|v| match v.kind {
+                        Some(prost_types::value::Kind::NumberValue(n)) => Some(n as u32),
+                        _ => None,
+                    })
+                    .unwrap_or(0);
+                let count = match k {
+                    1 => 5,
+                    2 => 0,
+                    3 => 3,
+                    _ => 0,
+                };
+                let rows = (0..count)
+                    .map(|r| make_struct([("row", num_kind(f64::from(r)))]))
+                    .collect();
+                Ok(rows)
+            })
+            .collect();
+        Ok(out)
+    };
+
+    // First verify `into_parts()` handle count on the identical workload.
+    let parts_run = foreach(
+        build_sets(),
+        ForeachConfig::new(2, 2).with_max_rows_per_chunk(2),
+        &scope,
+        upstream_fn,
+    )
+    .expect("parts run");
+    let (mut raw_chunks, handle) = parts_run.into_parts();
+    let mut observed_chunk_count = 0_u64;
+    while let Some(ch) = raw_chunks.next().await {
+        ch.expect("chunk ok");
+        observed_chunk_count += 1;
+    }
+    assert_eq!(observed_chunk_count, 9);
+    assert_eq!(handle.get(), 2);
+
+    // Now drive `into_query_stream()` and verify `Complete.rows_total == 13` (not 9 chunks!)
+    // and `Complete.upstream_calls == handle.get() == 2`.
+    let query_run = foreach(
+        build_sets(),
+        ForeachConfig::new(2, 2).with_max_rows_per_chunk(2),
+        &scope,
+        upstream_fn,
+    )
+    .expect("query stream run");
+    let mut qs = query_run.into_query_stream();
+
+    let mut row_messages = 0_u64;
+    let mut summed_rows = 0_u64;
+    let mut final_complete = None;
+
+    while let Some(item) = qs.next().await {
+        let resp = item.expect("QueryResponse ok");
+        match resp.chunk.expect("chunk oneof") {
+            query_response::Chunk::Rows(rc) => {
+                assert!(
+                    final_complete.is_none(),
+                    "no Rows chunk allowed after Complete"
+                );
+                row_messages += 1;
+                summed_rows += rc.rows.len() as u64;
+            }
+            query_response::Chunk::Complete(c) => {
+                assert!(final_complete.is_none(), "only one Complete allowed");
+                final_complete = Some(c);
+            }
+        }
+    }
+
+    assert_eq!(row_messages, 9, "expected 9 RowSetChunk messages");
+    assert_eq!(summed_rows, 13, "expected 13 total rows across all chunks");
+    let complete = final_complete.expect("Complete trailer emitted");
+    assert_eq!(
+        complete.rows_total, 13,
+        "Complete.rows_total must count total rows (13), not chunks (9)"
+    );
+    assert_eq!(
+        complete.upstream_calls,
+        handle.get(),
+        "Complete.upstream_calls must match UpstreamCallsHandle"
+    );
+    assert_eq!(complete.upstream_calls, 2);
+}
