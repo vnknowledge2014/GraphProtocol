@@ -2,6 +2,7 @@
 #![forbid(unsafe_code)]
 
 use std::collections::BTreeMap;
+use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -331,6 +332,13 @@ async fn http_enforces_405_404_415_413_slow_loris_ndjson_sse_retry_after_and_met
             .and_then(|v| v.to_str().ok()),
         Some("text/event-stream")
     );
+    assert_eq!(
+        resp_sse
+            .headers()
+            .get(http::header::CACHE_CONTROL)
+            .and_then(|v| v.to_str().ok()),
+        Some("no-cache")
+    );
     let sse_text = String::from_utf8(
         resp_sse
             .into_body()
@@ -356,6 +364,20 @@ async fn http_enforces_405_404_415_413_slow_loris_ndjson_sse_retry_after_and_met
         .await
         .expect("oneshot");
     assert_eq!(resp_watch.status(), StatusCode::OK);
+    assert_eq!(
+        resp_watch
+            .headers()
+            .get(http::header::CONTENT_TYPE)
+            .and_then(|v| v.to_str().ok()),
+        Some("text/event-stream")
+    );
+    assert_eq!(
+        resp_watch
+            .headers()
+            .get(http::header::CACHE_CONTROL)
+            .and_then(|v| v.to_str().ok()),
+        Some("no-cache")
+    );
 }
 
 // spec: NGC-003, NGC-093, NGC-095
@@ -602,16 +624,17 @@ async fn stdio_slow_loris_partial_line_times_out_while_idle_session_survives() {
         .expect("write partial line");
     stdin_tx.flush().await.expect("flush partial");
 
-    let fatal_line = out_lines
-        .next_line()
+    let fatal_line = tokio::time::timeout(Duration::from_secs(5), out_lines.next_line())
         .await
+        .expect("partial-line timer must fire within default_timeout (2s)")
         .expect("io")
         .expect("fatal slow-loris line");
     let fatal_val: serde_json::Value = serde_json::from_str(&fatal_line).expect("json");
     assert_eq!(fatal_val["error"]["code"], -32600);
     assert_eq!(fatal_val["error"]["data"]["code"], "DEADLINE_EXCEEDED");
-    server_join
+    tokio::time::timeout(Duration::from_secs(5), server_join)
         .await
+        .expect("stdio server must exit promptly on partial-line timeout")
         .expect("join")
         .expect("clean slow-loris termination");
 }
@@ -721,9 +744,13 @@ async fn grpc_metadata_forwarding_health_500ms_bound_bare_status_fallback_and_no
     ));
     for non_loopback in ["0.0.0.0:50051", "[::]:50051", "192.0.2.10:50051"] {
         let addr: std::net::SocketAddr = non_loopback.parse().expect("valid SocketAddr");
-        let err = serve_tcp(Arc::clone(&strict_core), addr)
-            .await
-            .expect_err("non-loopback plaintext bind must fail closed");
+        let err = tokio::time::timeout(
+            Duration::from_millis(250),
+            serve_tcp(Arc::clone(&strict_core), addr),
+        )
+        .await
+        .expect("serve_tcp non-loopback check must return immediately without binding/hanging")
+        .expect_err("non-loopback plaintext bind must fail closed");
         assert!(
             matches!(err, ServeError::InsecureNonLoopbackAddress(a) if a == addr),
             "unexpected error for {addr}: {err:?}"
@@ -1721,4 +1748,460 @@ fn proptest_grpc_client_stream_never_yields_after_first_error() {
             })
         })
         .expect("GrpcClient stream fuse proptest");
+}
+
+// spec: NGC-002, NGC-070, NGC-093, NGC-094
+#[tokio::test(start_paused = true)]
+async fn http_body_limit_exact_boundary_content_types_sse_headers_and_health_body_timeout() {
+    let mock = MockConnector::new()
+        .on_describe(|req, _scope| {
+            Ok(DescribeResponse {
+                not_modified: !req.known_spec_hash.is_empty(),
+                description: None,
+            })
+        })
+        .on_subscribe(|_req, _scope| {
+            Ok(Box::pin(stream::iter(vec![Ok(Event {
+                id: "ev-1".to_owned(),
+                ..Event::default()
+            })])))
+        })
+        .on_watch_task(|_req, _scope| {
+            Ok(Box::pin(stream::iter(vec![Ok(TaskStatus {
+                task_id: "t-1".to_owned(),
+                state: TaskState::Completed as i32,
+                ..TaskStatus::default()
+            })])))
+        });
+
+    let max_bytes = 64_usize;
+    let core = Arc::new(ServerCore::new(
+        mock,
+        ServerConfig::default()
+            .with_max_request_bytes(max_bytes)
+            .with_health_timeout(Duration::from_millis(500))
+            .with_default_timeout(Duration::from_secs(60)),
+    ));
+    let app = ngc_http::router(core);
+
+    let prefix = r#"{"knownSpecHash":""#;
+    let suffix = r#""}"#;
+    let fill_exact = "a".repeat(max_bytes - prefix.len() - suffix.len());
+    let body_64 = format!("{prefix}{fill_exact}{suffix}").into_bytes();
+    assert_eq!(body_64.len(), 64);
+
+    let fill_over = "a".repeat(max_bytes + 1 - prefix.len() - suffix.len());
+    let body_65 = format!("{prefix}{fill_over}{suffix}").into_bytes();
+    assert_eq!(body_65.len(), 65);
+
+    // 1. T-8 (H04): `Content-Length` == `max_request_bytes` (`64`) -> 200 OK; `65` -> 413 Payload Too Large.
+    let cl_ok = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method(Method::POST)
+                .uri("/gap/ngc/v1/Describe")
+                .header(http::header::CONTENT_TYPE, "application/json")
+                .header(http::header::CONTENT_LENGTH, "64")
+                .body(Body::from(body_64.clone()))
+                .expect("req"),
+        )
+        .await
+        .expect("oneshot");
+    assert_eq!(
+        cl_ok.status(),
+        StatusCode::OK,
+        "Content-Length == max_request_bytes (64) must be accepted"
+    );
+
+    let unpolled_flag = Arc::new(AtomicBool::new(false));
+    let unpolled_c = Arc::clone(&unpolled_flag);
+    let cl_65_stream = stream::once(async move {
+        unpolled_c.store(true, Ordering::SeqCst);
+        Ok::<_, std::io::Error>(bytes::Bytes::from(vec![b'{', b'}']))
+    });
+    let cl_413 = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method(Method::POST)
+                .uri("/gap/ngc/v1/Describe")
+                .header(http::header::CONTENT_TYPE, "application/json")
+                .header(http::header::CONTENT_LENGTH, "65")
+                .body(Body::from_stream(cl_65_stream))
+                .expect("req"),
+        )
+        .await
+        .expect("oneshot");
+    assert_eq!(
+        cl_413.status(),
+        StatusCode::PAYLOAD_TOO_LARGE,
+        "Content-Length == max_request_bytes + 1 (65) must be 413"
+    );
+    assert!(
+        !unpolled_flag.load(Ordering::SeqCst),
+        "Content-Length > max_request_bytes must reject before reading body stream"
+    );
+
+    // 2. T-8 (H05): Chunked / streaming body without `Content-Length`: exact `64` (`32 + 32`) -> 200 OK; `65` (`32 + 33`) -> 413.
+    let c0_ok = bytes::Bytes::copy_from_slice(&body_64[..32]);
+    let c1_ok = bytes::Bytes::copy_from_slice(&body_64[32..]);
+    let chunked_ok = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method(Method::POST)
+                .uri("/gap/ngc/v1/Describe")
+                .header(http::header::CONTENT_TYPE, "application/json")
+                .body(Body::from_stream(stream::iter(vec![
+                    Ok::<_, std::io::Error>(c0_ok),
+                    Ok(c1_ok),
+                ])))
+                .expect("req"),
+        )
+        .await
+        .expect("oneshot");
+    assert_eq!(
+        chunked_ok.status(),
+        StatusCode::OK,
+        "chunked body of exact max_request_bytes (32 + 32 = 64) must be accepted"
+    );
+
+    let c0_over = bytes::Bytes::copy_from_slice(&body_65[..32]);
+    let c1_over = bytes::Bytes::copy_from_slice(&body_65[32..]);
+    let chunked_413 = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method(Method::POST)
+                .uri("/gap/ngc/v1/Describe")
+                .header(http::header::CONTENT_TYPE, "application/json")
+                .body(Body::from_stream(stream::iter(vec![
+                    Ok::<_, std::io::Error>(c0_over),
+                    Ok(c1_over),
+                ])))
+                .expect("req"),
+        )
+        .await
+        .expect("oneshot");
+    assert_eq!(
+        chunked_413.status(),
+        StatusCode::PAYLOAD_TOO_LARGE,
+        "chunked body of max_request_bytes + 1 (32 + 33 = 65) must be 413"
+    );
+
+    // 3. T-9 (H09): `Content-Type` media-type parsing: parameters & case-insensitivity accepted, prefix-mismatch/other/missing 415.
+    for good_ct in [
+        "application/json",
+        "application/json; charset=utf-8",
+        "Application/JSON",
+        "APPLICATION/JSON ; charset=UTF-8",
+    ] {
+        let ok_ct = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method(Method::POST)
+                    .uri("/gap/ngc/v1/Describe")
+                    .header(http::header::CONTENT_TYPE, good_ct)
+                    .body(Body::from("{}"))
+                    .expect("req"),
+            )
+            .await
+            .expect("oneshot");
+        assert_eq!(
+            ok_ct.status(),
+            StatusCode::OK,
+            "Content-Type `{good_ct}` must be accepted"
+        );
+    }
+
+    for bad_ct in [
+        Some("application/jsonx"),
+        Some("application/jsonx; charset=utf-8"),
+        Some("text/json"),
+        Some(""),
+        None,
+    ] {
+        let mut req_b = Request::builder()
+            .method(Method::POST)
+            .uri("/gap/ngc/v1/Describe");
+        if let Some(ct) = bad_ct {
+            req_b = req_b.header(http::header::CONTENT_TYPE, ct);
+        }
+        let bad_resp = app
+            .clone()
+            .oneshot(req_b.body(Body::from("{}")).expect("req"))
+            .await
+            .expect("oneshot");
+        assert_eq!(
+            bad_resp.status(),
+            StatusCode::UNSUPPORTED_MEDIA_TYPE,
+            "Content-Type `{bad_ct:?}` must be rejected with 415"
+        );
+    }
+
+    // 4. T-10 (H08): SSE endpoints (`Subscribe` & `WatchTask`) carry `Cache-Control: no-cache` and `Content-Type: text/event-stream`.
+    for sse_uri in ["/gap/ngc/v1/Subscribe", "/gap/ngc/v1/WatchTask"] {
+        let sse_resp = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method(Method::POST)
+                    .uri(sse_uri)
+                    .header(http::header::CONTENT_TYPE, "application/json")
+                    .body(Body::from("{}"))
+                    .expect("req"),
+            )
+            .await
+            .expect("oneshot");
+        assert_eq!(sse_resp.status(), StatusCode::OK);
+        assert_eq!(
+            sse_resp
+                .headers()
+                .get(http::header::CONTENT_TYPE)
+                .and_then(|v| v.to_str().ok()),
+            Some("text/event-stream"),
+            "{sse_uri} missing Content-Type: text/event-stream"
+        );
+        assert_eq!(
+            sse_resp
+                .headers()
+                .get(http::header::CACHE_CONTROL)
+                .and_then(|v| v.to_str().ok()),
+            Some("no-cache"),
+            "{sse_uri} missing Cache-Control: no-cache"
+        );
+    }
+
+    // 5. T-11 (H11): Stalled `Health` request body fails 504 `DEADLINE_EXCEEDED` at `health_timeout` (500ms), NOT `default_timeout` (60s).
+    let t0 = tokio::time::Instant::now();
+    let stalled_health_body =
+        stream::once(async { Ok::<_, std::io::Error>(bytes::Bytes::from_static(b"{")) })
+            .chain(stream::pending());
+    let health_504 = tokio::time::timeout(
+        Duration::from_secs(1),
+        app.oneshot(
+            Request::builder()
+                .method(Method::POST)
+                .uri("/gap/ngc/v1/Health")
+                .header(http::header::CONTENT_TYPE, "application/json")
+                .body(Body::from_stream(stalled_health_body))
+                .expect("req"),
+        ),
+    )
+    .await
+    .expect("Health body timeout must fire at health_timeout (500ms), not default_timeout (60s)")
+    .expect("oneshot");
+
+    assert_eq!(
+        tokio::time::Instant::now().duration_since(t0),
+        Duration::from_millis(500),
+        "Health body read timeout must equal health_timeout (500ms)"
+    );
+    assert_eq!(health_504.status(), StatusCode::GATEWAY_TIMEOUT);
+    let err_bytes = health_504
+        .into_body()
+        .collect()
+        .await
+        .expect("collect")
+        .to_bytes();
+    let err_json: serde_json::Value = serde_json::from_slice(&err_bytes).expect("json");
+    assert_eq!(err_json["code"], "DEADLINE_EXCEEDED");
+}
+
+struct ScriptedChunksReader {
+    chunks: Vec<Vec<u8>>,
+    pos: usize,
+    polled_past_script: Option<Arc<AtomicBool>>,
+    eof_fut: Pin<Box<tokio_util::sync::WaitForCancellationFutureOwned>>,
+}
+
+impl AsyncRead for ScriptedChunksReader {
+    fn poll_read(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        buf: &mut ReadBuf<'_>,
+    ) -> Poll<std::io::Result<()>> {
+        if self.pos >= self.chunks.len() {
+            if let Some(ref flag) = self.polled_past_script {
+                flag.store(true, Ordering::SeqCst);
+            }
+            return match self.eof_fut.as_mut().poll(cx) {
+                Poll::Ready(()) => Poll::Ready(Ok(())),
+                Poll::Pending => Poll::Pending,
+            };
+        }
+        let idx = self.pos;
+        let slice = &self.chunks[idx];
+        assert!(
+            buf.remaining() >= slice.len(),
+            "BufReader capacity must fit scripted chunk"
+        );
+        buf.put_slice(slice);
+        self.pos += 1;
+        Poll::Ready(Ok(()))
+    }
+}
+
+// spec: NGC-003, NGC-093, NGC-095
+#[tokio::test(start_paused = true)]
+async fn stdio_line_limit_exact_boundary_single_read_and_partial_reads() {
+    let max_bytes = 128_usize;
+    let prefix =
+        r#"{"jsonrpc":"2.0","id":1,"method":"gap.ngc.Describe","params":{"knownSpecHash":""#;
+    let suffix = r#""}}"#;
+    let fill_128 = "x".repeat(max_bytes - prefix.len() - suffix.len());
+    let line_128 = format!("{prefix}{fill_128}{suffix}").into_bytes();
+    assert_eq!(line_128.len(), 128);
+
+    let fill_129 = "x".repeat(max_bytes + 1 - prefix.len() - suffix.len());
+    let line_129 = format!("{prefix}{fill_129}{suffix}").into_bytes();
+    assert_eq!(line_129.len(), 129);
+
+    let make_core = || {
+        let mock = MockConnector::new().on_describe(|req, _scope| {
+            Ok(DescribeResponse {
+                not_modified: !req.known_spec_hash.is_empty(),
+                description: None,
+            })
+        });
+        Arc::new(ServerCore::new(
+            mock,
+            ServerConfig::default().with_max_request_bytes(max_bytes),
+        ))
+    };
+
+    // 1. S01 exact boundary (single read): `128` bytes + `\n` (and `128` bytes + `\r\n`) accepted!
+    for line_ending in [&b"\n"[..], &b"\r\n"[..]] {
+        let mut wire = line_128.clone();
+        wire.extend_from_slice(line_ending);
+        let eof_gate = tokio_util::sync::CancellationToken::new();
+        let reader = BufReader::with_capacity(
+            512,
+            ScriptedChunksReader {
+                chunks: vec![wire],
+                pos: 0,
+                polled_past_script: None,
+                eof_fut: Box::pin(eof_gate.clone().cancelled_owned()),
+            },
+        );
+        let (writer, client_read) = tokio::io::duplex(4_096);
+        let core = make_core();
+        let server_join = tokio::spawn(async move { serve_stdio(core, reader, writer).await });
+
+        let mut out = BufReader::new(client_read).lines();
+        let resp_line = out.next_line().await.expect("io").expect("response line");
+        let val: serde_json::Value = serde_json::from_str(&resp_line).expect("json");
+        assert_eq!(
+            val["result"]["notModified"], true,
+            "single-read exact max_request_bytes (128) must succeed, got: {val}"
+        );
+        eof_gate.cancel();
+        server_join.await.expect("join").expect("clean EOF");
+        assert!(out.next_line().await.expect("io").is_none());
+    }
+
+    // 2. S01 +1 byte (single read): `129` bytes + `\n` rejected with fatal `-32600` (without waiting for EOF)!
+    {
+        let mut wire_129 = line_129.clone();
+        wire_129.push(b'\n');
+        let never_eof = tokio_util::sync::CancellationToken::new();
+        let reader = BufReader::with_capacity(
+            512,
+            ScriptedChunksReader {
+                chunks: vec![wire_129],
+                pos: 0,
+                polled_past_script: None,
+                eof_fut: Box::pin(never_eof.cancelled_owned()),
+            },
+        );
+        let (writer, client_read) = tokio::io::duplex(4_096);
+        tokio::time::timeout(
+            Duration::from_secs(1),
+            serve_stdio(make_core(), reader, writer),
+        )
+        .await
+        .expect("single-read 129-byte line must terminate immediately without waiting for EOF")
+        .expect("single-read 129-byte line ends session cleanly");
+        let mut out = BufReader::new(client_read).lines();
+        let resp_line = out
+            .next_line()
+            .await
+            .expect("io")
+            .expect("fatal -32600 line");
+        let val: serde_json::Value = serde_json::from_str(&resp_line).expect("json");
+        assert_eq!(val["error"]["code"], -32600);
+        assert_eq!(val["error"]["data"]["code"], "INVALID_ARGUMENT");
+        assert!(out.next_line().await.expect("io").is_none());
+    }
+
+    // 3. S02 exact boundary (several partial reads): `[64 bytes, 64 bytes, "\n"]` (`64 + 64 == 128` before `\n` arrives) accepted!
+    {
+        let eof_gate = tokio_util::sync::CancellationToken::new();
+        let reader = BufReader::with_capacity(
+            256,
+            ScriptedChunksReader {
+                chunks: vec![
+                    line_128[..64].to_vec(),
+                    line_128[64..128].to_vec(),
+                    b"\n".to_vec(),
+                ],
+                pos: 0,
+                polled_past_script: None,
+                eof_fut: Box::pin(eof_gate.clone().cancelled_owned()),
+            },
+        );
+        let (writer, client_read) = tokio::io::duplex(4_096);
+        let core = make_core();
+        let server_join = tokio::spawn(async move { serve_stdio(core, reader, writer).await });
+
+        let mut out = BufReader::new(client_read).lines();
+        let resp_line = out.next_line().await.expect("io").expect("response line");
+        let val: serde_json::Value = serde_json::from_str(&resp_line).expect("json");
+        assert_eq!(
+            val["result"]["notModified"], true,
+            "partial-read exact max_request_bytes (64 + 64 = 128) must succeed, got: {val}"
+        );
+        eof_gate.cancel();
+        server_join.await.expect("join").expect("clean EOF");
+        assert!(out.next_line().await.expect("io").is_none());
+    }
+
+    // 4. S02 +1 byte (several partial reads): `[64 bytes, 65 bytes]` (`64 + 65 == 129` without `\n`) rejected immediately with fatal `-32600`!
+    {
+        let read_third = Arc::new(AtomicBool::new(false));
+        let never_eof = tokio_util::sync::CancellationToken::new();
+        let reader = BufReader::with_capacity(
+            256,
+            ScriptedChunksReader {
+                chunks: vec![line_129[..64].to_vec(), line_129[64..129].to_vec()],
+                pos: 0,
+                polled_past_script: Some(Arc::clone(&read_third)),
+                eof_fut: Box::pin(never_eof.cancelled_owned()),
+            },
+        );
+        let (writer, client_read) = tokio::io::duplex(4_096);
+        tokio::time::timeout(
+            Duration::from_secs(1),
+            serve_stdio(make_core(), reader, writer),
+        )
+        .await
+        .expect("partial-read 129-byte line must terminate immediately without waiting for EOF")
+        .expect("partial-read 129-byte line ends session cleanly");
+        assert!(
+            !read_third.load(Ordering::SeqCst),
+            "partial-read 129-byte line must fail immediately without reading further chunks"
+        );
+        let mut out = BufReader::new(client_read).lines();
+        let resp_line = out
+            .next_line()
+            .await
+            .expect("io")
+            .expect("fatal -32600 line");
+        let val: serde_json::Value = serde_json::from_str(&resp_line).expect("json");
+        assert_eq!(val["error"]["code"], -32600);
+        assert_eq!(val["error"]["data"]["code"], "INVALID_ARGUMENT");
+        assert!(out.next_line().await.expect("io").is_none());
+    }
 }
