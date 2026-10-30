@@ -1114,3 +1114,306 @@ async fn grpc_client_bounds_decoded_message_size_and_maps_overflow_to_resource_e
         .expect("1.1 KiB well within 16 MiB default");
     assert_eq!(default_got, over_item);
 }
+
+// spec: NGC-003, NGC-025, NGC-095
+#[tokio::test(start_paused = true)]
+async fn stdio_releases_in_flight_id_before_final_send_completes_for_unary_and_stream() {
+    let health_target = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let health_count = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let health_reached = Arc::new(Notify::new());
+    let unary_done = Arc::new(Notify::new());
+    let stream_done = Arc::new(Notify::new());
+
+    let ht_c = Arc::clone(&health_target);
+    let hc_c = Arc::clone(&health_count);
+    let hr_c = Arc::clone(&health_reached);
+    let ud_c = Arc::clone(&unary_done);
+    let sd_c = Arc::clone(&stream_done);
+
+    let mock = MockConnector::new()
+        .on_health(move |_req, _scope| {
+            let cur = hc_c.fetch_add(1, Ordering::SeqCst) + 1;
+            if cur == ht_c.load(Ordering::SeqCst) {
+                hr_c.notify_one();
+            }
+            Ok(HealthResponse {
+                status: 1,
+                ..HealthResponse::default()
+            })
+        })
+        .on_describe(move |req, _scope| {
+            if req.known_spec_hash == "u1" {
+                ud_c.notify_one();
+            }
+            Ok(DescribeResponse {
+                not_modified: true,
+                description: None,
+            })
+        })
+        .on_query(move |req, _scope| {
+            if req.operation == "s-ok-1" || req.operation == "s-err-1" {
+                sd_c.notify_one();
+            }
+            if req.operation == "s-err-1" {
+                Ok(Box::pin(stream::iter(vec![Err(NgcErrorInfo::new(
+                    NgcErrorCode::Unavailable,
+                    "upstream closed",
+                ))])))
+            } else {
+                Ok(Box::pin(stream::empty()))
+            }
+        });
+
+    let core = Arc::new(ServerCore::new(
+        mock.clone(),
+        ServerConfig::default().with_stream_buffer(64),
+    ));
+
+    // Tiny 16-byte stdout duplex so response #0 blocks inside writer.write_all and responses #1..=#64
+    // fill the 64-slot `out_tx` channel completely, causing the 66th `out_tx.send` to block!
+    let (mut stdin_tx, stdin_rx) = tokio::io::duplex(64 * 1024);
+    let (writer, stdout_rx) = tokio::io::duplex(16);
+    let server_join =
+        tokio::spawn(async move { serve_stdio(core, BufReader::new(stdin_rx), writer).await });
+    let mut out_lines = BufReader::new(stdout_rx).lines();
+
+    let mut batch_round = 0_usize;
+    let mut saturate_out_channel = async |stdin: &mut tokio::io::DuplexStream| {
+        let goal = health_count.load(Ordering::SeqCst) + 65;
+        health_target.store(goal, Ordering::SeqCst);
+        for i in 0..65 {
+            let line = format!(
+                "{{\"jsonrpc\":\"2.0\",\"id\":\"fill-{batch_round}-{i}\",\"method\":\"gap.ngc.Health\",\"params\":{{}}}}\n"
+            );
+            stdin.write_all(line.as_bytes()).await.expect("write fill");
+        }
+        stdin.flush().await.expect("flush fill");
+        batch_round += 1;
+        tokio::time::timeout(Duration::from_secs(5), health_reached.notified())
+            .await
+            .expect("all 65 filler Health calls completed");
+        for _ in 0..16 {
+            tokio::task::yield_now().await;
+        }
+    };
+
+    // 1. Deterministic Unary check (`id: 777`): `u1` blocks on `out_tx.send`; `u2` reuses `777` while `u1` is blocked!
+    saturate_out_channel(&mut stdin_tx).await;
+    stdin_tx
+        .write_all(
+            b"{\"jsonrpc\":\"2.0\",\"id\":777,\"method\":\"gap.ngc.Describe\",\"params\":{\"knownSpecHash\":\"u1\"}}\n",
+        )
+        .await
+        .expect("write u1");
+    stdin_tx.flush().await.expect("flush u1");
+    tokio::time::timeout(Duration::from_secs(5), unary_done.notified())
+        .await
+        .expect("u1 executed");
+    for _ in 0..16 {
+        tokio::task::yield_now().await;
+    }
+
+    // At this exact instant, `u1`'s final `out_tx.send` is blocked because `stdout_rx` has not been read.
+    // Reusing `id: 777` MUST already be accepted (absent from in-flight map)!
+    stdin_tx
+        .write_all(
+            b"{\"jsonrpc\":\"2.0\",\"id\":777,\"method\":\"gap.ngc.Describe\",\"params\":{\"knownSpecHash\":\"u2\"}}\n",
+        )
+        .await
+        .expect("write u2");
+    stdin_tx.flush().await.expect("flush u2");
+
+    let mut u_resps = Vec::new();
+    for _ in 0..67 {
+        let line = tokio::time::timeout(Duration::from_secs(5), out_lines.next_line())
+            .await
+            .expect("no hang")
+            .expect("io")
+            .expect("line");
+        let val: serde_json::Value = serde_json::from_str(&line).expect("json");
+        if val["id"] == 777 {
+            u_resps.push(val);
+        }
+    }
+    assert_eq!(u_resps.len(), 2);
+    for r in &u_resps {
+        assert!(
+            r.get("error").is_none(),
+            "unary id 777 must already be released before final send unblocks, got: {r}"
+        );
+        assert_eq!(r["result"]["notModified"], true);
+    }
+    assert_eq!(mock.calls_for(RpcMethod::Describe), 2);
+
+    // 2. Deterministic Stream normal-end check (`id: 888`): `s-ok-1` blocks on `out_tx.send(end_line)`.
+    saturate_out_channel(&mut stdin_tx).await;
+    stdin_tx
+        .write_all(
+            b"{\"jsonrpc\":\"2.0\",\"id\":888,\"method\":\"gap.ngc.Query\",\"params\":{\"operation\":\"s-ok-1\"}}\n",
+        )
+        .await
+        .expect("write s-ok-1");
+    stdin_tx.flush().await.expect("flush s-ok-1");
+    tokio::time::timeout(Duration::from_secs(5), stream_done.notified())
+        .await
+        .expect("s-ok-1 executed");
+    for _ in 0..16 {
+        tokio::task::yield_now().await;
+    }
+
+    stdin_tx
+        .write_all(
+            b"{\"jsonrpc\":\"2.0\",\"id\":888,\"method\":\"gap.ngc.Query\",\"params\":{\"operation\":\"s-ok-2\"}}\n",
+        )
+        .await
+        .expect("write s-ok-2");
+    stdin_tx.flush().await.expect("flush s-ok-2");
+
+    let mut s_resps = Vec::new();
+    for _ in 0..67 {
+        let line = tokio::time::timeout(Duration::from_secs(5), out_lines.next_line())
+            .await
+            .expect("no hang")
+            .expect("io")
+            .expect("line");
+        let val: serde_json::Value = serde_json::from_str(&line).expect("json");
+        if val["id"] == 888 {
+            s_resps.push(val);
+        }
+    }
+    assert_eq!(s_resps.len(), 2);
+    for r in &s_resps {
+        assert!(
+            r.get("error").is_none(),
+            "stream id 888 must already be released before final end send unblocks, got: {r}"
+        );
+        assert_eq!(r["result"]["end"], true);
+    }
+
+    // 3. Deterministic Stream error-end check (`id: 889`): `s-err-1` blocks on `out_tx.send(err_line)`.
+    saturate_out_channel(&mut stdin_tx).await;
+    stdin_tx
+        .write_all(
+            b"{\"jsonrpc\":\"2.0\",\"id\":889,\"method\":\"gap.ngc.Query\",\"params\":{\"operation\":\"s-err-1\"}}\n",
+        )
+        .await
+        .expect("write s-err-1");
+    stdin_tx.flush().await.expect("flush s-err-1");
+    tokio::time::timeout(Duration::from_secs(5), stream_done.notified())
+        .await
+        .expect("s-err-1 executed");
+    for _ in 0..16 {
+        tokio::task::yield_now().await;
+    }
+
+    stdin_tx
+        .write_all(
+            b"{\"jsonrpc\":\"2.0\",\"id\":889,\"method\":\"gap.ngc.Query\",\"params\":{\"operation\":\"s-ok-3\"}}\n",
+        )
+        .await
+        .expect("write s-ok-3");
+    stdin_tx.flush().await.expect("flush s-ok-3");
+
+    let mut e_resps = Vec::new();
+    for _ in 0..67 {
+        let line = tokio::time::timeout(Duration::from_secs(5), out_lines.next_line())
+            .await
+            .expect("no hang")
+            .expect("io")
+            .expect("line");
+        let val: serde_json::Value = serde_json::from_str(&line).expect("json");
+        if val["id"] == 889 {
+            e_resps.push(val);
+        }
+    }
+    assert_eq!(e_resps.len(), 2);
+    assert_eq!(e_resps[0]["error"]["code"], -32001);
+    assert_eq!(e_resps[0]["error"]["data"]["code"], "UNAVAILABLE");
+    assert!(
+        e_resps[1].get("error").is_none(),
+        "stream error id 889 must already be released before final error send unblocks, got: {}",
+        e_resps[1]
+    );
+    assert_eq!(e_resps[1]["result"]["end"], true);
+
+    drop(stdin_tx);
+    server_join
+        .await
+        .expect("join")
+        .expect("clean stdio shutdown");
+}
+
+// spec: NGC-003, NGC-095
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn stdio_immediate_id_reuse_multithread_stress() {
+    let mock = MockConnector::new()
+        .on_describe(|_req, _scope| {
+            Ok(DescribeResponse {
+                not_modified: true,
+                description: None,
+            })
+        })
+        .on_query(|_req, _scope| {
+            let chunk = QueryResponse {
+                chunk: Some(query_response::Chunk::Rows(RowSetChunk {
+                    foreach_index: 0,
+                    rows: Vec::new(),
+                    last_for_index: true,
+                    error: None,
+                })),
+            };
+            Ok(Box::pin(stream::iter(vec![Ok(chunk)])))
+        });
+
+    let core = Arc::new(ServerCore::new(mock, ServerConfig::default()));
+    let (mut stdin_tx, stdout_rx, server_join) = in_memory_raw_stdio(core);
+    let mut out_lines = BufReader::new(stdout_rx).lines();
+
+    for i in 0..2_000_u32 {
+        stdin_tx
+            .write_all(
+                b"{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"gap.ngc.Query\",\"params\":{}}\n",
+            )
+            .await
+            .expect("write query");
+        stdin_tx.flush().await.expect("flush query");
+
+        let item_line = out_lines.next_line().await.expect("io").expect("item line");
+        let item_val: serde_json::Value = serde_json::from_str(&item_line).expect("item json");
+        assert_eq!(
+            item_val["method"], "gap.ngc.item",
+            "iteration {i}: unexpected line instead of item: {item_val}"
+        );
+
+        let end_line = out_lines.next_line().await.expect("io").expect("end line");
+        let end_val: serde_json::Value = serde_json::from_str(&end_line).expect("end json");
+        assert_eq!(
+            end_val["result"]["end"], true,
+            "iteration {i}: unexpected response: {end_val}"
+        );
+    }
+
+    for i in 0..500_u32 {
+        stdin_tx
+            .write_all(
+                b"{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"gap.ngc.Describe\",\"params\":{}}\n",
+            )
+            .await
+            .expect("write describe");
+        stdin_tx.flush().await.expect("flush describe");
+
+        let line = out_lines
+            .next_line()
+            .await
+            .expect("io")
+            .expect("describe line");
+        let val: serde_json::Value = serde_json::from_str(&line).expect("describe json");
+        assert_eq!(
+            val["result"]["notModified"], true,
+            "unary iteration {i}: unexpected response: {val}"
+        );
+    }
+
+    drop(stdin_tx);
+    server_join.await.expect("join").expect("clean shutdown");
+}

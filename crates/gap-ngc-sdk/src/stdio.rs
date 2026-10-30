@@ -235,6 +235,7 @@ async fn send_unary<Resp: ProtoMessage>(
     id: serde_json::Value,
     res: Result<Resp, NgcErrorInfo>,
     max_details_bytes: usize,
+    entry_guard: InFlightEntryGuard,
 ) {
     let line = match res.and_then(|resp| to_json_value(&resp)) {
         Ok(val) => match encode_jsonrpc_result(&id, val) {
@@ -243,6 +244,7 @@ async fn send_unary<Resp: ProtoMessage>(
         },
         Err(err) => encode_jsonrpc_error(id, JSONRPC_CONNECTOR_ERROR, &err, max_details_bytes),
     };
+    drop(entry_guard);
     let _ = out_tx.send(line).await;
 }
 
@@ -251,11 +253,13 @@ async fn send_stream<Item: ProtoMessage>(
     id: serde_json::Value,
     res: Result<CoreStream<Item>, NgcErrorInfo>,
     max_details_bytes: usize,
+    entry_guard: InFlightEntryGuard,
 ) {
     let mut stream = match res {
         Ok(s) => s,
         Err(err) => {
             let line = encode_jsonrpc_error(id, JSONRPC_CONNECTOR_ERROR, &err, max_details_bytes);
+            drop(entry_guard);
             let _ = out_tx.send(line).await;
             return;
         }
@@ -270,25 +274,31 @@ async fn send_stream<Item: ProtoMessage>(
                     }
                 }
                 Err(err) => {
+                    drop(stream);
                     let line =
                         encode_jsonrpc_error(id, JSONRPC_CONNECTOR_ERROR, &err, max_details_bytes);
+                    drop(entry_guard);
                     let _ = out_tx.send(line).await;
                     return;
                 }
             },
             Err(err) => {
+                drop(stream);
                 let line =
                     encode_jsonrpc_error(id, JSONRPC_CONNECTOR_ERROR, &err, max_details_bytes);
+                drop(entry_guard);
                 let _ = out_tx.send(line).await;
                 return;
             }
         }
     }
 
+    drop(stream);
     let end_line = match encode_jsonrpc_result(&id, serde_json::json!({ "end": true })) {
         Ok(line) => line,
         Err(err) => encode_jsonrpc_error(id, JSONRPC_CONNECTOR_ERROR, &err, max_details_bytes),
     };
+    drop(entry_guard);
     let _ = out_tx.send(end_line).await;
 }
 
@@ -586,14 +596,10 @@ where
                         NgcErrorCode::Unimplemented,
                         format!("unknown method `{method_str}`"),
                     );
-                    let _ = out_tx
-                        .send(encode_jsonrpc_error(
-                            id_val,
-                            JSONRPC_METHOD_NOT_FOUND,
-                            &err,
-                            max_details,
-                        ))
-                        .await;
+                    let line =
+                        encode_jsonrpc_error(id_val, JSONRPC_METHOD_NOT_FOUND, &err, max_details);
+                    drop(entry_guard);
+                    let _ = out_tx.send(line).await;
                     continue;
                 };
 
@@ -605,14 +611,10 @@ where
                             NgcErrorCode::InvalidArgument,
                             "params must be a JSON object",
                         );
-                        let _ = out_tx
-                            .send(encode_jsonrpc_error(
-                                id_val,
-                                JSONRPC_INVALID_PARAMS,
-                                &err,
-                                max_details,
-                            ))
-                            .await;
+                        let line =
+                            encode_jsonrpc_error(id_val, JSONRPC_INVALID_PARAMS, &err, max_details);
+                        drop(entry_guard);
+                        let _ = out_tx.send(line).await;
                         continue;
                     }
                 };
@@ -650,14 +652,10 @@ async fn dispatch_rpc<C: Connector>(
             match from_json_value::<$ty>(params_val) {
                 Ok(req) => req,
                 Err(err) => {
-                    let _ = out_tx
-                        .send(encode_jsonrpc_error(
-                            id_val,
-                            JSONRPC_INVALID_PARAMS,
-                            &err,
-                            max_details,
-                        ))
-                        .await;
+                    let line =
+                        encode_jsonrpc_error(id_val, JSONRPC_INVALID_PARAMS, &err, max_details);
+                    drop(entry_guard);
+                    let _ = out_tx.send(line).await;
                     return;
                 }
             }
@@ -670,9 +668,8 @@ async fn dispatch_rpc<C: Connector>(
             let core = Arc::clone(core);
             let tx = out_tx.clone();
             tasks.spawn(async move {
-                let _entry = entry_guard;
                 let res = core.describe(req, BTreeMap::new(), tok).await;
-                send_unary(&tx, id_val, res, max_details).await;
+                send_unary(&tx, id_val, res, max_details, entry_guard).await;
             });
         }
         StdioMethod::Query => {
@@ -680,9 +677,8 @@ async fn dispatch_rpc<C: Connector>(
             let core = Arc::clone(core);
             let tx = out_tx.clone();
             tasks.spawn(async move {
-                let _entry = entry_guard;
                 let res = core.query(req, BTreeMap::new(), tok).await;
-                send_stream(&tx, id_val, res, max_details).await;
+                send_stream(&tx, id_val, res, max_details, entry_guard).await;
             });
         }
         StdioMethod::Mutate => {
@@ -690,9 +686,8 @@ async fn dispatch_rpc<C: Connector>(
             let core = Arc::clone(core);
             let tx = out_tx.clone();
             tasks.spawn(async move {
-                let _entry = entry_guard;
                 let res = core.mutate(req, BTreeMap::new(), tok).await;
-                send_unary(&tx, id_val, res, max_details).await;
+                send_unary(&tx, id_val, res, max_details, entry_guard).await;
             });
         }
         StdioMethod::Subscribe => {
@@ -700,9 +695,8 @@ async fn dispatch_rpc<C: Connector>(
             let core = Arc::clone(core);
             let tx = out_tx.clone();
             tasks.spawn(async move {
-                let _entry = entry_guard;
                 let res = core.subscribe(req, BTreeMap::new(), tok).await;
-                send_stream(&tx, id_val, res, max_details).await;
+                send_stream(&tx, id_val, res, max_details, entry_guard).await;
             });
         }
         StdioMethod::StartTask => {
@@ -710,9 +704,8 @@ async fn dispatch_rpc<C: Connector>(
             let core = Arc::clone(core);
             let tx = out_tx.clone();
             tasks.spawn(async move {
-                let _entry = entry_guard;
                 let res = core.start_task(req, BTreeMap::new(), tok).await;
-                send_unary(&tx, id_val, res, max_details).await;
+                send_unary(&tx, id_val, res, max_details, entry_guard).await;
             });
         }
         StdioMethod::GetTask => {
@@ -720,9 +713,8 @@ async fn dispatch_rpc<C: Connector>(
             let core = Arc::clone(core);
             let tx = out_tx.clone();
             tasks.spawn(async move {
-                let _entry = entry_guard;
                 let res = core.get_task(req, BTreeMap::new(), tok).await;
-                send_unary(&tx, id_val, res, max_details).await;
+                send_unary(&tx, id_val, res, max_details, entry_guard).await;
             });
         }
         StdioMethod::CancelTask => {
@@ -730,9 +722,8 @@ async fn dispatch_rpc<C: Connector>(
             let core = Arc::clone(core);
             let tx = out_tx.clone();
             tasks.spawn(async move {
-                let _entry = entry_guard;
                 let res = core.cancel_task(req, BTreeMap::new(), tok).await;
-                send_unary(&tx, id_val, res, max_details).await;
+                send_unary(&tx, id_val, res, max_details, entry_guard).await;
             });
         }
         StdioMethod::WatchTask => {
@@ -740,9 +731,8 @@ async fn dispatch_rpc<C: Connector>(
             let core = Arc::clone(core);
             let tx = out_tx.clone();
             tasks.spawn(async move {
-                let _entry = entry_guard;
                 let res = core.watch_task(req, BTreeMap::new(), tok).await;
-                send_stream(&tx, id_val, res, max_details).await;
+                send_stream(&tx, id_val, res, max_details, entry_guard).await;
             });
         }
         StdioMethod::Sketch => {
@@ -750,9 +740,8 @@ async fn dispatch_rpc<C: Connector>(
             let core = Arc::clone(core);
             let tx = out_tx.clone();
             tasks.spawn(async move {
-                let _entry = entry_guard;
                 let res = core.sketch(req, BTreeMap::new(), tok).await;
-                send_unary(&tx, id_val, res, max_details).await;
+                send_unary(&tx, id_val, res, max_details, entry_guard).await;
             });
         }
         StdioMethod::Health => {
@@ -760,9 +749,8 @@ async fn dispatch_rpc<C: Connector>(
             let core = Arc::clone(core);
             let tx = out_tx.clone();
             tasks.spawn(async move {
-                let _entry = entry_guard;
                 let res = core.health(req, BTreeMap::new(), tok).await;
-                send_unary(&tx, id_val, res, max_details).await;
+                send_unary(&tx, id_val, res, max_details, entry_guard).await;
             });
         }
         StdioMethod::Explain => {
@@ -770,9 +758,8 @@ async fn dispatch_rpc<C: Connector>(
             let core = Arc::clone(core);
             let tx = out_tx.clone();
             tasks.spawn(async move {
-                let _entry = entry_guard;
                 let res = core.explain(req, BTreeMap::new(), tok).await;
-                send_unary(&tx, id_val, res, max_details).await;
+                send_unary(&tx, id_val, res, max_details, entry_guard).await;
             });
         }
     }
