@@ -28,12 +28,12 @@
     },
     {
       "id": 4,
-      "title": "WP-M1-04 NGC connector conformance kit. Deliverables: connector test kit: Describe validity, foreach correctness/partial failure, N+1 audit via Complete.upstream_calls, deadline+cancel, idempotency replay, dry-run, pagination stability, error mapping, size limits (capability-gated); the SDK mock connector passes the kit; a deliberately broken mock fails each check (kit self-test). Acceptance (must pass): cargo nextest run -p gap-conformance -E 'test(ngc_kit)'",
+      "title": "WP-M1-04 NGC connector conformance kit. Deliverables: connector test kit: Describe validity, foreach correctness/partial failure, N+1 audit via Complete.upstream_calls, deadline+cancel, idempotency replay, dry-run, pagination stability, error mapping, size limits (capability-gated); the SDK mock connector passes the kit; a deliberately broken mock fails each check (kit self-test); profile format `conformance/ngc/<name>.kit.toml` (a connector-specific probe manifest; `.toml`, not `.json`, so the fixture loader never reads it) and `gap-conformance --connector-kit --connector <addr> --profile <file>` (plan fix by the orchestrator: cli.rs and Cargo.toml belong to WP-M0-09 and are added to `owns` here; the `--connector-kit` flag and its not-implemented stub already exist there). Acceptance (must pass): cargo nextest run -p gap-conformance -E 'test(ngc_kit)' && cargo run -p gap-conformance -- --help",
       "role": "tester",
       "depends_on": [
         3
       ],
-      "system_prompt": "Read AGENTS.md and docs/AGENT-GUIDE.md first. Work ONLY inside these paths: conformance/ngc/**, crates/gap-conformance/src/ngc_kit/**. Spec refs: NGC-010, NGC-020, NGC-021, NGC-025, NGC-026, NGC-030, NGC-031, NGC-091. Expand this work package into 2-5 minute steps before coding."
+      "system_prompt": "Read AGENTS.md and docs/AGENT-GUIDE.md first. Work ONLY inside these paths: conformance/ngc/**, crates/gap-conformance/src/ngc_kit/**, crates/gap-conformance/Cargo.toml, crates/gap-conformance/src/cli.rs. Spec refs: NGC-010, NGC-012, NGC-013, NGC-020, NGC-021, NGC-022, NGC-023, NGC-025, NGC-026, NGC-027, NGC-030, NGC-031, NGC-061, NGC-070, NGC-091, INV-12, INV-15, INV-18. Expand this work package into 2-5 minute steps before coding."
     },
     {
       "id": 5,
