@@ -1370,6 +1370,151 @@ async fn stdio_releases_in_flight_id_before_final_send_completes_for_unary_and_s
         .expect("clean stdio shutdown");
 }
 
+// spec: NGC-003, NGC-025, NGC-095
+#[tokio::test(start_paused = true)]
+async fn stdio_releases_in_flight_id_before_final_send_when_stream_open_fails_or_item_is_unrenderable()
+ {
+    // Reviewer hardening: the two spawned stream exits that the test above does not reach. Same technique: a
+    // 16-byte stdout keeps the writer stuck, 65 `Health` replies fill the 64-slot channel, so the final line of the
+    // call under test cannot be queued; the id must nevertheless be free for a second request.
+    let health_count = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let health_target = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let health_reached = Arc::new(Notify::new());
+    let connector_reached = Arc::new(Notify::new());
+
+    let hc = Arc::clone(&health_count);
+    let ht = Arc::clone(&health_target);
+    let hr = Arc::clone(&health_reached);
+    let cr = Arc::clone(&connector_reached);
+    let mock = MockConnector::new()
+        .on_health(move |_req, _scope| {
+            if hc.fetch_add(1, Ordering::SeqCst) + 1 == ht.load(Ordering::SeqCst) {
+                hr.notify_one();
+            }
+            Ok(HealthResponse {
+                status: 1,
+                ..HealthResponse::default()
+            })
+        })
+        .on_query(move |req, _scope| match req.operation.as_str() {
+            "open-fail" => {
+                cr.notify_one();
+                Err(NgcErrorInfo::new(
+                    NgcErrorCode::Unavailable,
+                    "cannot open the stream",
+                ))
+            }
+            "nan" => {
+                cr.notify_one();
+                let mut fields = BTreeMap::new();
+                fields.insert(
+                    "metric".to_owned(),
+                    prost_types::Value {
+                        kind: Some(prost_types::value::Kind::NumberValue(f64::NAN)),
+                    },
+                );
+                let row = QueryResponse {
+                    chunk: Some(query_response::Chunk::Rows(RowSetChunk {
+                        foreach_index: 0,
+                        rows: vec![prost_types::Struct { fields }],
+                        last_for_index: true,
+                        error: None,
+                    })),
+                };
+                Ok(Box::pin(stream::iter(vec![Ok(row)])))
+            }
+            _ => Ok(Box::pin(stream::empty())),
+        });
+
+    let core = Arc::new(ServerCore::new(
+        mock,
+        ServerConfig::default().with_stream_buffer(64),
+    ));
+    let (mut stdin_tx, stdin_rx) = tokio::io::duplex(64 * 1024);
+    let (writer, stdout_rx) = tokio::io::duplex(16);
+    let server_join =
+        tokio::spawn(async move { serve_stdio(core, BufReader::new(stdin_rx), writer).await });
+    let mut out_lines = BufReader::new(stdout_rx).lines();
+
+    for (round, (operation, id, expected_code)) in [
+        ("open-fail", 901_u32, "UNAVAILABLE"),
+        ("nan", 902_u32, "INTERNAL"),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        health_target.store(health_count.load(Ordering::SeqCst) + 65, Ordering::SeqCst);
+        for i in 0..65 {
+            let line = format!(
+                "{{\"jsonrpc\":\"2.0\",\"id\":\"fill-{round}-{i}\",\"method\":\"gap.ngc.Health\",\"params\":{{}}}}\n"
+            );
+            stdin_tx.write_all(line.as_bytes()).await.expect("fill");
+        }
+        stdin_tx.flush().await.expect("flush fill");
+        tokio::time::timeout(Duration::from_secs(5), health_reached.notified())
+            .await
+            .expect("all 65 filler Health calls completed");
+        for _ in 0..32 {
+            tokio::task::yield_now().await;
+        }
+
+        let first = format!(
+            "{{\"jsonrpc\":\"2.0\",\"id\":{id},\"method\":\"gap.ngc.Query\",\"params\":{{\"operation\":\"{operation}\"}}}}\n"
+        );
+        stdin_tx.write_all(first.as_bytes()).await.expect("first");
+        stdin_tx.flush().await.expect("flush first");
+        tokio::time::timeout(Duration::from_secs(5), connector_reached.notified())
+            .await
+            .expect("connector reached");
+        for _ in 0..32 {
+            tokio::task::yield_now().await;
+        }
+
+        // The final line of the first call is blocked on the full channel right now; its id must already be free.
+        let second = format!(
+            "{{\"jsonrpc\":\"2.0\",\"id\":{id},\"method\":\"gap.ngc.Query\",\"params\":{{\"operation\":\"ok\"}}}}\n"
+        );
+        stdin_tx.write_all(second.as_bytes()).await.expect("second");
+        stdin_tx.flush().await.expect("flush second");
+
+        let mut resps = Vec::new();
+        for _ in 0..67 {
+            let line = tokio::time::timeout(Duration::from_secs(5), out_lines.next_line())
+                .await
+                .expect("no hang")
+                .expect("io")
+                .expect("line");
+            let val: serde_json::Value = serde_json::from_str(&line).expect("json");
+            if val["id"] == id {
+                resps.push(val);
+            }
+        }
+        assert_eq!(resps.len(), 2, "{operation}: expected exactly two replies");
+        assert_eq!(
+            resps[0]["error"]["code"], -32001,
+            "{operation}: {}",
+            resps[0]
+        );
+        assert_eq!(
+            resps[0]["error"]["data"]["code"], expected_code,
+            "{operation}: {}",
+            resps[0]
+        );
+        assert!(
+            resps[1].get("error").is_none(),
+            "{operation}: id {id} must already be released before the final error line is queued, got: {}",
+            resps[1]
+        );
+        assert_eq!(resps[1]["result"]["end"], true, "{operation}: {}", resps[1]);
+    }
+
+    drop(stdin_tx);
+    server_join
+        .await
+        .expect("join")
+        .expect("clean stdio shutdown");
+}
+
 // spec: NGC-003, NGC-095
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn stdio_immediate_id_reuse_multithread_stress() {
