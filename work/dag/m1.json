@@ -33,7 +33,7 @@
       "depends_on": [
         3
       ],
-      "system_prompt": "Read AGENTS.md and docs/AGENT-GUIDE.md first. Work ONLY inside these paths: conformance/ngc/**, crates/gap-conformance/src/ngc_kit/**, crates/gap-conformance/Cargo.toml, crates/gap-conformance/src/cli.rs. Spec refs: NGC-010, NGC-012, NGC-013, NGC-020, NGC-021, NGC-022, NGC-023, NGC-025, NGC-026, NGC-027, NGC-030, NGC-031, NGC-061, NGC-070, NGC-091, INV-12, INV-15, INV-18. Expand this work package into 2-5 minute steps before coding."
+      "system_prompt": "Read AGENTS.md and docs/AGENT-GUIDE.md first. Work ONLY inside these paths: conformance/ngc/**, crates/gap-conformance/src/ngc_kit/**, crates/gap-conformance/Cargo.toml, crates/gap-conformance/src/cli.rs, crates/gap-conformance/tests/canary_principals.rs. Spec refs: NGC-010, NGC-012, NGC-013, NGC-020, NGC-021, NGC-022, NGC-023, NGC-025, NGC-026, NGC-027, NGC-030, NGC-031, NGC-061, NGC-070, NGC-091, INV-12, INV-15, INV-18. Expand this work package into 2-5 minute steps before coding."
     },
     {
       "id": 5,

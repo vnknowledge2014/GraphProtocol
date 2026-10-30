@@ -1,0 +1,48 @@
+# Kit profile for the in-repo reference connector (`gap_conformance::ngc_kit::reference`).
+# Format and meaning of every field: conformance/ngc/README.md.
+
+name = "sdk-reference"
+
+[timing]
+deadline_ms = 200
+grace_ms = 2000
+
+# A keyed read that supports `foreach` (NGC-020, NGC-026).
+[read]
+operation = "customers"
+key_var = "id"
+keys = [1, 2, 3, 4, 5, 6]
+absent_key = 999
+failing_key = "not-a-number"
+row_key = "id"
+
+# A list operation for ordering and pagination (NGC-021, NGC-022). 12 customers, 3 per page: 4 pages.
+[page]
+operation = "customers_list"
+limit = 3
+order_by = "id"
+other_arguments = { region = "eu" }
+
+# An operation that stays open until it is cancelled or its deadline passes (NGC-025).
+[slow]
+operation = "slow"
+calls = 8
+
+# A mutation; `orders` returns one row per applied order, so the kit can count effects (NGC-030, NGC-031).
+[mutate]
+operation = "create_order"
+arguments = { item = "kit-widget" }
+
+[mutate.probe]
+operation = "orders"
+
+# An answer of 40 rows that does not fit in limits.max_response_bytes and can be resumed (NGC-027).
+[size]
+operation = "blobs"
+expected_total_rows = 40
+resumable = true
+
+# A request the connector must refuse with INVALID_ARGUMENT (NGC-060).
+[errors.invalid_query]
+operation = "customers"
+arguments = { id = "oops" }

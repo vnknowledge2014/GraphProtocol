@@ -231,6 +231,8 @@ async fn inv_15_principal_bearer_tokens_never_appear_in_logs_errors_debug_or_rep
             offline: None,
             spawn: None,
             connector_kit: false,
+            connector: None,
+            profile: None,
         };
         let mut stdout_buf = Vec::new();
         let mut stderr_buf = Vec::new();
@@ -281,6 +283,8 @@ async fn inv_15_principal_bearer_tokens_never_appear_in_logs_errors_debug_or_rep
             offline: None,
             spawn: None,
             connector_kit: false,
+            connector: None,
+            profile: None,
         },
         &mut pass_out,
         &mut pass_err,

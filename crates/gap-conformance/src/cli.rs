@@ -54,9 +54,17 @@ pub struct CliArgs {
     #[arg(long = "spawn", value_name = "EXAMPLE")]
     pub spawn: Option<String>,
 
-    /// NGC connector conformance kit mode (provided in WP-M1-04).
+    /// NGC connector conformance kit mode (`NGC-091`): needs `--connector` and `--profile`; `--report` writes the JSON report.
     #[arg(long = "connector-kit")]
     pub connector_kit: bool,
+
+    /// Address of the connector under test for `--connector-kit` (gRPC, plain text: `host:port` or `http://host:port`).
+    #[arg(long = "connector", value_name = "ADDR")]
+    pub connector: Option<String>,
+
+    /// Kit profile for `--connector-kit` (`conformance/ngc/<name>.kit.toml`, see `conformance/ngc/README.md`).
+    #[arg(long = "profile", value_name = "FILE")]
+    pub profile: Option<PathBuf>,
 }
 
 /// Parses `args` and executes the requested `gap-conformance` CLI mode, writing human/help output
@@ -81,11 +89,7 @@ where
     };
 
     if cli.connector_kit {
-        let _ = writeln!(
-            stderr,
-            "error: --connector-kit mode is not yet implemented; WP-M1-04 (NGC connector conformance kit) provides it."
-        );
-        return EXIT_USAGE_OR_UNSUPPORTED;
+        return execute_connector_kit(&cli, stdout, stderr).await;
     }
 
     if cli.offline.is_some() {
@@ -121,6 +125,55 @@ where
     };
 
     execute_target_mode(&driver, &cli, stdout, stderr).await
+}
+
+/// Runs the NGC connector kit (`NGC-091`): exit `0` if the connector is NGC-compatible, `1` if a check failed or an advertised
+/// capability could not be probed, `2` on a usage or profile error.
+async fn execute_connector_kit(
+    cli: &CliArgs,
+    stdout: &mut dyn Write,
+    stderr: &mut dyn Write,
+) -> u8 {
+    let (Some(addr), Some(profile_path)) = (cli.connector.as_deref(), cli.profile.as_deref())
+    else {
+        let _ = writeln!(
+            stderr,
+            "error: --connector-kit needs --connector <ADDR> and --profile <FILE>."
+        );
+        return EXIT_USAGE_OR_UNSUPPORTED;
+    };
+    let profile = match crate::ngc_kit::Profile::from_path(profile_path) {
+        Ok(profile) => profile,
+        Err(err) => {
+            let _ = writeln!(stderr, "error: {err}");
+            return EXIT_USAGE_OR_UNSUPPORTED;
+        }
+    };
+    let client = match crate::ngc_kit::connect(addr) {
+        Ok(client) => client,
+        Err(err) => {
+            let _ = writeln!(stderr, "error: {err}");
+            return EXIT_USAGE_OR_UNSUPPORTED;
+        }
+    };
+    let report = crate::ngc_kit::run_kit(&client, &profile).await;
+    let _ = write!(stdout, "{}", report.render_text());
+    if let Some(path) = &cli.report {
+        let json = serde_json::to_string_pretty(&report.to_json()).unwrap_or_default();
+        if let Err(err) = std::fs::write(path, format!("{json}\n")) {
+            let _ = writeln!(
+                stderr,
+                "error: cannot write report `{}`: {err}",
+                path.display()
+            );
+            return EXIT_USAGE_OR_UNSUPPORTED;
+        }
+    }
+    if report.compatible() {
+        EXIT_OK
+    } else {
+        EXIT_CONFORMANCE_FAILURE
+    }
 }
 
 /// Executes a parsed `--target`-style run with an injected [`ConformanceDriver`] (used by both
@@ -267,6 +320,107 @@ mod tests {
         }
     }
 
+    // spec: NGC-091 (VER-011)
+    #[tokio::test]
+    async fn cli_connector_kit_rejects_missing_arguments_bad_profiles_and_tls_addresses() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let bad_profile = dir.path().join("bad.kit.toml");
+        std::fs::write(&bad_profile, "name = \"x\"\nbogus = 1\n").expect("write profile");
+        let bad_profile = bad_profile.to_string_lossy().into_owned();
+        let good_profile = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../conformance/ngc/sdk-reference.kit.toml"
+        );
+        let cases: Vec<Vec<&str>> = vec![
+            vec!["gap-conformance", "--connector-kit"],
+            vec![
+                "gap-conformance",
+                "--connector-kit",
+                "--connector",
+                "127.0.0.1:1",
+            ],
+            vec![
+                "gap-conformance",
+                "--connector-kit",
+                "--profile",
+                good_profile,
+            ],
+            vec![
+                "gap-conformance",
+                "--connector-kit",
+                "--connector",
+                "127.0.0.1:1",
+                "--profile",
+                "/no/such/profile.kit.toml",
+            ],
+            vec![
+                "gap-conformance",
+                "--connector-kit",
+                "--connector",
+                "127.0.0.1:1",
+                "--profile",
+                bad_profile.as_str(),
+            ],
+            vec![
+                "gap-conformance",
+                "--connector-kit",
+                "--connector",
+                "https://127.0.0.1:1",
+                "--profile",
+                good_profile,
+            ],
+            vec![
+                "gap-conformance",
+                "--connector-kit",
+                "--connector",
+                "ftp://127.0.0.1:1",
+                "--profile",
+                good_profile,
+            ],
+        ];
+        for args in cases {
+            let (mut out, mut err) = (Vec::new(), Vec::new());
+            let code = run_cli_from_args(args.clone(), &mut out, &mut err).await;
+            assert_eq!(code, 2, "args {args:?} must exit 2");
+            let msg = String::from_utf8(err).expect("utf8 stderr");
+            assert!(msg.starts_with("error: "), "{args:?}: {msg:?}");
+        }
+    }
+
+    // spec: NGC-091 (VER-011)
+    #[tokio::test]
+    async fn cli_connector_kit_exits_1_when_nothing_answers_and_writes_the_report() {
+        // A port nobody listens on: Describe fails, so the connector is not NGC-compatible.
+        let free = std::net::TcpListener::bind("127.0.0.1:0").expect("bind");
+        let addr = free.local_addr().expect("addr").to_string();
+        drop(free);
+        let dir = tempfile::tempdir().expect("tempdir");
+        let report = dir.path().join("report.json");
+        let args = [
+            "gap-conformance",
+            "--connector-kit",
+            "--connector",
+            addr.as_str(),
+            "--profile",
+            concat!(
+                env!("CARGO_MANIFEST_DIR"),
+                "/../../conformance/ngc/sdk-reference.kit.toml"
+            ),
+            "--report",
+            report.to_str().expect("utf8 path"),
+        ];
+        let (mut out, mut err) = (Vec::new(), Vec::new());
+        let code = run_cli_from_args(args, &mut out, &mut err).await;
+        assert_eq!(code, 1, "stderr: {}", String::from_utf8_lossy(&err));
+        assert!(String::from_utf8_lossy(&out).contains("NOT NGC-compatible"));
+        let json: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(&report).expect("report written"))
+                .expect("json");
+        assert_eq!(json["compatible"], false);
+        assert_eq!(json["profile"], "sdk-reference");
+        assert_eq!(json["failed"], serde_json::json!(["describe.valid"]));
+    }
+
     // spec: GQL-002, NGC-091 (VER-011)
     #[tokio::test]
     async fn cli_help_exits_0_and_staged_modes_exit_2_naming_owning_work_packages() {
@@ -286,7 +440,6 @@ mod tests {
                 vec!["gap-conformance", "--spawn", "examples/walking-skeleton"],
                 "WP-M1-12",
             ),
-            (vec!["gap-conformance", "--connector-kit"], "WP-M1-04"),
         ] {
             let mut out_buf = Vec::new();
             let mut err_buf = Vec::new();

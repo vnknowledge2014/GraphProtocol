@@ -13,14 +13,20 @@ path = "src/main.rs"
 [dependencies]
 anyhow.workspace = true
 clap = { workspace = true, features = ["derive"] }
+futures-util.workspace = true
 gap-core.workspace = true
 gap-ngc-sdk.workspace = true
 gap-proto.workspace = true
+gap-ql.workspace = true
+prost.workspace = true
+prost-types.workspace = true
 reqwest = { workspace = true, features = ["json"] }
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
 thiserror.workspace = true
-tokio = { workspace = true, features = ["io-util", "macros", "net", "process", "rt-multi-thread", "time"] }
+tokio = { workspace = true, features = ["io-util", "macros", "net", "process", "rt-multi-thread", "sync", "time"] }
+toml.workspace = true
+tonic.workspace = true
 tracing.workspace = true
 
 [dev-dependencies]
@@ -28,3 +34,4 @@ axum.workspace = true
 gap-testkit.workspace = true
 proptest.workspace = true
 tempfile.workspace = true
+tokio = { workspace = true, features = ["test-util"] }
