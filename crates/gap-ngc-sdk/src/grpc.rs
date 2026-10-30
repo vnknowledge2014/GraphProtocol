@@ -357,6 +357,29 @@ fn client_status_to_ngc_error(
     status_to_ngc_error(status)
 }
 
+fn fuse_client_stream<T: Send + 'static>(
+    streaming: tonic::Streaming<T>,
+    max_decoding_bytes: usize,
+    req_encoded_len: usize,
+) -> BoxStream<T> {
+    Box::pin(
+        futures_util::stream::unfold(Some(streaming), move |mut maybe_stream| async move {
+            let mut stream = maybe_stream.take()?;
+            match stream.next().await {
+                Some(Ok(item)) => Some((Ok(item), Some(stream))),
+                Some(Err(status)) => {
+                    let err =
+                        client_status_to_ngc_error(&status, max_decoding_bytes, req_encoded_len);
+                    drop(stream);
+                    Some((Err(err), None))
+                }
+                None => None,
+            }
+        })
+        .fuse(),
+    )
+}
+
 /// Typed gRPC client mapping `tonic::Status` back to [`NgcErrorInfo`] via `ngc-error-bin` with
 /// code-table fallback (`NGC-062`, `NGC-063`, `NGC-093` (i)).
 #[derive(Debug, Clone)]
@@ -450,9 +473,7 @@ impl GrpcClient {
             .await
             .map(tonic::Response::into_inner)
             .map_err(|s| client_status_to_ngc_error(&s, max_dec, req_encoded_len))?;
-        Ok(Box::pin(streaming.map(move |res| {
-            res.map_err(|s| client_status_to_ngc_error(&s, max_dec, req_encoded_len))
-        })))
+        Ok(fuse_client_stream(streaming, max_dec, req_encoded_len))
     }
 
     /// Invokes `Mutate`.
@@ -515,9 +536,7 @@ impl GrpcClient {
             .await
             .map(tonic::Response::into_inner)
             .map_err(|s| client_status_to_ngc_error(&s, max_dec, req_encoded_len))?;
-        Ok(Box::pin(streaming.map(move |res| {
-            res.map_err(|s| client_status_to_ngc_error(&s, max_dec, req_encoded_len))
-        })))
+        Ok(fuse_client_stream(streaming, max_dec, req_encoded_len))
     }
 
     /// Invokes `StartTask`.
@@ -587,9 +606,7 @@ impl GrpcClient {
             .await
             .map(tonic::Response::into_inner)
             .map_err(|s| client_status_to_ngc_error(&s, max_dec, req_encoded_len))?;
-        Ok(Box::pin(streaming.map(move |res| {
-            res.map_err(|s| client_status_to_ngc_error(&s, max_dec, req_encoded_len))
-        })))
+        Ok(fuse_client_stream(streaming, max_dec, req_encoded_len))
     }
 
     /// Invokes `Sketch`.

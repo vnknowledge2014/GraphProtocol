@@ -1417,3 +1417,308 @@ async fn stdio_immediate_id_reuse_multithread_stress() {
     drop(stdin_tx);
     server_join.await.expect("join").expect("clean shutdown");
 }
+
+// spec: NGC-001, NGC-062, NGC-063, NGC-093
+#[tokio::test(start_paused = true)]
+async fn grpc_client_fuses_streams_after_first_error_and_drops_body() {
+    let make_row = |len: usize| -> QueryResponse {
+        let mut fields = BTreeMap::new();
+        fields.insert(
+            "payload".to_owned(),
+            prost_types::Value {
+                kind: Some(prost_types::value::Kind::StringValue("r".repeat(len))),
+            },
+        );
+        QueryResponse {
+            chunk: Some(query_response::Chunk::Rows(RowSetChunk {
+                foreach_index: 0,
+                rows: vec![prost_types::Struct { fields }],
+                last_for_index: false,
+                error: None,
+            })),
+        }
+    };
+
+    let mock = MockConnector::new()
+        .on_query(move |req, _scope| {
+            if req.operation == "eight-kib" {
+                // One 8 KiB row followed by a pending tail so we also prove the underlying body is dropped!
+                let first = stream::iter(vec![Ok(make_row(8 * 1024))]);
+                Ok(Box::pin(first.chain(stream::pending())))
+            } else {
+                // Two good items + one error + trailing item that must never be seen.
+                let items = vec![
+                    Ok(make_row(16)),
+                    Ok(make_row(32)),
+                    Err(NgcErrorInfo::new(
+                        NgcErrorCode::Unavailable,
+                        "midstream fail",
+                    )),
+                    Ok(make_row(64)),
+                ];
+                Ok(Box::pin(stream::iter(items)))
+            }
+        })
+        .on_subscribe(|_req, _scope| {
+            let mut fields = BTreeMap::new();
+            fields.insert(
+                "payload".to_owned(),
+                prost_types::Value {
+                    kind: Some(prost_types::value::Kind::StringValue("e".repeat(8 * 1024))),
+                },
+            );
+            let ev = Event {
+                id: "big-ev".to_owned(),
+                at: None,
+                payload: Some(prost_types::Struct { fields }),
+                resume_token: String::new(),
+            };
+            Ok(Box::pin(
+                stream::iter(vec![Ok(ev)]).chain(stream::pending()),
+            ))
+        })
+        .on_watch_task(|_req, _scope| {
+            let ts = TaskStatus {
+                task_id: "t".repeat(8 * 1024),
+                state: TaskState::Completed as i32,
+                ..TaskStatus::default()
+            };
+            Ok(Box::pin(
+                stream::iter(vec![Ok(ts)]).chain(stream::pending()),
+            ))
+        });
+
+    let core = Arc::new(ServerCore::new(mock.clone(), ServerConfig::default()));
+    let (base_client, _handle) = in_memory_grpc(core);
+    let client = base_client.with_max_decoding_message_size(4_096);
+
+    // 1. `query`: 8 KiB message > 4 KiB client bound -> exact 1 `RESOURCE_EXHAUSTED` item, then `None`!
+    let mut qs = client
+        .query(QueryRequest {
+            operation: "eight-kib".to_owned(),
+            ..QueryRequest::default()
+        })
+        .await
+        .expect("open query");
+    let first_q = qs
+        .next()
+        .await
+        .expect("first item")
+        .expect_err("must fail decode bound");
+    assert_eq!(first_q.code, NgcErrorCode::ResourceExhausted);
+    assert!(
+        qs.next().await.is_none(),
+        "query stream must be fused to None immediately after first Err"
+    );
+    assert!(qs.next().await.is_none());
+    tokio::time::timeout(Duration::from_secs(5), mock.wait_for_drops(1))
+        .await
+        .expect("underlying query body dropped on first decode error");
+
+    // 2. `subscribe`: 8 KiB event > 4 KiB client bound -> exact 1 `RESOURCE_EXHAUSTED` item, then `None`!
+    let mut ss = client
+        .subscribe(SubscribeRequest::default())
+        .await
+        .expect("open subscribe");
+    let first_s = ss
+        .next()
+        .await
+        .expect("first item")
+        .expect_err("must fail decode bound");
+    assert_eq!(first_s.code, NgcErrorCode::ResourceExhausted);
+    assert!(
+        ss.next().await.is_none(),
+        "subscribe stream must be fused to None immediately after first Err"
+    );
+    tokio::time::timeout(Duration::from_secs(5), mock.wait_for_drops(2))
+        .await
+        .expect("underlying subscribe body dropped on first decode error");
+
+    // 3. `watch_task`: 8 KiB status > 4 KiB client bound -> exact 1 `RESOURCE_EXHAUSTED` item, then `None`!
+    let mut ws = client
+        .watch_task(WatchTaskRequest::default())
+        .await
+        .expect("open watch_task");
+    let first_w = ws
+        .next()
+        .await
+        .expect("first item")
+        .expect_err("must fail decode bound");
+    assert_eq!(first_w.code, NgcErrorCode::ResourceExhausted);
+    assert!(
+        ws.next().await.is_none(),
+        "watch_task stream must be fused to None immediately after first Err"
+    );
+    tokio::time::timeout(Duration::from_secs(5), mock.wait_for_drops(3))
+        .await
+        .expect("underlying watch_task body dropped on first decode error");
+
+    // 4. Server failing after 2 good items yields exact 2 Ok items + 1 Err + None!
+    let mut two_good = client
+        .query(QueryRequest {
+            operation: "two-good-then-err".to_owned(),
+            ..QueryRequest::default()
+        })
+        .await
+        .expect("open two-good");
+    assert!(two_good.next().await.expect("item 0").is_ok());
+    assert!(two_good.next().await.expect("item 1").is_ok());
+    let third = two_good
+        .next()
+        .await
+        .expect("item 2")
+        .expect_err("3rd item must be error");
+    assert_eq!(third.code, NgcErrorCode::Unavailable);
+    assert!(two_good.next().await.is_none());
+    assert!(two_good.next().await.is_none());
+}
+
+// spec: NGC-001, NGC-062, NGC-063, NGC-093
+#[test]
+fn proptest_grpc_client_stream_never_yields_after_first_error() {
+    use proptest::prelude::*;
+    use proptest::test_runner::{Config as ProptestConfig, TestRunner};
+
+    #[derive(Debug, Clone, Copy)]
+    enum ScriptStep {
+        GoodSmall(u16),
+        GoodOversized,
+        ServerErr(NgcErrorCode),
+    }
+
+    let step_strategy = prop_oneof![
+        (1_u16..200).prop_map(ScriptStep::GoodSmall),
+        Just(ScriptStep::GoodOversized),
+        prop_oneof![
+            Just(NgcErrorCode::InvalidArgument),
+            Just(NgcErrorCode::Unavailable),
+            Just(NgcErrorCode::Internal),
+            Just(NgcErrorCode::ResourceExhausted),
+        ]
+        .prop_map(ScriptStep::ServerErr),
+    ];
+
+    let rt = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .expect("tokio rt");
+
+    let script_slot: Arc<std::sync::Mutex<Vec<ScriptStep>>> =
+        Arc::new(std::sync::Mutex::new(Vec::new()));
+    let slot_c = Arc::clone(&script_slot);
+
+    let mock = MockConnector::new().on_query(move |_req, _scope| {
+        let steps = slot_c.lock().expect("lock").clone();
+        let items: Vec<Result<QueryResponse, NgcErrorInfo>> = steps
+            .into_iter()
+            .map(|st| match st {
+                ScriptStep::GoodSmall(n) => {
+                    let mut fields = BTreeMap::new();
+                    fields.insert(
+                        "s".to_owned(),
+                        prost_types::Value {
+                            kind: Some(prost_types::value::Kind::StringValue(
+                                "a".repeat(usize::from(n)),
+                            )),
+                        },
+                    );
+                    Ok(QueryResponse {
+                        chunk: Some(query_response::Chunk::Rows(RowSetChunk {
+                            foreach_index: 0,
+                            rows: vec![prost_types::Struct { fields }],
+                            last_for_index: false,
+                            error: None,
+                        })),
+                    })
+                }
+                ScriptStep::GoodOversized => {
+                    let mut fields = BTreeMap::new();
+                    fields.insert(
+                        "s".to_owned(),
+                        prost_types::Value {
+                            kind: Some(prost_types::value::Kind::StringValue("Z".repeat(4_096))),
+                        },
+                    );
+                    Ok(QueryResponse {
+                        chunk: Some(query_response::Chunk::Rows(RowSetChunk {
+                            foreach_index: 0,
+                            rows: vec![prost_types::Struct { fields }],
+                            last_for_index: false,
+                            error: None,
+                        })),
+                    })
+                }
+                ScriptStep::ServerErr(code) => Err(NgcErrorInfo::new(code, "scripted error")),
+            })
+            .collect();
+        Ok(Box::pin(stream::iter(items)))
+    });
+
+    let (client, _handle) = rt.block_on(async {
+        let core = Arc::new(ServerCore::new(mock, ServerConfig::default()));
+        let (c, h) = in_memory_grpc(core);
+        (c.with_max_decoding_message_size(1_024), h)
+    });
+
+    let mut runner = TestRunner::new(ProptestConfig {
+        cases: 64,
+        failure_persistence: None,
+        ..ProptestConfig::default()
+    });
+
+    runner
+        .run(&proptest::collection::vec(step_strategy, 0..16), |steps| {
+            let expected_ok_prefix = steps
+                .iter()
+                .take_while(|s| matches!(s, ScriptStep::GoodSmall(_)))
+                .count();
+            let expected_err_code =
+                steps
+                    .get(expected_ok_prefix)
+                    .map(|first_bad| match *first_bad {
+                        ScriptStep::GoodOversized => NgcErrorCode::ResourceExhausted,
+                        ScriptStep::ServerErr(c) => c,
+                        ScriptStep::GoodSmall(_) => unreachable!(),
+                    });
+
+            *script_slot.lock().expect("lock") = steps;
+
+            rt.block_on(async {
+                let mut s = client
+                    .query(QueryRequest::default())
+                    .await
+                    .expect("open query");
+                let mut seen = Vec::new();
+                while let Some(res) = s.next().await {
+                    seen.push(res);
+                    if seen.len() > 32 {
+                        break;
+                    }
+                }
+                // Extra polls after None must continue returning None.
+                for _ in 0..3 {
+                    assert!(s.next().await.is_none());
+                }
+
+                match expected_err_code {
+                    None => {
+                        prop_assert_eq!(seen.len(), expected_ok_prefix);
+                        prop_assert!(seen.iter().all(Result::is_ok));
+                    }
+                    Some(code) => {
+                        prop_assert_eq!(
+                            seen.len(),
+                            expected_ok_prefix + 1,
+                            "stream yielded items after first error: {:?}",
+                            seen.len()
+                        );
+                        prop_assert!(seen[..expected_ok_prefix].iter().all(Result::is_ok));
+                        let err = seen.pop().expect("err item").expect_err("must be Err");
+                        prop_assert_eq!(err.code, code);
+                    }
+                }
+                Ok(())
+            })
+        })
+        .expect("GrpcClient stream fuse proptest");
+}
