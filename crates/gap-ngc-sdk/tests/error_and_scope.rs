@@ -1,24 +1,33 @@
-//! TDD tests for `gap_ngc_sdk::error` and `gap_ngc_sdk::connector` (`NGC-031`, `NGC-060`..`063`, `NGC-080`, `NGC-090`, `NGC-094`, `INV-15`).
+//! TDD tests for `gap_ngc_sdk::error`, `gap_ngc_sdk::connector`, and `gap_ngc_sdk::core` (`NGC-025`, `NGC-031`, `NGC-060`..`063`, `NGC-071`, `NGC-080`, `NGC-090`, `NGC-093`, `NGC-094`, `INV-12`, `INV-15`).
 #![forbid(unsafe_code)]
 
 use std::collections::BTreeMap;
 use std::future::{Future, ready};
+use std::pin::Pin;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::task::{Context, Poll};
 use std::time::Duration;
 
-use futures_util::stream;
+use futures_util::{Stream, StreamExt as _, stream};
+use gap_core::clock::ManualClock;
 use gap_core::error::{MAX_ERROR_MESSAGE_CHARS, NgcErrorCode, NgcErrorInfo};
 use gap_ngc_sdk::connector::{BoxStream, CallScope, Connector, NgcResult};
+use gap_ngc_sdk::core::{ServerConfig, ServerCore};
 use gap_ngc_sdk::error::{
     NGC_ERROR_METADATA_KEY, http_status_for_code, json_map_to_prost_struct,
     ngc_error_code_to_tonic, ngc_error_from_proto, ngc_error_to_proto, ngc_error_to_status,
     prost_struct_to_json_map, retry_after_seconds, sanitize_error_info, sanitize_proto_error,
     status_to_ngc_error,
 };
+use gap_ngc_sdk::mock::MockConnector;
 use gap_proto::ngc::v1::{
-    CancelTaskRequest, DescribeRequest, DescribeResponse, GetTaskRequest, HealthRequest,
-    MutateRequest, NgcError, QueryRequest, QueryResponse, ServingStatus, SketchRequest,
-    StartTaskRequest, SubscribeRequest, WatchTaskRequest,
+    CallContext, CancelTaskRequest, DescribeRequest, DescribeResponse, GetTaskRequest,
+    HealthRequest, MutateRequest, MutateResponse, NgcError, QueryRequest, QueryResponse,
+    RowSetChunk, ServingStatus, SketchRequest, StartTaskRequest, SubscribeRequest,
+    WatchTaskRequest, query_response,
 };
+use tokio::sync::Notify;
 use tokio::time::Instant;
 use tokio_util::sync::CancellationToken;
 
@@ -277,6 +286,24 @@ fn inv_15_call_scope_debug_redacts_authorization_and_sensitive_metadata() {
         "authorization".to_owned(),
         "Bearer super-secret-jwt-value".to_owned(),
     );
+    metadata.insert("cookie".to_owned(), "sid=cookie-lower-val".to_owned());
+    metadata.insert("Cookie".to_owned(), "sid=cookie-mixed-val".to_owned());
+    metadata.insert(
+        "set-cookie".to_owned(),
+        "sid=set-cookie-lower-val; HttpOnly".to_owned(),
+    );
+    metadata.insert(
+        "Set-Cookie".to_owned(),
+        "sid=set-cookie-mixed-val; Secure".to_owned(),
+    );
+    metadata.insert(
+        "proxy-authorization".to_owned(),
+        "Basic proxy-auth-lower-val".to_owned(),
+    );
+    metadata.insert(
+        "Proxy-Authorization".to_owned(),
+        "Bearer proxy-auth-mixed-val".to_owned(),
+    );
     metadata.insert(
         "x-trace-context-bin".to_owned(),
         "raw-binary-secret".to_owned(),
@@ -284,6 +311,10 @@ fn inv_15_call_scope_debug_redacts_authorization_and_sensitive_metadata() {
     metadata.insert("x-refresh-token".to_owned(), "refresh-tok-value".to_owned());
     metadata.insert("x-client-secret".to_owned(), "client-sec-value".to_owned());
     metadata.insert("x-api-key".to_owned(), "api-key-12345".to_owned());
+    metadata.insert(
+        "traceparent".to_owned(),
+        "00-traceparent-metadata-visible".to_owned(),
+    );
     metadata.insert(
         "x-Safe-Header".to_owned(),
         "visible-header-value".to_owned(),
@@ -301,11 +332,19 @@ fn inv_15_call_scope_debug_redacts_authorization_and_sensitive_metadata() {
     let dbg = format!("{scope:?}");
     assert!(dbg.contains("req-001"));
     assert!(dbg.contains("tenant-alpha"));
+    assert!(dbg.contains("00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01"));
+    assert!(dbg.contains("00-traceparent-metadata-visible"));
     assert!(dbg.contains("visible-header-value"));
     assert!(dbg.contains("[REDACTED]"));
 
     for forbidden in [
         "super-secret-jwt-value",
+        "cookie-lower-val",
+        "cookie-mixed-val",
+        "set-cookie-lower-val",
+        "set-cookie-mixed-val",
+        "proxy-auth-lower-val",
+        "proxy-auth-mixed-val",
         "raw-binary-secret",
         "refresh-tok-value",
         "client-sec-value",
@@ -393,5 +432,576 @@ async fn minimal_connector_defaults_health_to_serving_and_optional_rpcs_to_unimp
             .expect_err("explain unimplemented")
             .code,
         NgcErrorCode::Unimplemented
+    );
+}
+
+// spec: NGC-025, NGC-093, INV-12
+#[tokio::test(start_paused = true)]
+async fn server_core_negative_deadline_unix_ms_fails_deadline_exceeded_without_invoking_connector()
+{
+    let clock = Arc::new(ManualClock::new(1_700_000_000_000));
+    let mock = MockConnector::new()
+        .on_mutate(|_req, _scope| Ok(MutateResponse::default()))
+        .on_query(|_req, _scope| Ok(Box::pin(stream::empty())));
+    let core = ServerCore::new(mock.clone(), ServerConfig::default().with_clock(clock));
+
+    for neg_deadline in [-1_i64, -10_000_i64, i64::MIN] {
+        let ctx = Some(CallContext {
+            deadline_unix_ms: neg_deadline,
+            ..CallContext::default()
+        });
+        let u_err = core
+            .mutate(
+                MutateRequest {
+                    ctx: ctx.clone(),
+                    ..MutateRequest::default()
+                },
+                BTreeMap::new(),
+                CancellationToken::new(),
+            )
+            .await
+            .expect_err("negative deadline_unix_ms must fail unary call");
+        assert_eq!(u_err.code, NgcErrorCode::DeadlineExceeded);
+
+        let s_err = core
+            .query(
+                QueryRequest {
+                    ctx,
+                    ..QueryRequest::default()
+                },
+                BTreeMap::new(),
+                CancellationToken::new(),
+            )
+            .await
+            .err()
+            .expect("negative deadline_unix_ms must fail stream open");
+        assert_eq!(s_err.code, NgcErrorCode::DeadlineExceeded);
+    }
+
+    assert_eq!(
+        mock.total_calls(),
+        0,
+        "connector must never be invoked when deadline_unix_ms is negative"
+    );
+}
+
+// spec: NGC-025, NGC-093, INV-12
+#[tokio::test(start_paused = true)]
+async fn server_core_pre_cancelled_token_fails_cancelled_without_invoking_connector() {
+    let mock = MockConnector::new()
+        .on_describe(|_req, _scope| Ok(DescribeResponse::default()))
+        .on_mutate(|_req, _scope| Ok(MutateResponse::default()))
+        .on_query(|_req, _scope| Ok(Box::pin(stream::empty())));
+    let core = ServerCore::new(mock.clone(), ServerConfig::default());
+
+    let pre_cancelled = CancellationToken::new();
+    pre_cancelled.cancel();
+
+    let d_err = core
+        .describe(
+            DescribeRequest::default(),
+            BTreeMap::new(),
+            pre_cancelled.clone(),
+        )
+        .await
+        .expect_err("pre-cancelled unary describe must fail CANCELLED");
+    assert_eq!(d_err.code, NgcErrorCode::Cancelled);
+
+    let m_err = core
+        .mutate(
+            MutateRequest::default(),
+            BTreeMap::new(),
+            pre_cancelled.clone(),
+        )
+        .await
+        .expect_err("pre-cancelled unary mutate must fail CANCELLED");
+    assert_eq!(m_err.code, NgcErrorCode::Cancelled);
+
+    let q_err = core
+        .query(QueryRequest::default(), BTreeMap::new(), pre_cancelled)
+        .await
+        .err()
+        .expect("pre-cancelled stream query must fail CANCELLED");
+    assert_eq!(q_err.code, NgcErrorCode::Cancelled);
+
+    assert_eq!(
+        mock.total_calls(),
+        0,
+        "connector must never be invoked when transport token is already cancelled"
+    );
+}
+
+// spec: NGC-025, NGC-093, INV-12
+#[tokio::test(start_paused = true)]
+async fn server_core_post_completion_wall_clock_deadline_rejects_unary_and_stream_open() {
+    // Test both exact equality (`now_ms == deadline_unix_ms`, advance = 500ms) and strict past (`advance = 501ms`)
+    // while paused tokio `Instant` remains frozen at `t0`.
+    for advance_ms in [500_u64, 501_u64] {
+        let base_ms: u64 = 1_700_000_000_000;
+        let deadline_ms: i64 = 1_700_000_000_500;
+        let clock = Arc::new(ManualClock::new(base_ms));
+        let clock_u = Arc::clone(&clock);
+        let clock_s = Arc::clone(&clock);
+        let t0 = Instant::now();
+
+        let mock = MockConnector::new()
+            .on_mutate(move |_req, _scope| {
+                clock_u.advance(Duration::from_millis(advance_ms));
+                Ok(MutateResponse::default())
+            })
+            .on_query(move |_req, _scope| {
+                clock_s.advance(Duration::from_millis(advance_ms));
+                let item = QueryResponse {
+                    chunk: Some(query_response::Chunk::Rows(RowSetChunk {
+                        foreach_index: 0,
+                        rows: Vec::new(),
+                        last_for_index: true,
+                        error: None,
+                    })),
+                };
+                Ok(Box::pin(stream::iter(vec![Ok(item)])))
+            });
+
+        let core = ServerCore::new(
+            mock.clone(),
+            ServerConfig::default().with_clock(clock.clone()),
+        );
+
+        let u_err = core
+            .mutate(
+                MutateRequest {
+                    ctx: Some(CallContext {
+                        deadline_unix_ms: deadline_ms,
+                        ..CallContext::default()
+                    }),
+                    ..MutateRequest::default()
+                },
+                BTreeMap::new(),
+                CancellationToken::new(),
+            )
+            .await
+            .expect_err("unary response must not be delivered after wall clock passed deadline");
+        assert_eq!(u_err.code, NgcErrorCode::DeadlineExceeded);
+
+        // Reset ManualClock to `base_ms` for the stream-open check.
+        let reset_clock = Arc::new(ManualClock::new(base_ms));
+        let reset_clock_s = Arc::clone(&reset_clock);
+        let stream_mock = MockConnector::new().on_query(move |_req, _scope| {
+            reset_clock_s.advance(Duration::from_millis(advance_ms));
+            Ok(Box::pin(stream::pending()))
+        });
+        let stream_core = ServerCore::new(
+            stream_mock.clone(),
+            ServerConfig::default().with_clock(reset_clock),
+        );
+
+        let s_err = stream_core
+            .query(
+                QueryRequest {
+                    ctx: Some(CallContext {
+                        deadline_unix_ms: deadline_ms,
+                        ..CallContext::default()
+                    }),
+                    ..QueryRequest::default()
+                },
+                BTreeMap::new(),
+                CancellationToken::new(),
+            )
+            .await
+            .err()
+            .expect("stream open must fail DEADLINE_EXCEEDED when wall clock passed deadline");
+        assert_eq!(s_err.code, NgcErrorCode::DeadlineExceeded);
+        assert_eq!(
+            Instant::now().duration_since(t0),
+            Duration::ZERO,
+            "tokio monotonic clock must not have advanced"
+        );
+        tokio::time::timeout(Duration::from_secs(1), stream_mock.wait_for_drops(1))
+            .await
+            .expect("rejected stream must be dropped immediately");
+    }
+}
+
+struct CancelObservingFuture<T> {
+    scope_cancel: CancellationToken,
+    started: Arc<Notify>,
+    cancelled_when_dropped: Arc<AtomicBool>,
+    _marker: std::marker::PhantomData<fn() -> T>,
+}
+
+impl<T> Future for CancelObservingFuture<T> {
+    type Output = NgcResult<T>;
+
+    fn poll(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<Self::Output> {
+        self.started.notify_one();
+        Poll::Pending
+    }
+}
+
+impl<T> Drop for CancelObservingFuture<T> {
+    fn drop(&mut self) {
+        self.cancelled_when_dropped
+            .store(self.scope_cancel.is_cancelled(), Ordering::SeqCst);
+    }
+}
+
+struct CancelObservingStream {
+    scope_cancel: CancellationToken,
+    cancelled_when_dropped: Arc<AtomicBool>,
+}
+
+impl Stream for CancelObservingStream {
+    type Item = NgcResult<QueryResponse>;
+
+    fn poll_next(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        Poll::Pending
+    }
+}
+
+impl Drop for CancelObservingStream {
+    fn drop(&mut self) {
+        self.cancelled_when_dropped
+            .store(self.scope_cancel.is_cancelled(), Ordering::SeqCst);
+    }
+}
+
+#[derive(Clone)]
+struct CancelObservingConnector {
+    started: Arc<Notify>,
+    unary_cancelled_at_drop: Arc<AtomicBool>,
+    unary_cancelled_observed: Arc<Notify>,
+    stream_open_hang: Arc<AtomicBool>,
+    stream_open_cancelled_at_drop: Arc<AtomicBool>,
+    stream_cancelled_at_drop: Arc<AtomicBool>,
+    stream_cancelled_observed: Arc<Notify>,
+}
+
+impl Connector for CancelObservingConnector {
+    fn describe(
+        &self,
+        _request: DescribeRequest,
+        scope: CallScope,
+    ) -> impl Future<Output = NgcResult<DescribeResponse>> + Send {
+        let obs = Arc::clone(&self.unary_cancelled_observed);
+        let cancel_for_task = scope.cancel.clone();
+        tokio::spawn(async move {
+            cancel_for_task.cancelled().await;
+            obs.notify_one();
+        });
+        CancelObservingFuture {
+            scope_cancel: scope.cancel,
+            started: Arc::clone(&self.started),
+            cancelled_when_dropped: Arc::clone(&self.unary_cancelled_at_drop),
+            _marker: std::marker::PhantomData,
+        }
+    }
+
+    fn query(
+        &self,
+        _request: QueryRequest,
+        scope: CallScope,
+    ) -> impl Future<Output = NgcResult<BoxStream<QueryResponse>>> + Send {
+        let hang_open = self.stream_open_hang.load(Ordering::SeqCst);
+        let started = Arc::clone(&self.started);
+        let open_drop = Arc::clone(&self.stream_open_cancelled_at_drop);
+        let stream_drop = Arc::clone(&self.stream_cancelled_at_drop);
+        let obs = Arc::clone(&self.stream_cancelled_observed);
+
+        async move {
+            if hang_open {
+                let fut: CancelObservingFuture<BoxStream<QueryResponse>> = CancelObservingFuture {
+                    scope_cancel: scope.cancel,
+                    started,
+                    cancelled_when_dropped: open_drop,
+                    _marker: std::marker::PhantomData,
+                };
+                return fut.await;
+            }
+            let cancel_for_task = scope.cancel.clone();
+            tokio::spawn(async move {
+                cancel_for_task.cancelled().await;
+                obs.notify_one();
+            });
+            let s: BoxStream<QueryResponse> = Box::pin(CancelObservingStream {
+                scope_cancel: scope.cancel,
+                cancelled_when_dropped: stream_drop,
+            });
+            Ok(s)
+        }
+    }
+}
+
+// spec: NGC-025, NGC-093, INV-12
+#[tokio::test(start_paused = true)]
+async fn server_core_cooperative_cancellation_cancels_call_scope_on_deadline_and_client_cancel() {
+    let conn = CancelObservingConnector {
+        started: Arc::new(Notify::new()),
+        unary_cancelled_at_drop: Arc::new(AtomicBool::new(false)),
+        unary_cancelled_observed: Arc::new(Notify::new()),
+        stream_open_hang: Arc::new(AtomicBool::new(false)),
+        stream_open_cancelled_at_drop: Arc::new(AtomicBool::new(false)),
+        stream_cancelled_at_drop: Arc::new(AtomicBool::new(false)),
+        stream_cancelled_observed: Arc::new(Notify::new()),
+    };
+    let core = Arc::new(ServerCore::new(
+        conn.clone(),
+        ServerConfig::default().with_default_timeout(Duration::from_millis(200)),
+    ));
+
+    // 1. Unary client cancel: `scope.cancel` must be cancelled BEFORE `guarded_fut` drops.
+    let cancel_tok = CancellationToken::new();
+    let cancel_driver = {
+        let started = Arc::clone(&conn.started);
+        let tok = cancel_tok.clone();
+        tokio::spawn(async move {
+            started.notified().await;
+            tok.cancel();
+        })
+    };
+    let u_cancel = core
+        .describe(DescribeRequest::default(), BTreeMap::new(), cancel_tok)
+        .await
+        .expect_err("unary cancelled");
+    cancel_driver.await.expect("driver");
+    assert_eq!(u_cancel.code, NgcErrorCode::Cancelled);
+    assert!(
+        conn.unary_cancelled_at_drop.swap(false, Ordering::SeqCst),
+        "unary scope.cancel must be cancelled when client cancels (before future drop)"
+    );
+    tokio::time::timeout(
+        Duration::from_millis(50),
+        conn.unary_cancelled_observed.notified(),
+    )
+    .await
+    .expect("unary scope.cancel.cancelled() notified");
+
+    // 2. Unary deadline expiry: `scope.cancel` must be cancelled BEFORE `guarded_fut` drops.
+    let u_deadline = core
+        .describe(
+            DescribeRequest::default(),
+            BTreeMap::new(),
+            CancellationToken::new(),
+        )
+        .await
+        .expect_err("unary deadline");
+    assert_eq!(u_deadline.code, NgcErrorCode::DeadlineExceeded);
+    assert!(
+        conn.unary_cancelled_at_drop.swap(false, Ordering::SeqCst),
+        "unary scope.cancel must be cancelled when deadline fires (before future drop)"
+    );
+    tokio::time::timeout(
+        Duration::from_millis(50),
+        conn.unary_cancelled_observed.notified(),
+    )
+    .await
+    .expect("unary scope.cancel.cancelled() notified on deadline");
+
+    // 3. Stream-open client cancel & stream-open deadline expiry.
+    conn.stream_open_hang.store(true, Ordering::SeqCst);
+    let open_cancel_tok = CancellationToken::new();
+    let open_cancel_driver = {
+        let started = Arc::clone(&conn.started);
+        let tok = open_cancel_tok.clone();
+        tokio::spawn(async move {
+            started.notified().await;
+            tok.cancel();
+        })
+    };
+    let so_cancel = core
+        .query(QueryRequest::default(), BTreeMap::new(), open_cancel_tok)
+        .await
+        .err()
+        .expect("stream-open cancelled");
+    open_cancel_driver.await.expect("driver");
+    assert_eq!(so_cancel.code, NgcErrorCode::Cancelled);
+    assert!(
+        conn.stream_open_cancelled_at_drop
+            .swap(false, Ordering::SeqCst),
+        "stream-open scope.cancel must be cancelled on client cancel"
+    );
+
+    let so_deadline = core
+        .query(
+            QueryRequest::default(),
+            BTreeMap::new(),
+            CancellationToken::new(),
+        )
+        .await
+        .err()
+        .expect("stream-open deadline");
+    assert_eq!(so_deadline.code, NgcErrorCode::DeadlineExceeded);
+    assert!(
+        conn.stream_open_cancelled_at_drop
+            .swap(false, Ordering::SeqCst),
+        "stream-open scope.cancel must be cancelled on deadline"
+    );
+    conn.stream_open_hang.store(false, Ordering::SeqCst);
+
+    // 4. Open `CoreStream` client cancel: keep `s1` alive after terminal `Err(Cancelled)` so
+    // `CoreStream._cancel_guard` has NOT dropped yet!
+    let s1_tok = CancellationToken::new();
+    let mut s1 = core
+        .query(QueryRequest::default(), BTreeMap::new(), s1_tok.clone())
+        .await
+        .expect("open s1");
+    s1_tok.cancel();
+    let s1_err = s1
+        .next()
+        .await
+        .expect("terminal cancel item")
+        .expect_err("must be Err(Cancelled)");
+    assert_eq!(s1_err.code, NgcErrorCode::Cancelled);
+    assert!(
+        conn.stream_cancelled_at_drop.swap(false, Ordering::SeqCst),
+        "CoreStream::terminate must cancel scope.cancel before dropping inner stream (while CoreStream is still alive)"
+    );
+    tokio::time::timeout(
+        Duration::from_millis(50),
+        conn.stream_cancelled_observed.notified(),
+    )
+    .await
+    .expect("stream scope.cancel.cancelled() notified while CoreStream is still alive");
+    drop(s1);
+
+    // 5. Open `CoreStream` deadline expiry: keep `s2` alive after terminal `Err(DeadlineExceeded)`!
+    let mut s2 = core
+        .query(
+            QueryRequest::default(),
+            BTreeMap::new(),
+            CancellationToken::new(),
+        )
+        .await
+        .expect("open s2");
+    let s2_err = s2
+        .next()
+        .await
+        .expect("terminal deadline item")
+        .expect_err("must be Err(DeadlineExceeded)");
+    assert_eq!(s2_err.code, NgcErrorCode::DeadlineExceeded);
+    assert!(
+        conn.stream_cancelled_at_drop.swap(false, Ordering::SeqCst),
+        "CoreStream::terminate must cancel scope.cancel on deadline before dropping inner stream"
+    );
+    tokio::time::timeout(
+        Duration::from_millis(50),
+        conn.stream_cancelled_observed.notified(),
+    )
+    .await
+    .expect("stream scope.cancel.cancelled() notified on deadline while CoreStream is still alive");
+    drop(s2);
+}
+
+// spec: NGC-071, NGC-093
+#[tokio::test(start_paused = true)]
+async fn server_core_open_stream_holds_max_in_flight_permit_until_stream_ends() {
+    let finish_gate = Arc::new(Notify::new());
+    let gate_c = Arc::clone(&finish_gate);
+
+    let mock = MockConnector::new().on_query(move |req, _scope| {
+        if req.operation == "hold" {
+            let gate = Arc::clone(&gate_c);
+            let first = QueryResponse {
+                chunk: Some(query_response::Chunk::Rows(RowSetChunk {
+                    foreach_index: 0,
+                    rows: Vec::new(),
+                    last_for_index: true,
+                    error: None,
+                })),
+            };
+            let s = stream::unfold(0_u8, move |step| {
+                let gate = Arc::clone(&gate);
+                let first_item = first.clone();
+                async move {
+                    match step {
+                        0 => Some((Ok(first_item), 1)),
+                        1 => {
+                            gate.notified().await;
+                            None
+                        }
+                        _ => None,
+                    }
+                }
+            });
+            Ok(Box::pin(s))
+        } else {
+            Ok(Box::pin(stream::empty()))
+        }
+    });
+
+    let core = ServerCore::new(mock, ServerConfig::default().with_max_in_flight(1));
+
+    // Open stream 1 (`hold`) and read its first item; the stream is still open (`Pending` before `None`).
+    let mut s1 = core
+        .query(
+            QueryRequest {
+                operation: "hold".to_owned(),
+                ..QueryRequest::default()
+            },
+            BTreeMap::new(),
+            CancellationToken::new(),
+        )
+        .await
+        .expect("open s1");
+    assert!(s1.next().await.expect("first item").is_ok());
+
+    // While `s1` is open, `max_in_flight = 1` permit MUST still be held -> 2nd `Query` fails `RESOURCE_EXHAUSTED`.
+    let rejected = core
+        .query(
+            QueryRequest::default(),
+            BTreeMap::new(),
+            CancellationToken::new(),
+        )
+        .await
+        .err()
+        .expect("second Query must fail RESOURCE_EXHAUSTED while first stream is open");
+    assert_eq!(rejected.code, NgcErrorCode::ResourceExhausted);
+    assert!(rejected.retryable);
+
+    // Let `s1` finish (`None`), while STILL holding `s1` binding alive: permit is released as soon as the stream ends!
+    finish_gate.notify_one();
+    assert!(s1.next().await.is_none(), "s1 reaches clean EOF");
+
+    let mut s2 = core
+        .query(
+            QueryRequest::default(),
+            BTreeMap::new(),
+            CancellationToken::new(),
+        )
+        .await
+        .expect("second Query must succeed after first stream ended");
+    assert!(s2.next().await.is_none());
+    drop(s1);
+    drop(s2);
+
+    // Also verify dropping an open stream before EOF releases the permit immediately.
+    let s3 = core
+        .query(
+            QueryRequest {
+                operation: "hold".to_owned(),
+                ..QueryRequest::default()
+            },
+            BTreeMap::new(),
+            CancellationToken::new(),
+        )
+        .await
+        .expect("open s3");
+    assert!(
+        core.query(
+            QueryRequest::default(),
+            BTreeMap::new(),
+            CancellationToken::new(),
+        )
+        .await
+        .is_err()
+    );
+    drop(s3);
+    assert!(
+        core.query(
+            QueryRequest::default(),
+            BTreeMap::new(),
+            CancellationToken::new(),
+        )
+        .await
+        .is_ok()
     );
 }
