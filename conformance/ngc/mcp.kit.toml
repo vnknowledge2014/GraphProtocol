@@ -1,0 +1,38 @@
+# NGC connector conformance profile for `gap-mcp` (outbound MCP connector, `WP-M1-09`, `NGC-091`, `CMP-010..015`).
+# The tools come from `gap_mcp::outbound::fake::FakeMcpServer` (see crates/gap-conformance/tests/ngc_kit_mcp.rs).
+# Format reference: `conformance/ngc/README.md`. MCP has no pagination or ordering and the connector advertises neither, so no `[page]`.
+
+name = "mcp-fake"
+
+[timing]
+deadline_ms = 200
+grace_ms = 2000
+
+# A keyed read tool (`customer(id: Int!)`); `foreach` is emulated: one upstream call per distinct key (CMP-015).
+[read]
+operation = "customer"
+key_var = "id"
+keys = [1, 2, 3, 4, 5, 6]
+absent_key = 999
+failing_key = "not-a-number"
+row_key = "id"
+
+# A tool that never answers until its request is cancelled (`NGC-025`).
+[slow]
+operation = "slow"
+calls = 8
+
+# Unadvertised mutation name used by `mutate.dry_run` to verify `Mutate(dry_run = true)` fails `UNIMPLEMENTED` (`NGC-031`).
+[mutate]
+operation = "create_order"
+
+# Size-truncation probe: 40 rows of about 1 KiB against the test connector's 8 KiB response cap (`NGC-027`); not resumable.
+[size]
+operation = "blobs"
+expected_total_rows = 40
+resumable = false
+
+# An argument the connector must refuse before anything is sent (`NGC-060`).
+[errors.invalid_query]
+operation = "customer"
+arguments = { id = "oops" }
