@@ -1258,14 +1258,30 @@ dependencies = [
 name = "gap-transport"
 version = "0.1.0"
 dependencies = [
+ "axum",
+ "blake3",
+ "bytes",
+ "futures-util",
  "gap-balance",
  "gap-core",
  "gap-exec",
+ "gap-ngc-sdk",
  "gap-plan",
  "gap-proto",
  "gap-ql",
  "gap-sec",
  "gap-snapshot",
+ "gap-testkit",
+ "http-body-util",
+ "proptest",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
+ "tokio",
+ "tokio-util",
+ "tower",
+ "tracing",
+ "uuid",
 ]
 
 [[package]]
