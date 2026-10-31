@@ -849,6 +849,7 @@ dependencies = [
  "clap",
  "futures-util",
  "gap-core",
+ "gap-ngc-openapi",
  "gap-ngc-sdk",
  "gap-proto",
  "gap-ql",
