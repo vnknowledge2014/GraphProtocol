@@ -1,6 +1,6 @@
 //! `OpenApiConnector<U>` implementing `gap_ngc_sdk::Connector` (`CMP-030..033`, `NGC-010..027`, `NGC-060..072`, `NGC-091`).
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 use std::pin::Pin;
 use std::sync::Arc;
@@ -30,7 +30,9 @@ use tokio::time::{Instant, sleep_until};
 
 use crate::auth::{AuthConfig, AuthError, CredentialSource, ResolvedAuth, ValidatedBaseUrl};
 use crate::document::{ExtractError, ExtractLimits, OpenApiDocument};
-use crate::extract::{ExtractedOperation, ExtractionReport, NativeBatchSpec, extract_operations};
+use crate::extract::{
+    ExtractedOperation, ExtractionReport, NativeBatchSpec, ParamLocation, extract_operations,
+};
 use crate::request::{BuiltRequest, build_request, json_number_as_exact_i64, validate_arguments};
 use crate::schema::{GeneratedOperationSchema, build_schema_bundle};
 use crate::upstream::{
@@ -1049,10 +1051,14 @@ impl<U: Upstream> OpenApiConnector<U> {
             let attempts = Arc::clone(&attempts);
 
             async move {
+                struct NativeBatchGroup {
+                    shared_vars: Map<String, Value>,
+                    entries: Vec<(usize, Value)>,
+                }
+
                 let mut elem_outcomes: Vec<Option<NgcResult<Vec<prost_types::Struct>>>> =
                     vec![None; batch_structs.len()];
-                let mut valid_positions: Vec<(usize, Value)> =
-                    Vec::with_capacity(batch_structs.len());
+                let mut groups: BTreeMap<String, NativeBatchGroup> = BTreeMap::new();
 
                 for (pos, st) in batch_structs.iter().enumerate() {
                     let mut merged = base_args.clone();
@@ -1070,33 +1076,119 @@ impl<U: Upstream> OpenApiConnector<U> {
                         )));
                         continue;
                     };
-                    valid_positions.push((pos, key_val));
-                }
 
-                if !valid_positions.is_empty() {
-                    let mut batch_args = Map::new();
-                    for param in &target_reg.extracted.parameters {
-                        if param.name == nb.param {
+                    let mut shared_vars = Map::new();
+                    let mut unsupported_err: Option<NgcErrorInfo> = None;
+                    for (var_name, var_val) in &merged {
+                        if var_name == &key_param || var_val.is_null() {
                             continue;
                         }
-                        if let Some(shared_val) = base_args.get(&param.name) {
-                            batch_args.insert(param.name.clone(), shared_val.clone());
+                        let item_param_opt = item_extracted
+                            .parameters
+                            .iter()
+                            .find(|p| p.name == *var_name);
+                        let target_param_opt = item_param_opt.and_then(|ip| {
+                            target_reg.extracted.parameters.iter().find(|tp| {
+                                if tp.name == nb.param {
+                                    return false;
+                                }
+                                if target_reg.extracted.has_offset_pagination
+                                    && matches!(tp.name.as_str(), "limit" | "offset")
+                                {
+                                    return false;
+                                }
+                                if tp.location != ip.location || tp.shape != ip.shape {
+                                    return false;
+                                }
+                                match ip.location {
+                                    ParamLocation::Header => tp.name.eq_ignore_ascii_case(var_name),
+                                    ParamLocation::Query => tp.name == *var_name,
+                                    ParamLocation::Path => false,
+                                }
+                            })
+                        });
+                        match target_param_opt {
+                            Some(tp) => {
+                                shared_vars.insert(tp.name.clone(), var_val.clone());
+                            }
+                            None => {
+                                unsupported_err = Some(NgcErrorInfo::new(
+                                    NgcErrorCode::InvalidArgument,
+                                    format!(
+                                        "variable `{var_name}` is not supported by the batch endpoint of `{}`",
+                                        item_extracted.name
+                                    ),
+                                ));
+                                break;
+                            }
                         }
                     }
-                    let keys_array: Vec<Value> =
-                        valid_positions.iter().map(|(_, k)| k.clone()).collect();
+
+                    if let Some(err) = unsupported_err {
+                        elem_outcomes[pos] = Some(Err(err));
+                        continue;
+                    }
+
+                    let group_key = serde_json::to_string(&canonicalize_json_for_hash(
+                        &Value::Object(shared_vars.clone()),
+                    ))
+                    .unwrap_or_default();
+                    groups
+                        .entry(group_key)
+                        .or_insert_with(|| NativeBatchGroup {
+                            shared_vars,
+                            entries: Vec::new(),
+                        })
+                        .entries
+                        .push((pos, key_val));
+                }
+
+                for group in groups.into_values() {
+                    let mut batch_args = group.shared_vars;
+                    let mut seen_keys = BTreeSet::new();
+                    let mut keys_array = Vec::with_capacity(group.entries.len());
+                    for (_, kv) in &group.entries {
+                        let k_canon = serde_json::to_string(&canonicalize_json_for_hash(kv))
+                            .unwrap_or_default();
+                        if seen_keys.insert(k_canon) {
+                            keys_array.push(kv.clone());
+                        }
+                    }
                     batch_args.insert(nb.param.clone(), Value::Array(keys_array));
 
-                    let built = build_request(
+                    let built = match build_request(
                         &target_reg.extracted,
                         &target_reg.schema.input_json_schema,
                         &batch_args,
-                    )
-                    .map_err(|e| e.into_ngc_error())?;
+                    ) {
+                        Ok(b) => b,
+                        Err(err) => {
+                            let ngc_err = err.into_ngc_error();
+                            for (pos, _) in group.entries {
+                                elem_outcomes[pos] = Some(Err(ngc_err.clone()));
+                            }
+                            continue;
+                        }
+                    };
 
-                    let payload_opt = shared
+                    let payload_opt = match shared
                         .send_with_retry(built, true, &scope_owned, &attempts)
-                        .await?;
+                        .await
+                    {
+                        Ok(p) => p,
+                        Err(err) => {
+                            if matches!(
+                                err.code,
+                                NgcErrorCode::Cancelled | NgcErrorCode::DeadlineExceeded
+                            ) {
+                                return Err(err);
+                            }
+                            for (pos, _) in group.entries {
+                                elem_outcomes[pos] = Some(Err(err.clone()));
+                            }
+                            continue;
+                        }
+                    };
 
                     let raw_objects: Vec<Map<String, Value>> = match payload_opt {
                         None | Some(Value::Null) => Vec::new(),
@@ -1111,7 +1203,7 @@ impl<U: Upstream> OpenApiConnector<U> {
                         Some(_) => Vec::new(),
                     };
 
-                    for (pos, key_val) in valid_positions {
+                    for (pos, key_val) in group.entries {
                         let matched: Vec<prost_types::Struct> = raw_objects
                             .iter()
                             .filter(|row| {
@@ -2675,7 +2767,8 @@ mod tests {
                 .split("ids=")
                 .nth(1)
                 .expect("ids query param");
-            let count = ids_part.split("%2C").count();
+            let ids_val = ids_part.split('&').next().expect("ids val");
+            let count = ids_val.split(',').count();
             assert!(
                 count <= 3,
                 "batch exceeded max_batch_size=3: {}",
@@ -3023,5 +3116,262 @@ mod tests {
         }
 
         server.abort();
+    }
+
+    // spec: NGC-020, CMP-032
+    #[tokio::test]
+    async fn t4_native_foreach_rejects_unsupported_per_index_variable_and_never_sends_failed_key() {
+        let fixture = Arc::new(FixtureService::new());
+        let conn = OpenApiConnector::from_document_bytes(
+            &shop_bytes(),
+            OpenApiConfig::default(),
+            &StaticCredentialSource::new(),
+            Arc::clone(&fixture),
+        )
+        .expect("build");
+
+        let canary_tag = "tag_secret_value_01";
+        let sets = vec![
+            VariableSet {
+                index: 0,
+                values: Some(json_struct(&json!({
+                    "id": 1,
+                    "X-Request-Tag": canary_tag
+                }))),
+            },
+            VariableSet {
+                index: 1,
+                values: Some(json_struct(&json!({ "id": 2 }))),
+            },
+        ];
+
+        let (chunks, complete) = collect_stream(
+            conn.query(
+                QueryRequest {
+                    operation: "customer".to_owned(),
+                    foreach: sets,
+                    ..QueryRequest::default()
+                },
+                scope_in(Duration::from_secs(5)),
+            )
+            .await
+            .expect("foreach starts"),
+        )
+        .await
+        .expect("foreach completes");
+
+        assert_eq!(complete.upstream_calls, 1);
+        assert_eq!(fixture.request_count(), 1);
+
+        let recorded = fixture.recorded_requests();
+        assert_eq!(recorded.len(), 1);
+        assert!(
+            !recorded[0].path_and_query.contains("ids=1"),
+            "failed index key must not be sent upstream: {}",
+            recorded[0].path_and_query
+        );
+        assert!(
+            recorded[0].path_and_query.contains("ids=2"),
+            "valid index key must be sent: {}",
+            recorded[0].path_and_query
+        );
+
+        let by_idx: BTreeMap<u32, _> = chunks.iter().map(|c| (c.foreach_index, c)).collect();
+        assert_eq!(by_idx.len(), 2);
+
+        let err0 = by_idx[&0].error.as_ref().expect("index 0 must fail");
+        assert_eq!(
+            err0.code,
+            gap_proto::ngc::v1::ErrorCode::InvalidArgument as i32
+        );
+        assert_eq!(
+            err0.message,
+            "variable `X-Request-Tag` is not supported by the batch endpoint of `customer`"
+        );
+        assert!(!err0.message.contains(canary_tag));
+        assert!(by_idx[&0].rows.is_empty() && by_idx[&0].last_for_index);
+
+        assert!(by_idx[&1].error.is_none());
+        assert_eq!(by_idx[&1].rows.len(), 1);
+        let row1 = prost_struct_to_json_map(&by_idx[&1].rows[0]);
+        assert_eq!(json_number_as_exact_i64(&row1["id"]), Some(2));
+    }
+
+    // spec: NGC-020, CMP-032
+    #[tokio::test]
+    async fn t5_native_foreach_groups_shared_variables_deterministically_and_matches_solo_reads() {
+        #[derive(Default)]
+        struct BatchVarsUpstream {
+            recorded: std::sync::Mutex<Vec<String>>,
+        }
+
+        impl BatchVarsUpstream {
+            fn project_item(id: i64, fields: Option<&str>) -> Option<Value> {
+                if !(1..=4).contains(&id) {
+                    return None;
+                }
+                match fields {
+                    Some("detail") => Some(json!({
+                        "id": id,
+                        "name": format!("Item {id}"),
+                        "sku": format!("SKU-{id:02}"),
+                        "stock": id * 10
+                    })),
+                    _ => Some(json!({
+                        "id": id,
+                        "name": format!("Item {id}")
+                    })),
+                }
+            }
+        }
+
+        impl Upstream for Arc<BatchVarsUpstream> {
+            async fn send(&self, req: UpstreamRequest) -> Result<UpstreamResponse, UpstreamError> {
+                self.recorded
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .push(req.path_and_query.clone());
+
+                let (path, query_opt) = match req.path_and_query.split_once('?') {
+                    Some((p, q)) => (p, Some(q)),
+                    None => (req.path_and_query.as_str(), None),
+                };
+                let mut fields: Option<String> = None;
+                let mut ids: Vec<i64> = Vec::new();
+                if let Some(q) = query_opt {
+                    for pair in q.split('&').filter(|s| !s.is_empty()) {
+                        if let Some((k, v)) = pair.split_once('=') {
+                            if k == "fields" {
+                                fields = Some(v.to_owned());
+                            } else if k == "ids" {
+                                for raw_id in v.split(',').filter(|s| !s.is_empty()) {
+                                    if let Ok(parsed) = raw_id.parse::<i64>() {
+                                        ids.push(parsed);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                let mut headers = HeaderMap::new();
+                headers.insert(
+                    axum::http::header::CONTENT_TYPE,
+                    axum::http::HeaderValue::from_static("application/json"),
+                );
+
+                if path == "/items" {
+                    let rows: Vec<Value> = ids
+                        .into_iter()
+                        .filter_map(|id| BatchVarsUpstream::project_item(id, fields.as_deref()))
+                        .collect();
+                    return Ok(UpstreamResponse {
+                        status: StatusCode::OK,
+                        headers,
+                        body: serde_json::to_vec(&rows).expect("json"),
+                    });
+                }
+                if let Some(id_str) = path.strip_prefix("/items/")
+                    && let Ok(id) = id_str.parse::<i64>()
+                {
+                    if let Some(obj) = BatchVarsUpstream::project_item(id, fields.as_deref()) {
+                        return Ok(UpstreamResponse {
+                            status: StatusCode::OK,
+                            headers,
+                            body: serde_json::to_vec(&obj).expect("json"),
+                        });
+                    }
+                    return Ok(UpstreamResponse {
+                        status: StatusCode::NOT_FOUND,
+                        headers,
+                        body: b"{\"error\":\"not found\"}".to_vec(),
+                    });
+                }
+                Ok(UpstreamResponse {
+                    status: StatusCode::NOT_FOUND,
+                    headers,
+                    body: b"{}".to_vec(),
+                })
+            }
+        }
+
+        let fixture_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../../tests/fixtures/openapi/batch_vars.openapi.json");
+        let doc_bytes = std::fs::read(fixture_path).expect("read batch_vars.openapi.json");
+        let upstream = Arc::new(BatchVarsUpstream::default());
+        let conn = OpenApiConnector::from_document_bytes(
+            &doc_bytes,
+            OpenApiConfig::default(),
+            &StaticCredentialSource::new(),
+            Arc::clone(&upstream),
+        )
+        .expect("build connector");
+
+        let cases = [
+            (0_u32, 1_i64, "summary"),
+            (1_u32, 2_i64, "detail"),
+            (2_u32, 3_i64, "summary"),
+            (3_u32, 4_i64, "detail"),
+        ];
+        let sets: Vec<VariableSet> = cases
+            .iter()
+            .map(|(idx, id, fields)| VariableSet {
+                index: *idx,
+                values: Some(json_struct(&json!({ "id": *id, "fields": *fields }))),
+            })
+            .collect();
+
+        let (chunks, complete) = collect_stream(
+            conn.query(
+                QueryRequest {
+                    operation: "item".to_owned(),
+                    foreach: sets,
+                    ..QueryRequest::default()
+                },
+                scope_in(Duration::from_secs(5)),
+            )
+            .await
+            .expect("foreach starts"),
+        )
+        .await
+        .expect("foreach completes");
+
+        assert_eq!(complete.upstream_calls, 2);
+        let batch_recorded = upstream
+            .recorded
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone();
+        assert_eq!(
+            batch_recorded,
+            vec![
+                "/items?fields=detail&ids=2,4".to_owned(),
+                "/items?fields=summary&ids=1,3".to_owned(),
+            ]
+        );
+
+        let by_idx: BTreeMap<u32, _> = chunks.iter().map(|c| (c.foreach_index, c)).collect();
+        assert_eq!(by_idx.len(), 4);
+
+        for (idx, id, fields) in cases {
+            let (solo_chunks, _) = collect_stream(
+                conn.query(
+                    QueryRequest {
+                        operation: "item".to_owned(),
+                        arguments: Some(json_struct(&json!({ "id": id, "fields": fields }))),
+                        ..QueryRequest::default()
+                    },
+                    scope_in(Duration::from_secs(5)),
+                )
+                .await
+                .expect("solo starts"),
+            )
+            .await
+            .expect("solo completes");
+            assert_eq!(
+                by_idx[&idx].rows, solo_chunks[0].rows,
+                "foreach index {idx} must equal solo read for id={id} fields={fields}"
+            );
+        }
     }
 }
