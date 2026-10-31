@@ -8,5 +8,29 @@
     clippy::unimplemented
 )]
 
+pub mod app;
+pub mod config;
+pub mod gateway;
+pub mod health;
+pub mod metrics;
+pub mod operation;
+pub mod pipeline;
 pub mod ratelimit;
 pub mod shed;
+pub mod sse;
+
+pub use app::{AppState, router};
+pub use config::{
+    ApiKeyRecord, ApiKeyVerifier, Blake3ApiKeyVerifier, ConfigValidationError, DEFAULT_DEADLINE,
+    DEFAULT_MAX_DEADLINE, DEFAULT_MAX_JSON_DEPTH, DEFAULT_SSE_CHANNEL_CAPACITY, Profile,
+    TransportConfig, VerificationStats,
+};
+pub use gateway::{AdmissionPolicy, AllowAllAdmission};
+pub use metrics::{DURATION_BUCKETS_SECS, InFlightGuard, RouteLabel, TransportMetrics};
+pub use operation::{NegotiatedMedia, ParsedHttpGraphqlRequest, retry_after_seconds};
+pub use pipeline::{
+    AssembledPayload, AuthzLayer, AuthzRequest, AuthzService, ExecStageRequest, GatewayLayer,
+    GatewayRequest, GatewayService, OperationLayer, OperationRequest, OperationService,
+    PipelineError, PlanLayer, PlanService, PlanStageRequest, TransportExecService,
+    TransportMuxLayer, TransportMuxRequest, TransportMuxService,
+};
