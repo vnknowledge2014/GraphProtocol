@@ -89,7 +89,7 @@ jsonwebtoken = "11.1.0"
 llguidance = "1.9.1"
 loom = "0.7.2"
 metrics = "0.24.6"
-moka = "0.12.16"
+moka = { version = "0.12.16", default-features = false }
 openapiv3 = "2.2.0"
 opentelemetry = "0.33.1"
 ort = "=2.0.0-rc.15" # pre-release exact pin, feature-gated (ADR-002)

@@ -250,8 +250,8 @@ milestone = "M1"
 role = "coder"
 size = "L"
 depends_on = ["WP-M1-01", "WP-M1-03"]
-owns = ["crates/gap-snapshot/**", "crates/gap-core/src/snapshot/**"]
-spec_refs = ["ARC-005", "RUN-003", "RUN-011", "GQL-004", "INV-01", "INV-02", "INV-16"]
+owns = ["crates/gap-snapshot/**", "crates/gap-core/src/snapshot/**", "crates/gap-core/src/error.rs", "crates/gap-core/Cargo.toml"]
+spec_refs = ["ARC-005", "RUN-003", "RUN-009", "RUN-011", "GQL-004", "GQL-030", "GQL-032", "NGC-011", "INV-01", "INV-02", "INV-16"]
 deliverables = [
   "composer: branch Describe results (SDL + operations) -> supergraph Schema with namespacing, GAP built-ins, ownership map; errors GAP_RESERVED_NAME / GAP_AMBIGUOUS_FIELD",
   "replace the interim `Arc<BTreeMap>` containers of Snapshot.branches and Snapshot.groups (WP-M0-08 deviation: `im` was not in its allowed crate list) by `im::OrdMap` as in spec/01 section 4 so that unchanged branches are structurally shared between generations (ARC-005); `im` is pinned in the root Cargo.toml and must be vendored before an offline run",

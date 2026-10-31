@@ -43,7 +43,7 @@
         1,
         3
       ],
-      "system_prompt": "Read AGENTS.md and docs/AGENT-GUIDE.md first. Work ONLY inside these paths: crates/gap-snapshot/**, crates/gap-core/src/snapshot/**. Spec refs: ARC-005, RUN-003, RUN-011, GQL-004, INV-01, INV-02, INV-16. Expand this work package into 2-5 minute steps before coding."
+      "system_prompt": "Read AGENTS.md and docs/AGENT-GUIDE.md first. Work ONLY inside these paths: crates/gap-snapshot/**, crates/gap-core/src/snapshot/**, crates/gap-core/src/error.rs, crates/gap-core/Cargo.toml. Spec refs: ARC-005, RUN-003, RUN-009, RUN-011, GQL-004, GQL-030, GQL-032, NGC-011, INV-01, INV-02, INV-16. Expand this work package into 2-5 minute steps before coding."
     },
     {
       "id": 6,

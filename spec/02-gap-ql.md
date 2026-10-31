@@ -261,7 +261,8 @@ All errors: `{ message, path?, locations?, extensions: { code, retry: { retryabl
 | `GAP_JOIN_KEY_MISSING`, `GAP_JOIN_KEY_NOT_UNIQUE`, `GAP_JOIN_LIMIT_EXCEEDED`, `GAP_JOIN_NOT_BATCHABLE` (composition), `GAP_PUSHDOWN_FALLBACK` (warning), `GAP_PARTIAL_RESULT` (warning) | joins | no | |
 | `GAP_IDEMPOTENCY_CONFLICT`, `GAP_DRY_RUN_UNSUPPORTED`, `GAP_SIDE_EFFECT_UNCLASSIFIED` | mutation | no | |
 | `GAP_TASK_NOT_FOUND`, `GAP_TASK_INVALID_STATE`, `GAP_LOOP_DETECTED`, `GAP_HOP_LIMIT` | tasks/peers | no | |
-| `GAP_CYCLE_UNBOUNDED`, `GAP_RESERVED_NAME` | composition | no | admin-visible |
+| `GAP_CYCLE_UNBOUNDED`, `GAP_RESERVED_NAME`, `GAP_AMBIGUOUS_FIELD` (RUN-009) | composition | no | admin-visible |
+| `GAP_DIRECTIVE_IGNORED` (warning, GQL-030) | composition | no | admin-visible |
 | `GAP_INTERNAL` | internal | maybe | opaque message + `correlationId`; details only in logs |
 
 ## 11. Conformance fixtures
