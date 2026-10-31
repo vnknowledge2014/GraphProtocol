@@ -5,13 +5,14 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 
-use gap_core::error::{ErrorCode, GapError, GapResult};
+use gap_core::error::GapResult;
 use gap_core::snapshot::{PlanCacheKey, Snapshot};
-use gap_ql::{CostEstimate, ValidatedOperation};
+use gap_ql::{CostEstimate, ValidatedOperation, enforce_operation_cost};
+use moka::sync::Cache;
 use serde::{Deserialize, Serialize};
 
-use crate::ir::Plan;
-use crate::planner::PlanConfig;
+use crate::ir::{Plan, plan_compact_json};
+use crate::planner::{PlanConfig, check_query_operation_kind, plan_with_verified_cost};
 
 /// Default logical plan-cache entry capacity (`plan_cache.max_entries = 10_000`, `RUN-014`).
 pub const DEFAULT_PLAN_CACHE_MAX_ENTRIES: u64 = 10_000;
@@ -81,10 +82,20 @@ pub struct CachedPlan {
     pub request_cost: CostEstimate,
 }
 
+fn plan_weight_bytes(plan: &Plan) -> u32 {
+    let serialized_len = plan_compact_json(plan).len().max(1);
+    u32::try_from(serialized_len).unwrap_or(u32::MAX)
+}
+
 /// Concurrent `moka`-backed execution plan cache keyed by [`PlanCacheKey`] (`RUN-014`, `INV-02`,
 /// `INV-09`).
+///
+/// Concurrent misses on the same [`PlanCacheKey`] are coalesced into a single evaluation of the
+/// planner closure via `moka::sync::Cache::entry(...).or_try_insert_with(...)`. Read and write
+/// paths take zero locks in `gap-plan` (`INV-02`).
 #[derive(Debug)]
 pub struct PlanCache {
+    cache: Cache<PlanCacheKey, Arc<Plan>>,
     hits: AtomicU64,
     misses: AtomicU64,
 }
@@ -98,49 +109,122 @@ impl Default for PlanCache {
 impl PlanCache {
     /// Creates a new [`PlanCache`] with `config`.
     #[must_use]
-    pub fn new(_config: PlanCacheConfig) -> Self {
+    pub fn new(config: PlanCacheConfig) -> Self {
+        let effective_max_weight = config.max_weight_bytes.unwrap_or_else(|| {
+            config
+                .max_entries
+                .saturating_mul(DEFAULT_ESTIMATED_PLAN_BYTES)
+        });
+
+        let cache = Cache::builder()
+            .max_capacity(effective_max_weight)
+            .time_to_live(config.ttl)
+            .weigher(|_key: &PlanCacheKey, value: &Arc<Plan>| plan_weight_bytes(value))
+            .build();
+
         Self {
+            cache,
             hits: AtomicU64::new(0),
             misses: AtomicU64::new(0),
+        }
+    }
+
+    /// Performs a pure lock-free cache lookup without planning on miss, updating `hits`/`misses`.
+    #[must_use]
+    pub fn get(&self, key: &PlanCacheKey) -> Option<Arc<Plan>> {
+        if let Some(found) = self.cache.get(key) {
+            self.hits.fetch_add(1, Ordering::Relaxed);
+            Some(found)
+        } else {
+            self.misses.fetch_add(1, Ordering::Relaxed);
+            None
         }
     }
 
     /// Looks up or compiles a [`Plan`] for `(snapshot, document_hash, document)`, coalescing
     /// concurrent misses on the same [`PlanCacheKey`] (`RUN-014`, `INV-01`, `INV-02`, `INV-09`).
     ///
+    /// Per-request `GQL-041` cost caps (`max_cost_units` and caller `@budget` / request budget) are
+    /// always enforced via [`enforce_operation_cost`] even when the plan skeleton is warm in cache
+    /// (`RUN-005`).
+    ///
     /// # Errors
     ///
-    /// Returns [`GapError`] if cost enforcement or query planning fails.
+    /// Returns [`gap_core::error::GapError`] if cost enforcement or query planning fails.
     pub fn get_or_plan(
         &self,
-        _snapshot: &Snapshot,
-        _document_hash: [u8; 32],
-        _document: &ValidatedOperation,
-        _config: &PlanConfig,
+        snapshot: &Snapshot,
+        document_hash: [u8; 32],
+        document: &ValidatedOperation,
+        config: &PlanConfig,
     ) -> GapResult<CachedPlan> {
-        Err(GapError::new(
-            ErrorCode::UnsupportedFeature,
-            "PlanCache::get_or_plan stub not yet implemented",
-        ))
+        check_query_operation_kind(document)?;
+        let request_cost = enforce_operation_cost(
+            document,
+            &config.limits,
+            config.request_budget_cost_units,
+            config.cost_model,
+        )?;
+        let key =
+            PlanCacheKey::from_snapshot(snapshot, document_hash, document.operation_name.clone());
+        let cost_for_miss = request_cost.clone();
+        let (plan, status) = self.get_or_plan_with(key, || {
+            plan_with_verified_cost(snapshot, document, cost_for_miss)
+        })?;
+
+        tracing::Span::current().record(PlanCacheStatus::ATTRIBUTE_KEY, status.as_str());
+        tracing::debug!(
+            gap.plan_cache = status.as_str(),
+            generation = snapshot.generation,
+            policy_version = snapshot.policy_version,
+            "resolved query plan"
+        );
+
+        Ok(CachedPlan {
+            plan,
+            status,
+            request_cost,
+        })
     }
 
     /// Coalescing cache lookup/insertion over an explicit [`PlanCacheKey`] and planner closure.
     ///
+    /// Guarantees via `moka`'s entry selector that concurrent calls for the same missing key
+    /// evaluate `init` once (`entry.is_fresh() == true` -> [`PlanCacheStatus::Miss`]; waiting
+    /// callers observe `entry.is_fresh() == false` -> [`PlanCacheStatus::Hit`]).
+    ///
     /// # Errors
     ///
-    /// Returns [`GapError`] if `init` fails on a cache miss.
+    /// Returns [`gap_core::error::GapError`] if `init` fails on a cache miss (errors are never
+    /// cached).
     pub fn get_or_plan_with<F>(
         &self,
-        _key: PlanCacheKey,
-        _init: F,
+        key: PlanCacheKey,
+        init: F,
     ) -> GapResult<(Arc<Plan>, PlanCacheStatus)>
     where
         F: FnOnce() -> GapResult<Plan>,
     {
-        Err(GapError::new(
-            ErrorCode::UnsupportedFeature,
-            "PlanCache::get_or_plan_with stub not yet implemented",
-        ))
+        match self
+            .cache
+            .entry(key)
+            .or_try_insert_with(|| init().map(Arc::new))
+        {
+            Ok(entry) => {
+                let status = if entry.is_fresh() {
+                    self.misses.fetch_add(1, Ordering::Relaxed);
+                    PlanCacheStatus::Miss
+                } else {
+                    self.hits.fetch_add(1, Ordering::Relaxed);
+                    PlanCacheStatus::Hit
+                };
+                Ok((entry.into_value(), status))
+            }
+            Err(arc_err) => {
+                self.misses.fetch_add(1, Ordering::Relaxed);
+                Err((*arc_err).clone())
+            }
+        }
     }
 
     /// Total cache hits observed across all threads.
@@ -158,18 +242,22 @@ impl PlanCache {
     /// Approximate number of live entries currently held by `moka`.
     #[must_use]
     pub fn entry_count(&self) -> u64 {
-        0
+        self.cache.entry_count()
     }
 
     /// Approximate total byte weight of live entries held by `moka`.
     #[must_use]
     pub fn weighted_size(&self) -> u64 {
-        0
+        self.cache.weighted_size()
     }
 
-    /// Synchronously drives pending `moka` eviction and maintenance tasks (useful in deterministic tests).
-    pub fn run_pending_tasks(&self) {}
+    /// Synchronously drives pending `moka` eviction and maintenance tasks.
+    pub fn run_pending_tasks(&self) {
+        self.cache.run_pending_tasks();
+    }
 
     /// Marks all currently cached plans invalid.
-    pub fn invalidate_all(&self) {}
+    pub fn invalidate_all(&self) {
+        self.cache.invalidate_all();
+    }
 }

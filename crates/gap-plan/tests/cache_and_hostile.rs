@@ -376,7 +376,7 @@ fn gql_040_hostile_documents_deep_nesting_10000_root_fields_and_1mib_alias_end_b
     for _ in 0..10 {
         deep_12.push_str("} ");
     }
-    deep_12.push('}');
+    deep_12.push_str("} }");
 
     let plan_12 = plan_query(
         &snap,
@@ -396,7 +396,7 @@ fn gql_040_hostile_documents_deep_nesting_10000_root_fields_and_1mib_alias_end_b
     for _ in 0..11 {
         deep_13.push_str("} ");
     }
-    deep_13.push('}');
+    deep_13.push_str("} }");
     let depth_err = plan_query(
         &snap,
         &deep_13,
