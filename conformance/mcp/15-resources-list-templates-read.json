@@ -99,7 +99,7 @@
             "accept": "application/json, text/event-stream",
             "mcp-protocol-version": "2026-07-28",
             "mcp-method": "resources/read",
-            "mcp-name": "gap://schema/Billing_Invoice"
+            "mcp-name": "gap://schema/billing_Invoice"
           }
         },
         "body": {
@@ -107,7 +107,7 @@
           "id": 3,
           "method": "resources/read",
           "params": {
-            "uri": "gap://schema/Billing_Invoice",
+            "uri": "gap://schema/billing_Invoice",
             "_meta": {
               "io.modelcontextprotocol/protocolVersion": "2026-07-28",
               "io.modelcontextprotocol/clientCapabilities": {}
@@ -124,7 +124,7 @@
             "resultType": "complete",
             "contents": [
               {
-                "uri": "gap://schema/Billing_Invoice",
+                "uri": "gap://schema/billing_Invoice",
                 "mimeType": "application/graphql"
               }
             ]

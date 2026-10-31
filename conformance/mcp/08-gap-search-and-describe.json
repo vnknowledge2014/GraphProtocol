@@ -21,7 +21,7 @@
             "name": "gap_describe",
             "arguments": {
               "overview": true,
-              "types": ["Billing_Invoice"],
+              "types": ["billing_Invoice"],
               "depth": 1,
               "operations": true
             },
