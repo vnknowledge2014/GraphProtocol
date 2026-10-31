@@ -720,3 +720,116 @@ async fn status_200_with_partial_errors_and_legacy_application_json_accept_fallb
         "GAP_UNKNOWN_FIELD",
     );
 }
+
+// spec: GQL-003, GQL-070
+#[tokio::test(start_paused = true)]
+async fn status_422_for_requests_that_are_not_well_formed_graphql_over_http_requests() {
+    // GraphQLOverHTTP.md "Invalid parameters": a typo'd parameter name or a wrongly shaped `variables`
+    // is not a well-formed request: 422, not 400 (400 is for JSON and GraphQL *document* parse failures).
+    let harness = TestHarness::new(TransportConfig::for_profile(Profile::Dev));
+    for body in [
+        json!({}),
+        json!({ "operationName": "Orders" }),
+        json!({ "qeury": "{ __typename }" }),
+        json!({ "query": "query Q($i: Int!) { __typename }", "variables": [7] }),
+    ] {
+        let resp = send_oneshot(
+            &harness.router,
+            Request::builder()
+                .method("POST")
+                .uri("/graphql")
+                .header("content-type", "application/json")
+                .body(Body::from(serde_json::to_vec(&body).expect("json")))
+                .expect("req"),
+        )
+        .await;
+        assert_request_error_envelope(
+            &resp,
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "application/graphql-response+json",
+            "GAP_VALIDATION_ERROR",
+        );
+    }
+}
+
+// spec: GQL-003, GQL-050
+#[tokio::test(start_paused = true)]
+async fn status_413_when_a_resolved_persisted_document_exceeds_the_body_cap() {
+    let mut cfg = TransportConfig::for_profile(Profile::Dev);
+    cfg.limits.max_request_body_bytes = 16_384;
+
+    // The request itself is tiny; only the document resolved from the persisted store is over the cap.
+    let padding = "#".repeat(16_500);
+    let big_doc = format!("query Big {{ __typename }}\n{padding}\n");
+    let (store, hashes) = make_persisted_store(&[big_doc.as_str()]);
+    let harness = TestHarness::with_mocks(
+        cfg,
+        common::default_shop_mock(),
+        default_crm_mock(),
+        Some(store),
+        None,
+    );
+
+    let ext_enc = format!(
+        "%7B%22persistedQuery%22%3A%7B%22version%22%3A1%2C%22sha256Hash%22%3A%22{}%22%7D%7D",
+        hashes[0]
+    );
+    let resp = send_oneshot(
+        &harness.router,
+        Request::builder()
+            .method("GET")
+            .uri(format!("/graphql?extensions={ext_enc}"))
+            .body(Body::empty())
+            .expect("req"),
+    )
+    .await;
+    assert_request_error_envelope(
+        &resp,
+        StatusCode::PAYLOAD_TOO_LARGE,
+        "application/json",
+        "GAP_COMPLEXITY_EXCEEDED",
+    );
+}
+
+// spec: GQL-003, GQL-050
+#[tokio::test(start_paused = true)]
+async fn status_413_when_declared_content_length_exceeds_the_body_cap_before_reading_the_body() {
+    let mut cfg = TransportConfig::for_profile(Profile::Dev);
+    cfg.limits.max_request_body_bytes = 16_384;
+    let harness = TestHarness::new(cfg);
+
+    // The actual body is tiny and valid: only the declared length is over the cap.
+    let body =
+        serde_json::to_vec(&json!({ "query": "{ order(id: \"o1\") { id } }" })).expect("json");
+    let resp = send_oneshot(
+        &harness.router,
+        Request::builder()
+            .method("POST")
+            .uri("/graphql")
+            .header("content-type", "application/json")
+            .header("content-length", "16385")
+            .body(Body::from(body.clone()))
+            .expect("req"),
+    )
+    .await;
+    assert_request_error_envelope(
+        &resp,
+        StatusCode::PAYLOAD_TOO_LARGE,
+        "application/json",
+        "GAP_COMPLEXITY_EXCEEDED",
+    );
+
+    // A declared length exactly at the cap is accepted (the body itself is then bounded while reading).
+    let at_cap = send_oneshot(
+        &harness.router,
+        Request::builder()
+            .method("POST")
+            .uri("/graphql")
+            .header("content-type", "application/json")
+            .header("content-length", "16384")
+            .body(Body::from(body))
+            .expect("req"),
+    )
+    .await;
+    assert_eq!(at_cap.status, StatusCode::OK, "{}", at_cap.text());
+}

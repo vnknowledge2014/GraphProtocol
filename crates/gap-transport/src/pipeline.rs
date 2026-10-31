@@ -768,6 +768,27 @@ where
                         error,
                     }
                 })?;
+                // A declared `Content-Length` above the cap is refused before a single body byte is read, so an
+                // `Expect: 100-continue` client is never invited to upload a body that would be rejected anyway.
+                let max_body = state.config.limits.max_request_body_bytes;
+                let declared_len = req
+                    .request
+                    .headers()
+                    .get(header::CONTENT_LENGTH)
+                    .and_then(|v| v.to_str().ok())
+                    .and_then(|v| v.trim().parse::<u64>().ok());
+                if declared_len.is_some_and(|len| len > max_body) {
+                    return Err(PipelineError::Transport {
+                        status: StatusCode::PAYLOAD_TOO_LARGE,
+                        allow: None,
+                        error: GapError::new(
+                            ErrorCode::ComplexityExceeded,
+                            format!(
+                                "request body exceeds maximum allowed size of {max_body} bytes"
+                            ),
+                        ),
+                    });
+                }
                 let (_parts, body) = req.request.into_parts();
                 let body_timeout = state.config.default_deadline.min(state.config.max_deadline);
                 let bytes = tokio::time::timeout(
