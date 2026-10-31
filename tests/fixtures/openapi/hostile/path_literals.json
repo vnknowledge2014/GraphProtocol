@@ -1,0 +1,7 @@
+{"openapi":"3.0.3","info":{"title":"h","version":"1"},"paths":{
+ "/a/../b":{"get":{"operationId":"a","responses":{"200":{"description":"ok"}}}},
+ "/c/%2e%2e/d":{"get":{"operationId":"c","responses":{"200":{"description":"ok"}}}},
+ "/e\\f":{"get":{"operationId":"e","responses":{"200":{"description":"ok"}}}},
+ "/g?x":{"get":{"operationId":"g","responses":{"200":{"description":"ok"}}}},
+ "/h#i":{"get":{"operationId":"h","responses":{"200":{"description":"ok"}}}}},
+ "components":{"schemas":{}}}

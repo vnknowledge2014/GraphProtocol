@@ -43,6 +43,9 @@ pub enum RequestBuildError {
     /// Path parameter resolved to an empty string (`CMP-030`).
     #[error("path parameter `{0}` must not be empty")]
     EmptyPathParameter(String),
+    /// Path parameter resolved to `.` or `..`, which URL normalization would collapse (`CMP-030`).
+    #[error("path parameter `{0}` must not be a dot segment")]
+    DotSegmentPathParameter(String),
     /// Header name was not a valid RFC 7230 token (`CMP-030`).
     #[error("header parameter `{0}` is not a valid HTTP header name")]
     InvalidHeaderName(String),
@@ -65,17 +68,18 @@ pub fn encode_rfc3986_unreserved(raw: &str) -> String {
     utf8_percent_encode(raw, RFC3986_NON_UNRESERVED).to_string()
 }
 
-/// Encodes a single path parameter value so it cannot introduce `/`, `?`, `#`, empty segments, or `.`/`..` (`CMP-030`).
+/// Encodes a single path parameter value so it cannot introduce `/`, `?`, `#`, or empty segments,
+/// and refuses `.` and `..` because URL normalization collapses dot segments even when percent-encoded (`CMP-030`).
 pub fn encode_path_segment_value(param_name: &str, raw: &str) -> Result<String, RequestBuildError> {
     if raw.is_empty() {
         return Err(RequestBuildError::EmptyPathParameter(param_name.to_owned()));
     }
-    let encoded = encode_rfc3986_unreserved(raw);
-    match encoded.as_str() {
-        "." => Ok("%2E".to_owned()),
-        ".." => Ok("%2E%2E".to_owned()),
-        _ => Ok(encoded),
+    if raw == "." || raw == ".." {
+        return Err(RequestBuildError::DotSegmentPathParameter(
+            param_name.to_owned(),
+        ));
     }
+    Ok(encode_rfc3986_unreserved(raw))
 }
 
 /// Appends one percent-encoded `name=value` pair onto `path_and_query` (`CMP-030`).
@@ -613,9 +617,22 @@ mod tests {
         let product = ops.iter().find(|o| o.name == "product").expect("product");
         let prod_schema = &bundle.operations["product"].input_json_schema;
 
+        for dot in [".", ".."] {
+            let args = json!({ "sku": dot }).as_object().cloned().expect("obj");
+            let err =
+                build_request(product, prod_schema, &args).expect_err("dot segment must fail");
+            assert_eq!(
+                err,
+                RequestBuildError::DotSegmentPathParameter("sku".to_owned()),
+                "dot={dot:?}"
+            );
+            let ngc = err.into_ngc_error();
+            assert_eq!(ngc.code, NgcErrorCode::InvalidArgument);
+            assert!(ngc.message().contains("sku"));
+            assert!(!ngc.message().contains(".."));
+        }
+
         for (sku, expected) in [
-            (".", "/products/%2E"),
-            ("..", "/products/%2E%2E"),
             ("../admin?x=1#frag", "/products/..%2Fadmin%3Fx%3D1%23frag"),
             ("%2e%2e/secret", "/products/%252e%252e%2Fsecret"),
             ("a/b/c", "/products/a%2Fb%2Fc"),
@@ -773,6 +790,8 @@ mod tests {
 
             match PROP_FIXTURE.with(|(op, schema)| build_request(op, schema, &args)) {
                 Ok(built) => {
+                    prop_assert_ne!(sku.as_str(), ".");
+                    prop_assert_ne!(sku.as_str(), "..");
                     prop_assert!(built.path_and_query.starts_with('/'));
                     prop_assert!(!built.path_and_query.contains('#'));
                     let (path_part, query_part) = match built.path_and_query.split_once('?') {
@@ -787,13 +806,32 @@ mod tests {
                     prop_assert_ne!(segs[1], ".");
                     prop_assert_ne!(segs[1], "..");
 
-                    // Verify origin preservation when joined against a base URL
-                    let full = format!("http://127.0.0.1:9999{}", built.path_and_query);
-                    let parsed = url::Url::parse(&full).expect("valid URL");
+                    let base = crate::auth::ValidatedBaseUrl::parse(
+                        "http://127.0.0.1:9999",
+                        false,
+                        false,
+                    )
+                    .expect("base url");
+                    let joined = base.join_relative(&built.path_and_query).expect("join_relative");
+                    let parsed = url::Url::parse(joined.as_str()).expect("valid URL");
                     prop_assert_eq!(parsed.scheme(), "http");
                     prop_assert_eq!(parsed.host_str(), Some("127.0.0.1"));
                     prop_assert_eq!(parsed.port(), Some(9999));
                     prop_assert!(parsed.fragment().is_none());
+                    let decoded_segs: Vec<String> = parsed
+                        .path_segments()
+                        .expect("segments")
+                        .map(|s| {
+                            percent_encoding::percent_decode_str(s)
+                                .decode_utf8()
+                                .expect("utf8")
+                                .into_owned()
+                        })
+                        .collect();
+                    prop_assert_eq!(
+                        decoded_segs,
+                        vec!["items".to_owned(), sku, "detail".to_owned()]
+                    );
 
                     if let Some(q) = query_part {
                         let pairs: Vec<&str> = q.split('&').collect();
@@ -807,11 +845,162 @@ mod tests {
                         prop_assert!(!bytes.contains(&0));
                     }
                 }
+                Err(RequestBuildError::DotSegmentPathParameter(param)) => {
+                    prop_assert!(sku == "." || sku == "..");
+                    prop_assert_eq!(param, "sku");
+                }
                 Err(RequestBuildError::InvalidHeaderValue(_)) => {
                     // Expected whenever `hval` contains CR, LF, NUL, or non-visible header bytes.
                 }
                 Err(other) => prop_assert!(false, "unexpected error: {other:?}"),
             }
+        }
+
+        // spec: CMP-030
+        #[test]
+        fn t1_proptest_product_path_url_roundtrip(
+            sku in prop_oneof![
+                Just(".".to_owned()),
+                Just("..".to_owned()),
+                Just("%2e".to_owned()),
+                Just("%2E%2E".to_owned()),
+                Just(".%2e".to_owned()),
+                Just("%2e.".to_owned()),
+                Just("a\\..\\b".to_owned()),
+                ".*",
+            ],
+        ) {
+            thread_local! {
+                static SHOP_PRODUCT: (ExtractedOperation, Value) = {
+                    let (ops, bundle) = load_shop();
+                    let product = ops.into_iter().find(|o| o.name == "product").expect("product");
+                    let schema = bundle.operations["product"].input_json_schema.clone();
+                    (product, schema)
+                };
+            }
+
+            let base = crate::auth::ValidatedBaseUrl::parse(
+                "http://127.0.0.1:8080",
+                false,
+                false,
+            )
+            .expect("base url");
+            let args = json!({ "sku": sku }).as_object().cloned().expect("obj");
+
+            SHOP_PRODUCT.with(|(product, schema)| {
+                let res = build_request(product, schema, &args);
+                let char_len = sku.chars().count();
+                if !(1..=4096).contains(&char_len) {
+                    prop_assert!(res.is_err());
+                } else if sku == "." || sku == ".." {
+                    let err = res.expect_err("dot segment must be refused");
+                    prop_assert_eq!(
+                        &err,
+                        &RequestBuildError::DotSegmentPathParameter("sku".to_owned())
+                    );
+                    let ngc = err.into_ngc_error();
+                    prop_assert_eq!(ngc.code, NgcErrorCode::InvalidArgument);
+                    prop_assert!(ngc.message().contains("sku"));
+                    prop_assert!(!ngc.message().contains(".."));
+                } else {
+                    let built = res.expect("non-dot sku within length must build");
+                    let joined = base
+                        .join_relative(&built.path_and_query)
+                        .expect("join_relative must accept built path");
+                    let parsed = url::Url::parse(joined.as_str()).expect("valid URL");
+                    prop_assert!(parsed.query().is_none());
+                    prop_assert!(parsed.fragment().is_none());
+                    let decoded_segs: Vec<String> = parsed
+                        .path_segments()
+                        .expect("segments")
+                        .map(|s| {
+                            percent_encoding::percent_decode_str(s)
+                                .decode_utf8()
+                                .expect("utf8")
+                                .into_owned()
+                        })
+                        .collect();
+                    prop_assert_eq!(decoded_segs.len(), product.segments.len());
+                    prop_assert_eq!(decoded_segs, vec!["products".to_owned(), sku]);
+                }
+                Ok(())
+            })?;
+        }
+    }
+
+    // spec: CMP-030
+    #[test]
+    fn t1_product_path_oracle_14_values_and_join_relative_defence_in_depth() {
+        let (ops, bundle) = load_shop();
+        let product = ops.iter().find(|o| o.name == "product").expect("product");
+        let schema = &bundle.operations["product"].input_json_schema;
+        let base = crate::auth::ValidatedBaseUrl::parse("http://127.0.0.1:8080", false, false)
+            .expect("base url");
+
+        let probes_14 = [
+            "widget-1", "..", ".", "a/b", "%2e%2e", "..%2f", "?x=1", "#frag", "\\", "a b", "é",
+            "../admin", "%2E", "a\\..\\b",
+        ];
+        assert_eq!(probes_14.len(), 14);
+
+        for sku in probes_14 {
+            let args = json!({ "sku": sku }).as_object().cloned().expect("obj");
+            if sku == "." || sku == ".." {
+                let err = build_request(product, schema, &args)
+                    .expect_err("dot-segment path argument must be refused");
+                assert_eq!(
+                    err,
+                    RequestBuildError::DotSegmentPathParameter("sku".to_owned())
+                );
+                let ngc = err.into_ngc_error();
+                assert_eq!(ngc.code, NgcErrorCode::InvalidArgument);
+                assert!(ngc.message().contains("sku"));
+                assert!(!ngc.message().contains(".."));
+            } else {
+                let built = build_request(product, schema, &args)
+                    .unwrap_or_else(|e| panic!("sku={sku:?} failed: {e}"));
+                let joined = base
+                    .join_relative(&built.path_and_query)
+                    .unwrap_or_else(|e| panic!("join_relative failed for {sku:?}: {e}"));
+                let parsed = url::Url::parse(joined.as_str()).expect("valid URL");
+                assert!(parsed.query().is_none(), "sku={sku:?}");
+                assert!(parsed.fragment().is_none(), "sku={sku:?}");
+                let decoded_segs: Vec<String> = parsed
+                    .path_segments()
+                    .expect("segments")
+                    .map(|s| {
+                        percent_encoding::percent_decode_str(s)
+                            .decode_utf8()
+                            .expect("utf8")
+                            .into_owned()
+                    })
+                    .collect();
+                assert_eq!(decoded_segs.len(), product.segments.len(), "sku={sku:?}");
+                assert_eq!(
+                    decoded_segs,
+                    vec!["products".to_owned(), sku.to_owned()],
+                    "sku={sku:?}"
+                );
+            }
+        }
+
+        // Second mutant guard: hand-built dot-segment or backslash paths passed directly to
+        // `ValidatedBaseUrl::join_relative` must be rejected by defence-in-depth Check 2.
+        for hand_built in [
+            "/products/%2E%2E",
+            "/products/%2E",
+            "/products/.%2e",
+            "/products/%2e.",
+            "/products/..",
+            "/products/.",
+            "/products/a\\b",
+            "/products/",
+        ] {
+            assert_eq!(
+                base.join_relative(hand_built),
+                Err(crate::auth::AuthError::MalformedBaseUrlComponents),
+                "hand_built={hand_built:?}"
+            );
         }
     }
 }

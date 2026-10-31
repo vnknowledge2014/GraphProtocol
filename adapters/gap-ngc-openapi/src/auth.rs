@@ -5,6 +5,7 @@ use std::fmt;
 
 use axum::http::{HeaderName, HeaderValue};
 use gap_core::secret::{REDACTED_MARKER, SecretString};
+use percent_encoding::percent_decode_str;
 use thiserror::Error;
 use url::{Host, Url};
 
@@ -207,7 +208,7 @@ impl ValidatedBaseUrl {
     }
 
     /// Joins a validated relative `path_and_query` onto this base URL while guaranteeing the
-    /// scheme, host, and port remain identical (`CMP-030`).
+    /// scheme, host, port, and path segment structure remain intact (`CMP-030`).
     pub fn join_relative(&self, path_and_query: &str) -> Result<Url, AuthError> {
         if !path_and_query.starts_with('/')
             || path_and_query.starts_with("//")
@@ -239,8 +240,45 @@ impl ValidatedBaseUrl {
         {
             return Err(AuthError::MalformedBaseUrlComponents);
         }
+        let (Some(input_segments), Some(target_segments)) = (
+            non_root_segments(&combined_path),
+            non_root_segments(target.path()),
+        ) else {
+            return Err(AuthError::MalformedBaseUrlComponents);
+        };
+        if target_segments.len() != input_segments.len()
+            || input_segments.iter().any(|seg| seg.contains('\\'))
+            || target_segments
+                .iter()
+                .any(|seg| is_dot_segment_any_spelling(seg) || seg.contains('\\'))
+        {
+            return Err(AuthError::MalformedBaseUrlComponents);
+        }
         Ok(target)
     }
+}
+
+/// Returns `true` when `segment` is `.` or `..` in raw or single-layer percent-encoded form
+/// (`.`, `..`, `%2e`, `%2E%2E`, `.%2e`, `%2e.`), matching WHATWG URL dot-segment collapsing (`CMP-030`).
+#[must_use]
+pub(crate) fn is_dot_segment_any_spelling(segment: &str) -> bool {
+    let mut decoded = percent_decode_str(segment);
+    matches!(
+        (decoded.next(), decoded.next(), decoded.next()),
+        (Some(b'.'), None, _) | (Some(b'.'), Some(b'.'), None)
+    )
+}
+
+fn non_root_segments(path: &str) -> Option<Vec<&str>> {
+    let rest = path.strip_prefix('/')?;
+    if rest.is_empty() {
+        return Some(Vec::new());
+    }
+    let segs: Vec<&str> = rest.split('/').collect();
+    if segs.iter().any(|s| s.is_empty()) {
+        return None;
+    }
+    Some(segs)
 }
 
 #[derive(Clone)]

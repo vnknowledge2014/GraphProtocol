@@ -1034,12 +1034,14 @@ impl<U: Upstream> OpenApiConnector<U> {
 
         let batch_cap = usize::try_from(nb.max_batch_size).unwrap_or(1).max(1);
         let cfg = ForeachConfig::new(batch_cap, self.shared.config.fanout_concurrency.max(1));
+        let item_extracted = reg.extracted.clone();
         let item_input_schema = reg.schema.input_json_schema.clone();
 
         foreach(sets, cfg, scope, move |batch_structs| {
             let shared = Arc::clone(&shared);
             let target_reg = target_reg.clone();
             let base_args = base_args.clone();
+            let item_extracted = item_extracted.clone();
             let item_input_schema = item_input_schema.clone();
             let key_param = key_param.clone();
             let nb = nb.clone();
@@ -1057,7 +1059,7 @@ impl<U: Upstream> OpenApiConnector<U> {
                     for (k, v) in prost_struct_to_json_map(st) {
                         merged.insert(k, v);
                     }
-                    if let Err(err) = validate_arguments(&item_input_schema, &merged) {
+                    if let Err(err) = build_request(&item_extracted, &item_input_schema, &merged) {
                         elem_outcomes[pos] = Some(Err(err.into_ngc_error()));
                         continue;
                     }
@@ -1936,7 +1938,70 @@ mod tests {
         )
         .expect("build");
 
-        for sku in ["..", ".", "a/b?admin=1#frag", "%2e%2e/secret"] {
+        for dot in ["..", "."] {
+            fixture.clear_recorded();
+            let err = conn
+                .query(
+                    QueryRequest {
+                        operation: "product".to_owned(),
+                        arguments: Some(json_struct(&json!({ "sku": dot }))),
+                        ..QueryRequest::default()
+                    },
+                    scope_in(Duration::from_secs(5)),
+                )
+                .await
+                .err()
+                .expect("dot segment must fail before sending");
+            assert_eq!(err.code, NgcErrorCode::InvalidArgument);
+            assert!(err.message().contains("sku"));
+            assert!(!err.message().contains(".."));
+            assert_eq!(fixture.request_count(), 0);
+        }
+
+        // In `foreach`, `.` and `..` fail only their own index (`INVALID_ARGUMENT`).
+        fixture.clear_recorded();
+        let (fe_chunks, fe_complete) = collect_stream(
+            conn.query(
+                QueryRequest {
+                    operation: "product".to_owned(),
+                    foreach: vec![
+                        VariableSet {
+                            index: 0,
+                            values: Some(json_struct(&json!({ "sku": ".." }))),
+                        },
+                        VariableSet {
+                            index: 1,
+                            values: Some(json_struct(&json!({ "sku": "." }))),
+                        },
+                        VariableSet {
+                            index: 2,
+                            values: Some(json_struct(&json!({ "sku": "widget-1" }))),
+                        },
+                    ],
+                    ..QueryRequest::default()
+                },
+                scope_in(Duration::from_secs(5)),
+            )
+            .await
+            .expect("foreach starts"),
+        )
+        .await
+        .expect("foreach completes");
+        assert_eq!(fe_complete.upstream_calls, 1);
+        assert_eq!(fixture.request_count(), 1);
+        let by_idx: BTreeMap<u32, _> = fe_chunks.iter().map(|c| (c.foreach_index, c)).collect();
+        for bad_idx in [0_u32, 1_u32] {
+            let err_proto = by_idx[&bad_idx].error.as_ref().expect("per-index error");
+            assert_eq!(
+                err_proto.code,
+                gap_proto::ngc::v1::ErrorCode::InvalidArgument as i32
+            );
+            assert!(by_idx[&bad_idx].rows.is_empty() && by_idx[&bad_idx].last_for_index);
+        }
+        assert_eq!(by_idx[&2].rows.len(), 1);
+        assert!(by_idx[&2].error.is_none());
+
+        for sku in ["a/b?admin=1#frag", "%2e%2e/secret"] {
             fixture.clear_recorded();
             let stream = conn
                 .query(
@@ -2867,5 +2932,96 @@ mod tests {
                 );
             }
         }
+    }
+
+    // spec: CMP-030, NGC-091
+    #[tokio::test]
+    #[ignore = "needs loopback sockets"]
+    async fn t2_loopback_socket_14_value_path_parameter_table() {
+        let svc = Arc::new(FixtureService::new());
+        let app = crate::fixture::router(Arc::clone(&svc));
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("bind loopback");
+        let addr = listener.local_addr().expect("local_addr");
+        let server = tokio::spawn(async move {
+            let _ = axum::serve(listener, app).await;
+        });
+
+        let bytes = shop_bytes();
+        let doc = OpenApiDocument::parse(&bytes).expect("parse");
+        let ext = extract_operations(&doc).expect("extract");
+        let bundle = build_schema_bundle(&doc, &ext).expect("bundle");
+        let product = ext
+            .operations
+            .iter()
+            .find(|o| o.name == "product")
+            .expect("product");
+        let schema = &bundle.operations["product"].input_json_schema;
+
+        let conn = OpenApiConnector::new_http(
+            &bytes,
+            OpenApiConfig {
+                base_url: format!("http://{addr}"),
+                ..OpenApiConfig::default()
+            },
+            &StaticCredentialSource::new(),
+        )
+        .expect("build http connector");
+
+        let probes_14 = [
+            "widget-1", "..", ".", "a/b", "%2e%2e", "..%2f", "?x=1", "#frag", "\\", "a b", "é",
+            "../admin", "%2E", "a\\..\\b",
+        ];
+        assert_eq!(probes_14.len(), 14);
+
+        for sku in probes_14 {
+            svc.clear_recorded();
+            let args_map = json!({ "sku": sku }).as_object().cloned().expect("obj");
+            if sku == "." || sku == ".." {
+                assert!(build_request(product, schema, &args_map).is_err());
+                let err = conn
+                    .query(
+                        QueryRequest {
+                            operation: "product".to_owned(),
+                            arguments: Some(json_struct(&json!({ "sku": sku }))),
+                            ..QueryRequest::default()
+                        },
+                        scope_in(Duration::from_secs(5)),
+                    )
+                    .await
+                    .err()
+                    .expect("dot segment refused before sending");
+                assert_eq!(err.code, NgcErrorCode::InvalidArgument);
+                assert_eq!(
+                    svc.request_count(),
+                    0,
+                    "no request must be sent for {sku:?}"
+                );
+            } else {
+                let built = build_request(product, schema, &args_map).expect("builder accepts");
+                let stream = conn
+                    .query(
+                        QueryRequest {
+                            operation: "product".to_owned(),
+                            arguments: Some(json_struct(&json!({ "sku": sku }))),
+                            ..QueryRequest::default()
+                        },
+                        scope_in(Duration::from_secs(5)),
+                    )
+                    .await
+                    .expect("query starts");
+                let (chunks, _) = collect_stream(stream).await.expect("query succeeds");
+                assert_eq!(chunks[0].rows.len(), 1, "sku={sku:?}");
+                assert_eq!(svc.request_count(), 1, "sku={sku:?}");
+                let rec = &svc.recorded_requests()[0];
+                assert_eq!(
+                    rec.path_and_query, built.path_and_query,
+                    "server-received path must match built path for sku={sku:?}"
+                );
+            }
+        }
+
+        server.abort();
     }
 }

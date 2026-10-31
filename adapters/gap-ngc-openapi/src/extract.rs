@@ -5,6 +5,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use gap_core::ids::{MAX_OPERATION_NAME_LEN, is_reserved_root_field};
 use serde_json::{Map, Value};
 
+use crate::auth::is_dot_segment_any_spelling;
 use crate::document::{ExtractError, OpenApiDocument, unescape_pointer_segment};
 
 /// Maximum description length carried onto wire descriptors (`ADR-014`).
@@ -339,6 +340,12 @@ fn parse_path_template(path: &str) -> Result<Vec<PathSegment>, String> {
             return Err(format!(
                 "path `{path}` uses unsupported partial segment template `{seg}`"
             ));
+        } else if is_dot_segment_any_spelling(seg)
+            || seg
+                .chars()
+                .any(|ch| matches!(ch, '\\' | '?' | '#' | '%' | ' ') || ch.is_control())
+        {
+            return Err("unsafe_path_literal".to_owned());
         } else {
             segments.push(PathSegment::Literal(seg.to_owned()));
         }
@@ -1137,6 +1144,81 @@ mod tests {
         assert_eq!(
             skipped_paths,
             vec!["/skip-cookie", "/skip-deep", "/skip-host"]
+        );
+    }
+
+    // spec: CMP-030, ING-010
+    #[test]
+    fn t3_hostile_path_literals_are_skipped_with_unsafe_path_literal() {
+        let hostile_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../../tests/fixtures/openapi/hostile/path_literals.json");
+        let bytes = std::fs::read(hostile_path).expect("read hostile/path_literals.json");
+        let doc = OpenApiDocument::parse(&bytes).expect("parse hostile path_literals.json");
+        let ext = extract_operations(&doc).expect("extract hostile path_literals.json");
+
+        assert!(
+            ext.operations.is_empty(),
+            "all 5 unsafe literal paths must be skipped: {:?}",
+            ext.operations
+        );
+        let skipped: Vec<(&str, &str)> = ext
+            .report
+            .skipped
+            .iter()
+            .map(|s| (s.path.as_str(), s.reason.as_str()))
+            .collect();
+        assert_eq!(
+            skipped,
+            vec![
+                ("/a/../b", "unsafe_path_literal"),
+                ("/c/%2e%2e/d", "unsafe_path_literal"),
+                ("/e\\f", "unsafe_path_literal"),
+                ("/g?x", "unsafe_path_literal"),
+                ("/h#i", "unsafe_path_literal"),
+            ]
+        );
+
+        // Additional dot-spelling, space, and control-character literal segments must also skip.
+        let extra = json!({
+            "openapi": "3.0.3",
+            "info": { "title": "extra", "version": "1" },
+            "paths": {
+                "/.": { "get": { "operationId": "d1", "responses": { "200": { "description": "ok" } } } },
+                "/.%2e": { "get": { "operationId": "d2", "responses": { "200": { "description": "ok" } } } },
+                "/%2e.": { "get": { "operationId": "d3", "responses": { "200": { "description": "ok" } } } },
+                "/has space": { "get": { "operationId": "sp", "responses": { "200": { "description": "ok" } } } },
+                "/ctrl\u{0007}bell": { "get": { "operationId": "ct", "responses": { "200": { "description": "ok" } } } }
+            },
+            "components": { "schemas": {} }
+        });
+        let extra_doc =
+            OpenApiDocument::parse(&serde_json::to_vec(&extra).expect("json")).expect("parse");
+        let extra_ext = extract_operations(&extra_doc).expect("extract");
+        assert!(extra_ext.operations.is_empty());
+        assert_eq!(extra_ext.report.skipped.len(), 5);
+        for item in &extra_ext.report.skipped {
+            assert_eq!(item.reason, "unsafe_path_literal", "path={}", item.path);
+        }
+
+        // Shop golden extraction remains identical.
+        let shop_doc = OpenApiDocument::parse(&shop_bytes()).expect("parse shop");
+        let shop_ext = extract_operations(&shop_doc).expect("extract shop");
+        let shop_names: Vec<&str> = shop_ext
+            .operations
+            .iter()
+            .map(|o| o.name.as_str())
+            .collect();
+        assert_eq!(
+            shop_names,
+            vec![
+                "blobs",
+                "customers",
+                "customer",
+                "orders",
+                "order",
+                "product",
+                "slow"
+            ]
         );
     }
 }

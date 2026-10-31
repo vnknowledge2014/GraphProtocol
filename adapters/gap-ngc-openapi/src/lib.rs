@@ -4,6 +4,16 @@
 //! exposing read (`GET`) operations over GAP's Native Graph Connector wire contract without
 //! executing generated code or following untrusted `servers[]` or external `$ref` targets.
 //!
+//! # Path Parameter Safety (`CMP-030`)
+//!
+//! Path parameter arguments are percent-encoded outside RFC 3986 `unreserved` so `/`, `?`, `#`,
+//! `\` and spaces stay confined to their single segment slot. Because WHATWG URL path
+//! normalization collapses dot segments even in percent-encoded spellings (`%2e`, `%2E%2E`),
+//! path parameter values equal to `"."` or `".."` (as well as empty `""`) are refused with
+//! `INVALID_ARGUMENT` naming only the parameter (isolated per-index in `foreach`). Path templates
+//! whose literal segments contain dot segments, `\`, `?`, `#`, `%`, spaces, or control characters
+//! are skipped during extraction (`unsafe_path_literal`).
+//!
 //! # Upstream Error Mapping (`NGC-060`, `NGC-061`, `CMP-033`)
 //!
 //! Upstream HTTP statuses and transport outcomes map deterministically to [`gap_core::error::NgcErrorCode`].
