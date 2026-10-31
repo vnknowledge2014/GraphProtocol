@@ -282,9 +282,7 @@ pub fn compile_plan(
 }
 
 pub fn json_obj_to_prost_struct(val: &serde_json::Value) -> prost_types::Struct {
-    let map = val
-        .as_object()
-        .expect("row fixture must be a JSON object");
+    let map = val.as_object().expect("row fixture must be a JSON object");
     json_map_to_prost_struct(map)
 }
 

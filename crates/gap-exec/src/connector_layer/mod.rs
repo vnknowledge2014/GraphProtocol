@@ -410,11 +410,7 @@ impl ConnectorRegistryBuilder {
 
     /// Registers `client` for `branch`, sizing its bulkhead to `branch.limits.max_in_flight`.
     #[must_use]
-    pub fn register_branch(
-        self,
-        branch: &BranchDescriptor,
-        client: Arc<dyn BranchClient>,
-    ) -> Self {
+    pub fn register_branch(self, branch: &BranchDescriptor, client: Arc<dyn BranchClient>) -> Self {
         self.register(branch.uid, client, branch.limits.max_in_flight)
     }
 
@@ -477,10 +473,10 @@ impl ConnectorRegistry {
     ) -> Self {
         let mut entries = BTreeMap::new();
         for (uid, client) in clients {
-            let max_in_flight = snapshot
-                .branches
-                .get(&uid)
-                .map_or_else(|| BranchLimits::default().max_in_flight, |b| b.limits.max_in_flight);
+            let max_in_flight = snapshot.branches.get(&uid).map_or_else(
+                || BranchLimits::default().max_in_flight,
+                |b| b.limits.max_in_flight,
+            );
             entries.insert(uid, RegisteredBranch::new(client, max_in_flight));
         }
         Self { entries }
@@ -501,7 +497,9 @@ impl ConnectorRegistry {
     /// Returns available bulkhead permits for `uid`.
     #[must_use]
     pub fn available_permits(&self, uid: &BranchUid) -> Option<usize> {
-        self.entries.get(uid).map(RegisteredBranch::available_permits)
+        self.entries
+            .get(uid)
+            .map(RegisteredBranch::available_permits)
     }
 
     /// Returns configured `max_in_flight` capacity for `uid`.
@@ -572,10 +570,7 @@ impl ConnectorRegistry {
             .map_err(BranchQueryError::Registry)?;
 
         for (k, v) in &entry.metadata {
-            scope
-                .metadata
-                .entry(k.clone())
-                .or_insert_with(|| v.clone());
+            scope.metadata.entry(k.clone()).or_insert_with(|| v.clone());
         }
 
         let client = Arc::clone(&entry.client);
@@ -605,9 +600,8 @@ mod tests {
     #[tokio::test(start_paused = true)]
     async fn bulkhead_permit_held_across_open_stream_and_released_on_drop() {
         let uid = BranchUid::parse("018bcfe5-6c01-7010-8101-010101010101").expect("uid");
-        let mock = MockConnector::new().on_query(|_req, _scope| {
-            Ok(Box::pin(futures_util::stream::pending()))
-        });
+        let mock = MockConnector::new()
+            .on_query(|_req, _scope| Ok(Box::pin(futures_util::stream::pending())));
         let client: Arc<dyn BranchClient> =
             Arc::new(InProcess::from_connector(mock, ServerConfig::default()));
         let reg = ConnectorRegistry::builder()

@@ -194,7 +194,11 @@ async fn e2e_two_branch_parallel_aliases_typename_nested_list_object_scalar_and_
     .with_variables(exec_vars);
 
     let resp = exec.clone().oneshot(req).await.expect("infallible service");
-    assert!(resp.errors.is_empty(), "unexpected errors: {:?}", resp.errors);
+    assert!(
+        resp.errors.is_empty(),
+        "unexpected errors: {:?}",
+        resp.errors
+    );
     assert!(!resp.extensions.partial);
     assert_eq!(resp.extensions.generation, 1);
     assert_eq!(resp.extensions.cost.planned, plan.cost.planned_cost);
@@ -244,9 +248,8 @@ async fn e2e_skip_and_include_directives_on_root_fetches_and_selection_fields() 
     let clock = Arc::new(ManualClock::new(1_700_000_000_000));
     let (snapshot, _) = build_two_branch_snapshot();
 
-    let shop_mock = MockConnector::new().on_query(|_req, _scope| {
-        Ok(stream_rows(vec![json!({ "value": "pong" })]))
-    });
+    let shop_mock = MockConnector::new()
+        .on_query(|_req, _scope| Ok(stream_rows(vec![json!({ "value": "pong" })])));
     let crm_mock = MockConnector::new().on_query(|_req, _scope| {
         Ok(stream_rows(vec![json!({
             "id": "l-1",
@@ -636,7 +639,9 @@ async fn inv_01_pinned_snapshot_answers_request_even_after_new_generation_publis
         og.lock().expect("test mutex").push(generation);
         async move {
             tokio::time::sleep(Duration::from_millis(15)).await;
-            Ok(stream_rows(vec![json!({ "id": "c-1", "name": "Grace Hopper" })]))
+            Ok(stream_rows(vec![
+                json!({ "id": "c-1", "name": "Grace Hopper" }),
+            ]))
         }
     });
 
