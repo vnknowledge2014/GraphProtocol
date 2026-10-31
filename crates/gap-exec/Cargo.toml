@@ -9,7 +9,10 @@ description = "Deterministic ML-free execution engine: batched foreach joins, mu
 [features]
 incremental = []
 
+# The dependency set of WP-M1-07 is fixed by work/context/m1-07-brief.md section 2; it was resolved offline before dispatch.
 [dependencies]
+apollo-compiler.workspace = true
+futures-util.workspace = true
 gap-balance.workspace = true
 gap-core.workspace = true
 gap-ngc-sdk.workspace = true
@@ -18,3 +21,15 @@ gap-proto.workspace = true
 gap-ql.workspace = true
 gap-sec.workspace = true
 gap-store.workspace = true
+prost-types.workspace = true
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
+thiserror.workspace = true
+tokio = { workspace = true, features = ["macros", "rt", "sync", "time"] }
+tokio-util.workspace = true
+tower.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+proptest.workspace = true
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "test-util", "time"] }

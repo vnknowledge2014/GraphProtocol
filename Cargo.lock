@@ -922,6 +922,8 @@ dependencies = [
 name = "gap-exec"
 version = "0.1.0"
 dependencies = [
+ "apollo-compiler",
+ "futures-util",
  "gap-balance",
  "gap-core",
  "gap-ngc-sdk",
@@ -930,6 +932,15 @@ dependencies = [
  "gap-ql",
  "gap-sec",
  "gap-store",
+ "proptest",
+ "prost-types",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
+ "tokio",
+ "tokio-util",
+ "tower",
+ "tracing",
 ]
 
 [[package]]
