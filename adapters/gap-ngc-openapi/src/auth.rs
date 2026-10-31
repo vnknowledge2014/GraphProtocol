@@ -354,7 +354,7 @@ impl ResolvedAuth {
                     ));
                 }
                 let secret = source.resolve(credential)?;
-                let mut combined = SecretString::new(format!("{user}:{}", secret.expose_secret()));
+                let combined = SecretString::new(format!("{user}:{}", secret.expose_secret()));
                 let b64 = encode_base64(combined.expose_secret().as_bytes());
                 // Explicit drop of `combined` zeroizes the intermediate `user:secret` buffer.
                 drop(combined);
