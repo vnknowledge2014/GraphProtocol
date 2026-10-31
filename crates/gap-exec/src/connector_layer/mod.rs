@@ -620,14 +620,17 @@ mod tests {
         assert_eq!(reg.available_permits(&uid), Some(0));
 
         // Second call while s1 is still open must fail immediately with GAP_OVERLOADED!
-        let err = match reg
-            .open_query(
+        let second = tokio::time::timeout(
+            Duration::from_millis(10),
+            reg.open_query(
                 &uid,
                 QueryRequest::default(),
                 CallScope::for_test(Instant::now() + Duration::from_secs(5)),
-            )
-            .await
-        {
+            ),
+        )
+        .await
+        .expect("saturated bulkhead must fail immediately without queueing");
+        let err = match second {
             Err(BranchQueryError::Registry(e)) => e,
             Err(BranchQueryError::Connector(e)) => {
                 panic!("expected BranchQueryError::Registry, got connector error {e:?}")
