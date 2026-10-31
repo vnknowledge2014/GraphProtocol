@@ -94,6 +94,7 @@ struct State {
     deleted_sessions: usize,
     always_404: bool,
     drop_result_type: bool,
+    repeat_cursor: bool,
     sse: bool,
     in_flight: usize,
     max_in_flight: usize,
@@ -155,6 +156,7 @@ impl FakeMcpServer {
                     deleted_sessions: 0,
                     always_404: false,
                     drop_result_type: false,
+                    repeat_cursor: false,
                     sse: false,
                     in_flight: 0,
                     max_in_flight: 0,
@@ -209,6 +211,11 @@ impl FakeMcpServer {
     /// Answers every legacy request with `404`.
     pub fn always_404(&self, on: bool) {
         self.st().always_404 = on;
+    }
+
+    /// Makes every list page announce the same `nextCursor` forever (a hostile server).
+    pub fn repeat_cursor(&self, on: bool) {
+        self.st().repeat_cursor = on;
     }
 
     /// Omits `resultType` from modern results.
@@ -281,6 +288,15 @@ impl FakeMcpServer {
             .and_then(|n| n.parse().ok())
             .unwrap_or(0);
         let end = start.saturating_add(size).min(items.len());
+        if self.st().repeat_cursor {
+            let mut out = Map::new();
+            out.insert(
+                key.to_owned(),
+                Value::Array(items.iter().take(1).cloned().collect()),
+            );
+            out.insert("nextCursor".to_owned(), json!("same-cursor"));
+            return Value::Object(out);
+        }
         let mut out = Map::new();
         out.insert(
             key.to_owned(),
@@ -352,7 +368,10 @@ impl FakeMcpServer {
         }
         if era != ServerEra::Modern
             && is_http
-            && !matches!(method, "initialize" | "server/discover")
+            && !matches!(
+                method,
+                "initialize" | "server/discover" | "notifications/initialized"
+            )
         {
             let state_epoch = format!("fake-session-{}", self.st().session_epoch);
             if self.st().always_404 || headers.get("mcp-session-id") != Some(&state_epoch) {

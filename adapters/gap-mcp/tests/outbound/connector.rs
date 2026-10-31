@@ -648,3 +648,43 @@ async fn outbound_health_is_serving_until_discovery_fails() {
         .expect("health");
     assert_eq!(health.status, ServingStatus::NotServing as i32);
 }
+
+// spec: CMP-010
+#[tokio::test(start_paused = true)]
+async fn outbound_a_server_repeating_a_pagination_cursor_is_cut_after_two_pages() {
+    let server = echo_server(ServerEra::Modern);
+    server.repeat_cursor(true);
+    let connector = http_connector(&server, McpConfig::default());
+    let err = connector
+        .describe(DescribeRequest::default(), scope(30))
+        .await
+        .expect_err("endless cursor");
+    assert_eq!(err.code, NgcErrorCode::UpstreamError);
+    let pages = server
+        .requests()
+        .iter()
+        .filter(|r| r.method == "tools/list")
+        .count();
+    assert_eq!(
+        pages, 2,
+        "the repeated cursor must be detected on the second page, not after the page cap"
+    );
+}
+
+// spec: NGC-023, NGC-060
+#[tokio::test(start_paused = true)]
+async fn outbound_predicate_pushdown_is_invalid_argument() {
+    let server = echo_server(ServerEra::Modern);
+    let connector = http_connector(&server, McpConfig::default());
+    let mut req = query("echo", json!({"id": 1}));
+    req.predicate = Some(gap_proto::ngc::v1::Expr {
+        node: Some(gap_proto::ngc::v1::expr::Node::Exists("id".to_owned())),
+    });
+    let err = connector
+        .query(req, scope(30))
+        .await
+        .err()
+        .expect("rejected");
+    assert_eq!(err.code, NgcErrorCode::InvalidArgument);
+    assert!(server.calls().is_empty());
+}

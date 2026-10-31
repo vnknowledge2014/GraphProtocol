@@ -290,3 +290,33 @@ async fn outbound_modern_envelope_table_missing_unknown_and_absent_caching_hints
         );
     }
 }
+
+// spec: CMP-010
+#[tokio::test(start_paused = true)]
+async fn outbound_a_discover_result_without_result_type_does_not_select_the_modern_era() {
+    let mut discover = result_of("spec-2026-07-28-discover.json");
+    discover
+        .as_object_mut()
+        .expect("object")
+        .remove("resultType");
+    let transport = Arc::new(Scripted::new(vec![
+        ("server/discover", Ok(discover)),
+        (
+            "tools/list",
+            Ok(json!({"resultType": "complete", "tools": [], "ttlMs": 0, "cacheScope": "private"})),
+        ),
+        (
+            "resources/list",
+            Ok(
+                json!({"resultType": "complete", "resources": [], "ttlMs": 0, "cacheScope": "private"}),
+            ),
+        ),
+    ]));
+    let connector = McpConnector::new(transport, McpConfig::default()).expect("connector");
+    let err = connector
+        .describe(DescribeRequest::default(), scope(30))
+        .await
+        .expect_err("must not be accepted");
+    assert_eq!(err.code, NgcErrorCode::UpstreamError);
+    assert!(connector.session().era().is_none());
+}

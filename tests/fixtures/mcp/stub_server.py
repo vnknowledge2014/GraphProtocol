@@ -7,7 +7,10 @@ import json
 import sys
 
 TOOLS = [{"name": "echo", "description": "echoes its arguments",
-          "inputSchema": {"type": "object", "properties": {"id": {"type": "integer"}}, "required": ["id"]}}]
+          "inputSchema": {"type": "object", "properties": {"id": {"type": "integer"}}, "required": ["id"]}},
+         {"name": "env", "description": "lists the names of the environment variables it received",
+          "inputSchema": {"type": "object"}}]
+import os
 
 
 def reply(msg_id, result=None, error=None):
@@ -33,6 +36,8 @@ for line in sys.stdin:
                        "capabilities": {"tools": {}}, "ttlMs": 0, "cacheScope": "private"})
     elif method == "tools/list":
         reply(msg_id, {"resultType": "complete", "tools": TOOLS, "ttlMs": 0, "cacheScope": "private"})
+    elif method == "tools/call" and params.get("name") == "env":
+        reply(msg_id, {"resultType": "complete", "structuredContent": {"names": sorted(os.environ.keys())}})
     elif method == "tools/call":
         reply(msg_id, {"resultType": "complete", "structuredContent": {"echo": params.get("arguments")}})
     else:

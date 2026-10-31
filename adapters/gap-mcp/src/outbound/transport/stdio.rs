@@ -426,6 +426,40 @@ mod tests {
 
     // spec: CMP-010
     #[tokio::test(start_paused = true)]
+    async fn outbound_stdio_line_limit_boundary_exact_size_is_accepted_one_more_byte_is_fatal() {
+        for (extra, fatal) in [(0_usize, false), (1, true)] {
+            let (client_w, server_r) = duplex(64 * 1024);
+            let (mut server_w, client_r) = duplex(64 * 1024);
+            let t = Arc::new(StdioTransport::new(BufReader::new(client_r), client_w, 200));
+            let mut srv_r = BufReader::new(server_r);
+            let h = tokio::spawn({
+                let t = Arc::clone(&t);
+                async move {
+                    t.request("m", json!({}), HeaderHints::default(), opts(60_000))
+                        .await
+                }
+            });
+            let req = read_line(&mut srv_r).await;
+            let prefix = format!(r#"{{"jsonrpc":"2.0","id":{},"result":"#, req["id"]);
+            let pad = 200 + extra - prefix.len() - 2; // closing quote and brace
+            let line = format!("{prefix}\"{}\"}}\n", "x".repeat(pad - 1));
+            assert_eq!(
+                line.len(),
+                200 + extra + 1,
+                "line is the cap plus {extra} bytes and the newline"
+            );
+            let _ = server_w.write_all(line.as_bytes()).await;
+            let outcome = h.await.expect("join");
+            if fatal {
+                assert_eq!(outcome.expect_err("too long"), McpError::FrameTooLarge);
+            } else {
+                assert!(outcome.is_ok(), "{outcome:?}");
+            }
+        }
+    }
+
+    // spec: CMP-010
+    #[tokio::test(start_paused = true)]
     async fn outbound_stdio_eof_fails_pending_calls_and_later_calls() {
         let (t, mut srv_r, srv_w) = pair().await;
         let t = Arc::new(t);

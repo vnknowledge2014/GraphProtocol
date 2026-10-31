@@ -68,6 +68,26 @@ async fn outbound_real_stdio_child_runs_only_through_a_verified_allow_list_entry
     .await
     .expect("rows");
     assert_eq!(got.rows[&0][0]["echo"]["id"].as_f64(), Some(5.0));
+    // the child receives only the variables of the allow-list entry (the environment is cleared)
+    let env = collect(
+        connector
+            .query(query("env", json!({})), scope(30))
+            .await
+            .expect("query"),
+    )
+    .await
+    .expect("rows");
+    let names: Vec<&str> = env.rows[&0][0]["names"]
+        .as_array()
+        .expect("names")
+        .iter()
+        .filter_map(|v| v.as_str())
+        .collect();
+    assert!(names.contains(&"PYTHONUNBUFFERED"));
+    assert!(
+        !names.contains(&"PATH") && !names.contains(&"HOME"),
+        "the child must not inherit the parent's environment: {names:?}"
+    );
     let _ = child.kill().await;
 
     // a wrong pin is refused before anything runs

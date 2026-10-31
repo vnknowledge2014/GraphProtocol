@@ -420,6 +420,11 @@ mod tests {
             .expect("after expiry");
         assert_eq!(server.initialize_count(), 2);
         // a server that keeps answering 404 must not loop
+        let lists_before = server
+            .requests()
+            .iter()
+            .filter(|r| r.method == "tools/list")
+            .count();
         server.always_404(true);
         let err = session
             .call("tools/list", json!({}), None, opts())
@@ -429,10 +434,20 @@ mod tests {
             matches!(err, McpError::SessionNotFound | McpError::HttpStatus(404)),
             "{err:?}"
         );
-        assert!(
-            server.initialize_count() <= 4,
-            "initialize count {}",
-            server.initialize_count()
+        assert_eq!(
+            server.initialize_count(),
+            3,
+            "exactly one more initialize, not a loop"
+        );
+        let lists_after = server
+            .requests()
+            .iter()
+            .filter(|r| r.method == "tools/list")
+            .count();
+        assert_eq!(
+            lists_after - lists_before,
+            2,
+            "the original attempt plus exactly one retry"
         );
     }
 
