@@ -22,6 +22,7 @@ use gap_ngc_sdk::error::prost_struct_to_json_map;
 use gap_ngc_sdk::mock::MockConnector;
 use gap_ql::with_gap_builtins;
 use serde_json::json;
+use tokio::sync::Notify;
 use tokio::time::Instant;
 use tower::ServiceExt as _;
 
@@ -634,11 +635,21 @@ async fn inv_01_pinned_snapshot_answers_request_even_after_new_generation_publis
 
     let observed_generations = Arc::new(std::sync::Mutex::new(Vec::new()));
     let og = Arc::clone(&observed_generations);
+    let gen1_in_flight = Arc::new(Notify::new());
+    let gen1_sig = Arc::clone(&gen1_in_flight);
+    let release_gen1 = Arc::new(Notify::new());
+    let rel_sig = Arc::clone(&release_gen1);
+
     let shop_mock = MockConnector::new().on_query_async(move |req, _scope| {
         let generation = req.ctx.as_ref().map_or(0, |c| c.snapshot_generation);
         og.lock().expect("test mutex").push(generation);
+        let gen1_sig = Arc::clone(&gen1_sig);
+        let rel_sig = Arc::clone(&rel_sig);
         async move {
-            tokio::time::sleep(Duration::from_millis(15)).await;
+            if generation == 1 {
+                gen1_sig.notify_one();
+                rel_sig.notified().await;
+            }
             Ok(stream_rows(vec![
                 json!({ "id": "c-1", "name": "Grace Hopper" }),
             ]))
@@ -657,7 +668,7 @@ async fn inv_01_pinned_snapshot_answers_request_even_after_new_generation_publis
     let plan_gen1 = compile_plan(&snap_gen1, query, &serde_json::Map::new());
     let plan_gen2 = compile_plan(&snap_gen2, query, &serde_json::Map::new());
 
-    // Simulate gen 1 request pinned before gen 2 was published, running concurrently with gen 2!
+    // Start gen 1 request and pause it mid-flight while gen 2 is published and served!
     let req1 = ExecRequest::new(
         snap_gen1,
         plan_gen1,
@@ -669,9 +680,14 @@ async fn inv_01_pinned_snapshot_answers_request_even_after_new_generation_publis
         Instant::now() + Duration::from_secs(5),
     );
 
-    let (r1, r2) = tokio::join!(exec.clone().oneshot(req1), exec.clone().oneshot(req2));
-    let resp1 = r1.expect("infallible");
-    let resp2 = r2.expect("infallible");
+    let svc1 = exec.clone();
+    let fut1 = tokio::spawn(async move { svc1.oneshot(req1).await });
+    gen1_in_flight.notified().await;
+
+    // Serve gen 2 to completion while gen 1 is still in-flight!
+    let resp2 = exec.clone().oneshot(req2).await.expect("infallible");
+    release_gen1.notify_one();
+    let resp1 = fut1.await.expect("join req1").expect("infallible");
 
     assert_eq!(resp1.extensions.generation, 1);
     assert_eq!(
