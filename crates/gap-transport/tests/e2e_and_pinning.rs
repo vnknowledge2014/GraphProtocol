@@ -248,7 +248,7 @@ async fn inv_01_in_flight_request_pins_generation_once_across_all_stages() {
         let release = Arc::clone(&release_clone);
         async move {
             assert_eq!(req.operation, "shopVersion");
-            entered.notify_waiters();
+            entered.notify_one();
             release.notified().await;
             Ok(stream_rows(vec![json!({ "value": "served-from-gen-1" })]))
         }
@@ -329,7 +329,7 @@ async fn inv_01_in_flight_request_pins_generation_once_across_all_stages() {
     assert_eq!(pub3, 3);
     assert_eq!(base_harness.snapshot_handle.generation(), 3);
 
-    release_branch.notify_waiters();
+    release_branch.notify_one();
     let resp = in_flight.await.expect("join in-flight request");
     assert_eq!(resp.status, StatusCode::OK);
     let body = resp.json();

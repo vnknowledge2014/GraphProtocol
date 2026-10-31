@@ -333,44 +333,54 @@ async fn authn_dev_and_prod_api_keys_constant_time_verifier_and_sec_010_tenant_i
         Some(recorder.clone()),
     );
 
-    let (anon_resp, capture_anon) = TracingCapture::with_captured_async(send_oneshot(
-        &harness.router,
-        Request::builder()
-            .method("POST")
-            .uri("/graphql")
-            .header("content-type", "application/json")
-            .header("x-tenant", "evil-tenant")
-            .body(Body::from(
-                serde_json::to_vec(&json!({
-                    "query": "{ shopVersion }",
-                    "tenant": "evil-tenant",
-                    "principal": "evil-admin",
-                    "extensions": { "gap": { "tenant": "evil-tenant" } }
-                }))
-                .expect("json"),
-            ))
-            .expect("req"),
-    ))
+    let capture_all = TracingCapture::new();
+    let _thread_guard = capture_all.enter_guard();
+    tracing::callsite::rebuild_interest_cache();
+
+    let anon_resp = tracing::instrument::WithSubscriber::with_subscriber(
+        send_oneshot(
+            &harness.router,
+            Request::builder()
+                .method("POST")
+                .uri("/graphql")
+                .header("content-type", "application/json")
+                .header("x-tenant", "evil-tenant")
+                .body(Body::from(
+                    serde_json::to_vec(&json!({
+                        "query": "{ shopVersion }",
+                        "tenant": "evil-tenant",
+                        "principal": "evil-admin",
+                        "extensions": { "gap": { "tenant": "evil-tenant" } }
+                    }))
+                    .expect("json"),
+                ))
+                .expect("req"),
+        ),
+        capture_all.subscriber(),
+    )
     .await;
     assert_eq!(anon_resp.status, StatusCode::OK);
 
-    let (bearer_resp, capture_bearer) = TracingCapture::with_captured_async(send_oneshot(
-        &harness.router,
-        Request::builder()
-            .method("POST")
-            .uri("/graphql")
-            .header("content-type", "application/json")
-            .header("authorization", format!("Bearer {raw_key_1}"))
-            .header("x-tenant", "evil-tenant")
-            .body(Body::from(
-                serde_json::to_vec(&json!({
-                    "query": "{ shopVersion }",
-                    "tenant": "evil-tenant"
-                }))
-                .expect("json"),
-            ))
-            .expect("req"),
-    ))
+    let bearer_resp = tracing::instrument::WithSubscriber::with_subscriber(
+        send_oneshot(
+            &harness.router,
+            Request::builder()
+                .method("POST")
+                .uri("/graphql")
+                .header("content-type", "application/json")
+                .header("authorization", format!("Bearer {raw_key_1}"))
+                .header("x-tenant", "evil-tenant")
+                .body(Body::from(
+                    serde_json::to_vec(&json!({
+                        "query": "{ shopVersion }",
+                        "tenant": "evil-tenant"
+                    }))
+                    .expect("json"),
+                ))
+                .expect("req"),
+        ),
+        capture_all.subscriber(),
+    )
     .await;
     assert_eq!(bearer_resp.status, StatusCode::OK);
 
@@ -404,18 +414,21 @@ async fn authn_dev_and_prod_api_keys_constant_time_verifier_and_sec_010_tenant_i
     assert_eq!(observed[2].tenant.as_str(), "globex");
 
     // Wrong API key in `dev` -> `401` + `WWW-Authenticate: Bearer`, and canary never leaks!
-    let (bad_dev_resp, capture_bad) = TracingCapture::with_captured_async(send_oneshot(
-        &harness.router,
-        Request::builder()
-            .method("POST")
-            .uri("/graphql")
-            .header("content-type", "application/json")
-            .header("authorization", format!("Bearer {bad_canary}"))
-            .body(Body::from(
-                serde_json::to_vec(&json!({ "query": "{ shopVersion }" })).expect("json"),
-            ))
-            .expect("req"),
-    ))
+    let bad_dev_resp = tracing::instrument::WithSubscriber::with_subscriber(
+        send_oneshot(
+            &harness.router,
+            Request::builder()
+                .method("POST")
+                .uri("/graphql")
+                .header("content-type", "application/json")
+                .header("authorization", format!("Bearer {bad_canary}"))
+                .body(Body::from(
+                    serde_json::to_vec(&json!({ "query": "{ shopVersion }" })).expect("json"),
+                ))
+                .expect("req"),
+        ),
+        capture_all.subscriber(),
+    )
     .await;
     assert_eq!(bad_dev_resp.status, StatusCode::UNAUTHORIZED);
     assert_eq!(
@@ -492,11 +505,13 @@ async fn authn_dev_and_prod_api_keys_constant_time_verifier_and_sec_010_tenant_i
     assert_eq!(prod_obs[0].tenant.as_str(), "initech");
 
     // Verify zero canary secrets in any captured span or event across all traced calls (`INV-15`).
-    for cap in [&capture_anon, &capture_bearer, &capture_bad] {
-        for sink in &sinks {
-            sink.check_tracing(cap)
-                .expect("captured spans and events must never leak canary");
-        }
+    assert!(
+        !capture_all.spans().is_empty(),
+        "expected spans captured across authenticated calls"
+    );
+    for sink in &sinks {
+        sink.check_tracing(&capture_all)
+            .expect("captured spans and events must never leak canary");
     }
 }
 

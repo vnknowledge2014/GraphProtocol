@@ -237,23 +237,30 @@ async fn ops_010_and_ops_011_spans_record_normative_names_and_hash_queries_witho
         format!(r#"query SpanCheck {{ order(id: "{secret_query_literal}") {{ id sku }} }}"#);
     let incoming_traceparent = "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01";
 
-    let (resp, capture) = TracingCapture::with_captured_async(send_oneshot(
-        &harness.router,
-        Request::builder()
-            .method("POST")
-            .uri("/graphql")
-            .header("content-type", "application/json")
-            .header("authorization", format!("Bearer {api_key_canary}"))
-            .header("traceparent", incoming_traceparent)
-            .body(Body::from(
-                serde_json::to_vec(&json!({
-                    "query": raw_query,
-                    "operationName": "SpanCheck"
-                }))
-                .expect("json"),
-            ))
-            .expect("req"),
-    ))
+    let capture = TracingCapture::new();
+    let _thread_guard = capture.enter_guard();
+    tracing::callsite::rebuild_interest_cache();
+
+    let resp = tracing::instrument::WithSubscriber::with_subscriber(
+        send_oneshot(
+            &harness.router,
+            Request::builder()
+                .method("POST")
+                .uri("/graphql")
+                .header("content-type", "application/json")
+                .header("authorization", format!("Bearer {api_key_canary}"))
+                .header("traceparent", incoming_traceparent)
+                .body(Body::from(
+                    serde_json::to_vec(&json!({
+                        "query": raw_query,
+                        "operationName": "SpanCheck"
+                    }))
+                    .expect("json"),
+                ))
+                .expect("req"),
+        ),
+        capture.subscriber(),
+    )
     .await;
 
     assert_eq!(resp.status, StatusCode::OK);

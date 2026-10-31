@@ -19,7 +19,6 @@ use gap_core::clock::Clock as _;
 use gap_ngc_sdk::connector::BoxStream;
 use gap_ngc_sdk::mock::MockConnector;
 use gap_proto::ngc::v1::QueryResponse;
-use gap_testkit::clock::advance_paused;
 use gap_transport::{Profile, TransportConfig};
 use http_body_util::BodyExt as _;
 use serde_json::{Value, json};
@@ -139,7 +138,7 @@ async fn dropping_http_request_future_cancels_connector_stream_within_50ms() {
 
     let slow_shop = MockConnector::new().on_query(move |_req, scope| {
         *cancel_slot.lock().expect("cancel slot") = Some(scope.cancel.clone());
-        started_clone.notify_waiters();
+        started_clone.notify_one();
         let pending_stream: BoxStream<QueryResponse> = Box::pin(stream::pending());
         Ok(pending_stream)
     });
@@ -173,30 +172,17 @@ async fn dropping_http_request_future_cancels_connector_stream_within_50ms() {
     assert_eq!(harness.metrics.in_flight(), 1);
 
     // Client disconnects -> drop the HTTP response future!
-    let t_drop = harness.clock.unix_millis();
+    let t_drop = tokio::time::Instant::now();
     drop(resp_fut);
 
-    let drop_wait = tokio::time::timeout(Duration::from_millis(50), slow_shop.wait_for_drops(1));
-    tokio::pin!(drop_wait);
+    tokio::time::timeout(Duration::from_millis(50), slow_shop.wait_for_drops(1))
+        .await
+        .expect("connector stream must be dropped within 50 ms of HTTP future drop");
 
-    // Yield / advance at most 10 ms in paused time so in-memory h2 RST_STREAM propagates.
-    tokio::select! {
-        res = &mut drop_wait => {
-            res.expect("connector stream must be dropped within 50 ms of HTTP future drop");
-        }
-        () = async {
-            advance_paused(&harness.clock, Duration::from_millis(10)).await;
-        } => {
-            drop_wait
-                .await
-                .expect("connector stream must be dropped within 50 ms of HTTP future drop");
-        }
-    }
-
-    let elapsed_ms = harness.clock.unix_millis() - t_drop;
+    let elapsed = t_drop.elapsed();
     assert!(
-        elapsed_ms <= 50,
-        "cancellation propagation took {elapsed_ms} ms (> 50 ms)"
+        elapsed <= Duration::from_millis(50),
+        "cancellation propagation took {elapsed:?} (> 50 ms)"
     );
     assert_eq!(slow_shop.in_flight(), 0);
     assert_eq!(harness.metrics.in_flight(), 0);
@@ -364,7 +350,7 @@ async fn graphql_sse_bounded_mpsc_backpressures_slow_consumer_and_cancels_on_str
     let sse_query_started = Arc::new(Notify::new());
     let started_clone = Arc::clone(&sse_query_started);
     let slow_shop = MockConnector::new().on_query(move |_req, _scope| {
-        started_clone.notify_waiters();
+        started_clone.notify_one();
         let pending_stream: BoxStream<QueryResponse> = Box::pin(stream::pending());
         Ok(pending_stream)
     });
@@ -395,24 +381,18 @@ async fn graphql_sse_bounded_mpsc_backpressures_slow_consumer_and_cancels_on_str
         .expect("oneshot");
     assert_eq!(sse_resp.status(), StatusCode::OK);
 
-    tokio::select! {
-        () = sse_query_started.notified() => {}
-        () = advance_paused(&cancel_harness.clock, Duration::from_secs(1)) => {
-            panic!("SSE producer did not reach branch mock within 1 s");
-        }
-    }
+    tokio::time::timeout(Duration::from_secs(1), sse_query_started.notified())
+        .await
+        .expect("SSE producer must reach branch mock within 1 s");
     assert_eq!(slow_shop.in_flight(), 1);
 
     // Drop the SSE HTTP response (client closes EventSource connection).
+    let sse_drop_start = tokio::time::Instant::now();
     drop(sse_resp);
 
-    let wait_drop = tokio::time::timeout(Duration::from_millis(50), slow_shop.wait_for_drops(1));
-    tokio::pin!(wait_drop);
-    tokio::select! {
-        r = &mut wait_drop => r.expect("SSE drop must cancel connector within 50 ms"),
-        () = advance_paused(&cancel_harness.clock, Duration::from_millis(10)) => {
-            wait_drop.await.expect("SSE drop must cancel connector within 50 ms");
-        }
-    }
+    tokio::time::timeout(Duration::from_millis(50), slow_shop.wait_for_drops(1))
+        .await
+        .expect("SSE drop must cancel connector within 50 ms");
+    assert!(sse_drop_start.elapsed() <= Duration::from_millis(50));
     assert_eq!(slow_shop.in_flight(), 0);
 }
