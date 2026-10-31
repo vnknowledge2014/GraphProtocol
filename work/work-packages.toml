@@ -267,7 +267,7 @@ milestone = "M1"
 role = "coder"
 size = "L"
 depends_on = ["WP-M1-05"]
-owns = ["crates/gap-plan/**", "crates/gap-ql/src/persisted.rs"]
+owns = ["crates/gap-plan/**", "crates/gap-ql/src/persisted.rs", "crates/gap-ql/Cargo.toml"]
 spec_refs = ["RUN-005", "RUN-010", "RUN-011", "RUN-013", "RUN-014"]
 deliverables = [
   "replace the hand-written FIPS 180-4 SHA-256 in crates/gap-ql/src/persisted.rs (WP-M1-01 deviation: `sha2` was not in its offline crate list; it matches 308 independent hashlib comparisons and the NIST vectors) by the pinned `sha2` crate, keeping the NIST vector tests; `sha2` must be vendored first, and this edit is allowed for this WP although gap-ql is otherwise owned by WP-M1-01",

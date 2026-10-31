@@ -6,6 +6,18 @@ rust-version.workspace = true
 license.workspace = true
 description = "Deterministic ML-free query planner, predicate pushdown, foreach join planning, and plan cache keys (L2)."
 
+# The dependency set of WP-M1-06 is fixed by work/context/m1-06-brief.md section 2; it was resolved offline before dispatch.
 [dependencies]
+apollo-compiler.workspace = true
+blake3.workspace = true
 gap-core.workspace = true
 gap-ql.workspace = true
+moka = { workspace = true, features = ["sync"] }
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+proptest.workspace = true
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "time"] }
