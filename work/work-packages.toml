@@ -315,15 +315,28 @@ title = "gap-mcp outbound connector (MCP server as branch)"
 milestone = "M1"
 role = "coder"
 size = "L"
-depends_on = ["WP-M1-03", "WP-M0-03"]
-owns = ["adapters/gap-mcp/src/outbound/**", "adapters/gap-mcp/tests/outbound/**"]
-spec_refs = ["CMP-010", "CMP-011", "CMP-012", "CMP-013", "CMP-014", "CMP-015", "ADR-015"]
+depends_on = ["WP-M1-03", "WP-M0-03", "WP-M1-04", "WP-M1-11"]
+owns = [
+  "adapters/gap-mcp/src/outbound/**",
+  "adapters/gap-mcp/tests/outbound/**",
+  "adapters/gap-mcp/tests/outbound_*.rs",
+  "tests/fixtures/mcp/**",
+  "conformance/ngc/mcp.kit.toml",
+  "crates/gap-conformance/tests/ngc_kit_mcp.rs",
+  "crates/gap-conformance/Cargo.toml",
+]
+spec_refs = ["CMP-010", "CMP-011", "CMP-012", "CMP-013", "CMP-014", "CMP-015", "NGC-020", "NGC-025", "NGC-026", "NGC-027", "NGC-060", "NGC-091", "INV-12", "INV-15", "INV-18", "ADR-015"]
 deliverables = [
   "evaluate rmcp 3.7 against MCP 2026-07-28 (stateless, _meta); use it if conformant else a thin JSON-RPC client (record the decision in an ADR addendum)",
   "tools/list->OperationDescriptors (annotations untrusted), resources->node category, structuredContent/text result mapping, cancellation, timeouts, bounded-concurrency foreach emulation with honest upstream_calls",
   "stdio transport launches only via an allow-list entry (sandbox integration arrives in WP-M6-09; until then refuse non-dev profiles)",
+  "NGC kit profile conformance/ngc/mcp.kit.toml and an in-process test that runs gap_conformance::ngc_kit::run_kit against the connector in front of a fake MCP server (the kit has no --spawn mode; layering forbids the L4 crate from depending on the L5 kit, so the test lives in gap-conformance)",
 ]
-acceptance = ["cargo nextest run -p gap-mcp -E 'test(outbound)'", "cargo clippy -p gap-mcp --all-targets -- -D warnings"]
+acceptance = [
+  "cargo nextest run -p gap-mcp -E 'test(outbound)'",
+  "cargo nextest run -p gap-conformance -E 'test(ngc_kit_mcp)'",
+  "cargo clippy -p gap-mcp -p gap-conformance --all-targets -- -D warnings",
+]
 
 [[wp]]
 id = "WP-M1-10"
