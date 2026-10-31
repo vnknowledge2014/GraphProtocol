@@ -347,15 +347,26 @@ title = "gap-ngc-openapi v0: read operations, auth, mock REST fixture"
 milestone = "M1"
 role = "coder"
 size = "L"
-depends_on = ["WP-M1-03"]
-owns = ["adapters/gap-ngc-openapi/**", "tests/fixtures/openapi/**"]
-spec_refs = ["CMP-030", "CMP-031", "CMP-032", "CMP-033", "NGC-020", "NGC-026", "NGC-072"]
+depends_on = ["WP-M1-03", "WP-M1-04"]
+owns = [
+  "adapters/gap-ngc-openapi/**",
+  "tests/fixtures/openapi/**",
+  "conformance/ngc/openapi.kit.toml",
+  "crates/gap-conformance/tests/ngc_kit_openapi.rs",
+  "crates/gap-conformance/Cargo.toml",
+]
+spec_refs = ["CMP-030", "CMP-031", "CMP-032", "CMP-033", "NGC-020", "NGC-021", "NGC-022", "NGC-025", "NGC-026", "NGC-027", "NGC-060", "NGC-072", "NGC-091", "INV-15", "INV-18"]
 deliverables = [
   "OpenAPI 3.x -> Describe (operations, JSON Schema, SDL) via a minimal local-only $ref resolver; request builder that cannot escape its parameter slots; bearer/apiKey auth from vault stub",
   "foreach via native batch extension or bounded fan-out (batch=emulated) with honest upstream_calls; retries only for idempotent reads",
   "fixture REST service (axum) with 3 resources + rate-limit headers used by the walking skeleton and later benches",
+  "NGC kit profile conformance/ngc/openapi.kit.toml and an in-process test that runs gap_conformance::ngc_kit::run_kit against the connector in front of the fixture service (the kit has no --spawn mode; layering forbids the L4 crate from depending on the L5 kit, so the test lives in gap-conformance)",
 ]
-acceptance = ["cargo nextest run -p gap-ngc-openapi", "cargo run -p gap-conformance -- --connector-kit --spawn fixtures openapi"]
+acceptance = [
+  "cargo nextest run -p gap-ngc-openapi",
+  "cargo nextest run -p gap-conformance -E 'test(ngc_kit_openapi)'",
+  "cargo clippy -p gap-ngc-openapi -p gap-conformance --all-targets -- -D warnings",
+]
 
 [[wp]]
 id = "WP-M1-12"

@@ -6,8 +6,27 @@ rust-version.workspace = true
 license.workspace = true
 description = "Zero-ETL OpenAPI 3.x / REST Native Graph Connector adapter (L4)."
 
+# The dependency set of WP-M1-11 is fixed by work/context/m1-11-brief.md section 2; it was resolved offline before dispatch.
 [dependencies]
+axum.workspace = true
+blake3.workspace = true
+futures-util.workspace = true
 gap-core.workspace = true
 gap-ngc-sdk.workspace = true
 gap-proto.workspace = true
 gap-sec.workspace = true
+percent-encoding.workspace = true
+prost-types.workspace = true
+regex.workspace = true
+reqwest.workspace = true
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
+thiserror.workspace = true
+tokio = { workspace = true, features = ["macros", "net", "rt", "sync", "time"] }
+tracing.workspace = true
+url.workspace = true
+
+[dev-dependencies]
+gap-ql.workspace = true
+proptest.workspace = true
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "test-util", "time"] }

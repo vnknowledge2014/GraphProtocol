@@ -986,10 +986,25 @@ dependencies = [
 name = "gap-ngc-openapi"
 version = "0.1.0"
 dependencies = [
+ "axum",
+ "blake3",
+ "futures-util",
  "gap-core",
  "gap-ngc-sdk",
  "gap-proto",
+ "gap-ql",
  "gap-sec",
+ "percent-encoding",
+ "proptest",
+ "prost-types",
+ "regex",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
+ "tokio",
+ "tracing",
+ "url",
 ]
 
 [[package]]

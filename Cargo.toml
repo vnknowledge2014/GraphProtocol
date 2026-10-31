@@ -162,3 +162,9 @@ futures-util = "0.3.34"
 http-body-util = "0.1.5"
 hyper-util = "0.1.21"
 tokio-util = "0.7.20"
+
+# Added for WP-M1-11 (2026-10-31): gap-ngc-openapi request building (RFC 3986 percent-encoding, URL parsing, JSON Schema `pattern`). All three are
+# already in the lockfile (reqwest, proptest); no new package.
+percent-encoding = "2.3.2"
+regex = { version = "1.13.1", default-features = false, features = ["std", "unicode-perl"] } # JSON Schema `pattern` in the argument validator
+url = "2.5.8"
