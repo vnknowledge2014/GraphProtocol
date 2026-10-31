@@ -585,6 +585,15 @@ fn collect_merged_raw_params(
 
 /// Deterministically extracts read (`GET`) operations from `doc` (`ING-010`, `CMP-030`, `CMP-032`).
 pub fn extract_operations(doc: &OpenApiDocument) -> Result<Extraction, ExtractError> {
+    extract_operations_with_auth_query(doc, None)
+}
+
+/// Deterministically extracts read (`GET`) operations from `doc`, skipping any operation whose
+/// query parameters collide case-insensitively with `reserved_query_param` (`CMP-031`, `INV-15`).
+pub fn extract_operations_with_auth_query(
+    doc: &OpenApiDocument,
+    reserved_query_param: Option<&str>,
+) -> Result<Extraction, ExtractError> {
     let Some(paths_obj) = doc.root().get("paths").and_then(Value::as_object) else {
         return Err(ExtractError::MissingField("paths"));
     };
@@ -672,6 +681,14 @@ pub fn extract_operations(doc: &OpenApiDocument) -> Result<Extraction, ExtractEr
                 skip_reason = Some(format!("parameter `{p_name}` is missing `in`"));
                 break;
             };
+
+            if p_in == "query"
+                && reserved_query_param
+                    .is_some_and(|reserved| p_name.eq_ignore_ascii_case(reserved))
+            {
+                skip_reason = Some("auth_parameter_collision".to_owned());
+                break;
+            }
 
             if p_in == "cookie" {
                 skip_reason = Some(format!("cookie parameter `{p_name}` is unsupported in v0"));

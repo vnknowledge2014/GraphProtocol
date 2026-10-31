@@ -28,10 +28,13 @@ use thiserror::Error;
 use tokio::sync::{OwnedSemaphorePermit, Semaphore};
 use tokio::time::{Instant, sleep_until};
 
-use crate::auth::{AuthConfig, AuthError, CredentialSource, ResolvedAuth, ValidatedBaseUrl};
+use crate::auth::{
+    ApiKeyLocation, AuthConfig, AuthError, CredentialSource, ResolvedAuth, ValidatedBaseUrl,
+};
 use crate::document::{ExtractError, ExtractLimits, OpenApiDocument};
 use crate::extract::{
-    ExtractedOperation, ExtractionReport, NativeBatchSpec, ParamLocation, extract_operations,
+    ExtractedOperation, ExtractionReport, NativeBatchSpec, ParamLocation,
+    extract_operations_with_auth_query,
 };
 use crate::request::{BuiltRequest, build_request, json_number_as_exact_i64, validate_arguments};
 use crate::schema::{GeneratedOperationSchema, build_schema_bundle};
@@ -764,7 +767,15 @@ impl<U: Upstream> OpenApiConnector<U> {
         let auth = ResolvedAuth::resolve(&config.auth, credentials)?;
 
         let doc = OpenApiDocument::parse_with_limits(doc_bytes, config.extract_limits)?;
-        let extraction = extract_operations(&doc)?;
+        let reserved_query_param = match &config.auth {
+            AuthConfig::ApiKey {
+                location: ApiKeyLocation::Query,
+                name,
+                ..
+            } => Some(name.as_str()),
+            _ => None,
+        };
+        let extraction = extract_operations_with_auth_query(&doc, reserved_query_param)?;
         let bundle = build_schema_bundle(&doc, &extraction)?;
 
         let mut operations = BTreeMap::new();
@@ -1633,7 +1644,8 @@ mod tests {
     use tokio::time::Instant;
 
     use super::*;
-    use crate::auth::{ApiKeyLocation, StaticCredentialSource};
+    use crate::auth::StaticCredentialSource;
+    use crate::extract::extract_operations;
     use crate::fixture::{FIXTURE_BLOB_COUNT, FIXTURE_CUSTOMER_COUNT, FixtureService};
     use crate::upstream::UpstreamResponse;
 
@@ -3551,5 +3563,181 @@ mod tests {
                 Some(i64::from(idx) + 1)
             );
         }
+    }
+
+    // spec: CMP-031, INV-15
+    #[tokio::test]
+    async fn t11_auth_parameter_collision_retains_only_connector_header_and_skips_query_operation()
+    {
+        // 1. Header collision (`A05`): operation declares `X-Api-Key`, caller passes spoofed value,
+        //    upstream receives ONLY the connector's credential header (count == 1).
+        let hdr_doc = json!({
+            "openapi": "3.1.0",
+            "info": { "title": "HdrCollision", "version": "1.0.0" },
+            "paths": {
+                "/customers/{id}": {
+                    "get": {
+                        "operationId": "customer",
+                        "parameters": [
+                            { "name": "id", "in": "path", "required": true, "schema": { "type": "integer", "minimum": 1 } },
+                            { "name": "X-Api-Key", "in": "header", "required": false, "schema": { "type": "string" } }
+                        ],
+                        "responses": {
+                            "200": {
+                                "description": "ok",
+                                "content": {
+                                    "application/json": {
+                                        "schema": { "type": "object", "properties": { "id": { "type": "integer" } } }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        });
+        let hdr_fixture = Arc::new(FixtureService::new());
+        let mut creds = StaticCredentialSource::new();
+        creds.insert("hdr_secret", "CONNECTOR_REAL_HEADER_CRED");
+        creds.insert("qry_secret", "CONNECTOR_REAL_QUERY_CRED");
+
+        let hdr_conn = OpenApiConnector::from_document_bytes(
+            &serde_json::to_vec(&hdr_doc).expect("json"),
+            OpenApiConfig {
+                auth: AuthConfig::ApiKey {
+                    location: ApiKeyLocation::Header,
+                    name: "x-api-key".to_owned(),
+                    credential: "hdr_secret".to_owned(),
+                },
+                ..OpenApiConfig::default()
+            },
+            &creds,
+            Arc::clone(&hdr_fixture),
+        )
+        .expect("build hdr_conn");
+
+        let _ = collect_stream(
+            hdr_conn
+                .query(
+                    QueryRequest {
+                        operation: "customer".to_owned(),
+                        arguments: Some(json_struct(&json!({
+                            "id": 1,
+                            "X-Api-Key": "CALLER_SPOOFED_HEADER_CRED"
+                        }))),
+                        ..QueryRequest::default()
+                    },
+                    scope_in(Duration::from_secs(5)),
+                )
+                .await
+                .expect("query starts"),
+        )
+        .await
+        .expect("query completes");
+
+        let hdr_recorded = hdr_fixture.recorded_requests();
+        assert_eq!(hdr_recorded.len(), 1);
+        let matching_headers: Vec<&(String, String)> = hdr_recorded[0]
+            .headers
+            .iter()
+            .filter(|(k, _)| k.eq_ignore_ascii_case("x-api-key"))
+            .collect();
+        assert_eq!(
+            matching_headers.len(),
+            1,
+            "exactly one x-api-key header must reach upstream: {:?}",
+            hdr_recorded[0].headers
+        );
+        assert_eq!(matching_headers[0].1, "CONNECTOR_REAL_HEADER_CRED");
+
+        // 2. Query collision (`R-4`): operation declaring query param colliding case-insensitively
+        //    with configured ApiKey query name is skipped with `auth_parameter_collision`.
+        let qry_doc = json!({
+            "openapi": "3.1.0",
+            "info": { "title": "QryCollision", "version": "1.0.0" },
+            "paths": {
+                "/colliding": {
+                    "get": {
+                        "operationId": "colliding",
+                        "parameters": [
+                            { "name": "API_KEY", "in": "query", "required": false, "schema": { "type": "string" } }
+                        ],
+                        "responses": { "200": { "description": "ok" } }
+                    }
+                },
+                "/customers/{id}": {
+                    "get": {
+                        "operationId": "customer",
+                        "parameters": [
+                            { "name": "id", "in": "path", "required": true, "schema": { "type": "integer", "minimum": 1 } }
+                        ],
+                        "responses": { "200": { "description": "ok" } }
+                    }
+                }
+            }
+        });
+        let qry_fixture = Arc::new(FixtureService::new());
+        let qry_conn = OpenApiConnector::from_document_bytes(
+            &serde_json::to_vec(&qry_doc).expect("json"),
+            OpenApiConfig {
+                auth: AuthConfig::ApiKey {
+                    location: ApiKeyLocation::Query,
+                    name: "api_key".to_owned(),
+                    credential: "qry_secret".to_owned(),
+                },
+                ..OpenApiConfig::default()
+            },
+            &creds,
+            Arc::clone(&qry_fixture),
+        )
+        .expect("build qry_conn");
+
+        let report = qry_conn.extraction_report();
+        assert_eq!(report.skipped.len(), 1);
+        assert_eq!(report.skipped[0].path, "/colliding");
+        assert_eq!(report.skipped[0].operation_id.as_deref(), Some("colliding"));
+        assert_eq!(report.skipped[0].reason, "auth_parameter_collision");
+
+        let op_names: Vec<&str> = qry_conn
+            .description()
+            .operations
+            .iter()
+            .map(|o| o.name.as_str())
+            .collect();
+        assert_eq!(op_names, vec!["customer"]);
+
+        let skipped_call = qry_conn
+            .query(
+                QueryRequest {
+                    operation: "colliding".to_owned(),
+                    ..QueryRequest::default()
+                },
+                scope_in(Duration::from_secs(5)),
+            )
+            .await
+            .err()
+            .expect("colliding op must not be callable");
+        assert_eq!(skipped_call.code, NgcErrorCode::NotFound);
+        assert_eq!(qry_fixture.request_count(), 0);
+
+        let _ = collect_stream(
+            qry_conn
+                .query(
+                    QueryRequest {
+                        operation: "customer".to_owned(),
+                        arguments: Some(json_struct(&json!({ "id": 1 }))),
+                        ..QueryRequest::default()
+                    },
+                    scope_in(Duration::from_secs(5)),
+                )
+                .await
+                .expect("customer starts"),
+        )
+        .await
+        .expect("customer completes");
+        assert_eq!(
+            qry_fixture.recorded_requests()[0].path_and_query,
+            "/customers/1?api_key=CONNECTOR_REAL_QUERY_CRED"
+        );
     }
 }
