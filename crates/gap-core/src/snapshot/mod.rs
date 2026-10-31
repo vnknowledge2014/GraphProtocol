@@ -311,12 +311,99 @@ impl Default for BuildProvenance {
     }
 }
 
+/// GraphQL `(type_name, field)` coordinate inside a composed supergraph (`RUN-009`, `RUN-011`).
+#[derive(
+    Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, JsonSchema,
+)]
+#[serde(deny_unknown_fields)]
+pub struct FieldCoordinate {
+    /// Enclosing GraphQL object type name (e.g. `"Query"`, `"shop_Customer"`).
+    pub type_name: String,
+    /// Field name on `type_name`.
+    pub field: String,
+}
+
+impl FieldCoordinate {
+    /// Constructs a [`FieldCoordinate`] for `type_name.field`.
+    #[must_use]
+    pub fn new(type_name: impl Into<String>, field: impl Into<String>) -> Self {
+        Self {
+            type_name: type_name.into(),
+            field: field.into(),
+        }
+    }
+}
+
+impl fmt::Display for FieldCoordinate {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}.{}", self.type_name, self.field)
+    }
+}
+
+/// Immutable field-ownership map from [`FieldCoordinate`] to owning [`BranchUid`] (`RUN-009`, `RUN-011`).
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct FieldOwnership {
+    owners: BTreeMap<FieldCoordinate, BranchUid>,
+}
+
+impl FieldOwnership {
+    /// Returns an empty [`FieldOwnership`] map.
+    #[must_use]
+    pub fn empty() -> Self {
+        Self {
+            owners: BTreeMap::new(),
+        }
+    }
+
+    /// Wraps an immutable `BTreeMap` of [`FieldCoordinate`] -> [`BranchUid`] entries.
+    #[must_use]
+    pub const fn new(owners: BTreeMap<FieldCoordinate, BranchUid>) -> Self {
+        Self { owners }
+    }
+
+    /// Resolves the owning [`BranchUid`] for `coord`, if owned by a branch (`RUN-011`).
+    #[must_use]
+    pub fn owner(&self, coord: &FieldCoordinate) -> Option<BranchUid> {
+        self.owners.get(coord).copied()
+    }
+
+    /// Iterates in deterministic `(type_name, field)` order over coordinates owned by `branch_uid`.
+    pub fn fields_of(&self, branch_uid: BranchUid) -> impl Iterator<Item = &FieldCoordinate> + '_ {
+        self.owners
+            .iter()
+            .filter_map(move |(coord, &uid)| (uid == branch_uid).then_some(coord))
+    }
+
+    /// Number of branch-owned field coordinates in this map.
+    #[must_use]
+    pub fn len(&self) -> usize {
+        self.owners.len()
+    }
+
+    /// Returns `true` if no field coordinates are registered.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.owners.is_empty()
+    }
+
+    /// Iterates over all `(FieldCoordinate, BranchUid)` pairs in deterministic order.
+    pub fn iter(&self) -> std::collections::btree_map::Iter<'_, FieldCoordinate, BranchUid> {
+        self.owners.iter()
+    }
+
+    /// Borrows the underlying sorted map.
+    #[must_use]
+    pub const fn as_map(&self) -> &BTreeMap<FieldCoordinate, BranchUid> {
+        &self.owners
+    }
+}
+
 /// Immutable compiled supergraph snapshot (`spec/01-architecture.md` §4, `ARC-005`, `ARC-006`).
 ///
-/// All collections and large artifacts are wrapped in [`Arc`] so publishing generation `g + 1`
-/// structurally shares unchanged [`BranchDescriptor`]s, [`CapabilityGroup`]s, [`JoinGraph`], and
-/// [`apollo_compiler::Schema`] without copying (`ARC-005`), and contains zero live telemetry state
-/// (`ARC-006`).
+/// Persistent `im::OrdMap` collections and [`Arc`]-wrapped artifacts allow publishing generation
+/// `g + 1` to structurally share unchanged [`BranchDescriptor`]s, [`CapabilityGroup`]s,
+/// [`FieldOwnership`], [`JoinGraph`], and [`apollo_compiler::Schema`] without copying (`ARC-005`),
+/// while containing zero live telemetry state (`ARC-006`).
 #[derive(Clone)]
 pub struct Snapshot {
     /// Monotonically increasing generation number (`spec/00-conventions.md` §6).
@@ -325,12 +412,14 @@ pub struct Snapshot {
     pub format_version: u32,
     /// Owning tenant (`INV-09`, `ADR-018`).
     pub tenant_id: TenantId,
-    /// Registered branches keyed by stable [`BranchUid`].
-    pub branches: Arc<BTreeMap<BranchUid, Arc<BranchDescriptor>>>,
-    /// Interchangeable capability groups keyed by [`GroupId`].
-    pub groups: Arc<BTreeMap<GroupId, Arc<CapabilityGroup>>>,
+    /// Registered branches keyed by stable [`BranchUid`] (`ARC-005`).
+    pub branches: im::OrdMap<BranchUid, Arc<BranchDescriptor>>,
+    /// Interchangeable capability groups keyed by [`GroupId`] (`ARC-005`).
+    pub groups: im::OrdMap<GroupId, Arc<CapabilityGroup>>,
     /// Composed supergraph GraphQL schema (`apollo_compiler::Schema`).
     pub schema: Arc<Schema>,
+    /// Deterministic field-ownership table consistent with `@branch` directives (`RUN-009`, `RUN-011`).
+    pub ownership: Arc<FieldOwnership>,
     /// Cross-branch join graph (`INV-06`).
     pub joins: Arc<JoinGraph>,
     /// Hybrid lexical/vector discovery index (`ADR-010`).
@@ -355,6 +444,7 @@ impl fmt::Debug for Snapshot {
             .field("tenant_id", &self.tenant_id)
             .field("branch_count", &self.branches.len())
             .field("group_count", &self.groups.len())
+            .field("owned_fields", &self.ownership.len())
             .field("schema_type_count", &self.schema.types.len())
             .field("active_joins", &self.joins.active_edge_count())
             .field("index_elements", &self.index.element_count())
@@ -381,9 +471,10 @@ impl Snapshot {
             generation,
             format_version: SNAPSHOT_FORMAT_VERSION,
             tenant_id,
-            branches: Arc::new(BTreeMap::new()),
-            groups: Arc::new(BTreeMap::new()),
+            branches: im::OrdMap::new(),
+            groups: im::OrdMap::new(),
             schema: Arc::new(Schema::new()),
+            ownership: Arc::new(FieldOwnership::empty()),
             joins: Arc::new(JoinGraph::empty()),
             index: Arc::new(EmptyElementSearch),
             policy_version: 0,
@@ -530,12 +621,12 @@ mod tests {
     fn arc_005_snapshot_structurally_shares_unchanged_branches_across_generations() {
         let billing = sample_branch("billing");
         let crm = sample_branch("crm");
-        let mut map_g1 = BTreeMap::new();
+        let mut map_g1 = im::OrdMap::new();
         map_g1.insert(billing.uid, Arc::clone(&billing));
         map_g1.insert(crm.uid, Arc::clone(&crm));
 
         let mut g1 = Snapshot::empty(1);
-        g1.branches = Arc::new(map_g1);
+        g1.branches = map_g1;
         g1.schema = Arc::new(
             Schema::parse("type Query { ok: Boolean }", "supergraph.graphql").expect("valid SDL"),
         );
@@ -547,10 +638,8 @@ mod tests {
             "gap-snapshot",
             Some(ProposalId::new_v7()),
         );
-        let mut map_g2 = (*g1.branches).clone();
         let shipping = sample_branch("shipping");
-        map_g2.insert(shipping.uid, Arc::clone(&shipping));
-        g2.branches = Arc::new(map_g2);
+        g2.branches.insert(shipping.uid, Arc::clone(&shipping));
 
         assert_eq!(g1.generation, 1);
         assert_eq!(g2.generation, 2);
@@ -564,6 +653,69 @@ mod tests {
             g2.branches.get(&billing.uid).expect("billing in g2"),
         ));
         assert!(Arc::ptr_eq(&g1.schema, &g2.schema));
+        assert!(Arc::ptr_eq(&g1.ownership, &g2.ownership));
+
+        // Large OrdMap test: cloning and inserting 1 branch into a 500-branch OrdMap does not
+        // clone untouched leaf nodes (most descriptors keep strong_count == 2: vec + shared leaf).
+        let many: Vec<Arc<BranchDescriptor>> = (0..500)
+            .map(|i| sample_branch(&format!("br-{i:04}")))
+            .collect();
+        let mut ord_g1 = im::OrdMap::new();
+        for b in &many {
+            ord_g1.insert(b.uid, Arc::clone(b));
+        }
+        let mut ord_g2 = ord_g1.clone();
+        let extra = sample_branch("br-extra");
+        ord_g2.insert(extra.uid, extra);
+
+        let untouched_leaves = many.iter().filter(|b| Arc::strong_count(b) == 2).count();
+        assert!(
+            untouched_leaves > 400,
+            "im::OrdMap must share untouched B-tree leaf nodes (got {untouched_leaves}/500)"
+        );
+        for b in &many {
+            assert!(Arc::ptr_eq(
+                ord_g1.get(&b.uid).expect("in g1"),
+                ord_g2.get(&b.uid).expect("in g2"),
+            ));
+        }
+    }
+
+    // spec: RUN-009, RUN-011, ARC-005
+    #[test]
+    fn run_011_field_ownership_lookup_fields_of_and_snapshot_default() {
+        let empty_snap = Snapshot::empty(1);
+        assert!(empty_snap.ownership.is_empty());
+        assert_eq!(empty_snap.ownership.len(), 0);
+
+        let shop_uid = BranchUid::new_v7();
+        let crm_uid = BranchUid::new_v7();
+        let mut entries = BTreeMap::new();
+        entries.insert(FieldCoordinate::new("Query", "customer"), shop_uid);
+        entries.insert(FieldCoordinate::new("shop_Customer", "id"), shop_uid);
+        entries.insert(FieldCoordinate::new("Query", "lead"), crm_uid);
+
+        let ownership = FieldOwnership::new(entries);
+        assert!(!ownership.is_empty());
+        assert_eq!(ownership.len(), 3);
+        assert_eq!(
+            ownership.owner(&FieldCoordinate::new("Query", "customer")),
+            Some(shop_uid)
+        );
+        assert_eq!(
+            ownership.owner(&FieldCoordinate::new("Query", "unknown")),
+            None
+        );
+
+        let shop_fields: Vec<FieldCoordinate> = ownership.fields_of(shop_uid).cloned().collect();
+        assert_eq!(
+            shop_fields,
+            vec![
+                FieldCoordinate::new("Query", "customer"),
+                FieldCoordinate::new("shop_Customer", "id"),
+            ]
+        );
+        assert_eq!(ownership.fields_of(BranchUid::new_v7()).count(), 0);
     }
 
     // spec: INV-09, ARC-006 (ADR-018)

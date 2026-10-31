@@ -607,8 +607,8 @@ impl SnapshotBuilder {
         });
 
         let mut snap = Snapshot::empty_for_tenant(self.generation, self.tenant_id);
-        snap.branches = Arc::new(branches_map);
-        snap.groups = Arc::new(groups_map);
+        snap.branches = branches_map.into();
+        snap.groups = groups_map.into();
         snap.policy_version = self.policy_version;
         snap.calibration = self.calibration;
         snap.branch_set_hash = branch_set_hash;

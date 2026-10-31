@@ -103,7 +103,7 @@ pub enum ErrorCode {
     /// Operation disallowed in current mode, e.g. persisted-only (`GAP_OPERATION_NOT_ALLOWED`).
     #[serde(rename = "GAP_OPERATION_NOT_ALLOWED")]
     OperationNotAllowed,
-    /// Non-fatal warning that an optional directive was ignored (`GAP_DIRECTIVE_IGNORED`).
+    /// Non-fatal warning that a composer-managed or optional directive was ignored (`GAP_DIRECTIVE_IGNORED`, `GQL-030`).
     #[serde(rename = "GAP_DIRECTIVE_IGNORED")]
     DirectiveIgnored,
     /// Planned cost exceeds `max_cost_units` (`GAP_COMPLEXITY_EXCEEDED`).
@@ -214,13 +214,16 @@ pub enum ErrorCode {
     /// Branch attempted to register a GAP reserved name (`GAP_RESERVED_NAME`).
     #[serde(rename = "GAP_RESERVED_NAME")]
     ReservedName,
+    /// Two branches claimed the same root field or produced a colliding type name (`GAP_AMBIGUOUS_FIELD`, `RUN-009`, `RUN-011`).
+    #[serde(rename = "GAP_AMBIGUOUS_FIELD")]
+    AmbiguousField,
     /// Unexpected internal error; details logged under `correlationId` (`GAP_INTERNAL`).
     #[serde(rename = "GAP_INTERNAL")]
     Internal,
 }
 
 impl ErrorCode {
-    /// Exhaustive list of all 47 [`ErrorCode`] variants in `spec/02-gap-ql.md` §10.
+    /// Exhaustive list of all 48 [`ErrorCode`] variants in `spec/02-gap-ql.md` §10.
     pub const ALL: &'static [Self] = &[
         Self::ParseError,
         Self::ValidationError,
@@ -268,6 +271,7 @@ impl ErrorCode {
         Self::HopLimit,
         Self::CycleUnbounded,
         Self::ReservedName,
+        Self::AmbiguousField,
         Self::Internal,
     ];
 
@@ -321,6 +325,7 @@ impl ErrorCode {
             Self::HopLimit => "GAP_HOP_LIMIT",
             Self::CycleUnbounded => "GAP_CYCLE_UNBOUNDED",
             Self::ReservedName => "GAP_RESERVED_NAME",
+            Self::AmbiguousField => "GAP_AMBIGUOUS_FIELD",
             Self::Internal => "GAP_INTERNAL",
         }
     }
@@ -337,8 +342,7 @@ impl ErrorCode {
             | Self::TypeMismatch
             | Self::UnsupportedFeature
             | Self::PersistedOperationNotFound
-            | Self::OperationNotAllowed
-            | Self::DirectiveIgnored => ErrorClass::Request,
+            | Self::OperationNotAllowed => ErrorClass::Request,
             Self::ComplexityExceeded
             | Self::DepthExceeded
             | Self::ResponseTooLarge
@@ -370,7 +374,10 @@ impl ErrorCode {
             Self::TaskNotFound | Self::TaskInvalidState | Self::LoopDetected | Self::HopLimit => {
                 ErrorClass::TasksPeers
             }
-            Self::CycleUnbounded | Self::ReservedName => ErrorClass::Composition,
+            Self::CycleUnbounded
+            | Self::ReservedName
+            | Self::AmbiguousField
+            | Self::DirectiveIgnored => ErrorClass::Composition,
             Self::Internal => ErrorClass::Internal,
         }
     }
@@ -862,7 +869,9 @@ impl From<GapError> for NgcErrorInfo {
             | ErrorCode::ComplexityExceeded
             | ErrorCode::DepthExceeded
             | ErrorCode::CycleUnbounded
-            | ErrorCode::ReservedName => NgcErrorCode::InvalidArgument,
+            | ErrorCode::ReservedName
+            | ErrorCode::AmbiguousField
+            | ErrorCode::DirectiveIgnored => NgcErrorCode::InvalidArgument,
             ErrorCode::PersistedOperationNotFound | ErrorCode::TaskNotFound => {
                 NgcErrorCode::NotFound
             }
@@ -892,9 +901,9 @@ impl From<GapError> for NgcErrorInfo {
             }
             ErrorCode::Cancelled => NgcErrorCode::Cancelled,
             ErrorCode::BranchUnavailable => NgcErrorCode::Unavailable,
-            ErrorCode::UnsupportedFeature
-            | ErrorCode::DryRunUnsupported
-            | ErrorCode::DirectiveIgnored => NgcErrorCode::Unimplemented,
+            ErrorCode::UnsupportedFeature | ErrorCode::DryRunUnsupported => {
+                NgcErrorCode::Unimplemented
+            }
             ErrorCode::IdempotencyConflict => NgcErrorCode::Conflict,
             ErrorCode::BranchError => NgcErrorCode::UpstreamError,
             ErrorCode::Internal
@@ -955,8 +964,8 @@ mod tests {
     #[test]
     fn error_code_enum_matches_spec_02_section_10_exactly_and_serializes_to_extensions_code() {
         let spec_codes = extract_section_10_codes_from_spec();
-        assert_eq!(spec_codes.len(), 47);
-        assert_eq!(ErrorCode::ALL.len(), 47);
+        assert_eq!(spec_codes.len(), 48);
+        assert_eq!(ErrorCode::ALL.len(), 48);
 
         let enum_codes: BTreeSet<String> = ErrorCode::ALL
             .iter()
@@ -978,6 +987,29 @@ mod tests {
         }
 
         assert!(ErrorCode::from_str("GAP_DOES_NOT_EXIST").is_err());
+    }
+
+    // spec: RUN-009, RUN-011, GQL-030 (ADR-023)
+    #[test]
+    fn composition_error_codes_ambiguous_field_and_directive_ignored_honor_spec_02() {
+        assert_eq!(ErrorCode::AmbiguousField.as_str(), "GAP_AMBIGUOUS_FIELD");
+        assert_eq!(ErrorCode::AmbiguousField.class(), ErrorClass::Composition);
+        assert!(!ErrorCode::AmbiguousField.default_retryable());
+        assert_eq!(ErrorCode::AmbiguousField.request_level_http_status(), 200);
+        let ngc_amb = NgcErrorInfo::from(GapError::new(ErrorCode::AmbiguousField, "dup field"));
+        assert_eq!(ngc_amb.code, NgcErrorCode::InvalidArgument);
+
+        assert_eq!(
+            ErrorCode::DirectiveIgnored.as_str(),
+            "GAP_DIRECTIVE_IGNORED"
+        );
+        assert_eq!(ErrorCode::DirectiveIgnored.class(), ErrorClass::Composition);
+        assert!(!ErrorCode::DirectiveIgnored.default_retryable());
+        let ngc_dir = NgcErrorInfo::from(GapError::new(
+            ErrorCode::DirectiveIgnored,
+            "ignored @branch",
+        ));
+        assert_eq!(ngc_dir.code, NgcErrorCode::InvalidArgument);
     }
 
     // spec: GQL-070, GQL-071, GQL-072, INV-15 (ADR-023)
