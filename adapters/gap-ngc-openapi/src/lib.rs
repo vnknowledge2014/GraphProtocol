@@ -41,3 +41,10 @@ pub mod fixture;
 pub mod request;
 pub mod schema;
 pub mod upstream;
+
+pub use auth::{ApiKeyLocation, AuthConfig, AuthError, CredentialSource, StaticCredentialSource};
+pub use connector::{ConnectorBuildError, OpenApiConfig, OpenApiConnector};
+pub use document::{ExtractError, ExtractLimits, OpenApiDocument};
+pub use extract::{Extraction, ExtractionReport, SkippedOperation};
+pub use fixture::FixtureService;
+pub use upstream::{HttpUpstream, Upstream, UpstreamError, UpstreamRequest, UpstreamResponse};

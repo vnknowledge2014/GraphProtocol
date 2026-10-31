@@ -752,6 +752,11 @@ mod tests {
     }
 
     proptest! {
+        #![proptest_config(ProptestConfig {
+            failure_persistence: None,
+            ..ProptestConfig::default()
+        })]
+
         // spec: ING-012
         #[test]
         fn proptest_random_bytes_never_panic(bytes in proptest::collection::vec(any::<u8>(), 0..4096)) {
