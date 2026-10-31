@@ -8,6 +8,22 @@
     clippy::unimplemented
 )]
 
+pub mod cache;
+pub mod explain;
+pub mod ir;
 pub mod join;
+pub mod planner;
 pub mod pushdown;
 pub mod traverse;
+
+pub use crate::cache::{
+    CachedPlan, DEFAULT_ESTIMATED_PLAN_BYTES, DEFAULT_PLAN_CACHE_MAX_ENTRIES,
+    DEFAULT_PLAN_CACHE_TTL_SECS, PlanCache, PlanCacheConfig, PlanCacheStatus,
+};
+pub use crate::explain::{PlanExplanation, explain};
+pub use crate::ir::{
+    ArgValue, Fetch, GateNode, JoinCardinality, JoinKeyPair, JoinNode, JoinPlanStrategy,
+    MutateNode, Plan, PlanCost, PlanNode, Pushdown, SelectionDirective, SelectionField,
+    TraverseNode, plan_hash, plan_to_value,
+};
+pub use crate::planner::{PlanConfig, plan, plan_query};
