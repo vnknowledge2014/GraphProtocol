@@ -4846,4 +4846,536 @@ mod tests {
         .expect("limit=0 query completes");
         assert_eq!(fixture.recorded_requests()[0].path_and_query, "/customers");
     }
+
+    // spec: NGC-021, NGC-022, CMP-030, CMP-032, ING-010
+    #[tokio::test]
+    async fn t21_pagination_without_maximum_below_two_and_above_one_minimum() {
+        #[derive(Default)]
+        struct PaginationBoundsUpstream {
+            recorded: Mutex<Vec<String>>,
+        }
+
+        impl PaginationBoundsUpstream {
+            fn take_recorded(&self) -> Vec<String> {
+                std::mem::take(
+                    &mut *self
+                        .recorded
+                        .lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner),
+                )
+            }
+
+            fn slice_rows(total: usize, offset: usize, limit: usize) -> Vec<Value> {
+                (1..=total)
+                    .skip(offset)
+                    .take(limit)
+                    .map(|id| json!({ "id": id as i64, "label": format!("Item {id}") }))
+                    .collect()
+            }
+        }
+
+        impl Upstream for Arc<PaginationBoundsUpstream> {
+            async fn send(&self, req: UpstreamRequest) -> Result<UpstreamResponse, UpstreamError> {
+                self.recorded
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .push(req.path_and_query.clone());
+
+                let (path, query_opt) = match req.path_and_query.split_once('?') {
+                    Some((p, q)) => (p, Some(q)),
+                    None => (req.path_and_query.as_str(), None),
+                };
+                let mut offset: usize = 0;
+                let mut limit_opt: Option<usize> = None;
+                if let Some(q) = query_opt {
+                    for pair in q.split('&').filter(|s| !s.is_empty()) {
+                        if let Some((k, v)) = pair.split_once('=') {
+                            if k == "offset" {
+                                offset = v.parse::<usize>().unwrap_or(0);
+                            } else if k == "limit" {
+                                limit_opt = v.parse::<usize>().ok();
+                            }
+                        }
+                    }
+                }
+
+                let mut headers = HeaderMap::new();
+                headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
+
+                let rows = match path {
+                    "/unbounded" => {
+                        PaginationBoundsUpstream::slice_rows(250, offset, limit_opt.unwrap_or(250))
+                    }
+                    "/max-one" => {
+                        PaginationBoundsUpstream::slice_rows(3, offset, limit_opt.unwrap_or(1))
+                    }
+                    "/min-ten" => {
+                        PaginationBoundsUpstream::slice_rows(12, offset, limit_opt.unwrap_or(12))
+                    }
+                    "/tight-cap" => {
+                        PaginationBoundsUpstream::slice_rows(50, offset, limit_opt.unwrap_or(35))
+                    }
+                    _ => {
+                        return Ok(UpstreamResponse {
+                            status: StatusCode::NOT_FOUND,
+                            headers,
+                            body: b"{}".to_vec(),
+                        });
+                    }
+                };
+
+                Ok(UpstreamResponse {
+                    status: StatusCode::OK,
+                    headers,
+                    body: serde_json::to_vec(&rows).expect("serialize rows"),
+                })
+            }
+        }
+
+        let fixture_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../../tests/fixtures/openapi/pagination_bounds.openapi.json");
+        let doc_bytes = std::fs::read(fixture_path).expect("read pagination_bounds.openapi.json");
+
+        // Verify extraction report records `pagination_unavailable_limit_maximum` while keeping `/max-one` exposed.
+        let parsed_doc = OpenApiDocument::parse(&doc_bytes).expect("parse doc");
+        let extracted = extract_operations(&parsed_doc).expect("extract ops");
+        assert_eq!(
+            extracted.report.notes,
+            vec![crate::extract::ExtractionNote {
+                path: "/max-one".to_owned(),
+                method: "GET".to_owned(),
+                operation_id: Some("singleton_items".to_owned()),
+                reason: "pagination_unavailable_limit_maximum".to_owned(),
+            }]
+        );
+        let unbounded_op = extracted
+            .operations
+            .iter()
+            .find(|o| o.name == "unbounded_items")
+            .expect("unbounded_items");
+        assert!(unbounded_op.has_offset_pagination);
+        assert_eq!(unbounded_op.limit_maximum, None);
+        assert_eq!(unbounded_op.limit_minimum, Some(1));
+
+        let singleton_op = extracted
+            .operations
+            .iter()
+            .find(|o| o.name == "singleton_items")
+            .expect("singleton_items remains exposed");
+        assert!(!singleton_op.has_offset_pagination);
+        assert_eq!(singleton_op.limit_maximum, None);
+        assert_eq!(singleton_op.limit_minimum, None);
+
+        let min_ten_op = extracted
+            .operations
+            .iter()
+            .find(|o| o.name == "min_ten_items")
+            .expect("min_ten_items");
+        assert!(min_ten_op.has_offset_pagination);
+        assert_eq!(min_ten_op.limit_maximum, Some(80));
+        assert_eq!(min_ten_op.limit_minimum, Some(10));
+
+        let upstream = Arc::new(PaginationBoundsUpstream::default());
+        let conn = OpenApiConnector::from_document_bytes(
+            &doc_bytes,
+            OpenApiConfig {
+                max_page_size: 200,
+                ..OpenApiConfig::default()
+            },
+            &StaticCredentialSource::new(),
+            Arc::clone(&upstream),
+        )
+        .expect("build connector");
+
+        // 1. Operation without `maximum`: `P` bounded only by `config.max_page_size` (200),
+        //    so `page.limit = 500` sends `limit=201&offset=0` and returns 200 rows with cursor at 200.
+        let (unbounded_chunks, unbounded_complete) = collect_stream(
+            conn.query(
+                QueryRequest {
+                    operation: "unbounded_items".to_owned(),
+                    page: Some(Page {
+                        cursor: String::new(),
+                        limit: 500,
+                        offset: 0,
+                    }),
+                    ..QueryRequest::default()
+                },
+                scope_in(Duration::from_secs(5)),
+            )
+            .await
+            .expect("unbounded starts"),
+        )
+        .await
+        .expect("unbounded completes");
+        assert_eq!(
+            upstream.take_recorded(),
+            vec!["/unbounded?limit=201&offset=0"]
+        );
+        assert_eq!(unbounded_chunks[0].rows.len(), 200);
+        assert_eq!(unbounded_complete.rows_total, 200);
+        let expected_hash = canonical_args_and_order_hash(&Map::new(), &[]);
+        assert_eq!(
+            decode_and_verify_cursor(
+                &unbounded_complete.next_cursor,
+                "unbounded_items",
+                &expected_hash,
+                "tenant-alpha",
+            )
+            .expect("valid cursor"),
+            200
+        );
+
+        // 2. Operation with `maximum: 1`: not paginated (`page.limit` -> `INVALID_ARGUMENT`),
+        //    while a request without `page` succeeds normally.
+        let page_err = conn
+            .query(
+                QueryRequest {
+                    operation: "singleton_items".to_owned(),
+                    page: Some(Page {
+                        cursor: String::new(),
+                        limit: 1,
+                        offset: 0,
+                    }),
+                    ..QueryRequest::default()
+                },
+                scope_in(Duration::from_secs(5)),
+            )
+            .await
+            .err()
+            .expect("maximum: 1 must reject pagination");
+        assert_eq!(page_err.code, NgcErrorCode::InvalidArgument);
+        assert!(page_err.message().contains("does not support pagination"));
+        assert!(upstream.take_recorded().is_empty());
+
+        let (singleton_chunks, singleton_complete) = collect_stream(
+            conn.query(
+                QueryRequest {
+                    operation: "singleton_items".to_owned(),
+                    ..QueryRequest::default()
+                },
+                scope_in(Duration::from_secs(5)),
+            )
+            .await
+            .expect("unpaged singleton_items starts"),
+        )
+        .await
+        .expect("unpaged singleton_items completes");
+        assert_eq!(upstream.take_recorded(), vec!["/max-one"]);
+        assert_eq!(singleton_chunks[0].rows.len(), 1);
+        assert_eq!(singleton_complete.rows_total, 1);
+        assert!(singleton_complete.next_cursor.is_empty());
+
+        // 3. Operation with `minimum: 10` and `page.limit = 3`:
+        //    upstream is asked for `limit=10`, response is cut to 3 rows, `next_cursor` points at offset 3,
+        //    following it returns the next 3 rows (`[4, 5, 6]`), and draining to the end yields all 12 rows.
+        let (p1_chunks, p1_complete) = collect_stream(
+            conn.query(
+                QueryRequest {
+                    operation: "min_ten_items".to_owned(),
+                    page: Some(Page {
+                        cursor: String::new(),
+                        limit: 3,
+                        offset: 0,
+                    }),
+                    ..QueryRequest::default()
+                },
+                scope_in(Duration::from_secs(5)),
+            )
+            .await
+            .expect("min_ten page 1 starts"),
+        )
+        .await
+        .expect("min_ten page 1 completes");
+        assert_eq!(upstream.take_recorded(), vec!["/min-ten?limit=10&offset=0"]);
+        let p1_ids: Vec<i64> = p1_chunks[0]
+            .rows
+            .iter()
+            .map(|r| json_number_as_exact_i64(&prost_struct_to_json_map(r)["id"]).expect("i64"))
+            .collect();
+        assert_eq!(p1_ids, vec![1, 2, 3]);
+        assert_eq!(
+            decode_and_verify_cursor(
+                &p1_complete.next_cursor,
+                "min_ten_items",
+                &expected_hash,
+                "tenant-alpha",
+            )
+            .expect("page 1 cursor"),
+            3
+        );
+
+        let (p2_chunks, p2_complete) = collect_stream(
+            conn.query(
+                QueryRequest {
+                    operation: "min_ten_items".to_owned(),
+                    page: Some(Page {
+                        cursor: p1_complete.next_cursor.clone(),
+                        limit: 3,
+                        offset: 0,
+                    }),
+                    ..QueryRequest::default()
+                },
+                scope_in(Duration::from_secs(5)),
+            )
+            .await
+            .expect("min_ten page 2 starts"),
+        )
+        .await
+        .expect("min_ten page 2 completes");
+        assert_eq!(upstream.take_recorded(), vec!["/min-ten?limit=10&offset=3"]);
+        let p2_ids: Vec<i64> = p2_chunks[0]
+            .rows
+            .iter()
+            .map(|r| json_number_as_exact_i64(&prost_struct_to_json_map(r)["id"]).expect("i64"))
+            .collect();
+        assert_eq!(p2_ids, vec![4, 5, 6]);
+        assert_eq!(
+            decode_and_verify_cursor(
+                &p2_complete.next_cursor,
+                "min_ten_items",
+                &expected_hash,
+                "tenant-alpha",
+            )
+            .expect("page 2 cursor"),
+            6
+        );
+
+        let (p3_chunks, p3_complete) = collect_stream(
+            conn.query(
+                QueryRequest {
+                    operation: "min_ten_items".to_owned(),
+                    page: Some(Page {
+                        cursor: p2_complete.next_cursor.clone(),
+                        limit: 3,
+                        offset: 0,
+                    }),
+                    ..QueryRequest::default()
+                },
+                scope_in(Duration::from_secs(5)),
+            )
+            .await
+            .expect("min_ten page 3 starts"),
+        )
+        .await
+        .expect("min_ten page 3 completes");
+        assert_eq!(upstream.take_recorded(), vec!["/min-ten?limit=10&offset=6"]);
+        let p3_ids: Vec<i64> = p3_chunks[0]
+            .rows
+            .iter()
+            .map(|r| json_number_as_exact_i64(&prost_struct_to_json_map(r)["id"]).expect("i64"))
+            .collect();
+        assert_eq!(p3_ids, vec![7, 8, 9]);
+
+        let (p4_chunks, p4_complete) = collect_stream(
+            conn.query(
+                QueryRequest {
+                    operation: "min_ten_items".to_owned(),
+                    page: Some(Page {
+                        cursor: p3_complete.next_cursor.clone(),
+                        limit: 3,
+                        offset: 0,
+                    }),
+                    ..QueryRequest::default()
+                },
+                scope_in(Duration::from_secs(5)),
+            )
+            .await
+            .expect("min_ten page 4 starts"),
+        )
+        .await
+        .expect("min_ten page 4 completes");
+        assert_eq!(upstream.take_recorded(), vec!["/min-ten?limit=10&offset=9"]);
+        let p4_ids: Vec<i64> = p4_chunks[0]
+            .rows
+            .iter()
+            .map(|r| json_number_as_exact_i64(&prost_struct_to_json_map(r)["id"]).expect("i64"))
+            .collect();
+        assert_eq!(p4_ids, vec![10, 11, 12]);
+        assert!(p4_complete.next_cursor.is_empty());
+    }
+
+    // spec: NGC-010, NGC-021, CMP-030, CMP-032
+    #[tokio::test]
+    async fn t22_describe_max_page_size_reflects_min_across_paginated_operations() {
+        let fixture = Arc::new(FixtureService::new());
+
+        // 1. Shop document (`customers` maximum=200, `blobs` maximum=200) with default `max_page_size = 200` -> 199.
+        let shop_conn = OpenApiConnector::from_document_bytes(
+            &shop_bytes(),
+            OpenApiConfig::default(),
+            &StaticCredentialSource::new(),
+            Arc::clone(&fixture),
+        )
+        .expect("build shop default");
+        let shop_desc = shop_conn
+            .describe(DescribeRequest::default(), scope_in(Duration::from_secs(5)))
+            .await
+            .expect("describe shop default");
+        assert_eq!(
+            shop_desc
+                .description
+                .expect("description")
+                .limits
+                .expect("limits")
+                .max_page_size,
+            199,
+            "shop.openapi.json must advertise 199"
+        );
+
+        // 2. Purpose-built document (`unbounded`: None, `min-ten`: 80 -> 79, `tight-cap`: 35 -> 34, `max-one`: unpaginated) -> 34.
+        let bounds_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../../tests/fixtures/openapi/pagination_bounds.openapi.json");
+        let bounds_bytes = std::fs::read(bounds_path).expect("read pagination_bounds.openapi.json");
+        let bounds_conn = OpenApiConnector::from_document_bytes(
+            &bounds_bytes,
+            OpenApiConfig::default(),
+            &StaticCredentialSource::new(),
+            Arc::clone(&fixture),
+        )
+        .expect("build bounds default");
+        let bounds_desc = bounds_conn
+            .describe(DescribeRequest::default(), scope_in(Duration::from_secs(5)))
+            .await
+            .expect("describe bounds");
+        assert_eq!(
+            bounds_desc
+                .description
+                .expect("description")
+                .limits
+                .expect("limits")
+                .max_page_size,
+            34,
+            "min across paginated operations (200, 79, 34) must be 34"
+        );
+
+        // 3. Connector with `config.max_page_size = 50` advertises 50 when tighter than `limit_maximum - 1`.
+        let capped_conn = OpenApiConnector::from_document_bytes(
+            &shop_bytes(),
+            OpenApiConfig {
+                max_page_size: 50,
+                ..OpenApiConfig::default()
+            },
+            &StaticCredentialSource::new(),
+            Arc::clone(&fixture),
+        )
+        .expect("build shop max_page_size=50");
+        let capped_desc = capped_conn
+            .describe(DescribeRequest::default(), scope_in(Duration::from_secs(5)))
+            .await
+            .expect("describe shop max_page_size=50");
+        assert_eq!(
+            capped_desc
+                .description
+                .expect("description")
+                .limits
+                .expect("limits")
+                .max_page_size,
+            50
+        );
+    }
+
+    // spec: NGC-021, NGC-022, CMP-030, CMP-032
+    #[tokio::test]
+    async fn t23_end_to_end_paging_at_advertised_max_page_size_and_small_pages() {
+        let fixture = Arc::new(FixtureService::new());
+        let conn = OpenApiConnector::from_document_bytes(
+            &shop_bytes(),
+            OpenApiConfig::default(),
+            &StaticCredentialSource::new(),
+            Arc::clone(&fixture),
+        )
+        .expect("build");
+
+        let advertised_max = conn
+            .describe(DescribeRequest::default(), scope_in(Duration::from_secs(5)))
+            .await
+            .expect("describe")
+            .description
+            .expect("description")
+            .limits
+            .expect("limits")
+            .max_page_size;
+        assert_eq!(advertised_max, 199);
+
+        let cases = [
+            ("customers", FIXTURE_CUSTOMER_COUNT, advertised_max, 1_u32),
+            ("customers", FIXTURE_CUSTOMER_COUNT, 5, 3_u32),
+            ("blobs", FIXTURE_BLOB_COUNT, advertised_max, 1_u32),
+            ("blobs", FIXTURE_BLOB_COUNT, 5, 8_u32),
+        ];
+
+        for (op_name, expected_total, page_limit, expected_pages) in cases {
+            fixture.clear_recorded();
+            let mut cursor = String::new();
+            let mut pages = 0_u32;
+            let mut seen_ids = Vec::new();
+
+            loop {
+                pages += 1;
+                assert!(
+                    pages <= 32,
+                    "pagination drain did not terminate for {op_name} limit={page_limit}"
+                );
+                let (chunks, complete) = collect_stream(
+                    conn.query(
+                        QueryRequest {
+                            operation: op_name.to_owned(),
+                            page: Some(Page {
+                                cursor: cursor.clone(),
+                                limit: page_limit,
+                                offset: 0,
+                            }),
+                            ..QueryRequest::default()
+                        },
+                        scope_in(Duration::from_secs(5)),
+                    )
+                    .await
+                    .unwrap_or_else(|e| panic!("{op_name} limit={page_limit} page {pages}: {e:?}")),
+                )
+                .await
+                .unwrap_or_else(|e| {
+                    panic!("{op_name} limit={page_limit} stream page {pages}: {e:?}")
+                });
+
+                assert_eq!(complete.upstream_calls, 1);
+                assert!(!complete.truncated);
+                let mut page_row_count = 0_usize;
+                for c in &chunks {
+                    for r in &c.rows {
+                        let m = prost_struct_to_json_map(r);
+                        seen_ids.push(json_number_as_exact_i64(&m["id"]).expect("i64 id"));
+                        page_row_count += 1;
+                    }
+                }
+                assert!(
+                    page_row_count <= page_limit as usize,
+                    "{op_name} limit={page_limit} returned {page_row_count} rows"
+                );
+
+                if complete.next_cursor.is_empty() {
+                    break;
+                }
+                assert_eq!(
+                    page_row_count, page_limit as usize,
+                    "non-final page {pages} for {op_name} must be full"
+                );
+                cursor = complete.next_cursor;
+            }
+
+            let expected_ids: Vec<i64> = (1..=expected_total as i64).collect();
+            assert_eq!(
+                seen_ids, expected_ids,
+                "every row must be returned once for {op_name} limit={page_limit}"
+            );
+            assert_eq!(
+                pages, expected_pages,
+                "page count mismatch for {op_name} limit={page_limit}"
+            );
+            assert_eq!(
+                fixture.request_count(),
+                expected_pages,
+                "upstream call count must equal page count for {op_name} limit={page_limit}"
+            );
+        }
+    }
 }
