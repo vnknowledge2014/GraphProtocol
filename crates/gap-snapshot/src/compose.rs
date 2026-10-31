@@ -307,16 +307,31 @@ fn rewrite_type(
     }
 }
 
+#[derive(Clone, Copy)]
+enum SanitizeTarget {
+    RootField,
+    BranchObject,
+    NonRootField,
+    Other,
+}
+
 fn sanitize_directives(
     directives: &mut AstDirectiveList,
     target_label: &str,
     branch: &BranchInput,
-    is_field: bool,
-    force_t2_side_effect_if_absent: bool,
-    stamp_branch: bool,
+    target: SanitizeTarget,
     sources: &SourceMap,
     warnings: &mut Vec<CompositionWarning>,
 ) {
+    let is_field = matches!(
+        target,
+        SanitizeTarget::RootField | SanitizeTarget::NonRootField
+    );
+    let force_t2_side_effect_if_absent = matches!(target, SanitizeTarget::RootField);
+    let stamp_branch = matches!(
+        target,
+        SanitizeTarget::RootField | SanitizeTarget::BranchObject
+    );
     let mut kept = AstDirectiveList::new();
     for dir in directives.iter() {
         let dname = dir.name.as_str();
@@ -424,9 +439,7 @@ fn rewrite_and_sanitize_input_values(
             &mut arg.directives,
             &label,
             branch,
-            false,
-            false,
-            false,
+            SanitizeTarget::Other,
             sources,
             warnings,
         );
@@ -1195,9 +1208,7 @@ pub fn compose(branches: &[BranchInput]) -> Result<Composition, CompositionError
                         &mut obj.directives,
                         &root_name,
                         branch,
-                        false,
-                        false,
-                        false,
+                        SanitizeTarget::Other,
                         &sources,
                         &mut warnings,
                     );
@@ -1246,9 +1257,7 @@ pub fn compose(branches: &[BranchInput]) -> Result<Composition, CompositionError
                             &mut field.directives,
                             &coord,
                             branch,
-                            true,
-                            true,
-                            true,
+                            SanitizeTarget::RootField,
                             &sources,
                             &mut warnings,
                         );
@@ -1293,9 +1302,7 @@ pub fn compose(branches: &[BranchInput]) -> Result<Composition, CompositionError
                         &mut obj.directives,
                         &root_name,
                         branch,
-                        false,
-                        false,
-                        false,
+                        SanitizeTarget::Other,
                         &sources,
                         &mut warnings,
                     );
@@ -1344,9 +1351,7 @@ pub fn compose(branches: &[BranchInput]) -> Result<Composition, CompositionError
                             &mut field.directives,
                             &coord,
                             branch,
-                            true,
-                            true,
-                            true,
+                            SanitizeTarget::RootField,
                             &sources,
                             &mut warnings,
                         );
@@ -1378,9 +1383,7 @@ pub fn compose(branches: &[BranchInput]) -> Result<Composition, CompositionError
                         &mut obj.directives,
                         &obj_label,
                         branch,
-                        false,
-                        false,
-                        true,
+                        SanitizeTarget::BranchObject,
                         &sources,
                         &mut warnings,
                     );
@@ -1400,9 +1403,7 @@ pub fn compose(branches: &[BranchInput]) -> Result<Composition, CompositionError
                             &mut field.directives,
                             &coord,
                             branch,
-                            true,
-                            false,
-                            false,
+                            SanitizeTarget::NonRootField,
                             &sources,
                             &mut warnings,
                         );
@@ -1420,9 +1421,7 @@ pub fn compose(branches: &[BranchInput]) -> Result<Composition, CompositionError
                         &mut obj.directives,
                         &obj_label,
                         branch,
-                        false,
-                        false,
-                        false,
+                        SanitizeTarget::Other,
                         &sources,
                         &mut warnings,
                     );
@@ -1442,9 +1441,7 @@ pub fn compose(branches: &[BranchInput]) -> Result<Composition, CompositionError
                             &mut field.directives,
                             &coord,
                             branch,
-                            true,
-                            false,
-                            false,
+                            SanitizeTarget::NonRootField,
                             &sources,
                             &mut warnings,
                         );
@@ -1462,9 +1459,7 @@ pub fn compose(branches: &[BranchInput]) -> Result<Composition, CompositionError
                         &mut iface.directives,
                         &iface_label,
                         branch,
-                        false,
-                        false,
-                        false,
+                        SanitizeTarget::Other,
                         &sources,
                         &mut warnings,
                     );
@@ -1484,9 +1479,7 @@ pub fn compose(branches: &[BranchInput]) -> Result<Composition, CompositionError
                             &mut field.directives,
                             &coord,
                             branch,
-                            true,
-                            false,
-                            false,
+                            SanitizeTarget::NonRootField,
                             &sources,
                             &mut warnings,
                         );
@@ -1504,9 +1497,7 @@ pub fn compose(branches: &[BranchInput]) -> Result<Composition, CompositionError
                         &mut iface.directives,
                         &iface_label,
                         branch,
-                        false,
-                        false,
-                        false,
+                        SanitizeTarget::Other,
                         &sources,
                         &mut warnings,
                     );
@@ -1526,9 +1517,7 @@ pub fn compose(branches: &[BranchInput]) -> Result<Composition, CompositionError
                             &mut field.directives,
                             &coord,
                             branch,
-                            true,
-                            false,
-                            false,
+                            SanitizeTarget::NonRootField,
                             &sources,
                             &mut warnings,
                         );
@@ -1546,9 +1535,7 @@ pub fn compose(branches: &[BranchInput]) -> Result<Composition, CompositionError
                         &mut u.directives,
                         &u_label,
                         branch,
-                        false,
-                        false,
-                        false,
+                        SanitizeTarget::Other,
                         &sources,
                         &mut warnings,
                     );
@@ -1565,9 +1552,7 @@ pub fn compose(branches: &[BranchInput]) -> Result<Composition, CompositionError
                         &mut u.directives,
                         &u_label,
                         branch,
-                        false,
-                        false,
-                        false,
+                        SanitizeTarget::Other,
                         &sources,
                         &mut warnings,
                     );
@@ -1581,9 +1566,7 @@ pub fn compose(branches: &[BranchInput]) -> Result<Composition, CompositionError
                         &mut e.directives,
                         &e_label,
                         branch,
-                        false,
-                        false,
-                        false,
+                        SanitizeTarget::Other,
                         &sources,
                         &mut warnings,
                     );
@@ -1597,9 +1580,7 @@ pub fn compose(branches: &[BranchInput]) -> Result<Composition, CompositionError
                         &mut e.directives,
                         &e_label,
                         branch,
-                        false,
-                        false,
-                        false,
+                        SanitizeTarget::Other,
                         &sources,
                         &mut warnings,
                     );
@@ -1613,9 +1594,7 @@ pub fn compose(branches: &[BranchInput]) -> Result<Composition, CompositionError
                         &mut inp.directives,
                         &inp_label,
                         branch,
-                        false,
-                        false,
-                        false,
+                        SanitizeTarget::Other,
                         &sources,
                         &mut warnings,
                     );
@@ -1637,9 +1616,7 @@ pub fn compose(branches: &[BranchInput]) -> Result<Composition, CompositionError
                         &mut inp.directives,
                         &inp_label,
                         branch,
-                        false,
-                        false,
-                        false,
+                        SanitizeTarget::Other,
                         &sources,
                         &mut warnings,
                     );
@@ -1661,9 +1638,7 @@ pub fn compose(branches: &[BranchInput]) -> Result<Composition, CompositionError
                         &mut s.directives,
                         &s_label,
                         branch,
-                        false,
-                        false,
-                        false,
+                        SanitizeTarget::Other,
                         &sources,
                         &mut warnings,
                     );
@@ -1677,9 +1652,7 @@ pub fn compose(branches: &[BranchInput]) -> Result<Composition, CompositionError
                         &mut s.directives,
                         &s_label,
                         branch,
-                        false,
-                        false,
-                        false,
+                        SanitizeTarget::Other,
                         &sources,
                         &mut warnings,
                     );
@@ -1877,22 +1850,19 @@ pub fn compose(branches: &[BranchInput]) -> Result<Composition, CompositionError
         if let Definition::ObjectTypeDefinition(obj_node) = def {
             match obj_node.name.as_str() {
                 "Query" if !merged_query_fields.is_empty() => {
-                    obj_node
-                        .make_mut()
-                        .fields
-                        .extend(merged_query_fields.drain(..));
+                    obj_node.make_mut().fields.append(&mut merged_query_fields);
                 }
                 "Mutation" if !merged_mutation_fields.is_empty() => {
                     obj_node
                         .make_mut()
                         .fields
-                        .extend(merged_mutation_fields.drain(..));
+                        .append(&mut merged_mutation_fields);
                 }
                 "Subscription" if !merged_subscription_fields.is_empty() => {
                     obj_node
                         .make_mut()
                         .fields
-                        .extend(merged_subscription_fields.drain(..));
+                        .append(&mut merged_subscription_fields);
                 }
                 _ => {}
             }

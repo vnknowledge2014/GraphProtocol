@@ -990,7 +990,8 @@ fn compose_strips_authored_composer_directives_with_warnings_and_attaches_author
         vec![proto_op("account", ProtoOpKind::Query, "get account")],
     );
 
-    let comp = compose(&[branch.clone()]).expect("acct branch must compose after stripping");
+    let comp =
+        compose(std::slice::from_ref(&branch)).expect("acct branch must compose after stripping");
     assert!(
         comp.warnings.len() >= 5,
         "expected warnings for @branch (x2), @provenance (x2), @capabilityGroup, @join(status:); got {:?}",
