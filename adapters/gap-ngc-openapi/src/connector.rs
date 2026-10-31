@@ -2649,7 +2649,13 @@ mod tests {
         let mut blob_ids = Vec::new();
         let mut blob_cursor = String::new();
         let mut saw_truncated = false;
+        let mut drain_iters = 0_usize;
         loop {
+            drain_iters += 1;
+            assert!(
+                drain_iters <= 50,
+                "blob cursor drain must make forward progress"
+            );
             let page = if blob_cursor.is_empty() {
                 None
             } else {
@@ -3738,6 +3744,957 @@ mod tests {
         assert_eq!(
             qry_fixture.recorded_requests()[0].path_and_query,
             "/customers/1?api_key=CONNECTOR_REAL_QUERY_CRED"
+        );
+    }
+
+    // spec: CMP-031, INV-15
+    #[test]
+    fn t12_basic_auth_invalid_user_rejected_at_connector_build_without_leaking_secret() {
+        let canary = "TOP_SECRET_BASIC_PASSWORD_777";
+        let mut creds = StaticCredentialSource::new();
+        creds.insert("basic_pw", canary);
+        let bytes = shop_bytes();
+
+        for bad_user in [
+            "",
+            "alice:admin",
+            "alice\n",
+            "alice\r",
+            "alice\t",
+            "alice\0",
+            "alice\x1f",
+            "alice\x7f",
+        ] {
+            let err = OpenApiConnector::from_document_bytes(
+                &bytes,
+                OpenApiConfig {
+                    auth: AuthConfig::Basic {
+                        user: bad_user.to_owned(),
+                        credential: "basic_pw".to_owned(),
+                    },
+                    ..OpenApiConfig::default()
+                },
+                &creds,
+                Arc::new(FixtureService::new()),
+            )
+            .expect_err("invalid Basic user must be refused at connector build");
+
+            assert!(
+                matches!(
+                    err,
+                    ConnectorBuildError::Auth(AuthError::InvalidAuthParameter(_))
+                ),
+                "unexpected error for {bad_user:?}: {err:?}"
+            );
+            let display = err.to_string();
+            let debug = format!("{err:?}");
+            assert!(
+                !display.contains(canary),
+                "display leaked secret: {display}"
+            );
+            assert!(!debug.contains(canary), "debug leaked secret: {debug}");
+        }
+
+        // Exact `< 0x20` boundary: `0x20` (ASCII space) is not a control character and is accepted.
+        assert!(
+            OpenApiConnector::from_document_bytes(
+                &bytes,
+                OpenApiConfig {
+                    auth: AuthConfig::Basic {
+                        user: "alice ".to_owned(),
+                        credential: "basic_pw".to_owned(),
+                    },
+                    ..OpenApiConfig::default()
+                },
+                &creds,
+                Arc::new(FixtureService::new()),
+            )
+            .is_ok()
+        );
+    }
+
+    // spec: NGC-021, CMP-032
+    #[tokio::test]
+    async fn t13_cursor_bound_to_version_and_operation_under_identical_args_hash() {
+        let fixture = Arc::new(FixtureService::new());
+        let conn = OpenApiConnector::from_document_bytes(
+            &shop_bytes(),
+            OpenApiConfig::default(),
+            &StaticCredentialSource::new(),
+            Arc::clone(&fixture),
+        )
+        .expect("build");
+
+        // Issue a cursor from `customers` with empty arguments `{}` and empty `order_by` `[]`.
+        let (_, complete) = collect_stream(
+            conn.query(
+                QueryRequest {
+                    operation: "customers".to_owned(),
+                    page: Some(Page {
+                        cursor: String::new(),
+                        limit: 2,
+                        offset: 0,
+                    }),
+                    ..QueryRequest::default()
+                },
+                scope_in(Duration::from_secs(5)),
+            )
+            .await
+            .expect("page 1 starts"),
+        )
+        .await
+        .expect("page 1 completes");
+        assert!(!complete.next_cursor.is_empty());
+
+        // 1. Replay the `customers` cursor on `orders` with identical `{}` args and `[]` `order_by`
+        //    (so `args_hash` and `tenant_id` are identical — ONLY `token.op` differs, `C03`).
+        fixture.clear_recorded();
+        let cross_op_err = conn
+            .query(
+                QueryRequest {
+                    operation: "orders".to_owned(),
+                    page: Some(Page {
+                        cursor: complete.next_cursor.clone(),
+                        limit: 2,
+                        offset: 0,
+                    }),
+                    ..QueryRequest::default()
+                },
+                scope_in(Duration::from_secs(5)),
+            )
+            .await
+            .err()
+            .expect("cursor replayed on another operation must fail");
+        assert_eq!(cross_op_err.code, NgcErrorCode::InvalidArgument);
+        assert_eq!(fixture.request_count(), 0);
+
+        // 2. Cursor whose `v != 1` (`v = 0` and `v = 2`) with matching `op`, `args_hash`, and `tenant`
+        //    is rejected (`C01`), while `v = 1` succeeds.
+        let empty_args_hash = canonical_args_and_order_hash(&Map::new(), &[]);
+        for bad_v in [0_u8, 2_u8] {
+            let forged = encode_hex(
+                &serde_json::to_vec(&CursorToken {
+                    v: bad_v,
+                    op: "customers".to_owned(),
+                    args_hash: empty_args_hash.clone(),
+                    tenant: "tenant-alpha".to_owned(),
+                    offset: 2,
+                })
+                .expect("json"),
+            );
+            fixture.clear_recorded();
+            let v_err = conn
+                .query(
+                    QueryRequest {
+                        operation: "customers".to_owned(),
+                        page: Some(Page {
+                            cursor: forged,
+                            limit: 2,
+                            offset: 0,
+                        }),
+                        ..QueryRequest::default()
+                    },
+                    scope_in(Duration::from_secs(5)),
+                )
+                .await
+                .err()
+                .expect("wrong cursor version must fail");
+            assert_eq!(v_err.code, NgcErrorCode::InvalidArgument, "v={bad_v}");
+            assert_eq!(fixture.request_count(), 0);
+        }
+    }
+
+    // spec: NGC-060, NGC-061, CMP-033, INV-15
+    #[tokio::test]
+    async fn t14_upstream_401_and_403_return_fixed_upstream_error_message_without_leak() {
+        let cred_canary = "SUPER_SECRET_BEARER_401_403";
+        let body_canary = "UPSTREAM_AUTH_BODY_CANARY_999";
+        let mut creds = StaticCredentialSource::new();
+        creds.insert("tok", cred_canary);
+
+        let fixture = Arc::new(FixtureService::new());
+        let conn = OpenApiConnector::from_document_bytes(
+            &shop_bytes(),
+            OpenApiConfig {
+                auth: AuthConfig::Bearer {
+                    credential: "tok".to_owned(),
+                },
+                ..OpenApiConfig::default()
+            },
+            &creds,
+            Arc::clone(&fixture),
+        )
+        .expect("build");
+
+        for status in [StatusCode::UNAUTHORIZED, StatusCode::FORBIDDEN] {
+            fixture.clear_recorded();
+            let mut headers = HeaderMap::new();
+            headers.insert(
+                axum::http::header::CONTENT_TYPE,
+                axum::http::HeaderValue::from_static("application/json"),
+            );
+            fixture.push_scripted_response(UpstreamResponse {
+                status,
+                headers,
+                body: format!(r#"{{"detail":"{body_canary} token={cred_canary}"}}"#).into_bytes(),
+            });
+
+            let stream = conn
+                .query(
+                    QueryRequest {
+                        operation: "customer".to_owned(),
+                        arguments: Some(json_struct(&json!({ "id": 1 }))),
+                        ..QueryRequest::default()
+                    },
+                    scope_in(Duration::from_secs(5)),
+                )
+                .await
+                .expect("stream starts");
+            let err = collect_stream(stream)
+                .await
+                .expect_err("401/403 must fail UPSTREAM_ERROR");
+
+            assert_eq!(err.code, NgcErrorCode::UpstreamError, "status={status}");
+            assert!(!err.retryable, "status={status}");
+            assert_eq!(
+                err.message(),
+                "upstream rejected connector credentials",
+                "status={status}"
+            );
+            assert!(!err.message().contains(cred_canary));
+            assert!(!err.message().contains(body_canary));
+            assert_eq!(fixture.request_count(), 1, "401/403 must not retry");
+        }
+    }
+
+    // spec: NGC-060, NGC-061, NGC-025, CMP-033
+    #[tokio::test(start_paused = true)]
+    async fn t15_retry_boundaries_no_extra_sleep_after_last_retry_and_exact_deadline_cutoff() {
+        let fixture = Arc::new(FixtureService::new());
+        let conn = OpenApiConnector::from_document_bytes(
+            &shop_bytes(),
+            OpenApiConfig {
+                max_retry_delay: Duration::from_secs(2),
+                ..OpenApiConfig::default()
+            },
+            &StaticCredentialSource::new(),
+            Arc::clone(&fixture),
+        )
+        .expect("build");
+
+        // 1. `C07` (429 / 503): after the 2nd retry (attempt 2, 3rd total request) fails,
+        //    return UNAVAILABLE with capped `retry_after_ms` and NO extra sleep (`2 * 2000ms = 4000ms`).
+        for status in [
+            StatusCode::TOO_MANY_REQUESTS,
+            StatusCode::SERVICE_UNAVAILABLE,
+        ] {
+            fixture.clear_recorded();
+            fixture.fail_next_with_status(status, Some("10"), 3);
+            let t0 = Instant::now();
+            let stream = conn
+                .query(
+                    QueryRequest {
+                        operation: "customer".to_owned(),
+                        arguments: Some(json_struct(&json!({ "id": 1 }))),
+                        ..QueryRequest::default()
+                    },
+                    scope_in(Duration::from_secs(30)),
+                )
+                .await
+                .expect("stream starts");
+            let err = collect_stream(stream)
+                .await
+                .expect_err("exhausted retries must fail");
+            assert_eq!(err.code, NgcErrorCode::Unavailable, "status={status}");
+            assert!(err.retryable);
+            assert_eq!(err.retry_after_ms, 2000, "status={status}");
+            assert_eq!(fixture.request_count(), 3, "status={status}");
+            assert_eq!(
+                t0.elapsed(),
+                Duration::from_millis(4000),
+                "must sleep only between attempts 0->1 and 1->2, never after attempt 2 ({status})"
+            );
+        }
+
+        // Same `C07` check on `UpstreamError::Connect` (`DEFAULT_BACKOFF_DELAY = 50ms` -> `2 * 50ms = 100ms`).
+        fixture.clear_recorded();
+        for _ in 0..3 {
+            fixture.push_scripted_error(UpstreamError::Connect);
+        }
+        let t_conn = Instant::now();
+        let conn_err = collect_stream(
+            conn.query(
+                QueryRequest {
+                    operation: "customer".to_owned(),
+                    arguments: Some(json_struct(&json!({ "id": 1 }))),
+                    ..QueryRequest::default()
+                },
+                scope_in(Duration::from_secs(30)),
+            )
+            .await
+            .expect("stream starts"),
+        )
+        .await
+        .expect_err("connect retries exhausted");
+        assert_eq!(conn_err.code, NgcErrorCode::Unavailable);
+        assert_eq!(conn_err.retry_after_ms, 50);
+        assert_eq!(fixture.request_count(), 3);
+        assert_eq!(t_conn.elapsed(), Duration::from_millis(100));
+
+        // 2. `C08` (429/503): delay ending EXACTLY at deadline (`1000ms == 1000ms`) fails immediately
+        //    without sleeping (`elapsed == 0`), whereas 1 ms more budget (`1001ms`) sleeps `1000ms` and retries.
+        fixture.clear_recorded();
+        fixture.fail_next_with_status(StatusCode::SERVICE_UNAVAILABLE, Some("1"), 1);
+        let t_exact = Instant::now();
+        let exact_err = collect_stream(
+            conn.query(
+                QueryRequest {
+                    operation: "customer".to_owned(),
+                    arguments: Some(json_struct(&json!({ "id": 1 }))),
+                    ..QueryRequest::default()
+                },
+                scope_in(Duration::from_millis(1000)),
+            )
+            .await
+            .expect("stream starts"),
+        )
+        .await
+        .expect_err("delay == remaining deadline must fail at once");
+        assert_eq!(exact_err.code, NgcErrorCode::Unavailable);
+        assert_eq!(exact_err.retry_after_ms, 1000);
+        assert_eq!(fixture.request_count(), 1);
+        assert_eq!(t_exact.elapsed(), Duration::ZERO);
+
+        fixture.clear_recorded();
+        fixture.fail_next_with_status(StatusCode::SERVICE_UNAVAILABLE, Some("1"), 1);
+        let t_minus_1ms = Instant::now();
+        let (ok_chunks, _) = collect_stream(
+            conn.query(
+                QueryRequest {
+                    operation: "customer".to_owned(),
+                    arguments: Some(json_struct(&json!({ "id": 1 }))),
+                    ..QueryRequest::default()
+                },
+                scope_in(Duration::from_millis(1001)),
+            )
+            .await
+            .expect("stream starts"),
+        )
+        .await
+        .expect("1ms before deadline must sleep and succeed on retry");
+        assert_eq!(ok_chunks[0].rows.len(), 1);
+        assert_eq!(fixture.request_count(), 2);
+        assert_eq!(t_minus_1ms.elapsed(), Duration::from_millis(1000));
+
+        // Same `C08` exact boundary on `UpstreamError::Connect` (`delay = 50ms` vs `50ms` / `51ms`).
+        fixture.clear_recorded();
+        fixture.push_scripted_error(UpstreamError::Connect);
+        let t_c_exact = Instant::now();
+        let c_exact_err = collect_stream(
+            conn.query(
+                QueryRequest {
+                    operation: "customer".to_owned(),
+                    arguments: Some(json_struct(&json!({ "id": 1 }))),
+                    ..QueryRequest::default()
+                },
+                scope_in(Duration::from_millis(50)),
+            )
+            .await
+            .expect("stream starts"),
+        )
+        .await
+        .expect_err("connect delay == deadline must fail at once");
+        assert_eq!(c_exact_err.code, NgcErrorCode::Unavailable);
+        assert_eq!(c_exact_err.retry_after_ms, 50);
+        assert_eq!(fixture.request_count(), 1);
+        assert_eq!(t_c_exact.elapsed(), Duration::ZERO);
+
+        fixture.clear_recorded();
+        fixture.push_scripted_error(UpstreamError::Connect);
+        let t_c_ok = Instant::now();
+        let (c_ok_chunks, _) = collect_stream(
+            conn.query(
+                QueryRequest {
+                    operation: "customer".to_owned(),
+                    arguments: Some(json_struct(&json!({ "id": 1 }))),
+                    ..QueryRequest::default()
+                },
+                scope_in(Duration::from_millis(51)),
+            )
+            .await
+            .expect("stream starts"),
+        )
+        .await
+        .expect("connect 1ms before deadline must retry and succeed");
+        assert_eq!(c_ok_chunks[0].rows.len(), 1);
+        assert_eq!(fixture.request_count(), 2);
+        assert_eq!(t_c_ok.elapsed(), Duration::from_millis(50));
+    }
+
+    // spec: NGC-021, NGC-027, CMP-032
+    #[tokio::test]
+    async fn t16_exact_max_response_bytes_and_last_page_lookahead_boundaries() {
+        let bytes = shop_bytes();
+        let probe_fixture = Arc::new(FixtureService::new());
+        let probe_conn = OpenApiConnector::from_document_bytes(
+            &bytes,
+            OpenApiConfig::default(),
+            &StaticCredentialSource::new(),
+            Arc::clone(&probe_fixture),
+        )
+        .expect("build probe");
+
+        // Measure the exact encoded wire byte size of the last 2 blob rows (`offset = 38`, `limit = 2`).
+        let last_two_offset = u32::try_from(FIXTURE_BLOB_COUNT - 2).expect("u32");
+        let (probe_chunks, probe_complete) = collect_stream(
+            probe_conn
+                .query(
+                    QueryRequest {
+                        operation: "blobs".to_owned(),
+                        page: Some(Page {
+                            cursor: String::new(),
+                            limit: 2,
+                            offset: last_two_offset,
+                        }),
+                        ..QueryRequest::default()
+                    },
+                    scope_in(Duration::from_secs(5)),
+                )
+                .await
+                .expect("probe starts"),
+        )
+        .await
+        .expect("probe completes");
+        assert_eq!(probe_chunks[0].rows.len(), 2);
+        assert!(!probe_complete.truncated);
+        assert!(probe_complete.next_cursor.is_empty());
+
+        let exact_cap: u64 = probe_chunks[0]
+            .rows
+            .iter()
+            .map(|r| u64::try_from(encoded_prost_struct_len(r)).expect("u64"))
+            .sum();
+
+        // 1. `C10`: rows whose encoded byte total equals `max_response_bytes` are NOT truncated.
+        let exact_conn = OpenApiConnector::from_document_bytes(
+            &bytes,
+            OpenApiConfig {
+                max_response_bytes: exact_cap,
+                ..OpenApiConfig::default()
+            },
+            &StaticCredentialSource::new(),
+            Arc::new(FixtureService::new()),
+        )
+        .expect("build exact_conn");
+        let (exact_chunks, exact_complete) = collect_stream(
+            exact_conn
+                .query(
+                    QueryRequest {
+                        operation: "blobs".to_owned(),
+                        page: Some(Page {
+                            cursor: String::new(),
+                            limit: 2,
+                            offset: last_two_offset,
+                        }),
+                        ..QueryRequest::default()
+                    },
+                    scope_in(Duration::from_secs(5)),
+                )
+                .await
+                .expect("exact starts"),
+        )
+        .await
+        .expect("exact completes");
+        assert_eq!(exact_chunks[0].rows.len(), 2);
+        assert!(!exact_complete.truncated);
+        assert!(exact_complete.next_cursor.is_empty());
+
+        // One byte less (`exact_cap - 1`) cuts the second row, sets `truncated = true`, and emits `next_cursor`.
+        let minus_one_conn = OpenApiConnector::from_document_bytes(
+            &bytes,
+            OpenApiConfig {
+                max_response_bytes: exact_cap - 1,
+                ..OpenApiConfig::default()
+            },
+            &StaticCredentialSource::new(),
+            Arc::new(FixtureService::new()),
+        )
+        .expect("build minus_one_conn");
+        let (cut_chunks, cut_complete) = collect_stream(
+            minus_one_conn
+                .query(
+                    QueryRequest {
+                        operation: "blobs".to_owned(),
+                        page: Some(Page {
+                            cursor: String::new(),
+                            limit: 2,
+                            offset: last_two_offset,
+                        }),
+                        ..QueryRequest::default()
+                    },
+                    scope_in(Duration::from_secs(5)),
+                )
+                .await
+                .expect("cut starts"),
+        )
+        .await
+        .expect("cut completes");
+        assert_eq!(cut_chunks[0].rows.len(), 1);
+        assert!(cut_complete.truncated);
+        assert!(!cut_complete.next_cursor.is_empty());
+
+        // 2. `C11`: a last page holding EXACTLY `limit` rows (`limit = 4`, `offset = 8` on 12 customers:
+        //    upstream is asked for `limit + 1 = 5` and returns `4`) emits 4 rows and `next_cursor = ""`.
+        probe_fixture.clear_recorded();
+        let exact_last_offset = u32::try_from(FIXTURE_CUSTOMER_COUNT - 4).expect("u32");
+        let (last_chunks, last_complete) = collect_stream(
+            probe_conn
+                .query(
+                    QueryRequest {
+                        operation: "customers".to_owned(),
+                        page: Some(Page {
+                            cursor: String::new(),
+                            limit: 4,
+                            offset: exact_last_offset,
+                        }),
+                        ..QueryRequest::default()
+                    },
+                    scope_in(Duration::from_secs(5)),
+                )
+                .await
+                .expect("last page starts"),
+        )
+        .await
+        .expect("last page completes");
+        assert_eq!(
+            probe_fixture.recorded_requests()[0].path_and_query,
+            format!("/customers?limit=5&offset={exact_last_offset}")
+        );
+        assert_eq!(last_chunks[0].rows.len(), 4);
+        assert!(!last_complete.truncated);
+        assert!(
+            last_complete.next_cursor.is_empty(),
+            "exact last page must have empty next_cursor"
+        );
+
+        // One row earlier (`offset = 7`, `limit = 4`: upstream gets `limit=5` and returns 5 rows)
+        // emits 4 rows and a non-empty `next_cursor`.
+        probe_fixture.clear_recorded();
+        let more_offset = exact_last_offset - 1;
+        let (more_chunks, more_complete) = collect_stream(
+            probe_conn
+                .query(
+                    QueryRequest {
+                        operation: "customers".to_owned(),
+                        page: Some(Page {
+                            cursor: String::new(),
+                            limit: 4,
+                            offset: more_offset,
+                        }),
+                        ..QueryRequest::default()
+                    },
+                    scope_in(Duration::from_secs(5)),
+                )
+                .await
+                .expect("more page starts"),
+        )
+        .await
+        .expect("more page completes");
+        assert_eq!(
+            probe_fixture.recorded_requests()[0].path_and_query,
+            format!("/customers?limit=5&offset={more_offset}")
+        );
+        assert_eq!(more_chunks[0].rows.len(), 4);
+        assert!(!more_complete.next_cursor.is_empty());
+
+        // 3. `page.limit = 0` sends no `limit=` query parameter, and `page.limit` above a tighter
+        //    configured `max_page_size = 50` is clamped (`500` -> `limit=51&offset=0`).
+        probe_fixture.clear_recorded();
+        let _ = collect_stream(
+            probe_conn
+                .query(
+                    QueryRequest {
+                        operation: "customers".to_owned(),
+                        page: Some(Page {
+                            cursor: String::new(),
+                            limit: 0,
+                            offset: 0,
+                        }),
+                        ..QueryRequest::default()
+                    },
+                    scope_in(Duration::from_secs(5)),
+                )
+                .await
+                .expect("zero limit starts"),
+        )
+        .await
+        .expect("zero limit completes");
+        assert_eq!(
+            probe_fixture.recorded_requests()[0].path_and_query,
+            "/customers"
+        );
+
+        let clamp_fixture = Arc::new(FixtureService::new());
+        let clamp_conn = OpenApiConnector::from_document_bytes(
+            &bytes,
+            OpenApiConfig {
+                max_page_size: 50,
+                ..OpenApiConfig::default()
+            },
+            &StaticCredentialSource::new(),
+            Arc::clone(&clamp_fixture),
+        )
+        .expect("build clamp_conn");
+        let _ = collect_stream(
+            clamp_conn
+                .query(
+                    QueryRequest {
+                        operation: "customers".to_owned(),
+                        page: Some(Page {
+                            cursor: String::new(),
+                            limit: 500,
+                            offset: 0,
+                        }),
+                        ..QueryRequest::default()
+                    },
+                    scope_in(Duration::from_secs(5)),
+                )
+                .await
+                .expect("clamped limit starts"),
+        )
+        .await
+        .expect("clamped limit completes");
+        assert_eq!(
+            clamp_fixture.recorded_requests()[0].path_and_query,
+            "/customers?limit=51&offset=0"
+        );
+    }
+
+    // spec: NGC-020, NGC-021, NGC-022, NGC-023, NGC-060
+    #[tokio::test]
+    async fn t17_as_of_and_foreach_with_page_or_order_by_fail_invalid_argument_before_upstream() {
+        let fixture = Arc::new(FixtureService::new());
+        let conn = OpenApiConnector::from_document_bytes(
+            &shop_bytes(),
+            OpenApiConfig::default(),
+            &StaticCredentialSource::new(),
+            Arc::clone(&fixture),
+        )
+        .expect("build");
+
+        // 1. `as_of` set (`C16`) -> INVALID_ARGUMENT, upstream not called.
+        let as_of_err = conn
+            .query(
+                QueryRequest {
+                    operation: "customers".to_owned(),
+                    as_of: "2026-01-01T00:00:00Z".to_owned(),
+                    ..QueryRequest::default()
+                },
+                scope_in(Duration::from_secs(5)),
+            )
+            .await
+            .err()
+            .expect("as_of must be rejected");
+        assert_eq!(as_of_err.code, NgcErrorCode::InvalidArgument);
+        assert_eq!(fixture.request_count(), 0);
+
+        let sample_foreach = vec![VariableSet {
+            index: 0,
+            values: Some(json_struct(&json!({ "id": 1 }))),
+        }];
+
+        // 2. `foreach` + `page` (`C18`) -> INVALID_ARGUMENT, upstream not called.
+        let fe_page_err = conn
+            .query(
+                QueryRequest {
+                    operation: "customer".to_owned(),
+                    foreach: sample_foreach.clone(),
+                    page: Some(Page {
+                        cursor: String::new(),
+                        limit: 5,
+                        offset: 0,
+                    }),
+                    ..QueryRequest::default()
+                },
+                scope_in(Duration::from_secs(5)),
+            )
+            .await
+            .err()
+            .expect("foreach + page must be rejected");
+        assert_eq!(fe_page_err.code, NgcErrorCode::InvalidArgument);
+        assert_eq!(fixture.request_count(), 0);
+
+        // 3. `foreach` + `order_by` (`C18`) -> INVALID_ARGUMENT, upstream not called.
+        let fe_order_err = conn
+            .query(
+                QueryRequest {
+                    operation: "customer".to_owned(),
+                    foreach: sample_foreach,
+                    order_by: vec![OrderBy {
+                        path: "id".to_owned(),
+                        descending: false,
+                    }],
+                    ..QueryRequest::default()
+                },
+                scope_in(Duration::from_secs(5)),
+            )
+            .await
+            .err()
+            .expect("foreach + order_by must be rejected");
+        assert_eq!(fe_order_err.code, NgcErrorCode::InvalidArgument);
+        assert_eq!(fixture.request_count(), 0);
+    }
+
+    // spec: NGC-020, NGC-026, CMP-032
+    #[tokio::test(start_paused = true)]
+    async fn t18_emulated_foreach_reaches_exact_fanout_concurrency_and_single_key_requests() {
+        let fixture = Arc::new(FixtureService::new());
+        fixture.set_handler_delay(Duration::from_millis(50));
+        let conn = OpenApiConnector::from_document_bytes(
+            &shop_bytes(),
+            OpenApiConfig {
+                fanout_concurrency: 4,
+                ..OpenApiConfig::default()
+            },
+            &StaticCredentialSource::new(),
+            Arc::clone(&fixture),
+        )
+        .expect("build");
+
+        let sets: Vec<VariableSet> = (1_i64..=8_i64)
+            .enumerate()
+            .map(|(idx, id)| VariableSet {
+                index: u32::try_from(idx).expect("u32"),
+                values: Some(json_struct(&json!({ "id": id }))),
+            })
+            .collect();
+
+        let (chunks, complete) = collect_stream(
+            conn.query(
+                QueryRequest {
+                    operation: "order".to_owned(),
+                    foreach: sets,
+                    ..QueryRequest::default()
+                },
+                scope_in(Duration::from_secs(10)),
+            )
+            .await
+            .expect("emulated foreach starts"),
+        )
+        .await
+        .expect("emulated foreach completes");
+
+        assert_eq!(chunks.len(), 8);
+        assert_eq!(complete.upstream_calls, 8);
+        assert_eq!(
+            fixture.max_concurrent_seen(),
+            4,
+            "emulated foreach must reach exact fanout_concurrency=4"
+        );
+
+        let recorded = fixture.recorded_requests();
+        assert_eq!(recorded.len(), 8);
+        for rec in &recorded {
+            assert!(
+                !rec.path_and_query.contains('?'),
+                "emulated foreach must not send query batching: {}",
+                rec.path_and_query
+            );
+            let id_seg = rec
+                .path_and_query
+                .strip_prefix("/orders/")
+                .expect("must target /orders/{id}");
+            assert!(
+                !id_seg.contains(',') && !id_seg.contains('/'),
+                "each emulated request must carry exactly 1 key: {}",
+                rec.path_and_query
+            );
+            let parsed_id: i64 = id_seg.parse().expect("single integer order id");
+            assert!((1..=8).contains(&parsed_id));
+        }
+    }
+
+    // spec: NGC-022, NGC-060, CMP-032
+    #[tokio::test]
+    async fn t20_order_by_rejects_empty_path_multi_column_and_unsortable_op_and_formats_descending()
+    {
+        let fixture = Arc::new(FixtureService::new());
+        let conn = OpenApiConnector::from_document_bytes(
+            &shop_bytes(),
+            OpenApiConfig::default(),
+            &StaticCredentialSource::new(),
+            Arc::clone(&fixture),
+        )
+        .expect("build");
+
+        // 1. Empty / whitespace `order_by` path (`C24`) -> INVALID_ARGUMENT, upstream not called
+        //    (verified both on `customers` and on an unconstrained `sort: string` parameter without `enum`).
+        let free_sort_doc = json!({
+            "openapi": "3.1.0",
+            "info": { "title": "FreeSort", "version": "1.0.0" },
+            "paths": {
+                "/customers": {
+                    "get": {
+                        "operationId": "free_customers",
+                        "parameters": [
+                            { "name": "sort", "in": "query", "required": false, "schema": { "type": "string" } }
+                        ],
+                        "responses": { "200": { "description": "ok" } }
+                    }
+                }
+            }
+        });
+        let free_fixture = Arc::new(FixtureService::new());
+        let free_conn = OpenApiConnector::from_document_bytes(
+            &serde_json::to_vec(&free_sort_doc).expect("json"),
+            OpenApiConfig::default(),
+            &StaticCredentialSource::new(),
+            Arc::clone(&free_fixture),
+        )
+        .expect("build free_conn");
+
+        for empty_path in ["", "   "] {
+            let err = conn
+                .query(
+                    QueryRequest {
+                        operation: "customers".to_owned(),
+                        order_by: vec![OrderBy {
+                            path: empty_path.to_owned(),
+                            descending: false,
+                        }],
+                        ..QueryRequest::default()
+                    },
+                    scope_in(Duration::from_secs(5)),
+                )
+                .await
+                .err()
+                .expect("empty order_by path must fail");
+            assert_eq!(err.code, NgcErrorCode::InvalidArgument);
+            assert_eq!(err.message(), "order_by path must not be empty");
+            assert_eq!(fixture.request_count(), 0);
+
+            let free_err = free_conn
+                .query(
+                    QueryRequest {
+                        operation: "free_customers".to_owned(),
+                        order_by: vec![OrderBy {
+                            path: empty_path.to_owned(),
+                            descending: false,
+                        }],
+                        ..QueryRequest::default()
+                    },
+                    scope_in(Duration::from_secs(5)),
+                )
+                .await
+                .err()
+                .expect("empty order_by path on unconstrained sort must fail");
+            assert_eq!(free_err.code, NgcErrorCode::InvalidArgument);
+            assert_eq!(free_fixture.request_count(), 0);
+        }
+
+        // 2. Two `order_by` columns (`C24`) -> INVALID_ARGUMENT, upstream not called.
+        let two_cols_err = conn
+            .query(
+                QueryRequest {
+                    operation: "customers".to_owned(),
+                    order_by: vec![
+                        OrderBy {
+                            path: "id".to_owned(),
+                            descending: false,
+                        },
+                        OrderBy {
+                            path: "name".to_owned(),
+                            descending: false,
+                        },
+                    ],
+                    ..QueryRequest::default()
+                },
+                scope_in(Duration::from_secs(5)),
+            )
+            .await
+            .err()
+            .expect("multi-column order_by must fail");
+        assert_eq!(two_cols_err.code, NgcErrorCode::InvalidArgument);
+        assert_eq!(
+            two_cols_err.message(),
+            "only single-column order_by is supported"
+        );
+        assert_eq!(fixture.request_count(), 0);
+
+        // 3. Operation without `sort` (`orders`) rejects any `order_by` (`C24`).
+        let no_sort_err = conn
+            .query(
+                QueryRequest {
+                    operation: "orders".to_owned(),
+                    order_by: vec![OrderBy {
+                        path: "id".to_owned(),
+                        descending: false,
+                    }],
+                    ..QueryRequest::default()
+                },
+                scope_in(Duration::from_secs(5)),
+            )
+            .await
+            .err()
+            .expect("operation without sort must reject order_by");
+        assert_eq!(no_sort_err.code, NgcErrorCode::InvalidArgument);
+        assert_eq!(no_sort_err.message(), "operation does not support order_by");
+        assert_eq!(fixture.request_count(), 0);
+
+        // 4. Descending `order_by` sends `sort=-<path>` (`C25`), ascending sends `sort=<path>`.
+        fixture.clear_recorded();
+        let (desc_chunks, _) = collect_stream(
+            conn.query(
+                QueryRequest {
+                    operation: "customers".to_owned(),
+                    order_by: vec![OrderBy {
+                        path: "credit_cents".to_owned(),
+                        descending: true,
+                    }],
+                    ..QueryRequest::default()
+                },
+                scope_in(Duration::from_secs(5)),
+            )
+            .await
+            .expect("descending starts"),
+        )
+        .await
+        .expect("descending completes");
+        assert_eq!(
+            fixture.recorded_requests()[0].path_and_query,
+            "/customers?sort=-credit_cents"
+        );
+        let first_credit = json_number_as_exact_i64(
+            &prost_struct_to_json_map(&desc_chunks[0].rows[0])["credit_cents"],
+        )
+        .expect("i64");
+        let last_credit = json_number_as_exact_i64(
+            &prost_struct_to_json_map(desc_chunks[0].rows.last().expect("last"))["credit_cents"],
+        )
+        .expect("i64");
+        assert!(first_credit > last_credit);
+
+        fixture.clear_recorded();
+        let _ = collect_stream(
+            conn.query(
+                QueryRequest {
+                    operation: "customers".to_owned(),
+                    order_by: vec![OrderBy {
+                        path: "credit_cents".to_owned(),
+                        descending: false,
+                    }],
+                    ..QueryRequest::default()
+                },
+                scope_in(Duration::from_secs(5)),
+            )
+            .await
+            .expect("ascending starts"),
+        )
+        .await
+        .expect("ascending completes");
+        assert_eq!(
+            fixture.recorded_requests()[0].path_and_query,
+            "/customers?sort=credit_cents"
         );
     }
 }

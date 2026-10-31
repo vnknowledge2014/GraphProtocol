@@ -276,12 +276,14 @@ fn validate_object_map(
     if let Some(req_arr) = schema_obj.get("required").and_then(Value::as_array) {
         for req_key in req_arr.iter().filter_map(Value::as_str) {
             let allows_null = props.and_then(|p| p.get(req_key)).is_some_and(|sub| {
-                value_matches_single_type("null", &Value::Null) && {
-                    sub.as_object()
-                        .and_then(|o| o.get("type"))
-                        .and_then(Value::as_array)
-                        .is_some_and(|arr| arr.iter().any(|t| t.as_str() == Some("null")))
-                }
+                sub.as_object()
+                    .and_then(|o| o.get("type"))
+                    .is_some_and(|tv| {
+                        tv.as_str() == Some("null")
+                            || tv
+                                .as_array()
+                                .is_some_and(|arr| arr.iter().any(|t| t.as_str() == Some("null")))
+                    })
             });
             match arguments.get(req_key) {
                 None => {
@@ -1002,5 +1004,239 @@ mod tests {
                 "hand_built={hand_built:?}"
             );
         }
+    }
+
+    // spec: NGC-060, CMP-030
+    #[test]
+    fn t7_null_required_vs_nullable_and_optional_omission() {
+        let (ops, bundle) = load_shop();
+        let customer = ops.iter().find(|o| o.name == "customer").expect("customer");
+        let cust_schema = &bundle.operations["customer"].input_json_schema;
+        let customers = ops
+            .iter()
+            .find(|o| o.name == "customers")
+            .expect("customers");
+        let custs_schema = &bundle.operations["customers"].input_json_schema;
+
+        // 1. Required non-nullable argument given as `null` -> INVALID_ARGUMENT (`Q12`).
+        let null_req = json!({ "id": null }).as_object().cloned().expect("obj");
+        let err = build_request(customer, cust_schema, &null_req)
+            .expect_err("required non-nullable null must fail");
+        assert!(
+            err.to_string().contains("must not be null"),
+            "unexpected error for required null: {err}"
+        );
+        assert_eq!(err.into_ngc_error().code, NgcErrorCode::InvalidArgument);
+
+        // Even when a required property omits `type` (`{}`), `null` is still rejected unless `"null"` is allowed.
+        let typeless_req_schema = json!({
+            "type": "object",
+            "required": ["x"],
+            "properties": { "x": {} }
+        });
+        let typeless_null = json!({ "x": null }).as_object().cloned().expect("obj");
+        assert!(validate_arguments(&typeless_req_schema, &typeless_null).is_err());
+
+        // Single-string `"type": "null"` required property accepts `null`; `"type": ["string", "null"]`
+        // with an `enum` excluding `null` still validates `null` against `enum`.
+        let null_only_schema = json!({
+            "type": "object",
+            "required": ["n"],
+            "properties": { "n": { "type": "null" } }
+        });
+        let null_only_args = json!({ "n": null }).as_object().cloned().expect("obj");
+        assert!(validate_arguments(&null_only_schema, &null_only_args).is_ok());
+
+        let nullable_enum_schema = json!({
+            "type": "object",
+            "required": ["e"],
+            "properties": { "e": { "type": ["string", "null"], "enum": ["alpha"] } }
+        });
+        let nullable_enum_null = json!({ "e": null }).as_object().cloned().expect("obj");
+        assert!(validate_arguments(&nullable_enum_schema, &nullable_enum_null).is_err());
+
+        // 2. Required argument whose schema type includes `"null"` is accepted when `null`,
+        //    and omitted from the built query/headers.
+        let nullable_doc = json!({
+            "openapi": "3.1.0",
+            "info": { "title": "NullableReq", "version": "1.0.0" },
+            "paths": {
+                "/nullable": {
+                    "get": {
+                        "operationId": "nullable_op",
+                        "parameters": [
+                            {
+                                "name": "tag",
+                                "in": "query",
+                                "required": true,
+                                "schema": { "type": ["string", "null"] }
+                            }
+                        ],
+                        "responses": { "200": { "description": "ok" } }
+                    }
+                }
+            }
+        });
+        let ndoc = OpenApiDocument::parse(&serde_json::to_vec(&nullable_doc).expect("json"))
+            .expect("parse");
+        let next = extract_operations(&ndoc).expect("extract");
+        let nbundle = build_schema_bundle(&ndoc, &next).expect("bundle");
+        let nschema = &nbundle.operations["nullable_op"].input_json_schema;
+        let null_tag = json!({ "tag": null }).as_object().cloned().expect("obj");
+        let nbuilt = build_request(&next.operations[0], nschema, &null_tag)
+            .expect("required nullable parameter must accept null");
+        assert_eq!(nbuilt.path_and_query, "/nullable");
+
+        // 3. Optional query and header arguments given as `null` are skipped and never sent (`Q15`).
+        let opt_query_null = json!({ "limit": null, "region": null })
+            .as_object()
+            .cloned()
+            .expect("obj");
+        let built_custs = build_request(customers, custs_schema, &opt_query_null)
+            .expect("optional null query args must succeed");
+        assert_eq!(built_custs.path_and_query, "/customers");
+
+        let opt_hdr_null = json!({ "id": 1, "X-Request-Tag": null })
+            .as_object()
+            .cloned()
+            .expect("obj");
+        let built_cust = build_request(customer, cust_schema, &opt_hdr_null)
+            .expect("optional null header arg must succeed");
+        assert_eq!(built_cust.path_and_query, "/customers/1");
+        assert!(
+            built_cust.headers.is_empty(),
+            "null optional header must not be sent: {:?}",
+            built_cust.headers
+        );
+    }
+
+    // spec: NGC-060, CMP-030
+    #[test]
+    fn t8_enum_validation_string_and_numeric_value_equality() {
+        let (ops, bundle) = load_shop();
+        let customers = ops
+            .iter()
+            .find(|o| o.name == "customers")
+            .expect("customers");
+        let custs_schema = &bundle.operations["customers"].input_json_schema;
+
+        // Valid `sort` enum member passes.
+        let ok_sort = json!({ "sort": "-credit_cents" })
+            .as_object()
+            .cloned()
+            .expect("obj");
+        let built =
+            build_request(customers, custs_schema, &ok_sort).expect("enum member must pass");
+        assert_eq!(built.path_and_query, "/customers?sort=-credit_cents");
+
+        // Non-member `sort` fails `INVALID_ARGUMENT` (`Q16`).
+        let bad_sort = json!({ "sort": "unknown_col" })
+            .as_object()
+            .cloned()
+            .expect("obj");
+        let err = build_request(customers, custs_schema, &bad_sort)
+            .expect_err("value outside enum must fail");
+        assert_eq!(err.into_ngc_error().code, NgcErrorCode::InvalidArgument);
+
+        // Numeric enum members compare by numeric value (`1` and `1.0` both match `[1, 2.5]`).
+        let num_enum_doc = json!({
+            "openapi": "3.1.0",
+            "info": { "title": "NumEnum", "version": "1.0.0" },
+            "paths": {
+                "/tier": {
+                    "get": {
+                        "operationId": "tier",
+                        "parameters": [
+                            {
+                                "name": "level",
+                                "in": "query",
+                                "required": true,
+                                "schema": { "type": "number", "enum": [1, 2.5] }
+                            }
+                        ],
+                        "responses": { "200": { "description": "ok" } }
+                    }
+                }
+            }
+        });
+        let doc = OpenApiDocument::parse(&serde_json::to_vec(&num_enum_doc).expect("json"))
+            .expect("parse");
+        let ext = extract_operations(&doc).expect("extract");
+        let nbundle = build_schema_bundle(&doc, &ext).expect("bundle");
+        let t_op = &ext.operations[0];
+        let t_schema = &nbundle.operations["tier"].input_json_schema;
+
+        for ok_val in [json!(1), json!(1.0), json!(2.5)] {
+            let args = json!({ "level": ok_val })
+                .as_object()
+                .cloned()
+                .expect("obj");
+            assert!(
+                build_request(t_op, t_schema, &args).is_ok(),
+                "numeric enum member {ok_val} must pass"
+            );
+        }
+        for bad_val in [json!(2), json!(1.5), json!(0.0)] {
+            let args = json!({ "level": bad_val })
+                .as_object()
+                .cloned()
+                .expect("obj");
+            let e = build_request(t_op, t_schema, &args)
+                .expect_err("non-member numeric value must fail");
+            assert_eq!(e.into_ngc_error().code, NgcErrorCode::InvalidArgument);
+        }
+    }
+
+    // spec: CMP-030
+    #[test]
+    fn t9_query_parameter_names_are_percent_encoded_scalar_and_array() {
+        let raw_doc = json!({
+            "openapi": "3.1.0",
+            "info": { "title": "QueryParamNames", "version": "1.0.0" },
+            "paths": {
+                "/q": {
+                    "get": {
+                        "operationId": "q",
+                        "parameters": [
+                            {
+                                "name": "a b&c=d",
+                                "in": "query",
+                                "required": false,
+                                "schema": { "type": "string" }
+                            },
+                            {
+                                "name": "x y&z=w",
+                                "in": "query",
+                                "required": false,
+                                "style": "form",
+                                "explode": false,
+                                "schema": { "type": "array", "items": { "type": "integer" } }
+                            }
+                        ],
+                        "responses": { "200": { "description": "ok" } }
+                    }
+                }
+            }
+        });
+        let doc =
+            OpenApiDocument::parse(&serde_json::to_vec(&raw_doc).expect("json")).expect("parse");
+        let ext = extract_operations(&doc).expect("extract");
+        let bundle = build_schema_bundle(&doc, &ext).expect("bundle");
+        let q_op = &ext.operations[0];
+        let q_schema = &bundle.operations["q"].input_json_schema;
+
+        let scalar_args = json!({ "a b&c=d": "val_1" })
+            .as_object()
+            .cloned()
+            .expect("obj");
+        let built_scalar = build_request(q_op, q_schema, &scalar_args).expect("build scalar");
+        assert_eq!(built_scalar.path_and_query, "/q?a%20b%26c%3Dd=val_1");
+
+        let array_args = json!({ "x y&z=w": [10, 20] })
+            .as_object()
+            .cloned()
+            .expect("obj");
+        let built_array = build_request(q_op, q_schema, &array_args).expect("build array");
+        assert_eq!(built_array.path_and_query, "/q?x%20y%26z%3Dw=10,20");
     }
 }

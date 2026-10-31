@@ -487,4 +487,184 @@ mod tests {
         assert_eq!(svc.request_count(), 2, "must not follow 302 Location");
         server.abort();
     }
+
+    // spec: CMP-030, CMP-033
+    #[tokio::test]
+    #[ignore = "needs loopback sockets"]
+    async fn t10_loopback_accept_encoding_stripped_and_default_accept_respects_allow_binary() {
+        use futures_util::StreamExt;
+        use gap_ngc_sdk::connector::{CallScope, Connector};
+        use gap_ngc_sdk::error::json_map_to_prost_struct;
+        use gap_proto::ngc::v1::QueryRequest;
+
+        use crate::auth::StaticCredentialSource;
+        use crate::connector::{OpenApiConfig, OpenApiConnector};
+
+        let svc = Arc::new(FixtureService::new());
+        let app = router(Arc::clone(&svc));
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("bind loopback");
+        let addr = listener.local_addr().expect("local_addr");
+        let server = tokio::spawn(async move {
+            let _ = axum::serve(listener, app).await;
+        });
+
+        let raw_doc = json!({
+            "openapi": "3.1.0",
+            "info": { "title": "AcceptHeaders", "version": "1.0.0" },
+            "paths": {
+                "/customers/{id}": {
+                    "get": {
+                        "operationId": "customer",
+                        "parameters": [
+                            { "name": "id", "in": "path", "required": true, "schema": { "type": "integer", "minimum": 1 } },
+                            { "name": "Accept-Encoding", "in": "header", "required": false, "schema": { "type": "string" } }
+                        ],
+                        "responses": {
+                            "200": {
+                                "description": "ok",
+                                "content": {
+                                    "application/json": {
+                                        "schema": { "type": "object", "properties": { "id": { "type": "integer" } } }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        });
+        let doc_bytes = serde_json::to_vec(&raw_doc).expect("json");
+        let args = json_map_to_prost_struct(
+            json!({ "id": 1, "Accept-Encoding": "gzip, deflate, br" })
+                .as_object()
+                .expect("obj"),
+        );
+
+        // 1. `allow_binary = false` (`U06`, `U07`): `Accept-Encoding` is stripped and default
+        //    `Accept: application/json` is sent.
+        svc.clear_recorded();
+        let conn_json = OpenApiConnector::new_http(
+            &doc_bytes,
+            OpenApiConfig {
+                base_url: format!("http://{addr}"),
+                allow_binary: false,
+                ..OpenApiConfig::default()
+            },
+            &StaticCredentialSource::new(),
+        )
+        .expect("build json connector");
+
+        let mut s1 = conn_json
+            .query(
+                QueryRequest {
+                    operation: "customer".to_owned(),
+                    arguments: Some(args.clone()),
+                    ..QueryRequest::default()
+                },
+                CallScope::for_test(tokio::time::Instant::now() + Duration::from_secs(5)),
+            )
+            .await
+            .expect("query starts");
+        while let Some(item) = s1.next().await {
+            let _ = item.expect("item ok");
+        }
+
+        let rec_json = svc.recorded_requests();
+        assert_eq!(rec_json.len(), 1);
+        assert!(
+            !rec_json[0]
+                .headers
+                .iter()
+                .any(|(k, _)| k.eq_ignore_ascii_case("accept-encoding")),
+            "Accept-Encoding declared by document must never be sent: {:?}",
+            rec_json[0].headers
+        );
+        let accept_json: Vec<&str> = rec_json[0]
+            .headers
+            .iter()
+            .filter(|(k, _)| k.eq_ignore_ascii_case("accept"))
+            .map(|(_, v)| v.as_str())
+            .collect();
+        assert_eq!(accept_json, vec!["application/json"]);
+
+        // 2. `allow_binary = true` (`U07`): `Accept-Encoding` is still stripped, and
+        //    `Accept: application/json` is NOT forced.
+        svc.clear_recorded();
+        let conn_bin = OpenApiConnector::new_http(
+            &doc_bytes,
+            OpenApiConfig {
+                base_url: format!("http://{addr}"),
+                allow_binary: true,
+                ..OpenApiConfig::default()
+            },
+            &StaticCredentialSource::new(),
+        )
+        .expect("build bin connector");
+
+        let mut s2 = conn_bin
+            .query(
+                QueryRequest {
+                    operation: "customer".to_owned(),
+                    arguments: Some(args),
+                    ..QueryRequest::default()
+                },
+                CallScope::for_test(tokio::time::Instant::now() + Duration::from_secs(5)),
+            )
+            .await
+            .expect("query starts");
+        while let Some(item) = s2.next().await {
+            let _ = item.expect("item ok");
+        }
+
+        let rec_bin = svc.recorded_requests();
+        assert_eq!(rec_bin.len(), 1);
+        assert!(
+            !rec_bin[0]
+                .headers
+                .iter()
+                .any(|(k, _)| k.eq_ignore_ascii_case("accept-encoding")),
+            "Accept-Encoding must never be sent when allow_binary=true: {:?}",
+            rec_bin[0].headers
+        );
+        assert!(
+            !rec_bin[0].headers.iter().any(|(k, v)| {
+                k.eq_ignore_ascii_case("accept") && v.eq_ignore_ascii_case("application/json")
+            }),
+            "Accept: application/json must not be forced when allow_binary=true: {:?}",
+            rec_bin[0].headers
+        );
+
+        // 3. Explicit `Accept` header on `UpstreamRequest` is preserved without appending a second
+        //    default `Accept: application/json` (`!has_accept` guard in `U07`).
+        svc.clear_recorded();
+        let direct_up = HttpUpstream::new(
+            ValidatedBaseUrl::parse(&format!("http://{addr}"), false, false).expect("url"),
+            DEFAULT_MAX_UPSTREAM_BODY_BYTES,
+            false,
+        )
+        .expect("build HttpUpstream");
+        let _ = direct_up
+            .send(UpstreamRequest {
+                path_and_query: "/customers/1".to_owned(),
+                headers: vec![(
+                    ACCEPT,
+                    HeaderValue::from_static("application/vnd.shop+json"),
+                )],
+                timeout: Duration::from_secs(5),
+            })
+            .await
+            .expect("send explicit accept");
+        let rec_custom = svc.recorded_requests();
+        let accept_custom: Vec<&str> = rec_custom[0]
+            .headers
+            .iter()
+            .filter(|(k, _)| k.eq_ignore_ascii_case("accept"))
+            .map(|(_, v)| v.as_str())
+            .collect();
+        assert_eq!(accept_custom, vec!["application/vnd.shop+json"]);
+
+        server.abort();
+    }
 }
