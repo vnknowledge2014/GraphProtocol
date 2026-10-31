@@ -1,0 +1,46 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Cycle",
+    "version": "1.0.0"
+  },
+  "paths": {
+    "/cycle": {
+      "get": {
+        "operationId": "cycle",
+        "responses": {
+          "200": {
+            "description": "ok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NodeA"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "NodeA": {
+        "type": "object",
+        "properties": {
+          "next": {
+            "$ref": "#/components/schemas/NodeB"
+          }
+        }
+      },
+      "NodeB": {
+        "type": "object",
+        "properties": {
+          "prev": {
+            "$ref": "#/components/schemas/NodeA"
+          }
+        }
+      }
+    }
+  }
+}

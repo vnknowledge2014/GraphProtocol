@@ -1,0 +1,158 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Chain",
+    "version": "1.0.0"
+  },
+  "paths": {
+    "/chain": {
+      "get": {
+        "operationId": "chain",
+        "responses": {
+          "200": {
+            "description": "ok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Hop0"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Hop0": {
+        "$ref": "#/components/schemas/Hop1"
+      },
+      "Hop1": {
+        "$ref": "#/components/schemas/Hop2"
+      },
+      "Hop2": {
+        "$ref": "#/components/schemas/Hop3"
+      },
+      "Hop3": {
+        "$ref": "#/components/schemas/Hop4"
+      },
+      "Hop4": {
+        "$ref": "#/components/schemas/Hop5"
+      },
+      "Hop5": {
+        "$ref": "#/components/schemas/Hop6"
+      },
+      "Hop6": {
+        "$ref": "#/components/schemas/Hop7"
+      },
+      "Hop7": {
+        "$ref": "#/components/schemas/Hop8"
+      },
+      "Hop8": {
+        "$ref": "#/components/schemas/Hop9"
+      },
+      "Hop9": {
+        "$ref": "#/components/schemas/Hop10"
+      },
+      "Hop10": {
+        "$ref": "#/components/schemas/Hop11"
+      },
+      "Hop11": {
+        "$ref": "#/components/schemas/Hop12"
+      },
+      "Hop12": {
+        "$ref": "#/components/schemas/Hop13"
+      },
+      "Hop13": {
+        "$ref": "#/components/schemas/Hop14"
+      },
+      "Hop14": {
+        "$ref": "#/components/schemas/Hop15"
+      },
+      "Hop15": {
+        "$ref": "#/components/schemas/Hop16"
+      },
+      "Hop16": {
+        "$ref": "#/components/schemas/Hop17"
+      },
+      "Hop17": {
+        "$ref": "#/components/schemas/Hop18"
+      },
+      "Hop18": {
+        "$ref": "#/components/schemas/Hop19"
+      },
+      "Hop19": {
+        "$ref": "#/components/schemas/Hop20"
+      },
+      "Hop20": {
+        "$ref": "#/components/schemas/Hop21"
+      },
+      "Hop21": {
+        "$ref": "#/components/schemas/Hop22"
+      },
+      "Hop22": {
+        "$ref": "#/components/schemas/Hop23"
+      },
+      "Hop23": {
+        "$ref": "#/components/schemas/Hop24"
+      },
+      "Hop24": {
+        "$ref": "#/components/schemas/Hop25"
+      },
+      "Hop25": {
+        "$ref": "#/components/schemas/Hop26"
+      },
+      "Hop26": {
+        "$ref": "#/components/schemas/Hop27"
+      },
+      "Hop27": {
+        "$ref": "#/components/schemas/Hop28"
+      },
+      "Hop28": {
+        "$ref": "#/components/schemas/Hop29"
+      },
+      "Hop29": {
+        "$ref": "#/components/schemas/Hop30"
+      },
+      "Hop30": {
+        "$ref": "#/components/schemas/Hop31"
+      },
+      "Hop31": {
+        "$ref": "#/components/schemas/Hop32"
+      },
+      "Hop32": {
+        "$ref": "#/components/schemas/Hop33"
+      },
+      "Hop33": {
+        "$ref": "#/components/schemas/Hop34"
+      },
+      "Hop34": {
+        "$ref": "#/components/schemas/Hop35"
+      },
+      "Hop35": {
+        "$ref": "#/components/schemas/Hop36"
+      },
+      "Hop36": {
+        "$ref": "#/components/schemas/Hop37"
+      },
+      "Hop37": {
+        "$ref": "#/components/schemas/Hop38"
+      },
+      "Hop38": {
+        "$ref": "#/components/schemas/Hop39"
+      },
+      "Hop39": {
+        "$ref": "#/components/schemas/Hop40"
+      },
+      "Hop40": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer"
+          }
+        }
+      }
+    }
+  }
+}
