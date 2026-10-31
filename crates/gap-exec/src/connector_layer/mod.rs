@@ -7,10 +7,12 @@ use std::fmt;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
+use std::task::{Context, Poll};
 
+use futures_util::Stream;
 use gap_core::error::{ErrorCode, GapError, GapResult, NgcErrorCode, NgcErrorInfo};
 use gap_core::ids::BranchUid;
-use gap_core::snapshot::{BranchDescriptor, Snapshot};
+use gap_core::snapshot::{BranchDescriptor, BranchLimits, Snapshot};
 use gap_ngc_sdk::connector::{
     BoxStream, CallScope, Connector, NgcResult, is_sensitive_metadata_key,
 };
@@ -18,6 +20,120 @@ use gap_ngc_sdk::core::{ServerConfig, ServerCore};
 use gap_ngc_sdk::grpc::GrpcClient;
 use gap_proto::ngc::v1::{QueryRequest, QueryResponse};
 use tokio::sync::{OwnedSemaphorePermit, Semaphore};
+use tokio::time::{Instant, Sleep, sleep_until};
+use tokio_util::sync::{CancellationToken, WaitForCancellationFutureOwned};
+
+/// Stream wrapper enforcing `CallScope::cancel`, `CallScope::deadline`, and optional RAII bulkhead
+/// permit retention across the full stream lifetime (`RUN-031`, `NGC-025`, `NGC-071`, `INV-12`).
+///
+/// Dropping `ScopedQueryStream` — or triggering `cancel` / `deadline` — drops `inner` immediately
+/// (which drops `tonic::Streaming` on gRPC, sending HTTP/2 `RST_STREAM` to the connector) and
+/// releases `_permit` back to the branch bulkhead.
+struct ScopedQueryStream {
+    inner: Option<BoxStream<QueryResponse>>,
+    _permit: Option<OwnedSemaphorePermit>,
+    cancel_fut: Pin<Box<WaitForCancellationFutureOwned>>,
+    sleep: Pin<Box<Sleep>>,
+}
+
+impl ScopedQueryStream {
+    fn new(
+        inner: BoxStream<QueryResponse>,
+        permit: Option<OwnedSemaphorePermit>,
+        cancel: CancellationToken,
+        deadline: Instant,
+    ) -> Self {
+        Self {
+            inner: Some(inner),
+            _permit: permit,
+            cancel_fut: Box::pin(cancel.cancelled_owned()),
+            sleep: Box::pin(sleep_until(deadline)),
+        }
+    }
+
+    fn terminate(&mut self) {
+        self.inner = None;
+        self._permit = None;
+    }
+}
+
+impl Stream for ScopedQueryStream {
+    type Item = NgcResult<QueryResponse>;
+
+    fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        let this = self.get_mut();
+        if this.inner.is_none() {
+            return Poll::Ready(None);
+        }
+
+        if this.cancel_fut.as_mut().poll(cx).is_ready() {
+            this.terminate();
+            return Poll::Ready(Some(Err(NgcErrorInfo::new(
+                NgcErrorCode::Cancelled,
+                "call cancelled",
+            ))));
+        }
+
+        if this.sleep.as_mut().poll(cx).is_ready() {
+            this.terminate();
+            return Poll::Ready(Some(Err(NgcErrorInfo::new(
+                NgcErrorCode::DeadlineExceeded,
+                "call deadline exceeded",
+            ))));
+        }
+
+        let poll_res = {
+            let Some(ref mut stream) = this.inner else {
+                return Poll::Ready(None);
+            };
+            stream.as_mut().poll_next(cx)
+        };
+
+        match poll_res {
+            Poll::Pending => Poll::Pending,
+            Poll::Ready(None) => {
+                this.terminate();
+                Poll::Ready(None)
+            }
+            Poll::Ready(Some(Err(err))) => {
+                this.terminate();
+                Poll::Ready(Some(Err(err)))
+            }
+            Poll::Ready(Some(Ok(item))) => Poll::Ready(Some(Ok(item))),
+        }
+    }
+}
+
+/// Stream wrapper holding an [`OwnedSemaphorePermit`] until the inner stream completes or is dropped (`NGC-071`).
+struct PermitGuardedStream {
+    inner: Option<BoxStream<QueryResponse>>,
+    _permit: Option<OwnedSemaphorePermit>,
+}
+
+impl Stream for PermitGuardedStream {
+    type Item = NgcResult<QueryResponse>;
+
+    fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        let this = self.get_mut();
+        let Some(ref mut stream) = this.inner else {
+            return Poll::Ready(None);
+        };
+        match stream.as_mut().poll_next(cx) {
+            Poll::Pending => Poll::Pending,
+            Poll::Ready(None) => {
+                this.inner = None;
+                this._permit = None;
+                Poll::Ready(None)
+            }
+            Poll::Ready(Some(Err(err))) => {
+                this.inner = None;
+                this._permit = None;
+                Poll::Ready(Some(Err(err)))
+            }
+            Poll::Ready(Some(Ok(item))) => Poll::Ready(Some(Ok(item))),
+        }
+    }
+}
 
 /// Object-safe NGC branch client trait (`NGC-020`, `NGC-025`, `Brief §3.1`).
 ///
@@ -35,14 +151,39 @@ pub trait BranchClient: Send + Sync + 'static {
 impl BranchClient for GrpcClient {
     fn query(
         &self,
-        _request: QueryRequest,
-        _scope: CallScope,
+        request: QueryRequest,
+        scope: CallScope,
     ) -> Pin<Box<dyn Future<Output = NgcResult<BoxStream<QueryResponse>>> + Send + '_>> {
         Box::pin(async move {
-            Err(NgcErrorInfo::new(
-                NgcErrorCode::Unimplemented,
-                "GrpcClient::query stub",
-            ))
+            if scope.cancel.is_cancelled() {
+                return Err(NgcErrorInfo::new(NgcErrorCode::Cancelled, "call cancelled"));
+            }
+            if Instant::now() >= scope.deadline {
+                return Err(NgcErrorInfo::new(
+                    NgcErrorCode::DeadlineExceeded,
+                    "call deadline exceeded",
+                ));
+            }
+
+            let cancel = scope.cancel.clone();
+            let deadline = scope.deadline;
+            let metadata = scope.metadata;
+
+            let stream = tokio::select! {
+                biased;
+                () = cancel.cancelled() => {
+                    return Err(NgcErrorInfo::new(NgcErrorCode::Cancelled, "call cancelled"));
+                }
+                () = sleep_until(deadline) => {
+                    return Err(NgcErrorInfo::new(
+                        NgcErrorCode::DeadlineExceeded,
+                        "call deadline exceeded",
+                    ));
+                }
+                res = self.query_with_metadata(request, &metadata) => res?,
+            };
+
+            Ok(Box::pin(ScopedQueryStream::new(stream, None, cancel, deadline)) as BoxStream<_>)
         })
     }
 }
@@ -91,14 +232,40 @@ impl<C: Connector> InProcess<C> {
 impl<C: Connector> BranchClient for InProcess<C> {
     fn query(
         &self,
-        _request: QueryRequest,
-        _scope: CallScope,
+        request: QueryRequest,
+        scope: CallScope,
     ) -> Pin<Box<dyn Future<Output = NgcResult<BoxStream<QueryResponse>>> + Send + '_>> {
         Box::pin(async move {
-            Err(NgcErrorInfo::new(
-                NgcErrorCode::Unimplemented,
-                "InProcess::query stub",
-            ))
+            if scope.cancel.is_cancelled() {
+                return Err(NgcErrorInfo::new(NgcErrorCode::Cancelled, "call cancelled"));
+            }
+            if Instant::now() >= scope.deadline {
+                return Err(NgcErrorInfo::new(
+                    NgcErrorCode::DeadlineExceeded,
+                    "call deadline exceeded",
+                ));
+            }
+
+            let cancel = scope.cancel.clone();
+            let deadline = scope.deadline;
+            let metadata = scope.metadata;
+
+            let core_stream = tokio::select! {
+                biased;
+                () = cancel.cancelled() => {
+                    return Err(NgcErrorInfo::new(NgcErrorCode::Cancelled, "call cancelled"));
+                }
+                () = sleep_until(deadline) => {
+                    return Err(NgcErrorInfo::new(
+                        NgcErrorCode::DeadlineExceeded,
+                        "call deadline exceeded",
+                    ));
+                }
+                res = self.core.query(request, metadata, cancel.clone()) => res?,
+            };
+
+            let boxed: BoxStream<QueryResponse> = Box::pin(core_stream);
+            Ok(Box::pin(ScopedQueryStream::new(boxed, None, cancel, deadline)) as BoxStream<_>)
         })
     }
 }
@@ -184,6 +351,25 @@ impl RegisteredBranch {
     pub const fn metadata(&self) -> &BTreeMap<String, String> {
         &self.metadata
     }
+
+    /// Collects sensitive metadata values registered for this branch so error sanitisation can
+    /// scrub any echoed credential (`INV-15`).
+    #[must_use]
+    pub fn sensitive_values(&self) -> Vec<&str> {
+        let mut out = Vec::new();
+        for (k, v) in &self.metadata {
+            if is_sensitive_metadata_key(k) && !v.is_empty() {
+                out.push(v.as_str());
+                if let Some((_scheme, rest)) = v.split_once(' ') {
+                    let trimmed = rest.trim();
+                    if !trimmed.is_empty() {
+                        out.push(trimmed);
+                    }
+                }
+            }
+        }
+        out
+    }
 }
 
 /// Builder for an immutable [`ConnectorRegistry`] (`INV-02`).
@@ -239,6 +425,15 @@ impl ConnectorRegistryBuilder {
     }
 }
 
+/// Failure when opening a branch query through [`ConnectorRegistry::open_query`].
+#[derive(Debug)]
+pub enum BranchQueryError {
+    /// Registry lookup or bulkhead saturation error (`GAP_BRANCH_UNAVAILABLE` / `GAP_OVERLOADED`).
+    Registry(GapError),
+    /// Connector-returned `NgcErrorInfo` (to be mapped + sanitised with branch secrets).
+    Connector(NgcErrorInfo),
+}
+
 /// Immutable per-branch client registry (`INV-02`: `BTreeMap<BranchUid, RegisteredBranch>`, zero locks on read path).
 ///
 /// # Connection Pooling (`v0`)
@@ -282,10 +477,10 @@ impl ConnectorRegistry {
     ) -> Self {
         let mut entries = BTreeMap::new();
         for (uid, client) in clients {
-            let max_in_flight = snapshot.branches.get(&uid).map_or_else(
-                || gap_core::snapshot::BranchLimits::default().max_in_flight,
-                |b| b.limits.max_in_flight,
-            );
+            let max_in_flight = snapshot
+                .branches
+                .get(&uid)
+                .map_or_else(|| BranchLimits::default().max_in_flight, |b| b.limits.max_in_flight);
             entries.insert(uid, RegisteredBranch::new(client, max_in_flight));
         }
         Self { entries }
@@ -337,10 +532,120 @@ impl ConnectorRegistry {
         &self,
         uid: &BranchUid,
     ) -> GapResult<(&RegisteredBranch, OwnedSemaphorePermit)> {
-        let _ = uid;
-        Err(GapError::new(
-            ErrorCode::Internal,
-            "try_acquire_branch stub",
-        ))
+        let Some(entry) = self.entries.get(uid) else {
+            return Err(GapError::new(
+                ErrorCode::BranchUnavailable,
+                format!("no client registered for branch `{uid}`"),
+            ));
+        };
+        let permit = Arc::clone(&entry.bulkhead)
+            .try_acquire_owned()
+            .map_err(|_| {
+                GapError::new(
+                    ErrorCode::Overloaded,
+                    format!(
+                        "branch `{uid}` bulkhead saturated (max_in_flight={})",
+                        entry.max_in_flight
+                    ),
+                )
+                .with_retry(true, None)
+            })?;
+        Ok((entry, permit))
+    }
+
+    /// Acquires a non-queueing bulkhead permit for `uid`, merges branch call metadata into `scope`,
+    /// opens the `Query` stream, and retains the bulkhead permit across the returned stream's
+    /// lifetime (`NGC-071`, `INV-02`, `INV-12`).
+    ///
+    /// # Errors
+    ///
+    /// Returns [`BranchQueryError::Registry`] on missing branch or bulkhead saturation, or
+    /// [`BranchQueryError::Connector`] on connector failure.
+    pub async fn open_query(
+        &self,
+        uid: &BranchUid,
+        request: QueryRequest,
+        mut scope: CallScope,
+    ) -> Result<BoxStream<QueryResponse>, BranchQueryError> {
+        let (entry, permit) = self
+            .try_acquire_branch(uid)
+            .map_err(BranchQueryError::Registry)?;
+
+        for (k, v) in &entry.metadata {
+            scope
+                .metadata
+                .entry(k.clone())
+                .or_insert_with(|| v.clone());
+        }
+
+        let client = Arc::clone(&entry.client);
+        let stream = client
+            .query(request, scope)
+            .await
+            .map_err(BranchQueryError::Connector)?;
+
+        Ok(Box::pin(PermitGuardedStream {
+            inner: Some(stream),
+            _permit: Some(permit),
+        }))
+    }
+}
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+mod tests {
+    use std::time::Duration;
+
+    use futures_util::StreamExt as _;
+    use gap_ngc_sdk::mock::MockConnector;
+
+    use super::*;
+
+    // spec: INV-02, NGC-071
+    #[tokio::test(start_paused = true)]
+    async fn bulkhead_permit_held_across_open_stream_and_released_on_drop() {
+        let uid = BranchUid::parse("018bcfe5-6c01-7010-8101-010101010101").expect("uid");
+        let mock = MockConnector::new().on_query(|_req, _scope| {
+            Ok(Box::pin(futures_util::stream::pending()))
+        });
+        let client: Arc<dyn BranchClient> =
+            Arc::new(InProcess::from_connector(mock, ServerConfig::default()));
+        let reg = ConnectorRegistry::builder()
+            .register(uid, client, 1)
+            .build();
+
+        assert_eq!(reg.available_permits(&uid), Some(1));
+        let mut s1 = reg
+            .open_query(
+                &uid,
+                QueryRequest::default(),
+                CallScope::for_test(Instant::now() + Duration::from_secs(5)),
+            )
+            .await
+            .expect("slot 1 opens");
+        assert_eq!(reg.available_permits(&uid), Some(0));
+
+        // Second call while s1 is still open must fail immediately with GAP_OVERLOADED!
+        let err = match reg
+            .open_query(
+                &uid,
+                QueryRequest::default(),
+                CallScope::for_test(Instant::now() + Duration::from_secs(5)),
+            )
+            .await
+        {
+            Err(BranchQueryError::Registry(e)) => e,
+            Err(BranchQueryError::Connector(e)) => {
+                panic!("expected BranchQueryError::Registry, got connector error {e:?}")
+            }
+            Ok(_) => panic!("expected BranchQueryError::Registry, got Ok(stream)"),
+        };
+        assert_eq!(err.code(), ErrorCode::Overloaded);
+        assert!(err.retry().retryable);
+
+        // Dropping s1 immediately releases the permit.
+        let _ = futures_util::poll!(s1.next());
+        drop(s1);
+        assert_eq!(reg.available_permits(&uid), Some(1));
     }
 }
