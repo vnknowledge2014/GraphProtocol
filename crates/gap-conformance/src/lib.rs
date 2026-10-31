@@ -13,5 +13,6 @@ pub mod driver;
 pub mod fixture;
 pub mod matcher;
 pub mod ngc_kit;
+pub mod offline;
 pub mod report;
 pub mod runner;

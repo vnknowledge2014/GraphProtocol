@@ -1,0 +1,26 @@
+{
+  "name": "a persistedQuery hash equal to the SHA-256 of the query is accepted",
+  "class": [
+    "Core"
+  ],
+  "spec": [
+    "GQL-061"
+  ],
+  "schema": "fixtures/shop.graphql",
+  "request": {
+    "query": "{ orders { id } }",
+    "extensions": {
+      "persistedQuery": {
+        "version": 1,
+        "sha256Hash": "9f9cd1d335e3c4e6c48c79a526ee918b12095248b579476cedb5e9a98dca9505"
+      }
+    }
+  },
+  "expect": {
+    "status": 200,
+    "data": {
+      "orders": []
+    },
+    "errors": []
+  }
+}

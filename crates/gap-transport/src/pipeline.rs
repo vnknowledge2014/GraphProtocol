@@ -539,7 +539,10 @@ where
                 })
             })?;
 
-            let variables = authz.http_req.variables.unwrap_or_default();
+            // Execute with the variables coerced against the operation's definitions (GraphQL spec
+            // "CoerceVariableValues"): declared defaults applied, undeclared variables dropped, input
+            // coercion (`Int` for `ID`, ...) done once. The raw map would silently ignore `$x: T = default`.
+            let variables = coerced_variables_to_json_map(&*authz.validated.coerced_variables);
             let exec_req = ExecStageRequest {
                 request_id: authz.request_id,
                 snapshot: authz.snapshot,
@@ -1021,6 +1024,16 @@ pub fn build_graphql_pipeline(state: Arc<AppState>) -> GraphqlPipelineService {
     }
     .layer(op_svc);
     TransportMuxLayer { state }.layer(gw_svc)
+}
+
+/// Converts the validator's coerced variable map into the `serde_json` map the executor binds from.
+fn coerced_variables_to_json_map<T: serde::Serialize + ?Sized>(
+    coerced: &T,
+) -> serde_json::Map<String, serde_json::Value> {
+    match serde_json::to_value(coerced) {
+        Ok(serde_json::Value::Object(map)) => map,
+        _ => serde_json::Map::new(),
+    }
 }
 
 #[cfg(test)]

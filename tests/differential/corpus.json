@@ -1,0 +1,390 @@
+{
+ "schema": "schema.graphql",
+ "documents": [
+  {
+   "id": "ok-shorthand",
+   "doc": "{ shopVersion }",
+   "expect": "valid",
+   "note": "anonymous shorthand query"
+  },
+  {
+   "id": "ok-named-query",
+   "doc": "query Q { shopVersion }",
+   "expect": "valid",
+   "note": ""
+  },
+  {
+   "id": "ok-mutation",
+   "doc": "mutation M { createOrder(sku: \"S\") { id } }",
+   "expect": "valid",
+   "note": ""
+  },
+  {
+   "id": "exec-type-definition",
+   "doc": "{ shopVersion } type Foo { id: ID }",
+   "expect": "invalid",
+   "note": "ExecutableDefinitions: type system definition in a request document"
+  },
+  {
+   "id": "op-duplicate-name",
+   "doc": "query A { shopVersion } query A { shopVersion }",
+   "expect": "invalid",
+   "note": "UniqueOperationNames"
+  },
+  {
+   "id": "op-lone-anonymous",
+   "doc": "{ shopVersion } query B { shopVersion }",
+   "expect": "invalid",
+   "note": "LoneAnonymousOperation"
+  },
+  {
+   "id": "op-two-anonymous",
+   "doc": "{ shopVersion } { shopVersion }",
+   "expect": "invalid",
+   "note": "LoneAnonymousOperation"
+  },
+  {
+   "id": "op-subscription-missing-root",
+   "doc": "subscription S { shopVersion }",
+   "expect": "invalid",
+   "note": "the schema has no subscription root type: invalid per the GraphQL spec (validation needs the root operation type); graphql-js only fails at execution time",
+   "allow": {
+    "graphql-js": "valid"
+   }
+  },
+  {
+   "id": "syn-unterminated",
+   "doc": "{ shopVersion ",
+   "expect": "syntax",
+   "note": ""
+  },
+  {
+   "id": "syn-empty",
+   "doc": "",
+   "expect": "syntax",
+   "note": "a document needs at least one definition"
+  },
+  {
+   "id": "syn-garbage",
+   "doc": "this is not graphql",
+   "expect": "syntax",
+   "note": ""
+  },
+  {
+   "id": "syn-bad-string",
+   "doc": "{ order(id: \"abc) { id } }",
+   "expect": "syntax",
+   "note": ""
+  },
+  {
+   "id": "syn-unexpected-brace",
+   "doc": "{ shopVersion } }",
+   "expect": "syntax",
+   "note": ""
+  },
+  {
+   "id": "field-unknown",
+   "doc": "{ nope }",
+   "expect": "invalid",
+   "note": "FieldsOnCorrectType"
+  },
+  {
+   "id": "field-unknown-nested",
+   "doc": "{ order(id: \"1\") { nope } }",
+   "expect": "invalid",
+   "note": "FieldsOnCorrectType"
+  },
+  {
+   "id": "field-on-scalar",
+   "doc": "{ shopVersion { x } }",
+   "expect": "invalid",
+   "note": "ScalarLeafs"
+  },
+  {
+   "id": "field-object-without-selection",
+   "doc": "{ order(id: \"1\") }",
+   "expect": "invalid",
+   "note": "ScalarLeafs"
+  },
+  {
+   "id": "field-merge-conflict-args",
+   "doc": "{ a: order(id: \"1\") { id } a: order(id: \"2\") { id } }",
+   "expect": "invalid",
+   "note": "OverlappingFieldsCanBeMerged"
+  },
+  {
+   "id": "field-merge-conflict-names",
+   "doc": "{ a: shopVersion a: order(id: \"1\") { id } }",
+   "expect": "invalid",
+   "note": "OverlappingFieldsCanBeMerged"
+  },
+  {
+   "id": "field-merge-ok",
+   "doc": "{ order(id: \"1\") { id } order(id: \"1\") { sku } }",
+   "expect": "valid",
+   "note": "identical field and arguments merge"
+  },
+  {
+   "id": "field-typename",
+   "doc": "{ order(id: \"1\") { __typename id } }",
+   "expect": "valid",
+   "note": ""
+  },
+  {
+   "id": "arg-unknown",
+   "doc": "{ order(id: \"1\", limit: 3) { id } }",
+   "expect": "invalid",
+   "note": "KnownArgumentNames"
+  },
+  {
+   "id": "arg-missing-required",
+   "doc": "{ order { id } }",
+   "expect": "invalid",
+   "note": "ProvidedRequiredArguments"
+  },
+  {
+   "id": "arg-duplicate",
+   "doc": "{ order(id: \"1\", id: \"2\") { id } }",
+   "expect": "invalid",
+   "note": "UniqueArgumentNames"
+  },
+  {
+   "id": "arg-wrong-literal-type",
+   "doc": "{ orders(first: \"two\") { id } }",
+   "expect": "invalid",
+   "note": "ValuesOfCorrectType"
+  },
+  {
+   "id": "arg-null-for-non-null",
+   "doc": "{ order(id: null) { id } }",
+   "expect": "invalid",
+   "note": "ValuesOfCorrectType"
+  },
+  {
+   "id": "arg-int-for-id",
+   "doc": "{ order(id: 5) { id } }",
+   "expect": "valid",
+   "note": "ID accepts an Int literal"
+  },
+  {
+   "id": "arg-float-for-int",
+   "doc": "{ orders(first: 1.5) { id } }",
+   "expect": "invalid",
+   "note": "ValuesOfCorrectType"
+  },
+  {
+   "id": "arg-enum-unknown",
+   "doc": "{ orders(status: SHIPPD) { id } }",
+   "expect": "invalid",
+   "note": "ValuesOfCorrectType"
+  },
+  {
+   "id": "arg-enum-as-string",
+   "doc": "{ orders(status: \"PAID\") { id } }",
+   "expect": "invalid",
+   "note": "an enum literal must not be a string"
+  },
+  {
+   "id": "arg-enum-ok",
+   "doc": "{ orders(status: PAID) { id } }",
+   "expect": "valid",
+   "note": ""
+  },
+  {
+   "id": "arg-input-object-ok",
+   "doc": "{ orders(filter: { status: PAID, minTotal: 5 }) { id } }",
+   "expect": "valid",
+   "note": ""
+  },
+  {
+   "id": "arg-input-object-unknown-field",
+   "doc": "{ orders(filter: { nope: 1 }) { id } }",
+   "expect": "invalid",
+   "note": "ValuesOfCorrectType"
+  },
+  {
+   "id": "arg-input-object-duplicate-field",
+   "doc": "{ orders(filter: { status: PAID, status: OPEN }) { id } }",
+   "expect": "invalid",
+   "note": "UniqueInputFieldNames"
+  },
+  {
+   "id": "arg-input-object-missing-required",
+   "doc": "{ orders(filter: { status: PAID, minTotal: null }) { id } }",
+   "expect": "invalid",
+   "note": "null for a non-null input field"
+  },
+  {
+   "id": "var-ok",
+   "doc": "query Q($id: ID!) { order(id: $id) { id } }",
+   "expect": "valid",
+   "note": "",
+   "variables": {
+    "id": "1"
+   }
+  },
+  {
+   "id": "var-default-ok",
+   "doc": "query Q($n: Int = 1) { orders(first: $n) { id } }",
+   "expect": "valid",
+   "note": ""
+  },
+  {
+   "id": "var-undefined",
+   "doc": "{ orders(first: $n) { id } }",
+   "expect": "invalid",
+   "note": "NoUndefinedVariables"
+  },
+  {
+   "id": "var-unused",
+   "doc": "query Q($u: Int) { shopVersion }",
+   "expect": "invalid",
+   "note": "NoUnusedVariables"
+  },
+  {
+   "id": "var-duplicate",
+   "doc": "query($a: Int, $a: Int) { orders(first: $a) { id } }",
+   "expect": "invalid",
+   "note": "UniqueVariableNames"
+  },
+  {
+   "id": "var-output-type",
+   "doc": "query Q($o: Order) { shopVersion }",
+   "expect": "invalid",
+   "note": "VariablesAreInputTypes"
+  },
+  {
+   "id": "var-unknown-type",
+   "doc": "query Q($o: Nope) { shopVersion }",
+   "expect": "invalid",
+   "note": "KnownTypeNames"
+  },
+  {
+   "id": "var-position-mismatch",
+   "doc": "query Q($s: String) { orders(first: $s) { id } }",
+   "expect": "invalid",
+   "note": "VariablesInAllowedPosition"
+  },
+  {
+   "id": "var-nullable-for-non-null",
+   "doc": "query Q($id: ID) { order(id: $id) { id } }",
+   "expect": "invalid",
+   "note": "VariablesInAllowedPosition"
+  },
+  {
+   "id": "var-nullable-with-default-for-non-null",
+   "doc": "query Q($id: ID = \"1\") { order(id: $id) { id } }",
+   "expect": "valid",
+   "note": "a default makes a nullable variable usable for a non-null position"
+  },
+  {
+   "id": "frag-ok",
+   "doc": "{ order(id: \"1\") { ...F } } fragment F on Order { id }",
+   "expect": "valid",
+   "note": ""
+  },
+  {
+   "id": "frag-unknown",
+   "doc": "{ order(id: \"1\") { ...Nope } }",
+   "expect": "invalid",
+   "note": "KnownFragmentNames"
+  },
+  {
+   "id": "frag-unused",
+   "doc": "{ shopVersion } fragment U on Order { id }",
+   "expect": "invalid",
+   "note": "NoUnusedFragments"
+  },
+  {
+   "id": "frag-cycle",
+   "doc": "{ order(id: \"1\") { ...A } } fragment A on Order { ...B } fragment B on Order { ...A }",
+   "expect": "invalid",
+   "note": "NoFragmentCycles"
+  },
+  {
+   "id": "frag-self-cycle",
+   "doc": "{ order(id: \"1\") { ...A } } fragment A on Order { ...A }",
+   "expect": "invalid",
+   "note": "NoFragmentCycles"
+  },
+  {
+   "id": "frag-duplicate-name",
+   "doc": "{ order(id: \"1\") { ...A } } fragment A on Order { id } fragment A on Order { sku }",
+   "expect": "invalid",
+   "note": "UniqueFragmentNames"
+  },
+  {
+   "id": "frag-unknown-type",
+   "doc": "{ order(id: \"1\") { ... on Nope { id } } }",
+   "expect": "invalid",
+   "note": "KnownTypeNames"
+  },
+  {
+   "id": "frag-on-scalar",
+   "doc": "{ order(id: \"1\") { ... on String { id } } }",
+   "expect": "invalid",
+   "note": "FragmentsOnCompositeTypes"
+  },
+  {
+   "id": "frag-impossible-spread",
+   "doc": "{ order(id: \"1\") { ... on Line { quantity } } }",
+   "expect": "invalid",
+   "note": "PossibleFragmentSpreads"
+  },
+  {
+   "id": "frag-interface-ok",
+   "doc": "{ entity(id: \"1\") { id ... on Order { sku } } }",
+   "expect": "valid",
+   "note": ""
+  },
+  {
+   "id": "frag-union-ok",
+   "doc": "{ search(term: \"x\") { ... on Order { sku } ... on Line { quantity } } }",
+   "expect": "valid",
+   "note": ""
+  },
+  {
+   "id": "frag-union-field-direct",
+   "doc": "{ search(term: \"x\") { id } }",
+   "expect": "invalid",
+   "note": "FieldsOnCorrectType: a union has no fields besides __typename"
+  },
+  {
+   "id": "dir-skip-ok",
+   "doc": "{ shopVersion @skip(if: true) order(id: \"1\") @include(if: false) { id } }",
+   "expect": "valid",
+   "note": ""
+  },
+  {
+   "id": "dir-unknown",
+   "doc": "{ order(id: \"1\") @unknown { id } }",
+   "expect": "invalid",
+   "note": "KnownDirectives"
+  },
+  {
+   "id": "dir-wrong-location",
+   "doc": "query Q @skip(if: true) { shopVersion }",
+   "expect": "invalid",
+   "note": "KnownDirectives: @skip is not allowed on an operation"
+  },
+  {
+   "id": "dir-duplicate",
+   "doc": "{ shopVersion @skip(if: true) @skip(if: false) }",
+   "expect": "invalid",
+   "note": "UniqueDirectivesPerLocation"
+  },
+  {
+   "id": "dir-missing-argument",
+   "doc": "{ shopVersion @skip }",
+   "expect": "invalid",
+   "note": "ProvidedRequiredArguments"
+  },
+  {
+   "id": "dir-wrong-arg-type",
+   "doc": "{ shopVersion @include(if: \"yes\") }",
+   "expect": "invalid",
+   "note": "ValuesOfCorrectType"
+  }
+ ],
+ "allow_list_policy": "`expect` is the verdict required by the GraphQL specification (September 2025). `allow` documents an implementation that deliberately or knowingly deviates; every entry needs a `note`. An unlisted disagreement fails the test."
+}

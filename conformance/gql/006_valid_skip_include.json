@@ -1,0 +1,21 @@
+{
+  "name": "@skip and @include drop fields before execution",
+  "class": [
+    "Core"
+  ],
+  "spec": [
+    "GQL-001",
+    "GQL-002"
+  ],
+  "schema": "fixtures/shop.graphql",
+  "request": {
+    "query": "{ shopVersion @skip(if: true) order(id: \"1\") @include(if: false) { id } orders { id } }"
+  },
+  "expect": {
+    "status": 200,
+    "data": {
+      "orders": []
+    },
+    "errors": []
+  }
+}

@@ -1,0 +1,33 @@
+{
+  "name": "an unknown enum value is a type mismatch with didYouMean",
+  "class": [
+    "Core"
+  ],
+  "spec": [
+    "GQL-002",
+    "GQL-070"
+  ],
+  "schema": "fixtures/shop.graphql",
+  "request": {
+    "query": "{ orders(status: SHIPPD) { id } }"
+  },
+  "expect": {
+    "status": 422,
+    "dataNull": true,
+    "headers": {
+      "content-type": "application/graphql-response+json; charset=utf-8"
+    },
+    "errors": [
+      {
+        "extensions": {
+          "code": "GAP_TYPE_MISMATCH",
+          "suggestion": {
+            "didYouMean": [
+              "SHIPPED"
+            ]
+          }
+        }
+      }
+    ]
+  }
+}

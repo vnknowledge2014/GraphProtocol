@@ -872,16 +872,24 @@ name = "gap-conformance"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "apollo-compiler",
  "axum",
+ "blake3",
+ "bytes",
  "clap",
  "futures-util",
  "gap-core",
+ "gap-exec",
  "gap-mcp",
  "gap-ngc-openapi",
  "gap-ngc-sdk",
+ "gap-plan",
  "gap-proto",
  "gap-ql",
+ "gap-snapshot",
  "gap-testkit",
+ "gap-transport",
+ "http-body-util",
  "proptest",
  "prost",
  "prost-types",
@@ -893,6 +901,7 @@ dependencies = [
  "tokio",
  "toml",
  "tonic",
+ "tower",
  "tracing",
 ]
 

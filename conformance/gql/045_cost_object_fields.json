@@ -1,0 +1,25 @@
+{
+  "name": "planned cost of { order(id: \"1\") { id sku status totalCents note } }",
+  "class": [
+    "Core"
+  ],
+  "spec": [
+    "GQL-041",
+    "GQL-050"
+  ],
+  "schema": "fixtures/shop.graphql",
+  "request": {
+    "query": "{ order(id: \"1\") { id sku status totalCents note } }"
+  },
+  "expect": {
+    "status": 200,
+    "errors": [],
+    "extensions": {
+      "gap": {
+        "cost": {
+          "planned": 8
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "name": "an unused fragment is rejected",
+  "class": [
+    "Core"
+  ],
+  "spec": [
+    "GQL-002"
+  ],
+  "schema": "fixtures/shop.graphql",
+  "request": {
+    "query": "{ shopVersion } fragment Unused on Query { shopVersion }"
+  },
+  "expect": {
+    "status": 422,
+    "dataNull": true,
+    "headers": {
+      "content-type": "application/graphql-response+json; charset=utf-8"
+    },
+    "errors": [
+      {
+        "extensions": {
+          "code": "GAP_VALIDATION_ERROR"
+        }
+      }
+    ]
+  }
+}

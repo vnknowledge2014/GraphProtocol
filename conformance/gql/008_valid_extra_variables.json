@@ -1,0 +1,23 @@
+{
+  "name": "variables not declared by the operation are ignored",
+  "class": [
+    "Core"
+  ],
+  "spec": [
+    "GQL-002"
+  ],
+  "schema": "fixtures/shop.graphql",
+  "request": {
+    "query": "{ orders { id } }",
+    "variables": {
+      "unused": 1
+    }
+  },
+  "expect": {
+    "status": 200,
+    "data": {
+      "orders": []
+    },
+    "errors": []
+  }
+}

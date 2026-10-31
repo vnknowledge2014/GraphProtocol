@@ -1,0 +1,24 @@
+{
+  "name": "a supplied variable overrides its default",
+  "class": [
+    "Core"
+  ],
+  "spec": [
+    "GQL-001",
+    "GQL-002"
+  ],
+  "schema": "fixtures/shop.graphql",
+  "request": {
+    "query": "query Q($first: Int = 1) { orders(first: $first) { id } }",
+    "variables": {
+      "first": 3
+    }
+  },
+  "expect": {
+    "status": 200,
+    "data": {
+      "orders": []
+    },
+    "errors": []
+  }
+}

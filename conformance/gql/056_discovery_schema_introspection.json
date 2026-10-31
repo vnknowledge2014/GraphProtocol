@@ -1,0 +1,17 @@
+{
+  "name": "__schema introspection is available",
+  "class": [
+    "Discovery"
+  ],
+  "spec": [
+    "GQL-024"
+  ],
+  "schema": "fixtures/shop.graphql",
+  "request": {
+    "query": "{ __schema { queryType { name } } }"
+  },
+  "expect": {
+    "status": 200,
+    "errors": []
+  }
+}

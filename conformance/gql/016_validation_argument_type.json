@@ -1,0 +1,27 @@
+{
+  "name": "a literal of the wrong type for an argument is a type mismatch",
+  "class": [
+    "Core"
+  ],
+  "spec": [
+    "GQL-002"
+  ],
+  "schema": "fixtures/shop.graphql",
+  "request": {
+    "query": "{ orders(first: \"two\") { id } }"
+  },
+  "expect": {
+    "status": 422,
+    "dataNull": true,
+    "headers": {
+      "content-type": "application/graphql-response+json; charset=utf-8"
+    },
+    "errors": [
+      {
+        "extensions": {
+          "code": "GAP_TYPE_MISMATCH"
+        }
+      }
+    ]
+  }
+}

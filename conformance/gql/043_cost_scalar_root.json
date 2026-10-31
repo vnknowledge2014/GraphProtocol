@@ -1,0 +1,25 @@
+{
+  "name": "planned cost of { shopVersion }",
+  "class": [
+    "Core"
+  ],
+  "spec": [
+    "GQL-041",
+    "GQL-050"
+  ],
+  "schema": "fixtures/shop.graphql",
+  "request": {
+    "query": "{ shopVersion }"
+  },
+  "expect": {
+    "status": 200,
+    "errors": [],
+    "extensions": {
+      "gap": {
+        "cost": {
+          "planned": 1
+        }
+      }
+    }
+  }
+}

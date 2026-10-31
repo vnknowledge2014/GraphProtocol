@@ -1,0 +1,23 @@
+{
+  "name": "a valid enum value in a variable is accepted",
+  "class": [
+    "Core"
+  ],
+  "spec": [
+    "GQL-002"
+  ],
+  "schema": "fixtures/shop.graphql",
+  "request": {
+    "query": "query Q($s: shop_OrderStatus) { orders(status: $s) { id } }",
+    "variables": {
+      "s": "PAID"
+    }
+  },
+  "expect": {
+    "status": 200,
+    "data": {
+      "orders": []
+    },
+    "errors": []
+  }
+}

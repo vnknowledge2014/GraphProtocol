@@ -1,0 +1,43 @@
+"A purchase made in the shop."
+type Order {
+    id: ID!
+    sku: String!
+    status: OrderStatus!
+    totalCents: Int! @cost(weight: 2)
+    note: String
+    lines(first: Int): [Line!]! @cost(weight: 1, listSize: 100)
+}
+
+type Line {
+    id: ID!
+    quantity: Int!
+}
+
+enum OrderStatus {
+    OPEN
+    PAID
+    SHIPPED
+}
+
+type Customer {
+    id: ID!
+    orders(first: Int): [Order!]! @cost(weight: 1, listSize: 100)
+}
+
+"A node of a self-referential chain, used to exercise depth limits."
+type Node {
+    id: ID!
+    next: Node
+}
+
+type Query {
+    shopVersion: String @cost(weight: 1)
+    order(id: ID!): Order @cost(weight: 2)
+    orders(first: Int, status: OrderStatus): [Order!]! @cost(weight: 2, listSize: 10)
+    customers(first: Int): [Customer!]! @cost(weight: 1, listSize: 100)
+    node(id: ID!): Node
+}
+
+type Mutation {
+    createOrder(sku: String!): Order! @cost(weight: 5)
+}

@@ -1,0 +1,29 @@
+{
+  "name": "an operationName that matches nothing cannot be resolved",
+  "class": [
+    "Core"
+  ],
+  "spec": [
+    "GQL-002",
+    "GQL-003"
+  ],
+  "schema": "fixtures/shop.graphql",
+  "request": {
+    "query": "query A { shopVersion }",
+    "operationName": "Z"
+  },
+  "expect": {
+    "status": 422,
+    "dataNull": true,
+    "headers": {
+      "content-type": "application/graphql-response+json; charset=utf-8"
+    },
+    "errors": [
+      {
+        "extensions": {
+          "code": "GAP_VALIDATION_ERROR"
+        }
+      }
+    ]
+  }
+}

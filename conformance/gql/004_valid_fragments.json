@@ -1,0 +1,21 @@
+{
+  "name": "named and inline fragments on the supergraph types validate",
+  "class": [
+    "Core"
+  ],
+  "spec": [
+    "GQL-001",
+    "GQL-002"
+  ],
+  "schema": "fixtures/shop.graphql",
+  "request": {
+    "query": "{ orders { ...F ... on shop_Order { sku } } } fragment F on shop_Order { id }"
+  },
+  "expect": {
+    "status": 200,
+    "data": {
+      "orders": []
+    },
+    "errors": []
+  }
+}

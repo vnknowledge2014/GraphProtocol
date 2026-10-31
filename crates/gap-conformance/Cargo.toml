@@ -12,12 +12,21 @@ path = "src/main.rs"
 
 [dependencies]
 anyhow.workspace = true
+apollo-compiler.workspace = true
+axum.workspace = true
+blake3.workspace = true
+bytes.workspace = true
 clap = { workspace = true, features = ["derive"] }
 futures-util.workspace = true
 gap-core.workspace = true
+gap-exec.workspace = true
 gap-ngc-sdk.workspace = true
+gap-plan.workspace = true
 gap-proto.workspace = true
 gap-ql.workspace = true
+gap-snapshot.workspace = true
+gap-transport.workspace = true
+http-body-util.workspace = true
 prost.workspace = true
 prost-types.workspace = true
 reqwest = { workspace = true, features = ["json"] }
@@ -27,6 +36,7 @@ thiserror.workspace = true
 tokio = { workspace = true, features = ["io-util", "macros", "net", "process", "rt-multi-thread", "sync", "time"] }
 toml.workspace = true
 tonic.workspace = true
+tower = { workspace = true, features = ["util"] }
 tracing.workspace = true
 
 [dev-dependencies]

@@ -1,0 +1,28 @@
+{
+  "name": "nested lists beyond max_cost_units are refused before any branch call",
+  "class": [
+    "Core"
+  ],
+  "spec": [
+    "GQL-041",
+    "GQL-040"
+  ],
+  "schema": "fixtures/shop.graphql",
+  "request": {
+    "query": "{ customers(first: 100) { orders(first: 100) { lines(first: 100) { id } } } }"
+  },
+  "expect": {
+    "status": 422,
+    "dataNull": true,
+    "headers": {
+      "content-type": "application/graphql-response+json; charset=utf-8"
+    },
+    "errors": [
+      {
+        "extensions": {
+          "code": "GAP_COMPLEXITY_EXCEEDED"
+        }
+      }
+    ]
+  }
+}

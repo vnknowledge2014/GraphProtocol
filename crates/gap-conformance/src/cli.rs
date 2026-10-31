@@ -1,14 +1,17 @@
 //! Command-line parser and mode dispatch for `gap-conformance` (`VER-011`).
 
+use std::collections::BTreeSet;
 use std::ffi::OsString;
 use std::io::Write;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use clap::Parser;
 use clap::error::ErrorKind;
 
 use crate::driver::{ConformanceDriver, HttpDriver, PrincipalsMap};
-use crate::fixture::{ConformanceClass, load_fixtures_dir};
+use crate::fixture::{ConformanceClass, LoadedFixture, load_fixtures_dir};
+use crate::offline::{OfflineDriver, group_by_schema};
+use crate::report::ConformanceReport;
 use crate::runner::{RunnerConfig, run_suite};
 
 /// Exit code when all executed fixtures passed (`VER-011`).
@@ -92,12 +95,8 @@ where
         return execute_connector_kit(&cli, stdout, stderr).await;
     }
 
-    if cli.offline.is_some() {
-        let _ = writeln!(
-            stderr,
-            "error: --offline mode is not yet implemented; WP-M1-02 and WP-M1-08 provide in-process offline server execution."
-        );
-        return EXIT_USAGE_OR_UNSUPPORTED;
+    if let Some(ref dir) = cli.offline {
+        return execute_offline_mode(&cli, dir, stdout, stderr).await;
     }
 
     if cli.spawn.is_some() {
@@ -211,6 +210,17 @@ pub async fn execute_target_mode(
 
     let report = run_suite(driver, &fixtures, &config, None).await;
 
+    emit_report(&report, cli, &cli.fixtures, stdout, stderr)
+}
+
+/// Writes the optional JSON report and the one-line summary, and maps the report to the exit code.
+fn emit_report(
+    report: &ConformanceReport,
+    cli: &CliArgs,
+    fixtures_dir: &Path,
+    stdout: &mut dyn Write,
+    stderr: &mut dyn Write,
+) -> u8 {
     if let Some(ref report_path) = cli.report {
         let serialized = match report.to_json_pretty() {
             Ok(json) => json,
@@ -254,7 +264,7 @@ pub async fn execute_target_mode(
         let _ = writeln!(
             stderr,
             "error: no fixtures selected (directory: `{}`, class filter: [{class_filter}])",
-            cli.fixtures.display(),
+            fixtures_dir.display(),
         );
         return EXIT_USAGE_OR_UNSUPPORTED;
     }
@@ -275,6 +285,61 @@ pub async fn execute_target_mode(
     } else {
         EXIT_CONFORMANCE_FAILURE
     }
+}
+
+/// Runs the fixtures under `dir` against in-process test servers built from their `schema` SDL files
+/// (`--offline`, see [`crate::offline`]).
+async fn execute_offline_mode(
+    cli: &CliArgs,
+    dir: &Path,
+    stdout: &mut dyn Write,
+    stderr: &mut dyn Write,
+) -> u8 {
+    let fixtures = match load_fixtures_dir(dir) {
+        Ok(list) => list,
+        Err(err) => {
+            let _ = writeln!(stderr, "error: {err}");
+            return EXIT_USAGE_OR_UNSUPPORTED;
+        }
+    };
+    let groups = match group_by_schema(dir, &fixtures) {
+        Ok(groups) => groups,
+        Err(err) => {
+            let _ = writeln!(stderr, "error: {err}");
+            return EXIT_USAGE_OR_UNSUPPORTED;
+        }
+    };
+    let principal_names: BTreeSet<String> = fixtures
+        .iter()
+        .filter_map(|fixture| fixture.principal.clone())
+        .collect();
+
+    let mut results = Vec::new();
+    for group in groups.values() {
+        let driver = match OfflineDriver::new(&group.name, &group.sdl, &principal_names) {
+            Ok(driver) => driver,
+            Err(err) => {
+                let _ = writeln!(stderr, "error: {err}");
+                return EXIT_USAGE_OR_UNSUPPORTED;
+            }
+        };
+        let principals = PrincipalsMap::from_entries(
+            driver
+                .principal_tokens()
+                .iter()
+                .map(|(name, token)| (name.clone(), token.expose_secret().clone())),
+        );
+        let config = RunnerConfig {
+            classes: cli.classes.clone(),
+            principals,
+        };
+        let owned: Vec<LoadedFixture> = group.fixtures.iter().map(|f| (*f).clone()).collect();
+        results.extend(run_suite(&driver, &owned, &config, None).await.fixtures);
+    }
+    results.sort_by(|a, b| a.file.cmp(&b.file));
+    let report =
+        ConformanceReport::from_results(format!("offline:{}", dir.display()), results, None);
+    emit_report(&report, cli, dir, stdout, stderr)
 }
 
 #[cfg(test)]
@@ -431,16 +496,10 @@ mod tests {
         assert!(String::from_utf8_lossy(&out).contains("gap-conformance"));
         assert!(err.is_empty());
 
-        for (args, expected_wp) in [
-            (
-                vec!["gap-conformance", "--offline", "conformance/gql"],
-                "WP-M1-02",
-            ),
-            (
-                vec!["gap-conformance", "--spawn", "examples/walking-skeleton"],
-                "WP-M1-12",
-            ),
-        ] {
+        for (args, expected_wp) in [(
+            vec!["gap-conformance", "--spawn", "examples/walking-skeleton"],
+            "WP-M1-12",
+        )] {
             let mut out_buf = Vec::new();
             let mut err_buf = Vec::new();
             let code = run_cli_from_args(args.clone(), &mut out_buf, &mut err_buf).await;
@@ -482,6 +541,85 @@ mod tests {
             assert_eq!(code, 2, "bad args {bad_args:?} must return exit code 2");
             assert!(!err_buf.is_empty());
         }
+    }
+
+    // spec: GQL-003, GQL-070, VER-011
+    #[tokio::test]
+    async fn offline_mode_runs_fixtures_against_the_in_process_server() {
+        let tmp = TempDir::new().expect("tempdir");
+        let dir = tmp.path();
+        fs::write(
+            dir.join("unknown_field.json"),
+            json!({
+                "name": "unknown field is a validation error",
+                "class": ["Core"],
+                "spec": ["GQL-070"],
+                "principal": "agent-readonly",
+                "request": {"query": "{ order(id: \"1\") { nope } }"},
+                "expect": {"status": 422, "dataNull": true,
+                           "errors": [{"extensions": {"code": "GAP_UNKNOWN_FIELD"}}]}
+            })
+            .to_string(),
+        )
+        .expect("write fixture");
+        fs::write(
+            dir.join("wrong_expectation.json"),
+            json!({
+                "name": "deliberately wrong expectation",
+                "class": ["Core"],
+                "spec": ["GQL-003"],
+                "request": {"query": "{ shopVersion }"},
+                "expect": {"status": 418}
+            })
+            .to_string(),
+        )
+        .expect("write fixture");
+
+        let offline = dir.to_str().expect("utf8 path");
+        let mut out = Vec::new();
+        let mut err = Vec::new();
+        let code = run_cli_from_args(
+            ["gap-conformance", "--offline", offline],
+            &mut out,
+            &mut err,
+        )
+        .await;
+        let stdout = String::from_utf8_lossy(&out);
+        assert_eq!(
+            code,
+            EXIT_CONFORMANCE_FAILURE,
+            "stdout: {stdout} stderr: {}",
+            String::from_utf8_lossy(&err)
+        );
+        assert!(stdout.contains("total=2 passed=1 failed=1"), "{stdout}");
+
+        // Only the passing fixture's class/spec selection: exit 0.
+        fs::remove_file(dir.join("wrong_expectation.json")).expect("remove fixture");
+        let mut out = Vec::new();
+        let mut err = Vec::new();
+        let code = run_cli_from_args(
+            ["gap-conformance", "--offline", offline],
+            &mut out,
+            &mut err,
+        )
+        .await;
+        assert_eq!(code, EXIT_OK, "{}", String::from_utf8_lossy(&err));
+
+        // A directory that does not exist is a usage error.
+        let missing = tmp.path().join("missing");
+        let mut out = Vec::new();
+        let mut err = Vec::new();
+        let code = run_cli_from_args(
+            [
+                "gap-conformance",
+                "--offline",
+                missing.to_str().expect("utf8"),
+            ],
+            &mut out,
+            &mut err,
+        )
+        .await;
+        assert_eq!(code, EXIT_USAGE_OR_UNSUPPORTED);
     }
 
     // spec: GQL-002, INV-15 (VER-010, VER-011)
