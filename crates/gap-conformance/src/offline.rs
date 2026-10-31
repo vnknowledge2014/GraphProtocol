@@ -135,7 +135,7 @@ impl OfflineDriver {
         let branch_id = BranchId::new(branch_slug.as_str()).map_err(|e| invalid(e.to_string()))?;
         let input = BranchInput {
             id: branch_id,
-            uid: uid.clone(),
+            uid,
             protocol: Protocol::Grpc,
             trust: TrustTier::T0,
             endpoint: Endpoint {
