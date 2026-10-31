@@ -430,6 +430,111 @@ fn branch_slug(schema_name: &str) -> String {
 mod tests {
     use super::*;
 
+    fn request(query: &str) -> FixtureRequest {
+        FixtureRequest {
+            query: query.to_owned(),
+            variables: None,
+            operation_name: None,
+            extensions: None,
+        }
+    }
+
+    // spec: GQL-003, SEC-010
+    #[tokio::test]
+    async fn generated_principal_keys_authenticate_and_unknown_keys_are_refused() {
+        let principals = BTreeSet::from(["agent-readonly".to_owned()]);
+        let driver = OfflineDriver::new("shop.graphql", DEFAULT_SCHEMA_SDL, &principals).unwrap();
+        let token = driver.principal_tokens().get("agent-readonly").unwrap();
+        let ok = driver
+            .execute(&request("{ shopVersion }"), Some(token))
+            .await
+            .unwrap();
+        assert_eq!(ok.status, 200, "{ok:?}");
+        let bogus = SecretString::new("offline-not-a-key".to_owned());
+        let refused = driver
+            .execute(&request("{ shopVersion }"), Some(&bogus))
+            .await
+            .unwrap();
+        assert_eq!(refused.status, 401, "{refused:?}");
+        let anonymous = driver
+            .execute(&request("{ shopVersion }"), None)
+            .await
+            .unwrap();
+        assert_eq!(
+            anonymous.status, 200,
+            "dev profile allows anonymous: {anonymous:?}"
+        );
+    }
+
+    // spec: GQL-003
+    #[test]
+    fn a_schema_without_root_fields_or_with_broken_sdl_is_refused() {
+        let none = BTreeSet::new();
+        for (name, sdl) in [
+            ("empty.graphql", "type Foo { id: ID }"),
+            ("broken.graphql", "type Query {"),
+        ] {
+            let err = OfflineDriver::new(name, sdl, &none).unwrap_err();
+            assert!(
+                matches!(err, OfflineError::SchemaInvalid { .. }),
+                "{name}: {err}"
+            );
+        }
+    }
+
+    // spec: GQL-003
+    #[tokio::test]
+    async fn each_schema_gets_its_own_server() {
+        let none = BTreeSet::new();
+        let a = OfflineDriver::new("a.graphql", "type Query { alpha: String }", &none).unwrap();
+        let b = OfflineDriver::new("b.graphql", "type Query { beta: String }", &none).unwrap();
+        for (driver, own, other) in [(&a, "alpha", "beta"), (&b, "beta", "alpha")] {
+            let ok = driver
+                .execute(&request(&format!("{{ {own} }}")), None)
+                .await
+                .unwrap();
+            assert_eq!(ok.status, 200, "{own}: {ok:?}");
+            let unknown = driver
+                .execute(&request(&format!("{{ {other} }}")), None)
+                .await
+                .unwrap();
+            assert_eq!(unknown.status, 422, "{other}: {unknown:?}");
+        }
+        assert_ne!(a.target(), b.target());
+    }
+
+    // spec: GQL-003
+    #[test]
+    fn group_by_schema_reads_each_schema_once_and_reports_unreadable_files() {
+        let dir = tempfile::TempDir::new().unwrap();
+        std::fs::write(dir.path().join("a.graphql"), "type Query { alpha: String }").unwrap();
+        let mk = |name: &str, schema: Option<&str>| {
+            let doc = serde_json::json!({
+                "name": name, "class": ["Core"], "spec": ["GQL-003"],
+                "request": {"query": "{ alpha }"}, "expect": {"status": 200}
+            });
+            let mut doc = doc;
+            if let Some(schema) = schema {
+                doc["schema"] = serde_json::json!(schema);
+            }
+            std::fs::write(dir.path().join(format!("{name}.json")), doc.to_string()).unwrap();
+        };
+        mk("01_with", Some("a.graphql"));
+        mk("02_with_again", Some("a.graphql"));
+        mk("03_default", None);
+        let fixtures = crate::fixture::load_fixtures_dir(dir.path()).unwrap();
+        let groups = group_by_schema(dir.path(), &fixtures).unwrap();
+        assert_eq!(groups.len(), 2);
+        assert_eq!(groups[&Some("a.graphql".to_owned())].fixtures.len(), 2);
+        assert_eq!(groups[&None].fixtures.len(), 1);
+        assert_eq!(groups[&None].sdl, DEFAULT_SCHEMA_SDL);
+
+        mk("04_missing", Some("missing.graphql"));
+        let fixtures = crate::fixture::load_fixtures_dir(dir.path()).unwrap();
+        let err = group_by_schema(dir.path(), &fixtures).unwrap_err();
+        assert!(matches!(err, OfflineError::SchemaRead { .. }), "{err}");
+    }
+
     // spec: GQL-003
     #[test]
     fn branch_slug_is_always_a_valid_branch_id() {
