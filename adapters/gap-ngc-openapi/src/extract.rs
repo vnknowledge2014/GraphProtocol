@@ -99,10 +99,12 @@ pub struct NativeBatchSpec {
     pub path: String,
     /// List-valued query parameter on `path` (e.g. `"ids"`).
     pub param: String,
-    /// Field in each returned row carrying the lookup key (e.g. `"id"`).
+    /// Unique key field in each returned row carrying the lookup key (e.g. `"id"`).
     pub key_field: String,
-    /// Maximum number of distinct keys sent in one upstream batch call (`>= 1`).
+    /// Effective maximum number of distinct keys sent in one upstream batch call (`>= 1`, capped by target `limit.maximum`).
     pub max_batch_size: u32,
+    /// `true` when the batch target operation declares an integer `limit` query parameter (`CMP-032`).
+    pub target_has_limit: bool,
 }
 
 /// Segment of an OpenAPI path template (`/customers/{id}`).
@@ -455,6 +457,7 @@ fn parse_native_batch(ext_val: &Value) -> Result<NativeBatchSpec, ExtractError> 
         param,
         key_field,
         max_batch_size,
+        target_has_limit: false,
     })
 }
 
@@ -946,16 +949,22 @@ pub fn extract_operations(doc: &OpenApiDocument) -> Result<Extraction, ExtractEr
         });
     }
 
-    // Cross-validate every `x-gap-in-param` target against extracted GET operations.
-    for op in &operations {
-        if let Some(nb) = &op.native_batch {
-            let Some(target) = operations.iter().find(|cand| cand.path_template == nb.path) else {
+    // Cross-validate every `x-gap-in-param` target against extracted GET operations and resolve
+    // `limit` capping for server-side paginated batch endpoints (`CMP-032`).
+    let params_by_path: BTreeMap<String, Vec<ParameterSpec>> = operations
+        .iter()
+        .map(|op| (op.path_template.clone(), op.parameters.clone()))
+        .collect();
+
+    for op in &mut operations {
+        if let Some(nb) = &mut op.native_batch {
+            let Some(target_params) = params_by_path.get(&nb.path) else {
                 return Err(ExtractError::InvalidStructure(format!(
                     "`x-gap-in-param` on `{}` references missing GET path `{}`",
                     op.path_template, nb.path
                 )));
             };
-            let has_array_param = target.parameters.iter().any(|p| {
+            let has_array_param = target_params.iter().any(|p| {
                 p.location == ParamLocation::Query
                     && p.name == nb.param
                     && matches!(p.shape, ParamShape::Array(_))
@@ -965,6 +974,34 @@ pub fn extract_operations(doc: &OpenApiDocument) -> Result<Extraction, ExtractEr
                     "`x-gap-in-param` target `{}` lacks array query parameter `{}`",
                     nb.path, nb.param
                 )));
+            }
+            if let Some(limit_param) = target_params.iter().find(|p| {
+                p.location == ParamLocation::Query
+                    && p.name == "limit"
+                    && p.shape == ParamShape::Scalar(ParamPrimitive::Integer)
+            }) {
+                nb.target_has_limit = true;
+                if let Some(max_f) = limit_param
+                    .schema
+                    .get("maximum")
+                    .and_then(Value::as_f64)
+                    .filter(|f| f.is_finite())
+                {
+                    let max_int = max_f.floor();
+                    if max_int < 1.0 {
+                        return Err(ExtractError::InvalidStructure(format!(
+                            "`x-gap-in-param` target `{}` has `limit.maximum` < 1",
+                            nb.path
+                        )));
+                    }
+                    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+                    let cap = if max_int >= f64::from(u32::MAX) {
+                        u32::MAX
+                    } else {
+                        max_int as u32
+                    };
+                    nb.max_batch_size = nb.max_batch_size.min(cap);
+                }
             }
         }
     }
@@ -1031,6 +1068,7 @@ mod tests {
                 param: "ids".to_owned(),
                 key_field: "id".to_owned(),
                 max_batch_size: 50,
+                target_has_limit: true,
             })
         );
         // `Authorization` header parameter in OpenAPI must be ignored, while `X-Request-Tag` is kept.

@@ -1092,6 +1092,9 @@ impl<U: Upstream> OpenApiConnector<U> {
                                 if tp.name == nb.param {
                                     return false;
                                 }
+                                if nb.target_has_limit && tp.name == "limit" {
+                                    return false;
+                                }
                                 if target_reg.extracted.has_offset_pagination
                                     && matches!(tp.name.as_str(), "limit" | "offset")
                                 {
@@ -1154,7 +1157,11 @@ impl<U: Upstream> OpenApiConnector<U> {
                             keys_array.push(kv.clone());
                         }
                     }
+                    let key_count = keys_array.len();
                     batch_args.insert(nb.param.clone(), Value::Array(keys_array));
+                    if nb.target_has_limit {
+                        batch_args.insert("limit".to_owned(), json!(key_count));
+                    }
 
                     let built = match build_request(
                         &target_reg.extracted,
@@ -3371,6 +3378,177 @@ mod tests {
             assert_eq!(
                 by_idx[&idx].rows, solo_chunks[0].rows,
                 "foreach index {idx} must equal solo read for id={id} fields={fields}"
+            );
+        }
+    }
+
+    // spec: CMP-032, NGC-015, NGC-020, NGC-026
+    #[tokio::test]
+    async fn t6_native_batch_with_server_paging_caps_max_batch_size_and_sends_explicit_limit() {
+        #[derive(Default)]
+        struct DefaultPageSizeOneUpstream {
+            recorded: std::sync::Mutex<Vec<String>>,
+        }
+
+        impl Upstream for Arc<DefaultPageSizeOneUpstream> {
+            async fn send(&self, req: UpstreamRequest) -> Result<UpstreamResponse, UpstreamError> {
+                self.recorded
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .push(req.path_and_query.clone());
+
+                let query_opt = req.path_and_query.split_once('?').map(|(_, q)| q);
+                let mut wanted_ids: Vec<i64> = Vec::new();
+                // Simulate a server that applies a tiny default page size (`1`) whenever `limit` is omitted.
+                let mut effective_limit: usize = 1;
+                if let Some(q) = query_opt {
+                    for pair in q.split('&').filter(|s| !s.is_empty()) {
+                        if let Some((k, v)) = pair.split_once('=') {
+                            if k == "ids" {
+                                for part in v.split(',').filter(|s| !s.is_empty()) {
+                                    if let Ok(parsed) = part.parse::<i64>() {
+                                        wanted_ids.push(parsed);
+                                    }
+                                }
+                            } else if k == "limit"
+                                && let Ok(lim) = v.parse::<usize>()
+                            {
+                                effective_limit = lim;
+                            }
+                        }
+                    }
+                }
+
+                let rows: Vec<Value> = wanted_ids
+                    .into_iter()
+                    .take(effective_limit)
+                    .map(|id| {
+                        json!({
+                            "id": id,
+                            "name": format!("Customer {id}"),
+                            "region": "eu",
+                            "credit_cents": id * 100
+                        })
+                    })
+                    .collect();
+
+                let mut headers = HeaderMap::new();
+                headers.insert(
+                    axum::http::header::CONTENT_TYPE,
+                    axum::http::HeaderValue::from_static("application/json"),
+                );
+                Ok(UpstreamResponse {
+                    status: StatusCode::OK,
+                    headers,
+                    body: serde_json::to_vec(&rows).expect("json"),
+                })
+            }
+        }
+
+        let mut shop_json: Value = serde_json::from_slice(&shop_bytes()).expect("parse shop");
+        // Set `/customers` `limit.maximum = 5` while `/customers/{id}` keeps `x-gap-in-param.max_batch_size = 50`.
+        let params = shop_json["paths"]["/customers"]["get"]["parameters"]
+            .as_array_mut()
+            .expect("customers parameters");
+        let limit_param = params
+            .iter_mut()
+            .find(|p| p["name"] == "limit")
+            .expect("limit param");
+        limit_param["schema"]["maximum"] = json!(5);
+        assert_eq!(
+            shop_json["paths"]["/customers/{id}"]["get"]["x-gap-in-param"]["max_batch_size"],
+            json!(50)
+        );
+        let doc_bytes = serde_json::to_vec(&shop_json).expect("serialize");
+
+        let upstream = Arc::new(DefaultPageSizeOneUpstream::default());
+        let conn = OpenApiConnector::from_document_bytes(
+            &doc_bytes,
+            OpenApiConfig::default(),
+            &StaticCredentialSource::new(),
+            Arc::clone(&upstream),
+        )
+        .expect("build connector");
+
+        let desc = conn
+            .describe(DescribeRequest::default(), scope_in(Duration::from_secs(5)))
+            .await
+            .expect("describe")
+            .description
+            .expect("description");
+        assert_eq!(
+            desc.limits.expect("limits").max_batch_size,
+            5,
+            "Describe.limits.max_batch_size must reflect target limit.maximum cap"
+        );
+
+        let sets: Vec<VariableSet> = (1_i64..=12_i64)
+            .enumerate()
+            .map(|(idx, id)| VariableSet {
+                index: u32::try_from(idx).expect("u32"),
+                values: Some(json_struct(&json!({ "id": id }))),
+            })
+            .collect();
+
+        let (chunks, complete) = collect_stream(
+            conn.query(
+                QueryRequest {
+                    operation: "customer".to_owned(),
+                    foreach: sets,
+                    ..QueryRequest::default()
+                },
+                scope_in(Duration::from_secs(5)),
+            )
+            .await
+            .expect("foreach starts"),
+        )
+        .await
+        .expect("foreach completes");
+
+        assert_eq!(complete.upstream_calls, 3);
+        let recorded = upstream
+            .recorded
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone();
+        assert_eq!(recorded.len(), 3);
+
+        for rec in &recorded {
+            let query = rec.split_once('?').map(|(_, q)| q).expect("query string");
+            let mut key_count: Option<usize> = None;
+            let mut sent_limit: Option<usize> = None;
+            for pair in query.split('&') {
+                if let Some((k, v)) = pair.split_once('=') {
+                    if k == "ids" {
+                        key_count = Some(v.split(',').filter(|s| !s.is_empty()).count());
+                    } else if k == "limit" {
+                        sent_limit = Some(v.parse::<usize>().expect("limit usize"));
+                    }
+                }
+            }
+            let kc = key_count.expect("ids present");
+            assert!(kc <= 5, "chunk exceeded cap 5: {rec}");
+            assert_eq!(
+                sent_limit,
+                Some(kc),
+                "every batch call must send limit equal to its key count: {rec}"
+            );
+        }
+
+        // All 12 distinct keys received their row despite server's default page size of 1.
+        let by_idx: BTreeMap<u32, _> = chunks.iter().map(|c| (c.foreach_index, c)).collect();
+        assert_eq!(by_idx.len(), 12);
+        for idx in 0_u32..12_u32 {
+            assert!(by_idx[&idx].error.is_none());
+            assert_eq!(
+                by_idx[&idx].rows.len(),
+                1,
+                "index {idx} was silently dropped"
+            );
+            let row = prost_struct_to_json_map(&by_idx[&idx].rows[0]);
+            assert_eq!(
+                json_number_as_exact_i64(&row["id"]),
+                Some(i64::from(idx) + 1)
             );
         }
     }

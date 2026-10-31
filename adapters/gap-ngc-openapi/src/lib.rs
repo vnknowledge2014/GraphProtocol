@@ -14,6 +14,17 @@
 //! whose literal segments contain dot segments, `\`, `?`, `#`, `%`, spaces, or control characters
 //! are skipped during extraction (`unsafe_path_literal`).
 //!
+//! # Native Batching (`CMP-032`, `NGC-020`, `NGC-026`)
+//!
+//! Single-keyed reads carrying `x-gap-in-param` batch `foreach` calls through the declared target
+//! `GET` endpoint. `x-gap-in-param.key_field` MUST be a unique key (at most one row per key).
+//! When the batch target declares an integer `limit` query parameter, effective `max_batch_size`
+//! (and `Describe.limits.max_batch_size`) is capped at `limit.maximum` and each batch call sends
+//! `limit = <distinct keys in call>` so server-side default page sizes cannot truncate trailing
+//! keys into false absences. Non-key per-index variables shared with the batch target are grouped
+//! deterministically; unsupported non-key variables fail only their own index with
+//! `INVALID_ARGUMENT`.
+//!
 //! # Upstream Error Mapping (`NGC-060`, `NGC-061`, `CMP-033`)
 //!
 //! Upstream HTTP statuses and transport outcomes map deterministically to [`gap_core::error::NgcErrorCode`].
