@@ -1,0 +1,209 @@
+{
+  "name": "resources/list, resources/templates/list, and resources/read serve static and templated GAP resources with caching metadata",
+  "class": ["Facade-MCP"],
+  "spec": ["CMP-005"],
+  "setup": {
+    "snapshot": "two-branch",
+    "principal": {
+      "subject": "user:alice",
+      "tenant": "acme-corp",
+      "scopes": ["read:all"]
+    }
+  },
+  "steps": [
+    {
+      "request": {
+        "http": {
+          "method": "POST",
+          "path": "/mcp",
+          "headers": {
+            "content-type": "application/json",
+            "accept": "application/json, text/event-stream",
+            "mcp-protocol-version": "2026-07-28",
+            "mcp-method": "resources/list"
+          }
+        },
+        "body": {
+          "jsonrpc": "2.0",
+          "id": 1,
+          "method": "resources/list",
+          "params": {
+            "_meta": {
+              "io.modelcontextprotocol/protocolVersion": "2026-07-28",
+              "io.modelcontextprotocol/clientCapabilities": {}
+            }
+          }
+        }
+      },
+      "expect": {
+        "status": 200,
+        "body": {
+          "jsonrpc": "2.0",
+          "id": 1,
+          "result": {
+            "resultType": "complete",
+            "resources": [
+              { "uri": "gap://meta", "name": "meta" },
+              { "uri": "gap://operations", "name": "operations" }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "http": {
+          "method": "POST",
+          "path": "/mcp",
+          "headers": {
+            "content-type": "application/json",
+            "accept": "application/json, text/event-stream",
+            "mcp-protocol-version": "2026-07-28",
+            "mcp-method": "resources/templates/list"
+          }
+        },
+        "body": {
+          "jsonrpc": "2.0",
+          "id": 2,
+          "method": "resources/templates/list",
+          "params": {
+            "_meta": {
+              "io.modelcontextprotocol/protocolVersion": "2026-07-28",
+              "io.modelcontextprotocol/clientCapabilities": {}
+            }
+          }
+        }
+      },
+      "expect": {
+        "status": 200,
+        "body": {
+          "jsonrpc": "2.0",
+          "id": 2,
+          "result": {
+            "resultType": "complete",
+            "resourceTemplates": [
+              { "uriTemplate": "gap://schema/{type}", "name": "schema_type" },
+              { "uriTemplate": "gap://task/{id}", "name": "task_snapshot" }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "http": {
+          "method": "POST",
+          "path": "/mcp",
+          "headers": {
+            "content-type": "application/json",
+            "accept": "application/json, text/event-stream",
+            "mcp-protocol-version": "2026-07-28",
+            "mcp-method": "resources/read",
+            "mcp-name": "gap://schema/Billing_Invoice"
+          }
+        },
+        "body": {
+          "jsonrpc": "2.0",
+          "id": 3,
+          "method": "resources/read",
+          "params": {
+            "uri": "gap://schema/Billing_Invoice",
+            "_meta": {
+              "io.modelcontextprotocol/protocolVersion": "2026-07-28",
+              "io.modelcontextprotocol/clientCapabilities": {}
+            }
+          }
+        }
+      },
+      "expect": {
+        "status": 200,
+        "body": {
+          "jsonrpc": "2.0",
+          "id": 3,
+          "result": {
+            "resultType": "complete",
+            "contents": [
+              {
+                "uri": "gap://schema/Billing_Invoice",
+                "mimeType": "application/graphql"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "http": {
+          "method": "POST",
+          "path": "/mcp",
+          "headers": {
+            "content-type": "application/json",
+            "accept": "application/json, text/event-stream",
+            "mcp-protocol-version": "2026-07-28",
+            "mcp-method": "resources/read",
+            "mcp-name": "gap://unknown/item"
+          }
+        },
+        "body": {
+          "jsonrpc": "2.0",
+          "id": 4,
+          "method": "resources/read",
+          "params": {
+            "uri": "gap://unknown/item",
+            "_meta": {
+              "io.modelcontextprotocol/protocolVersion": "2026-07-28",
+              "io.modelcontextprotocol/clientCapabilities": {}
+            }
+          }
+        }
+      },
+      "expect": {
+        "status": 400,
+        "body": {
+          "jsonrpc": "2.0",
+          "id": 4,
+          "error": {
+            "code": -32602
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "http": {
+          "method": "POST",
+          "path": "/mcp",
+          "headers": {
+            "content-type": "application/json",
+            "accept": "application/json, text/event-stream",
+            "mcp-protocol-version": "2026-07-28",
+            "mcp-method": "resources/subscribe"
+          }
+        },
+        "body": {
+          "jsonrpc": "2.0",
+          "id": 5,
+          "method": "resources/subscribe",
+          "params": {
+            "uri": "gap://meta",
+            "_meta": {
+              "io.modelcontextprotocol/protocolVersion": "2026-07-28",
+              "io.modelcontextprotocol/clientCapabilities": {}
+            }
+          }
+        }
+      },
+      "expect": {
+        "status": 404,
+        "body": {
+          "jsonrpc": "2.0",
+          "id": 5,
+          "error": {
+            "code": -32601
+          }
+        }
+      }
+    }
+  ]
+}

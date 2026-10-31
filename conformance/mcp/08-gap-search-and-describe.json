@@ -1,0 +1,97 @@
+{
+  "name": "gap_describe serves L0 overview, SDL types, and operations; gap_search returns SearchResult",
+  "class": ["Facade-MCP"],
+  "spec": ["CMP-002", "CMP-004", "GQL-020", "GQL-023"],
+  "setup": {
+    "snapshot": "two-branch",
+    "principal": {
+      "subject": "user:alice",
+      "tenant": "acme-corp",
+      "scopes": ["read:all"]
+    }
+  },
+  "steps": [
+    {
+      "request": {
+        "stdio": {
+          "jsonrpc": "2.0",
+          "id": 1,
+          "method": "tools/call",
+          "params": {
+            "name": "gap_describe",
+            "arguments": {
+              "overview": true,
+              "types": ["Billing_Invoice"],
+              "depth": 1,
+              "operations": true
+            },
+            "_meta": {
+              "io.modelcontextprotocol/protocolVersion": "2026-07-28",
+              "io.modelcontextprotocol/clientCapabilities": {}
+            }
+          }
+        }
+      },
+      "expect": {
+        "body": {
+          "jsonrpc": "2.0",
+          "id": 1,
+          "result": {
+            "resultType": "complete",
+            "isError": false,
+            "structuredContent": {
+              "data": {
+                "overview": {
+                  "branches": [
+                    { "id": "billing", "trust": "T0" },
+                    { "id": "extnotes", "trust": "T2" }
+                  ]
+                },
+                "operations": [
+                  { "name": "GetInvoice" }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "stdio": {
+          "jsonrpc": "2.0",
+          "id": 2,
+          "method": "tools/call",
+          "params": {
+            "name": "gap_search",
+            "arguments": {
+              "query": "invoice",
+              "limit": 5
+            },
+            "_meta": {
+              "io.modelcontextprotocol/protocolVersion": "2026-07-28",
+              "io.modelcontextprotocol/clientCapabilities": {}
+            }
+          }
+        }
+      },
+      "expect": {
+        "body": {
+          "jsonrpc": "2.0",
+          "id": 2,
+          "result": {
+            "resultType": "complete",
+            "isError": false,
+            "structuredContent": {
+              "data": {
+                "__search": {
+                  "abstained": false
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}
