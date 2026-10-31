@@ -317,7 +317,7 @@ pub fn negotiate_accept(
 pub const fn retry_after_seconds(after_ms: Option<u32>) -> u64 {
     match after_ms {
         Some(0) | None => 1,
-        Some(ms) => ((ms as u64) + 999) / 1_000,
+        Some(ms) => (ms as u64).div_ceil(1_000),
     }
 }
 
@@ -543,20 +543,14 @@ pub fn parse_get_query_params(
 
         match key.as_str() {
             "query" => query = Some(val),
-            "operationName" => {
-                if !val.is_empty() && val != "null" {
-                    operation_name = Some(val);
-                }
+            "operationName" if !val.is_empty() && val != "null" => {
+                operation_name = Some(val);
             }
-            "variables" => {
-                if !val.is_empty() {
-                    variables = parse_query_json_object("variables", &val, max_json_depth)?;
-                }
+            "variables" if !val.is_empty() => {
+                variables = parse_query_json_object("variables", &val, max_json_depth)?;
             }
-            "extensions" => {
-                if !val.is_empty() {
-                    extensions = parse_query_json_object("extensions", &val, max_json_depth)?;
-                }
+            "extensions" if !val.is_empty() => {
+                extensions = parse_query_json_object("extensions", &val, max_json_depth)?;
             }
             _ => {}
         }
@@ -924,7 +918,7 @@ pub fn persisted_id_bytes(id: &PersistedOperationId) -> [u8; 32] {
     if raw.len() == 64 {
         let mut out = [0_u8; 32];
         let mut ok = true;
-        for (idx, pair) in raw.chunks_exact(2).enumerate() {
+        for (idx, pair) in raw.as_chunks::<2>().0.iter().enumerate() {
             match (hex_val(pair[0]), hex_val(pair[1])) {
                 (Some(hi), Some(lo)) => out[idx] = (hi << 4) | lo,
                 _ => {

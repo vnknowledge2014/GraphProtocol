@@ -33,7 +33,8 @@ use crate::pipeline::{
     TransportMuxRequest, build_graphql_pipeline, build_transport_error_response,
 };
 
-/// Per-request correlation metadata injected by [`RouterTelemetryService`] into `Request::extensions`.
+/// Per-request correlation metadata injected by the outer router telemetry layer into
+/// `Request::extensions`.
 #[derive(Debug, Clone)]
 pub struct RequestCorrelation {
     /// Validated or minted UUIDv7 correlation ID (`X-Request-Id`).

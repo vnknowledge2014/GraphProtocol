@@ -650,7 +650,7 @@ where
                 )?;
 
                 validate_span.record("gap.persisted", prep.is_registered);
-                validate_span.record("gap.depth", u64::from(prep.metrics.selection_depth));
+                validate_span.record("gap.depth", prep.metrics.selection_depth);
                 validate_span.record("gap.query_hash", prep.query_blake3_hex.as_str());
 
                 let op_label = prep

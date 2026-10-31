@@ -176,7 +176,7 @@ fn decode_hex_32(hex: &str) -> Option<[u8; 32]> {
         return None;
     }
     let mut out = [0_u8; 32];
-    for (idx, pair) in raw.chunks_exact(2).enumerate() {
+    for (idx, pair) in raw.as_chunks::<2>().0.iter().enumerate() {
         let hi = hex_nibble(pair[0])?;
         let lo = hex_nibble(pair[1])?;
         out[idx] = (hi << 4) | lo;
