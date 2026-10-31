@@ -226,7 +226,7 @@ mod tests {
         }
     }
 
-    // spec: CMP-010, ADR-013
+    // spec: CMP-010
     #[test]
     fn outbound_launch_refuse_policy_and_unlisted_or_relative_paths_never_authorize() {
         assert_eq!(
@@ -251,7 +251,7 @@ mod tests {
         assert_eq!(LaunchPolicy::default(), LaunchPolicy::Refuse);
     }
 
-    // spec: CMP-010, ADR-013
+    // spec: CMP-010
     #[test]
     fn outbound_launch_verifies_the_sha256_before_anything_runs() {
         let (_dir, path) = temp_binary(b"#!/bin/sh\necho hi\n");
@@ -289,7 +289,7 @@ mod tests {
         assert_eq!(verify_binary(&relative), Err(LaunchError::RelativePath));
     }
 
-    // spec: CMP-010, ADR-013
+    // spec: CMP-010
     #[cfg(unix)]
     #[test]
     fn outbound_launch_refuses_symlinks_and_directories() {
@@ -312,7 +312,7 @@ mod tests {
         assert_eq!(verify_binary(&as_dir), Err(LaunchError::NotRegularFile));
     }
 
-    // spec: CMP-010, ADR-013, INV-15
+    // spec: CMP-010, INV-15
     #[test]
     fn outbound_launch_command_has_no_shell_a_cleared_environment_and_only_listed_variables() {
         let entry = AllowedBinary {
@@ -350,7 +350,7 @@ mod tests {
         }
     }
 
-    // spec: CMP-010, ADR-013
+    // spec: CMP-010
     #[tokio::test]
     async fn outbound_spawn_stdio_is_refused_before_any_exec_under_the_default_policy() {
         let result = spawn_stdio(&LaunchPolicy::Refuse, Path::new("/bin/sh"), 1024);

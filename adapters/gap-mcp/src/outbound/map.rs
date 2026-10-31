@@ -631,7 +631,7 @@ mod tests {
         }
     }
 
-    // spec: CMP-011, ADR-015
+    // spec: CMP-011
     #[test]
     fn outbound_names_are_sanitised_deterministically_with_collision_suffixes() {
         for (raw, want) in [
@@ -661,7 +661,7 @@ mod tests {
         }
     }
 
-    // spec: CMP-011, ADR-015
+    // spec: CMP-011
     #[test]
     fn outbound_annotations_are_hints_only_and_admin_classification_decides_the_kind() {
         let mut t = tool(

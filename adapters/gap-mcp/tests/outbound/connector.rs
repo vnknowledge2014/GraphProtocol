@@ -79,7 +79,7 @@ async fn outbound_solo_query_maps_results_over_both_eras_and_both_transports() {
     }
 }
 
-// spec: CMP-011, ADR-015, NGC-010, NGC-012
+// spec: CMP-011, NGC-010, NGC-012
 #[tokio::test(start_paused = true)]
 async fn outbound_describe_is_stable_not_modified_and_honours_admin_classification_over_hints() {
     let server = FakeMcpServer::new(ServerEra::Modern);

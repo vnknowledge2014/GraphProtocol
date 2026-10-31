@@ -43,7 +43,7 @@ fn sha_of(path: &PathBuf) -> String {
         .collect()
 }
 
-// spec: CMP-010, ADR-013
+// spec: CMP-010
 #[tokio::test]
 #[ignore = "needs child processes"]
 async fn outbound_real_stdio_child_runs_only_through_a_verified_allow_list_entry() {
