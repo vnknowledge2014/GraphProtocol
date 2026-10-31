@@ -279,17 +279,24 @@ fn scrub_credential_tokens(input: &str) -> String {
 
     for word in words {
         let (core, trail) = split_trailing_punct(word);
+        let lower_core = core.to_ascii_lowercase();
+        let is_auth_scheme = matches!(
+            lower_core.as_str(),
+            "bearer" | "basic" | "apikey" | "digest" | "token"
+        );
+
         if redact_next {
+            if is_auth_scheme && trail.is_empty() {
+                out.push(word.to_owned());
+                // Keep `redact_next = true` so `Authorization: Bearer <token>` redacts `<token>`!
+                continue;
+            }
             out.push(format!("{REDACTED_MARKER}{trail}"));
             redact_next = false;
             continue;
         }
 
-        let lower_core = core.to_ascii_lowercase();
-        if matches!(
-            lower_core.as_str(),
-            "bearer" | "basic" | "apikey" | "token"
-        ) {
+        if is_auth_scheme {
             out.push(word.to_owned());
             redact_next = true;
             continue;

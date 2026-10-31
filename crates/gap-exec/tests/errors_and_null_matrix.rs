@@ -36,9 +36,8 @@ async fn null_propagation_matrix_matches_golden_graphql_json() {
 
     // Cell 1: Absent nullable scalar field -> null field, 0 errors, partial = false
     {
-        let shop = MockConnector::new().on_query(|_req, _scope| {
-            Ok(stream_rows(vec![json!({ "id": "c-1", "name": "Ada" })]))
-        });
+        let shop = MockConnector::new()
+            .on_query(|_req, _scope| Ok(stream_rows(vec![json!({ "id": "c-1", "name": "Ada" })])));
         let exec = ExecLayer::new(Arc::new(
             ConnectorRegistry::builder()
                 .register(shop_uid(), make_in_process_branch(shop, clock.clone()), 16)
@@ -302,9 +301,8 @@ async fn null_propagation_matrix_matches_golden_graphql_json() {
 
     // Cell 8: Per-chunk `RowSetChunk.error` on nullable `lead` -> `lead: null`, mapped error at `["lead"]`, `partial: true`
     {
-        let shop = MockConnector::new().on_query(|_req, _scope| {
-            Ok(stream_rows(vec![json!({ "value": "ok" })]))
-        });
+        let shop = MockConnector::new()
+            .on_query(|_req, _scope| Ok(stream_rows(vec![json!({ "value": "ok" })])));
         let crm = MockConnector::new().on_query(|_req, _scope| {
             let chunk_err =
                 NgcErrorInfo::new(NgcErrorCode::PermissionDenied, "row policy denied lead");
@@ -395,11 +393,7 @@ fn all_14_ngc_error_codes_map_to_documented_gap_codes_and_drop_details() {
             None,
         ),
         (NgcErrorCode::Internal, ErrorCode::BranchError, None),
-        (
-            NgcErrorCode::Conflict,
-            ErrorCode::IdempotencyConflict,
-            None,
-        ),
+        (NgcErrorCode::Conflict, ErrorCode::IdempotencyConflict, None),
         (NgcErrorCode::UpstreamError, ErrorCode::BranchError, None),
     ];
 
@@ -440,8 +434,7 @@ fn all_14_ngc_error_codes_map_to_documented_gap_codes_and_drop_details() {
 
             let serialized = serde_json::to_string(&mapped).unwrap();
             assert!(
-                !serialized.contains("db-01.corp.internal")
-                    && !serialized.contains("internalHost"),
+                !serialized.contains("db-01.corp.internal") && !serialized.contains("internalHost"),
                 "NgcError.details must be dropped when mapping to GraphqlError"
             );
         }
@@ -502,10 +495,7 @@ async fn inv_15_canary_credentials_and_hostile_error_text_never_leak() {
 
     let (crm_client, _ch) = spawn_grpc_branch(crm_mock, clock.clone());
     let mut branch_meta = BTreeMap::new();
-    branch_meta.insert(
-        "authorization".to_owned(),
-        format!("Bearer {canary_meta}"),
-    );
+    branch_meta.insert("authorization".to_owned(), format!("Bearer {canary_meta}"));
 
     let registry = Arc::new(
         ConnectorRegistry::builder()
@@ -603,4 +593,22 @@ async fn run_061_response_redactor_seam_masks_projected_fields() {
         resp.data,
         Some(json!({ "lead": { "id": "l-1", "email": "***" } }))
     );
+}
+
+proptest::proptest! {
+    #![proptest_config(proptest::test_runner::Config::with_cases(64))]
+
+    // spec: INV-15, NGC-061
+    #[test]
+    fn prop_inv_15_sanitised_messages_never_exceed_300_chars_or_leak_canary(
+        prefix in "[\\PC\\x00-\\x1f]{0,180}",
+        suffix in "[\\PC\\x00-\\x1f]{0,260}",
+    ) {
+        let canary = "canary-secret-token-xyz987654321";
+        let raw = format!("{prefix} Authorization: Bearer {canary} secret={canary} {suffix}");
+        let out = sanitize_connector_message(&raw, &[canary]);
+        proptest::prop_assert!(out.chars().count() <= 300);
+        proptest::prop_assert!(!out.contains(canary));
+        proptest::prop_assert!(!out.chars().any(char::is_control));
+    }
 }

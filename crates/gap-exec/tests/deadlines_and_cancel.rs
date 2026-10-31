@@ -143,9 +143,8 @@ async fn run_030_deadline_reaches_connector_for_three_remaining_time_cases() {
 async fn run_030_expired_deadline_never_calls_connector() {
     let clock = Arc::new(ManualClock::new(1_700_000_000_000));
     let (snapshot, _) = build_two_branch_snapshot();
-    let shop_mock = MockConnector::new().on_query(|_req, _scope| {
-        Ok(stream_rows(vec![json!({ "value": "should-never-run" })]))
-    });
+    let shop_mock = MockConnector::new()
+        .on_query(|_req, _scope| Ok(stream_rows(vec![json!({ "value": "should-never-run" })])));
 
     let (grpc_client, _handle) = spawn_grpc_branch(shop_mock.clone(), clock.clone());
     let registry = Arc::new(
@@ -199,7 +198,7 @@ async fn run_031_request_cancel_drops_in_flight_grpc_stream_within_50ms() {
     let entered_sig = Arc::clone(&entered);
 
     let shop_mock = MockConnector::new().on_query(move |_req, _scope| {
-        entered_sig.notify_waiters();
+        entered_sig.notify_one();
         let first = stream::once(async {
             Ok(rows_response(vec![json!({
                 "id": "o-1",
@@ -272,13 +271,13 @@ async fn run_031_caller_dropping_executor_future_drops_streams_and_leaves_zero_i
 
     let sr = Arc::clone(&shop_ready);
     let shop_mock = MockConnector::new().on_query(move |_req, _scope| {
-        sr.notify_waiters();
+        sr.notify_one();
         Ok(Box::pin(stream::pending()))
     });
 
     let cr = Arc::clone(&crm_ready);
     let crm_mock = MockConnector::new().on_query(move |_req, _scope| {
-        cr.notify_waiters();
+        cr.notify_one();
         Ok(Box::pin(stream::pending()))
     });
 
@@ -324,11 +323,69 @@ async fn run_031_caller_dropping_executor_future_drops_streams_and_leaves_zero_i
         crm_mock.wait_for_drops(1).await;
     })
     .await
-    .expect("both gRPC and InProcess streams must drop within 50 ms when caller drops ExecLayer future");
+    .expect(
+        "both gRPC and InProcess streams must drop within 50 ms when caller drops ExecLayer future",
+    );
 
     assert!(drop_t0.elapsed() <= Duration::from_millis(50));
     assert_eq!(shop_mock.in_flight(), 0);
     assert_eq!(crm_mock.in_flight(), 0);
     assert_eq!(registry.available_permits(&shop_uid()), Some(8));
     assert_eq!(registry.available_permits(&crm_uid()), Some(8));
+}
+
+// spec: RUN-031, INV-12
+#[tokio::test(start_paused = true)]
+async fn run_031_cancel_under_busy_streaming_loop_drops_within_50ms_and_zeros_in_flight() {
+    let clock = Arc::new(ManualClock::new(1_700_000_000_000));
+    let (snapshot, _) = build_two_branch_snapshot();
+    let started = Arc::new(Notify::new());
+    let started_sig = Arc::clone(&started);
+
+    let busy_mock = MockConnector::new().on_query(move |_req, _scope| {
+        started_sig.notify_one();
+        let endless = stream::repeat_with(|| {
+            Ok(rows_response(vec![json!({
+                "id": "o-busy",
+                "sku": "BUSY",
+                "totalCents": 1
+            })]))
+        });
+        Ok(Box::pin(endless))
+    });
+
+    let (grpc_client, _handle) = spawn_grpc_branch(busy_mock.clone(), clock.clone());
+    let registry = Arc::new(
+        ConnectorRegistry::builder()
+            .register(shop_uid(), grpc_client, 8)
+            .build(),
+    );
+    let exec = ExecLayer::new(registry.clone()).with_clock(clock);
+    let plan = compile_plan(&snapshot, "{ orders { id } }", &serde_json::Map::new());
+
+    let cancel = CancellationToken::new();
+    let cancel_trigger = cancel.clone();
+    let req = ExecRequest::new(snapshot, plan, Instant::now() + Duration::from_secs(30))
+        .with_cancel(cancel);
+
+    let exec_task = tokio::spawn(async move { exec.execute(req).await });
+    started.notified().await;
+    tokio::task::yield_now().await;
+
+    let cancel_t0 = Instant::now();
+    cancel_trigger.cancel();
+
+    let resp = tokio::time::timeout(Duration::from_millis(50), exec_task)
+        .await
+        .expect("busy loop must abort within 50 ms on cancel")
+        .expect("join exec_task");
+
+    assert_eq!(resp.data, None);
+    assert_eq!(resp.errors[0].code(), ErrorCode::Cancelled);
+    tokio::time::timeout(Duration::from_millis(50), busy_mock.wait_for_drops(1))
+        .await
+        .expect("busy stream drop guard must fire within 50 ms");
+    assert!(cancel_t0.elapsed() <= Duration::from_millis(50));
+    assert_eq!(busy_mock.in_flight(), 0);
+    assert_eq!(registry.available_permits(&shop_uid()), Some(8));
 }

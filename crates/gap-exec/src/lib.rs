@@ -6,11 +6,11 @@
 //!
 //! # Pooling & Lock-Free Read Path (`INV-02`)
 //!
-//! [`ConnectorRegistry`](connector_layer::ConnectorRegistry) is an immutable
+//! [`ConnectorRegistry`] is an immutable
 //! `BTreeMap<BranchUid, RegisteredBranch>` constructed before serving. In `gap-exec` v0,
-//! connection pooling means **one multiplexed [`BranchClient`](connector_layer::BranchClient)
+//! connection pooling means **one multiplexed [`BranchClient`]
 //! instance per branch** (e.g. HTTP/2 multiplexed `tonic` [`GrpcClient`](gap_ngc_sdk::grpc::GrpcClient)
-//! or [`InProcess`](connector_layer::InProcess)) guarded by a per-branch
+//! or [`InProcess`]) guarded by a per-branch
 //! `tokio::sync::Semaphore` sized to `BranchDescriptor.limits.max_in_flight` and acquired solely
 //! via `try_acquire_owned` (failing fast with `GAP_OVERLOADED`, never queueing). Zero `Mutex` or
 //! `RwLock` primitives exist on the request execution path.
@@ -18,8 +18,8 @@
 //! # `RUN-061` Authorization & Redaction Seam
 //!
 //! Field-level `@pii` and policy-driven response redaction (`RUN-061`) is isolated behind the
-//! [`ResponseRedactor`](exec::ResponseRedactor) trait injected into [`ExecLayer`](exec::ExecLayer)
-//! (defaulting to [`NoopResponseRedactor`](exec::NoopResponseRedactor) in `WP-M1-07`).
+//! [`ResponseRedactor`] trait injected into [`ExecLayer`]
+//! (defaulting to [`NoopResponseRedactor`] in `WP-M1-07`).
 //!
 //! # NGC to GAP Error Mapping (`NGC-060`, `NGC-061`, `NGC-063`, `INV-15`)
 //!
