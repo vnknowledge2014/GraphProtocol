@@ -200,8 +200,8 @@ title = "GAP-QL conformance corpus, differential test vs graphql-js, parser fuzz
 milestone = "M1"
 role = "tester"
 size = "M"
-depends_on = ["WP-M1-01", "WP-M0-09"]
-owns = ["conformance/gql/**", "tests/differential/**", "fuzz/fuzz_targets/fuzz_gapql_parse.rs"]
+depends_on = ["WP-M1-01", "WP-M0-09", "WP-M1-08", "WP-M1-04", "WP-M1-09", "WP-M1-11"]
+owns = ["conformance/gql/**", "tests/differential/**", "fuzz/fuzz_targets/fuzz_gapql_parse.rs", "crates/gap-conformance/src/offline.rs", "crates/gap-conformance/src/cli.rs", "crates/gap-conformance/Cargo.toml", "crates/gap-conformance/tests/conformance_gql.rs"]
 spec_refs = ["GQL-002", "GQL-062", "GQL-070", "GQL-041"]
 deliverables = [
   "conformance/gql fixtures covering every GQL-* MUST (valid/invalid documents, limits, cost, errors, hidden-vs-unknown)",
