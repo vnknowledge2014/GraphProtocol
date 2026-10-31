@@ -31,7 +31,7 @@ const CANONICAL_TWO_BRANCH_QUERY: &str = r#"
 /// Pinned `blake3-256` hex digest of `CANONICAL_TWO_BRANCH_QUERY` over `two_branch_snapshot()`.
 /// Changing `Plan` serialization or ordering requires an intentional update to this golden value.
 const PINNED_TWO_BRANCH_PLAN_HASH: &str =
-    "d6a6b2f6c1bb87e91db42099923d60b69596ef931214ccbe7b74c5bb8c6c9930";
+    "050a1ec9b24a93d23680584500afbc96b3b8c9adb285e4493ef89463e097be62";
 
 fn build_canonical_two_branch_plan() -> gap_plan::Plan {
     let (snap, schema) = two_branch_snapshot();

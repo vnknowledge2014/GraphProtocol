@@ -24,6 +24,6 @@ pub use crate::explain::{PlanExplanation, explain};
 pub use crate::ir::{
     ArgValue, Fetch, GateNode, JoinCardinality, JoinKeyPair, JoinNode, JoinPlanStrategy,
     MutateNode, Plan, PlanCost, PlanNode, Pushdown, SelectionDirective, SelectionField,
-    TraverseNode, plan_hash, plan_to_value,
+    TraverseNode, plan_compact_json, plan_hash, plan_to_value,
 };
 pub use crate::planner::{PlanConfig, plan, plan_query};

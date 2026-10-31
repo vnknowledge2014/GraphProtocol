@@ -42,6 +42,7 @@ fn run_010_ir_nodes_roundtrip_serde_and_serde_json_map_sorts_keys() {
         arguments: BTreeMap::from([("id".to_owned(), ArgValue::Variable("cid".to_owned()))]),
         selection: vec![SelectionField::leaf("id")],
         response_key: "customer".to_owned(),
+        directives: Vec::new(),
         pushdown: Pushdown {
             limit: Some(10),
             order_by: vec!["id ASC".to_owned()],
@@ -55,6 +56,7 @@ fn run_010_ir_nodes_roundtrip_serde_and_serde_json_map_sorts_keys() {
         arguments: BTreeMap::from([("id".to_owned(), ArgValue::Literal(json!("L-1")))]),
         selection: vec![SelectionField::leaf("email")],
         response_key: "lead".to_owned(),
+        directives: Vec::new(),
         pushdown: Pushdown::default(),
     };
 
@@ -418,6 +420,46 @@ fn run_010_aliases_variables_nested_selections_typename_fragments_and_directives
             },
         ]
     );
+    assert!(fetch.directives.is_empty());
+
+    // Verify root-level `@skip`/`@include` and diamond fragment reuse (`...Common` spread twice).
+    let diamond_query = r#"
+        query Diamond($withLead: Boolean!) {
+            ... on Query @include(if: $withLead) {
+                first: lead(id: "l1") { ...CommonLead }
+                second: lead(id: "l2") { ...CommonLead }
+            }
+        }
+        fragment CommonLead on crm_Lead { id email }
+    "#;
+    let diamond_doc = validate_op(
+        &schema,
+        diamond_query,
+        Some("Diamond"),
+        json!({ "withLead": true }).as_object().unwrap(),
+    );
+    let diamond_plan = plan(&snap, &diamond_doc, &cfg).expect("diamond fragment query must plan");
+    let PlanNode::Parallel { nodes } = &diamond_plan.root else {
+        panic!("expected Parallel for two aliased root fields");
+    };
+    assert_eq!(nodes.len(), 2);
+    for (idx, expected_key) in ["first", "second"].into_iter().enumerate() {
+        let PlanNode::Fetch(f) = &nodes[idx] else {
+            panic!("expected Fetch");
+        };
+        assert_eq!(f.response_key, expected_key);
+        assert_eq!(
+            f.directives,
+            vec![SelectionDirective {
+                name: "include".to_owned(),
+                if_arg: ArgValue::Variable("withLead".to_owned()),
+            }]
+        );
+        assert_eq!(
+            f.selection,
+            vec![SelectionField::leaf("id"), SelectionField::leaf("email")]
+        );
+    }
 }
 
 // spec: RUN-010, RUN-011

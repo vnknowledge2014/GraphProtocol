@@ -138,6 +138,10 @@ pub struct Fetch {
     pub selection: Vec<SelectionField>,
     /// Top-level GraphQL response key (`alias` if present, otherwise `operation`).
     pub response_key: String,
+    /// Conditional `@skip` / `@include` directives attached to this root field (or inherited from
+    /// an enclosing root fragment).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub directives: Vec<SelectionDirective>,
     /// Optional remote pushdown hints (`RUN-012`).
     pub pushdown: Pushdown,
 }
@@ -281,13 +285,61 @@ pub struct Plan {
 /// Converts `plan` into a canonical `serde_json::Value` whose object maps are backed by `BTreeMap`
 /// (`Brief §3.5`).
 #[must_use]
-pub fn plan_to_value(_plan: &Plan) -> serde_json::Value {
-    serde_json::Value::Null
+pub fn plan_to_value(plan: &Plan) -> serde_json::Value {
+    serde_json::to_value(plan).unwrap_or(serde_json::Value::Null)
+}
+
+/// Renders `plan` into compact JSON text with every object's keys sorted lexicographically via
+/// `serde_json::Map` (`BTreeMap`, `Brief §3.5`).
+#[must_use]
+pub fn plan_compact_json(plan: &Plan) -> String {
+    let val = plan_to_value(plan);
+    serde_json::to_string(&val).unwrap_or_default()
 }
 
 /// Computes the 64-character lowercase hexadecimal `blake3` digest of the compact sorted JSON
 /// representation of `plan` (`RUN-010`, `RUN-013`, `Brief §3.5`).
 #[must_use]
-pub fn plan_hash(_plan: &Plan) -> String {
-    String::new()
+pub fn plan_hash(plan: &Plan) -> String {
+    let compact = plan_compact_json(plan);
+    blake3::hash(compact.as_bytes()).to_hex().to_string()
+}
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+mod tests {
+    use super::*;
+
+    // spec: RUN-010, RUN-013
+    #[test]
+    fn plan_compact_json_and_hash_sort_keys_deterministically() {
+        let branch: BranchId = "shop".parse().expect("shop");
+        let uid = BranchUid::parse("018bcfe5-6c01-7010-8101-010101010101").expect("uid");
+        let p = Plan {
+            root: PlanNode::Fetch(Fetch {
+                branch: branch.clone(),
+                branch_uid: uid,
+                operation: "ping".to_owned(),
+                arguments: BTreeMap::new(),
+                selection: Vec::new(),
+                response_key: "ping".to_owned(),
+                directives: Vec::new(),
+                pushdown: Pushdown::default(),
+            }),
+            operation_name: None,
+            cost: PlanCost {
+                planned_cost: 1,
+                effective_budget: None,
+                warnings: Vec::new(),
+            },
+            branches: vec![branch],
+            policy_version: 0,
+        };
+        let compact = plan_compact_json(&p);
+        assert!(compact.starts_with(r#"{"branches":["shop"],"cost":{"planned_cost":1}"#));
+        assert_eq!(
+            plan_hash(&p),
+            blake3::hash(compact.as_bytes()).to_hex().to_string()
+        );
+    }
 }
