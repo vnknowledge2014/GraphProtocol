@@ -14,7 +14,7 @@ use futures_util::stream;
 use gap_core::clock::{Clock as _, ManualClock};
 use gap_core::error::ErrorCode;
 use gap_core::snapshot::BranchLimits;
-use gap_exec::{BranchClient, ConnectorRegistry, ExecLayer, ExecRequest};
+use gap_exec::{BranchClient, ConnectorRegistry, ExecLayer, ExecLimits, ExecRequest};
 use gap_ngc_sdk::connector::{BoxStream, CallScope, NgcResult};
 use gap_ngc_sdk::mock::MockConnector;
 use gap_proto::ngc::v1::{QueryRequest, QueryResponse};
@@ -222,7 +222,11 @@ async fn run_031_request_cancel_drops_in_flight_grpc_stream_within_50ms() {
     let cancel = CancellationToken::new();
     let cancel_trigger = cancel.clone();
     let req = ExecRequest::new(snapshot, plan, Instant::now() + Duration::from_secs(30))
-        .with_cancel(cancel);
+        .with_cancel(cancel)
+        .with_limits(ExecLimits {
+            max_response_bytes: 64 * 1024,
+            ..ExecLimits::default()
+        });
 
     let exec_task = tokio::spawn(async move { exec.execute(req).await });
 
@@ -366,7 +370,11 @@ async fn run_031_cancel_under_busy_streaming_loop_drops_within_50ms_and_zeros_in
     let cancel = CancellationToken::new();
     let cancel_trigger = cancel.clone();
     let req = ExecRequest::new(snapshot, plan, Instant::now() + Duration::from_secs(30))
-        .with_cancel(cancel);
+        .with_cancel(cancel)
+        .with_limits(ExecLimits {
+            max_response_bytes: 64 * 1024,
+            ..ExecLimits::default()
+        });
 
     let exec_task = tokio::spawn(async move { exec.execute(req).await });
     started.notified().await;
