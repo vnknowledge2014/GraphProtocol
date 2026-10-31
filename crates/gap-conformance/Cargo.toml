@@ -32,6 +32,7 @@ tracing.workspace = true
 [dev-dependencies]
 axum.workspace = true
 gap-ngc-openapi.workspace = true
+gap-mcp.workspace = true
 gap-testkit.workspace = true
 proptest.workspace = true
 tempfile.workspace = true

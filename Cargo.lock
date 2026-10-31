@@ -858,6 +858,7 @@ dependencies = [
  "clap",
  "futures-util",
  "gap-core",
+ "gap-mcp",
  "gap-ngc-openapi",
  "gap-ngc-sdk",
  "gap-proto",
@@ -936,6 +937,9 @@ dependencies = [
 name = "gap-mcp"
 version = "0.1.0"
 dependencies = [
+ "axum",
+ "blake3",
+ "futures-util",
  "gap-core",
  "gap-ngc-sdk",
  "gap-proto",
@@ -943,6 +947,16 @@ dependencies = [
  "gap-sec",
  "gap-testkit",
  "gap-transport",
+ "proptest",
+ "prost-types",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "sha2",
+ "thiserror 2.0.21",
+ "tokio",
+ "tokio-util",
+ "tracing",
 ]
 
 [[package]]
