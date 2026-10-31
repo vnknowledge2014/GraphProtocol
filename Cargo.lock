@@ -966,6 +966,7 @@ dependencies = [
 name = "gap-mcp"
 version = "0.1.0"
 dependencies = [
+ "apollo-compiler",
  "axum",
  "blake3",
  "futures-util",
@@ -974,6 +975,7 @@ dependencies = [
  "gap-proto",
  "gap-ql",
  "gap-sec",
+ "gap-snapshot",
  "gap-testkit",
  "gap-transport",
  "proptest",
@@ -986,6 +988,7 @@ dependencies = [
  "tokio",
  "tokio-util",
  "tracing",
+ "uuid",
 ]
 
 [[package]]
