@@ -25,6 +25,20 @@
 //! deterministically; unsupported non-key variables fail only their own index with
 //! `INVALID_ARGUMENT`.
 //!
+//! # Offset Pagination Lookahead (`NGC-021`, `NGC-022`, `CMP-030`, `CMP-032`)
+//!
+//! Operations declaring integer `limit` and `offset` query parameters support cursor-resumed
+//! pagination unless `limit.maximum < 2` (in which case pagination is disabled and recorded as
+//! `pagination_unavailable_limit_maximum` in [`ExtractionReport::notes`] while the operation stays
+//! exposed). For a requested `page.limit > 0`, the effective page size is
+//! `P = min(page.limit, config.max_page_size, limit.maximum - 1)` (the last term when `limit.maximum`
+//! is declared) and the connector asks the upstream for `max(P + 1, limit.minimum)`, truncating any
+//! excess rows locally to `P`. Reserving one row of `+1` lookahead inside `limit.maximum` detects
+//! exact last-page boundaries (`<= P` rows returned => empty `next_cursor`) without ever violating
+//! the upstream's declared schema bounds or emitting a spurious trailing empty page, and
+//! `Describe.limits.max_page_size` advertises the minimum `min(config.max_page_size, limit.maximum - 1)`
+//! across all paginated operations.
+//!
 //! # Upstream Error Mapping (`NGC-060`, `NGC-061`, `CMP-033`)
 //!
 //! Upstream HTTP statuses and transport outcomes map deterministically to [`gap_core::error::NgcErrorCode`].
@@ -66,6 +80,6 @@ pub mod upstream;
 pub use auth::{ApiKeyLocation, AuthConfig, AuthError, CredentialSource, StaticCredentialSource};
 pub use connector::{ConnectorBuildError, OpenApiConfig, OpenApiConnector};
 pub use document::{ExtractError, ExtractLimits, OpenApiDocument};
-pub use extract::{Extraction, ExtractionReport, SkippedOperation};
+pub use extract::{Extraction, ExtractionNote, ExtractionReport, SkippedOperation};
 pub use fixture::FixtureService;
 pub use upstream::{HttpUpstream, Upstream, UpstreamError, UpstreamRequest, UpstreamResponse};

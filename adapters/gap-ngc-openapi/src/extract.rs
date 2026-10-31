@@ -133,8 +133,12 @@ pub struct ExtractedOperation {
     pub parameters: Vec<ParameterSpec>,
     /// Path parameter names when this operation is a keyed read.
     pub key_fields: Vec<String>,
-    /// `true` when the operation declares both `limit` and `offset` integer query parameters.
+    /// `true` when the operation declares both `limit` (`maximum >= 2` if bounded) and `offset` integer query parameters.
     pub has_offset_pagination: bool,
+    /// Declared `maximum` of the `limit` parameter schema for paginated operations (`>= 2`), if bounded (`NGC-021`, `CMP-030`).
+    pub limit_maximum: Option<u32>,
+    /// Effective `minimum` of the `limit` parameter schema for paginated operations (default `1`, `NGC-021`, `CMP-030`).
+    pub limit_minimum: Option<u32>,
     /// `true` when the operation declares a `sort` string query parameter.
     pub has_sort: bool,
     /// Allowed `sort` values if constrained by an `enum` on the `sort` parameter.
@@ -160,6 +164,19 @@ pub struct SkippedOperation {
     pub reason: String,
 }
 
+/// Non-fatal capability note for an operation that remains exposed during extraction (`ING-010`, `CMP-032`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ExtractionNote {
+    /// OpenAPI path template.
+    pub path: String,
+    /// Uppercase HTTP method (`GET`).
+    pub method: String,
+    /// Original `operationId`, if present.
+    pub operation_id: Option<String>,
+    /// Deterministic explanation code (e.g. `"pagination_unavailable_limit_maximum"`).
+    pub reason: String,
+}
+
 /// Diagnostic report produced alongside extracted operations (`ING-010`, `spec/05-ingestion.md` §2).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ExtractionReport {
@@ -171,6 +188,8 @@ pub struct ExtractionReport {
     pub servers: Vec<String>,
     /// Operations skipped because of non-`GET` methods or unsupported parameter features.
     pub skipped: Vec<SkippedOperation>,
+    /// Non-fatal capability notes for operations that stay exposed (e.g. `"pagination_unavailable_limit_maximum"`).
+    pub notes: Vec<ExtractionNote>,
 }
 
 /// Output of deterministic OpenAPI extraction (`ING-010`).
@@ -600,6 +619,7 @@ pub fn extract_operations_with_auth_query(
 
     let mut operations = Vec::new();
     let mut skipped = Vec::new();
+    let mut notes = Vec::new();
     let mut used_names = BTreeSet::new();
 
     for (path_template, path_item_val) in paths_obj {
@@ -897,13 +917,78 @@ pub fn extract_operations_with_auth_query(
                 .cmp(&b.name.to_ascii_lowercase())
         });
 
-        let has_limit = query_params
+        let limit_param = query_params
             .iter()
-            .any(|p| p.name == "limit" && p.shape == ParamShape::Scalar(ParamPrimitive::Integer));
+            .find(|p| p.name == "limit" && p.shape == ParamShape::Scalar(ParamPrimitive::Integer));
         let has_offset = query_params
             .iter()
             .any(|p| p.name == "offset" && p.shape == ParamShape::Scalar(ParamPrimitive::Integer));
-        let has_offset_pagination = has_limit && has_offset;
+
+        let (has_offset_pagination, limit_maximum, limit_minimum) =
+            if let (true, Some(lim_spec)) = (has_offset, limit_param) {
+                let raw_max_opt = lim_spec
+                    .schema
+                    .get("maximum")
+                    .and_then(Value::as_f64)
+                    .filter(|f| f.is_finite());
+                let raw_min_opt = lim_spec
+                    .schema
+                    .get("minimum")
+                    .and_then(Value::as_f64)
+                    .filter(|f| f.is_finite());
+
+                let parsed_max: Result<Option<u32>, ()> = match raw_max_opt {
+                    None => Ok(None),
+                    Some(max_f) => {
+                        let max_floor = max_f.floor();
+                        if max_floor < 2.0 {
+                            Err(())
+                        } else {
+                            #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+                            let max_u32 = if max_floor >= f64::from(u32::MAX) {
+                                u32::MAX
+                            } else {
+                                max_floor as u32
+                            };
+                            Ok(Some(max_u32))
+                        }
+                    }
+                };
+
+                let parsed_min: Option<u32> = match raw_min_opt {
+                    None => Some(1),
+                    Some(min_f) if min_f <= 1.0 => Some(1),
+                    Some(min_f) => {
+                        let min_ceil = min_f.ceil();
+                        if min_ceil > f64::from(u32::MAX) {
+                            None
+                        } else {
+                            #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+                            let min_u32 = min_ceil as u32;
+                            Some(min_u32)
+                        }
+                    }
+                };
+
+                match (parsed_max, parsed_min) {
+                    (Ok(opt_max), Some(min_u32))
+                        if opt_max.is_none_or(|max_u32| min_u32 <= max_u32) =>
+                    {
+                        (true, opt_max, Some(min_u32))
+                    }
+                    _ => {
+                        notes.push(ExtractionNote {
+                            path: path_template.clone(),
+                            method: "GET".to_owned(),
+                            operation_id: raw_op_id.clone(),
+                            reason: "pagination_unavailable_limit_maximum".to_owned(),
+                        });
+                        (false, None, None)
+                    }
+                }
+            } else {
+                (false, None, None)
+            };
 
         let sort_param = query_params
             .iter()
@@ -958,6 +1043,8 @@ pub fn extract_operations_with_auth_query(
             parameters,
             key_fields,
             has_offset_pagination,
+            limit_maximum,
+            limit_minimum,
             has_sort,
             sort_allowed_values,
             native_batch,
@@ -1030,6 +1117,7 @@ pub fn extract_operations_with_auth_query(
             spec_hash: doc.spec_hash().to_owned(),
             servers: doc.servers().to_vec(),
             skipped,
+            notes,
         },
     })
 }
@@ -1102,6 +1190,8 @@ mod tests {
             .find(|o| o.name == "customers")
             .expect("customers op");
         assert!(customers.has_offset_pagination);
+        assert_eq!(customers.limit_maximum, Some(200));
+        assert_eq!(customers.limit_minimum, Some(1));
         assert!(customers.has_sort);
         assert!(customers.key_fields.is_empty());
 
@@ -1112,9 +1202,13 @@ mod tests {
             .expect("order op");
         assert_eq!(order.key_fields, vec!["id".to_owned()]);
         assert!(order.native_batch.is_none());
+        assert!(!order.has_offset_pagination);
+        assert_eq!(order.limit_maximum, None);
+        assert_eq!(order.limit_minimum, None);
 
         // Non-GET `POST /orders` is recorded as skipped, never exposed as an operation.
         assert_eq!(ext1.report.servers, vec!["https://api.shop.internal/v1"]);
+        assert!(ext1.report.notes.is_empty());
         assert_eq!(ext1.report.skipped.len(), 1);
         assert_eq!(ext1.report.skipped[0].path, "/orders");
         assert_eq!(ext1.report.skipped[0].method, "POST");

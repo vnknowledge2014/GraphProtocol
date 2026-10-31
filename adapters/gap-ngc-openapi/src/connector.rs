@@ -781,6 +781,7 @@ impl<U: Upstream> OpenApiConnector<U> {
         let mut operations = BTreeMap::new();
         let mut by_path = BTreeMap::new();
         let mut native_batch_min: Option<u32> = None;
+        let mut effective_max_page_size = config.max_page_size;
         let mut any_sort = false;
         let mut any_pagination = false;
 
@@ -796,6 +797,10 @@ impl<U: Upstream> OpenApiConnector<U> {
             }
             if op.has_offset_pagination {
                 any_pagination = true;
+                if let Some(lim_max) = op.limit_maximum {
+                    effective_max_page_size =
+                        effective_max_page_size.min(lim_max.saturating_sub(1));
+                }
             }
             let Some(gen_schema) = bundle.operations.get(&op.name).cloned() else {
                 return Err(ConnectorBuildError::Extract(
@@ -849,7 +854,7 @@ impl<U: Upstream> OpenApiConnector<U> {
             limits: Some(Limits {
                 max_batch_size,
                 max_in_flight: config.max_in_flight,
-                max_page_size: config.max_page_size,
+                max_page_size: effective_max_page_size,
                 default_timeout_ms: u32::try_from(config.request_timeout.as_millis())
                     .unwrap_or(u32::MAX),
                 max_response_bytes: config.max_response_bytes,
@@ -1451,15 +1456,26 @@ impl<U: Upstream> Connector for OpenApiConnector<U> {
                 start_offset = u64::from(page.offset);
             }
             if page.limit > 0 {
-                requested_page_limit = Some(page.limit.min(self.shared.config.max_page_size));
+                let op_page_cap = match reg.extracted.limit_maximum {
+                    Some(lim_max) => self
+                        .shared
+                        .config
+                        .max_page_size
+                        .min(lim_max.saturating_sub(1)),
+                    None => self.shared.config.max_page_size,
+                };
+                requested_page_limit = Some(page.limit.min(op_page_cap));
             }
         }
 
         if reg.extracted.has_offset_pagination {
             if let Some(lim) = requested_page_limit {
-                // Request `limit + 1` rows from upstream so exact boundaries emit `next_cursor = ""` without a trailing empty page.
-                let lookahead = u64::from(lim).saturating_add(1);
-                effective_args.insert("limit".to_owned(), json!(lookahead));
+                // Effective page size `P = min(page.limit, config.max_page_size, limit_maximum - 1)`.
+                // Send `max(P + 1, limit_minimum) <= limit_maximum` so exact last pages emit
+                // `next_cursor = ""` without violating upstream schema bounds; truncate locally to `P`.
+                let min_limit = u64::from(reg.extracted.limit_minimum.unwrap_or(1));
+                let upstream_limit = u64::from(lim).saturating_add(1).max(min_limit);
+                effective_args.insert("limit".to_owned(), json!(upstream_limit));
                 effective_args.insert("offset".to_owned(), json!(start_offset));
             } else if start_offset > 0 {
                 effective_args.insert("offset".to_owned(), json!(start_offset));
@@ -3546,9 +3562,13 @@ mod tests {
             }
             let kc = key_count.expect("ids present");
             assert!(kc <= 5, "chunk exceeded cap 5: {rec}");
+            let sl = sent_limit.expect("limit present");
+            assert!(
+                sl <= 5,
+                "native batch limit must never exceed declared limit.maximum=5: {rec}"
+            );
             assert_eq!(
-                sent_limit,
-                Some(kc),
+                sl, kc,
                 "every batch call must send limit equal to its key count: {rec}"
             );
         }
@@ -4698,7 +4718,7 @@ mod tests {
         );
     }
 
-    // spec: NGC-021, CMP-030, CMP-032
+    // spec: NGC-021, NGC-022, CMP-030, CMP-032
     #[tokio::test]
     async fn t19_page_limit_clamping_and_zero_limit() {
         let fixture = Arc::new(FixtureService::new());
@@ -4713,7 +4733,98 @@ mod tests {
         )
         .expect("build");
 
-        // 1. `page.limit = 0` sends no `limit=` query parameter at all.
+        let two_hundred_rows: Vec<Value> = (1_i64..=200_i64)
+            .map(|id| {
+                json!({
+                    "id": id,
+                    "name": format!("Customer {id}"),
+                    "region": "eu",
+                    "credit_cents": id * 10,
+                    "active": true
+                })
+            })
+            .collect();
+        let scripted_body = serde_json::to_vec(&two_hundred_rows).expect("serialize 200 rows");
+        let mut json_hdrs = HeaderMap::new();
+        json_hdrs.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
+
+        // 1 & 2. `page.limit = 500` and `page.limit = 200` on `shop.openapi.json` (`limit.maximum = 200`)
+        //        both clamp effective page size `P` to `199`, send `limit=200&offset=0`, return at most
+        //        `199` rows, and issue a cursor at `offset = 199`.
+        for req_limit in [500_u32, 200_u32] {
+            fixture.clear_recorded();
+            fixture.push_scripted_response(UpstreamResponse {
+                status: StatusCode::OK,
+                headers: json_hdrs.clone(),
+                body: scripted_body.clone(),
+            });
+            let (chunks, complete) = collect_stream(
+                conn.query(
+                    QueryRequest {
+                        operation: "customers".to_owned(),
+                        page: Some(Page {
+                            cursor: String::new(),
+                            limit: req_limit,
+                            offset: 0,
+                        }),
+                        ..QueryRequest::default()
+                    },
+                    scope_in(Duration::from_secs(5)),
+                )
+                .await
+                .expect("clamped query starts"),
+            )
+            .await
+            .expect("clamped query completes");
+            assert_eq!(
+                fixture.recorded_requests()[0].path_and_query,
+                "/customers?limit=200&offset=0",
+                "req_limit={req_limit}"
+            );
+            assert_eq!(chunks[0].rows.len(), 199, "req_limit={req_limit}");
+            assert_eq!(complete.rows_total, 199, "req_limit={req_limit}");
+            assert!(!complete.truncated, "req_limit={req_limit}");
+            assert!(!complete.next_cursor.is_empty(), "req_limit={req_limit}");
+
+            let expected_hash = canonical_args_and_order_hash(&Map::new(), &[]);
+            let decoded_offset = decode_and_verify_cursor(
+                &complete.next_cursor,
+                "customers",
+                &expected_hash,
+                "tenant-alpha",
+            )
+            .expect("valid cursor");
+            assert_eq!(decoded_offset, 199, "req_limit={req_limit}");
+        }
+
+        // 3. `page.limit = 3` sends `limit=4&offset=0`.
+        fixture.clear_recorded();
+        let (three_chunks, three_complete) = collect_stream(
+            conn.query(
+                QueryRequest {
+                    operation: "customers".to_owned(),
+                    page: Some(Page {
+                        cursor: String::new(),
+                        limit: 3,
+                        offset: 0,
+                    }),
+                    ..QueryRequest::default()
+                },
+                scope_in(Duration::from_secs(5)),
+            )
+            .await
+            .expect("limit=3 query starts"),
+        )
+        .await
+        .expect("limit=3 query completes");
+        assert_eq!(
+            fixture.recorded_requests()[0].path_and_query,
+            "/customers?limit=4&offset=0"
+        );
+        assert_eq!(three_chunks[0].rows.len(), 3);
+        assert!(!three_complete.next_cursor.is_empty());
+
+        // 4. `page.limit = 0` sends no `limit=` query parameter at all.
         fixture.clear_recorded();
         let _ = collect_stream(
             conn.query(
@@ -4734,31 +4845,5 @@ mod tests {
         .await
         .expect("limit=0 query completes");
         assert_eq!(fixture.recorded_requests()[0].path_and_query, "/customers");
-
-        // 2. `page.limit = 500` with `max_page_size = 200` clamps to `200` and requests
-        //    lookahead `limit=201` upstream (exposes conflict when upstream `limit.maximum == 200`).
-        fixture.clear_recorded();
-        let _ = collect_stream(
-            conn.query(
-                QueryRequest {
-                    operation: "customers".to_owned(),
-                    page: Some(Page {
-                        cursor: String::new(),
-                        limit: 500,
-                        offset: 0,
-                    }),
-                    ..QueryRequest::default()
-                },
-                scope_in(Duration::from_secs(5)),
-            )
-            .await
-            .expect("clamped limit=500 query should succeed under max_page_size=200"),
-        )
-        .await
-        .expect("clamped limit=500 stream completes");
-        assert_eq!(
-            fixture.recorded_requests()[0].path_and_query,
-            "/customers?limit=201&offset=0"
-        );
     }
 }
