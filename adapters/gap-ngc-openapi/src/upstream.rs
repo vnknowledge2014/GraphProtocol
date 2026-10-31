@@ -308,7 +308,20 @@ mod tests {
     #[tokio::test]
     async fn streaming_body_cap_stops_early_on_content_length_and_mid_stream_chunks() {
         let pulls = AtomicUsize::new(0);
-        // Declared Content-Length over cap must fail BEFORE pulling even chunk 0.
+        // Declared Content-Length equal to cap succeeds; +1 fails BEFORE pulling even chunk 0.
+        let exact_cl = read_capped_chunks(Some(1024), 1024, || async {
+            let prev = pulls.fetch_add(1, Ordering::SeqCst);
+            if prev == 0 {
+                Ok(Some(vec![b'a'; 1024]))
+            } else {
+                Ok(None)
+            }
+        })
+        .await
+        .expect("exact Content-Length must succeed");
+        assert_eq!(exact_cl.len(), 1024);
+        pulls.store(0, Ordering::SeqCst);
+
         let err = read_capped_chunks(Some(1025), 1024, || async {
             pulls.fetch_add(1, Ordering::SeqCst);
             Ok(Some(vec![b'a'; 10]))
@@ -318,13 +331,27 @@ mod tests {
         assert_eq!(err, UpstreamError::BodyTooLarge { max_bytes: 1024 });
         assert_eq!(pulls.load(Ordering::SeqCst), 0, "must not read body");
 
+        // Exact streaming boundary (`10` bytes with `max_body_bytes = 10`) succeeds; `11` bytes fails immediately.
+        let exact_stream_idx = AtomicUsize::new(0);
+        let exact_stream = read_capped_chunks(None, 10, || async {
+            let idx = exact_stream_idx.fetch_add(1, Ordering::SeqCst);
+            match idx {
+                0 => Ok(Some(vec![b'x'; 6])),
+                1 => Ok(Some(vec![b'y'; 4])),
+                _ => Ok(None),
+            }
+        })
+        .await
+        .expect("exact streaming cap must succeed");
+        assert_eq!(exact_stream.len(), 10);
+
         // Chunked response without Content-Length: stops as soon as chunk crosses cap and never polls remaining chunks.
         let chunk_idx = AtomicUsize::new(0);
         let err = read_capped_chunks(None, 10, || async {
             let idx = chunk_idx.fetch_add(1, Ordering::SeqCst);
             match idx {
                 0 => Ok(Some(vec![b'x'; 6])),
-                1 => Ok(Some(vec![b'y'; 6])),
+                1 => Ok(Some(vec![b'y'; 5])),
                 _ => panic!("must never poll after exceeding max_body_bytes"),
             }
         })
@@ -379,6 +406,25 @@ mod tests {
         let wrapped =
             decode_2xx_payload(&bin_hdr, b"foobar", 1024, true).expect("allow_binary base64");
         assert_eq!(wrapped, json!({ "raw": "Zm9vYmFy" }));
+
+        // Exact decode_2xx_payload cap boundary (`12` bytes ok, `13` bytes BodyTooLarge) and non-standard JSON media types rejected.
+        assert!(decode_2xx_payload(&json_hdr, br#"{"ok":false}"#, 12, false).is_ok());
+        assert_eq!(
+            decode_2xx_payload(&json_hdr, br#"{"ok":false} "#, 12, false),
+            Err(PayloadDecodeError::BodyTooLarge { max_bytes: 12 })
+        );
+        for bad_media in ["text/json", "application/jsonx", "+json"] {
+            let mut bad_hdr = HeaderMap::new();
+            bad_hdr.insert(
+                CONTENT_TYPE,
+                HeaderValue::from_str(bad_media).expect("hdr val"),
+            );
+            assert_eq!(
+                decode_2xx_payload(&bad_hdr, br#"{"ok":true}"#, 1024, false),
+                Err(PayloadDecodeError::UnsupportedContentType),
+                "media={bad_media}"
+            );
+        }
     }
 
     // spec: CMP-033, NGC-091
@@ -408,6 +454,37 @@ mod tests {
         assert_eq!(resp.status, StatusCode::OK);
         let decoded = decode_2xx_payload(&resp.headers, &resp.body, 65_536, false).expect("json");
         assert_eq!(decoded["id"], json!(1));
+        let recorded = svc.recorded_requests();
+        assert_eq!(recorded.len(), 1);
+        assert!(
+            !recorded[0]
+                .headers
+                .iter()
+                .any(|(k, _)| k.eq_ignore_ascii_case("accept-encoding")),
+            "HttpUpstream must never send Accept-Encoding"
+        );
+
+        // Verify `HttpUpstream` never follows HTTP 3xx redirects (`redirect::Policy::none()`).
+        let mut redir_hdr = HeaderMap::new();
+        redir_hdr.insert(
+            reqwest::header::LOCATION,
+            HeaderValue::from_str(&format!("http://{addr}/customers/2")).expect("loc"),
+        );
+        svc.push_scripted_response(UpstreamResponse {
+            status: StatusCode::FOUND,
+            headers: redir_hdr,
+            body: Vec::new(),
+        });
+        let redir_resp = upstream
+            .send(UpstreamRequest {
+                path_and_query: "/customers/1".to_owned(),
+                headers: Vec::new(),
+                timeout: Duration::from_secs(5),
+            })
+            .await
+            .expect("send 302");
+        assert_eq!(redir_resp.status, StatusCode::FOUND);
+        assert_eq!(svc.request_count(), 2, "must not follow 302 Location");
         server.abort();
     }
 }

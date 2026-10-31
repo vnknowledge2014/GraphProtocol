@@ -565,13 +565,39 @@ mod tests {
             .expect("obj");
         assert!(build_request(customer, schema, &unknown).is_err());
 
-        // Over `maxLength` (65 chars > 64) and failing `pattern`
+        // Exact `maxLength` (64 chars ok, 65 chars > 64 rejected), `minimum`/`maximum` on `limit` (1 and 200 ok, 0 and 201 rejected), and failing `pattern`
+        let exact_len = json!({ "id": 1, "X-Request-Tag": "a".repeat(64) })
+            .as_object()
+            .cloned()
+            .expect("obj");
+        assert!(build_request(customer, schema, &exact_len).is_ok());
+
         let too_long = "a".repeat(65);
         let over_len = json!({ "id": 1, "X-Request-Tag": too_long })
             .as_object()
             .cloned()
             .expect("obj");
         assert!(build_request(customer, schema, &over_len).is_err());
+
+        let customers = ops
+            .iter()
+            .find(|o| o.name == "customers")
+            .expect("customers");
+        let cust_schema = &bundle.operations["customers"].input_json_schema;
+        for ok_lim in [1, 200] {
+            let m = json!({ "limit": ok_lim })
+                .as_object()
+                .cloned()
+                .expect("obj");
+            assert!(build_request(customers, cust_schema, &m).is_ok());
+        }
+        for bad_lim in [0, 201] {
+            let m = json!({ "limit": bad_lim })
+                .as_object()
+                .cloned()
+                .expect("obj");
+            assert!(build_request(customers, cust_schema, &m).is_err());
+        }
 
         let bad_pat = json!({ "id": 1, "X-Request-Tag": "bad space!" })
             .as_object()
@@ -687,6 +713,33 @@ mod tests {
         }
     }
 
+    fn build_prop_fixture() -> (ExtractedOperation, Value) {
+        let raw = json!({
+            "openapi": "3.1.0",
+            "info": { "title": "Prop", "version": "1.0.0" },
+            "paths": {
+                "/items/{sku}/detail": {
+                    "get": {
+                        "operationId": "detail",
+                        "parameters": [
+                            { "name": "sku", "in": "path", "required": true, "schema": { "type": "string", "minLength": 1, "maxLength": 4096 } },
+                            { "name": "q", "in": "query", "required": false, "schema": { "type": "string" } },
+                            { "name": "X-Custom", "in": "header", "required": false, "schema": { "type": "string" } }
+                        ],
+                        "responses": { "200": { "description": "ok" } }
+                    }
+                }
+            }
+        });
+        let doc = OpenApiDocument::parse(&serde_json::to_vec(&raw).expect("json")).expect("parse");
+        let ext = extract_operations(&doc).expect("extract");
+        let bundle = build_schema_bundle(&doc, &ext).expect("bundle");
+        (
+            ext.operations[0].clone(),
+            bundle.operations["detail"].input_json_schema.clone(),
+        )
+    }
+
     proptest! {
         #![proptest_config(ProptestConfig {
             failure_persistence: None,
@@ -709,35 +762,16 @@ mod tests {
             qval in ".*",
             hval in ".*",
         ) {
-            let raw = json!({
-                "openapi": "3.1.0",
-                "info": { "title": "Prop", "version": "1.0.0" },
-                "paths": {
-                    "/items/{sku}/detail": {
-                        "get": {
-                            "operationId": "detail",
-                            "parameters": [
-                                { "name": "sku", "in": "path", "required": true, "schema": { "type": "string", "minLength": 1, "maxLength": 4096 } },
-                                { "name": "q", "in": "query", "required": false, "schema": { "type": "string" } },
-                                { "name": "X-Custom", "in": "header", "required": false, "schema": { "type": "string" } }
-                            ],
-                            "responses": { "200": { "description": "ok" } }
-                        }
-                    }
-                }
-            });
-            let doc = OpenApiDocument::parse(&serde_json::to_vec(&raw).expect("json")).expect("parse");
-            let ext = extract_operations(&doc).expect("extract");
-            let bundle = build_schema_bundle(&doc, &ext).expect("bundle");
-            let op = &ext.operations[0];
-            let schema = &bundle.operations["detail"].input_json_schema;
+            thread_local! {
+                static PROP_FIXTURE: (ExtractedOperation, Value) = build_prop_fixture();
+            }
 
             let args = json!({ "sku": sku, "q": qval, "X-Custom": hval })
                 .as_object()
                 .cloned()
                 .expect("obj");
 
-            match build_request(op, schema, &args) {
+            match PROP_FIXTURE.with(|(op, schema)| build_request(op, schema, &args)) {
                 Ok(built) => {
                     prop_assert!(built.path_and_query.starts_with('/'));
                     prop_assert!(!built.path_and_query.contains('#'));

@@ -755,6 +755,86 @@ mod tests {
             bomb_doc.inline_refs(&json!({ "$ref": "#/components/schemas/D0" })),
             Err(ExtractError::ItemLimitExceeded { .. })
         ));
+
+        // Exact `max_bytes` and `max_ref_hops` boundary checks (`==` succeeds, `+1` fails).
+        let minimal_bytes = serde_json::to_vec(&json!({
+            "openapi": "3.1.0",
+            "info": { "title": "Exact", "version": "1.0.0" },
+            "paths": {}
+        }))
+        .expect("json");
+        assert!(
+            OpenApiDocument::parse_with_limits(
+                &minimal_bytes,
+                ExtractLimits {
+                    max_bytes: minimal_bytes.len(),
+                    ..ExtractLimits::default()
+                },
+            )
+            .is_ok()
+        );
+        assert!(matches!(
+            OpenApiDocument::parse_with_limits(
+                &minimal_bytes,
+                ExtractLimits {
+                    max_bytes: minimal_bytes.len() - 1,
+                    ..ExtractLimits::default()
+                },
+            ),
+            Err(ExtractError::TooLarge { .. })
+        ));
+
+        let exact_hops_doc = OpenApiDocument::parse_with_limits(
+            &serde_json::to_vec(&json!({
+                "openapi": "3.1.0",
+                "info": { "title": "Hops", "version": "1.0.0" },
+                "paths": {},
+                "components": {
+                    "schemas": {
+                        "H0": { "$ref": "#/components/schemas/H1" },
+                        "H1": { "$ref": "#/components/schemas/H2" },
+                        "H2": { "type": "string" }
+                    }
+                }
+            }))
+            .expect("json"),
+            ExtractLimits {
+                max_ref_hops: 2,
+                ..ExtractLimits::default()
+            },
+        )
+        .expect("parse");
+        assert!(
+            exact_hops_doc
+                .inline_refs(&json!({ "$ref": "#/components/schemas/H0" }))
+                .is_err()
+        );
+        let enough_hops_doc = OpenApiDocument::parse_with_limits(
+            &serde_json::to_vec(&json!({
+                "openapi": "3.1.0",
+                "info": { "title": "Hops", "version": "1.0.0" },
+                "paths": {},
+                "components": {
+                    "schemas": {
+                        "H0": { "$ref": "#/components/schemas/H1" },
+                        "H1": { "$ref": "#/components/schemas/H2" },
+                        "H2": { "type": "string" }
+                    }
+                }
+            }))
+            .expect("json"),
+            ExtractLimits {
+                max_ref_hops: 3,
+                ..ExtractLimits::default()
+            },
+        )
+        .expect("parse");
+        assert_eq!(
+            enough_hops_doc
+                .inline_refs(&json!({ "$ref": "#/components/schemas/H0" }))
+                .expect("3 hops allowed"),
+            json!({ "type": "string" })
+        );
     }
 
     proptest! {
