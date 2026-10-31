@@ -12,9 +12,10 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use axum::body::Body;
 use axum::http::{Request, StatusCode};
 use common::{
-    TestHarness, compose_two_branch_snapshot, default_crm_mock, make_persisted_store, send_oneshot,
-    stream_rows,
+    TestHarness, compose_two_branch_snapshot_with_shop_uid, crm_uid, default_crm_mock,
+    make_persisted_store, send_oneshot, shop_uid, shop_v2_uid, spawn_grpc_branch, stream_rows,
 };
+use gap_exec::ConnectorRegistry;
 use gap_ngc_sdk::mock::MockConnector;
 use gap_ql::{PersistedOperationId, PersistedOperationStore};
 use gap_transport::{Profile, TransportConfig};
@@ -253,24 +254,41 @@ async fn inv_01_in_flight_request_pins_generation_once_across_all_stages() {
             Ok(stream_rows(vec![json!({ "value": "served-from-gen-1" })]))
         }
     });
+    let shop_v2_mock = MockConnector::new().on_query(|req, _scope| {
+        assert_eq!(req.operation, "shopVersion");
+        Ok(stream_rows(vec![json!({ "value": "served-from-gen-2" })]))
+    });
 
     let doc = "query PinnedGen { shopVersion }";
     let op_id = PersistedOperationId::from_document(doc);
 
-    // Build initial harness first, then wrap with MidFlightPublishingStore sharing the same SnapshotHandle.
+    // Build initial harness first, then register a second `shop_v2` connector (`shop_v2_uid`) so
+    // Gen 2 and Gen 3 route `shopVersion` to `shop_v2_mock` ("served-from-gen-2") while Gen 1
+    // routes to `shop_mock` ("served-from-gen-1").
     let base_harness = TestHarness::with_mocks(
         TransportConfig::for_profile(Profile::Dev),
-        shop_mock,
+        shop_mock.clone(),
         default_crm_mock(),
         None,
         None,
     );
+    let clock_dyn = Arc::clone(&base_harness.state.clock);
+    let (shop_v1_client, _g1) = spawn_grpc_branch(shop_mock, Arc::clone(&clock_dyn));
+    let (shop_v2_client, _g2) = spawn_grpc_branch(shop_v2_mock, Arc::clone(&clock_dyn));
+    let (crm_client, _gc) = spawn_grpc_branch(default_crm_mock(), Arc::clone(&clock_dyn));
+    let multi_registry = Arc::new(
+        ConnectorRegistry::builder()
+            .register(shop_uid(), shop_v1_client, 64)
+            .register(shop_v2_uid(), shop_v2_client, 64)
+            .register(crm_uid(), crm_client, 64)
+            .build(),
+    );
 
     let gen1 = base_harness.snapshot_handle.pin();
     assert_eq!(gen1.generation, 1);
-    let gen2 = compose_two_branch_snapshot(&gen1, true);
+    let gen2 = compose_two_branch_snapshot_with_shop_uid(&gen1, true, "v2", shop_v2_uid());
     assert_eq!(gen2.generation, 2);
-    let gen3 = compose_two_branch_snapshot(&gen2, false);
+    let gen3 = compose_two_branch_snapshot_with_shop_uid(&gen2, false, "v3", shop_v2_uid());
     assert_eq!(gen3.generation, 3);
 
     let publishing_store = Arc::new(MidFlightPublishingStore {
@@ -284,15 +302,16 @@ async fn inv_01_in_flight_request_pins_generation_once_across_all_stages() {
     let state = Arc::new(
         gap_transport::AppState::new(
             Arc::clone(&base_harness.snapshot_handle),
-            Arc::clone(&base_harness.state.registry),
+            multi_registry,
             Arc::clone(&base_harness.state.plan_cache),
             base_harness.state.config.clone(),
             Arc::clone(&base_harness.metrics),
         )
-        .with_clock(Arc::clone(&base_harness.state.clock))
+        .with_clock(clock_dyn)
         .with_persisted_store(publishing_store.clone()),
     );
     let app = gap_transport::router(state);
+    let app_after = app.clone();
 
     let req = Request::builder()
         .method("POST")
@@ -311,31 +330,57 @@ async fn inv_01_in_flight_request_pins_generation_once_across_all_stages() {
     let mut in_flight = tokio::spawn(async move { send_oneshot(&app, req).await });
 
     // Wait until the request has pinned Gen 1 in `Gateway`, triggered Gen 2 publish inside
-    // `Operation`, planned, and entered `Exec` (`shop_mock`).
-    tokio::select! {
+    // `Operation`, planned, and entered `Exec` (`shop_mock`). If a double-pinning bug routed to
+    // `shop_v2_mock` instead, `in_flight` finishes early with `"served-from-gen-2"` and fails the
+    // data-content assertion below.
+    let resp = tokio::select! {
         early = &mut in_flight => {
-            panic!("request finished before entering branch mock: {:?}", early.map(|r| r.status));
+            early.expect("join early in-flight request")
         }
-        () = entered_branch.notified() => {}
-    }
-    assert_eq!(publishing_store.calls.load(Ordering::Acquire), 1);
-    assert_eq!(base_harness.snapshot_handle.generation(), 2);
+        () = entered_branch.notified() => {
+            assert_eq!(publishing_store.calls.load(Ordering::Acquire), 1);
+            assert_eq!(base_harness.snapshot_handle.generation(), 2);
 
-    // Publish Generation 3 while `Exec` is mid-flight, before `Assemble` runs!
-    let pub3 = base_harness
-        .snapshot_handle
-        .publish(gen3)
-        .expect("publish gen 3");
-    assert_eq!(pub3, 3);
-    assert_eq!(base_harness.snapshot_handle.generation(), 3);
+            // Publish Generation 3 while `Exec` is mid-flight, before `Assemble` runs!
+            let pub3 = base_harness
+                .snapshot_handle
+                .publish(gen3)
+                .expect("publish gen 3");
+            assert_eq!(pub3, 3);
+            assert_eq!(base_harness.snapshot_handle.generation(), 3);
 
-    release_branch.notify_one();
-    let resp = in_flight.await.expect("join in-flight request");
+            release_branch.notify_one();
+            in_flight.await.expect("join in-flight request")
+        }
+    };
     assert_eq!(resp.status, StatusCode::OK);
     let body = resp.json();
-    assert_eq!(body["data"]["shopVersion"], "served-from-gen-1");
+    assert_eq!(
+        body["data"]["shopVersion"], "served-from-gen-1",
+        "in-flight request pinned on Gen 1 must return Gen 1 branch data even after Gen 2/3 publish"
+    );
     assert_eq!(
         body["extensions"]["gap"]["generation"], 1,
         "request that pinned generation 1 must report generation 1 even after gen 2 & gen 3 published"
     );
+
+    // Subsequent request after Gen 3 publish pins Generation 3 and observes Gen 2/3 branch data.
+    let req2 = Request::builder()
+        .method("POST")
+        .uri("/graphql")
+        .header("content-type", "application/json")
+        .body(Body::from(
+            serde_json::to_vec(&json!({
+                "extensions": {
+                    "persistedQuery": { "version": 1, "sha256Hash": op_id.as_str() }
+                }
+            }))
+            .expect("json"),
+        ))
+        .expect("req2");
+    let resp2 = send_oneshot(&app_after, req2).await;
+    assert_eq!(resp2.status, StatusCode::OK);
+    let body2 = resp2.json();
+    assert_eq!(body2["data"]["shopVersion"], "served-from-gen-2");
+    assert_eq!(body2["extensions"]["gap"]["generation"], 3);
 }

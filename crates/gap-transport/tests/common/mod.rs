@@ -38,10 +38,15 @@ use serde_json::{Value, json};
 use tower::ServiceExt as _;
 
 pub const SHOP_UID_STR: &str = "018bcfe5-6c01-7010-8101-010101010101";
+pub const SHOP_V2_UID_STR: &str = "018bcfe5-6c03-7030-8303-030303030303";
 pub const CRM_UID_STR: &str = "018bcfe5-6c02-7020-8202-020202020202";
 
 pub fn shop_uid() -> BranchUid {
     BranchUid::parse(SHOP_UID_STR).expect("valid shop UUIDv7")
+}
+
+pub fn shop_v2_uid() -> BranchUid {
+    BranchUid::parse(SHOP_V2_UID_STR).expect("valid shop_v2 UUIDv7")
 }
 
 pub fn crm_uid() -> BranchUid {
@@ -53,6 +58,10 @@ pub fn ts(ms: i64) -> Timestamp {
 }
 
 pub fn shop_branch_input(rev_label: &str) -> BranchInput {
+    shop_branch_input_with_uid(rev_label, shop_uid())
+}
+
+pub fn shop_branch_input_with_uid(rev_label: &str, uid: BranchUid) -> BranchInput {
     let sdl = r#"
 type Order {
     id: ID!
@@ -91,7 +100,7 @@ type Mutation {
 
     BranchInput {
         id: BranchId::new("shop").expect("shop branch id"),
-        uid: shop_uid(),
+        uid,
         protocol: Protocol::Grpc,
         trust: TrustTier::T0,
         endpoint: Endpoint {
@@ -225,8 +234,20 @@ type Query {{
 
 pub fn compose_two_branch_snapshot(base: &Snapshot, gen2_extra: bool) -> Snapshot {
     let rev = if gen2_extra { "v2" } else { "v1" };
-    let comp = compose(&[shop_branch_input(rev), crm_branch_input(gen2_extra)])
-        .expect("two-branch supergraph must compose cleanly");
+    compose_two_branch_snapshot_with_shop_uid(base, gen2_extra, rev, shop_uid())
+}
+
+pub fn compose_two_branch_snapshot_with_shop_uid(
+    base: &Snapshot,
+    gen2_extra: bool,
+    rev: &str,
+    s_uid: BranchUid,
+) -> Snapshot {
+    let comp = compose(&[
+        shop_branch_input_with_uid(rev, s_uid),
+        crm_branch_input(gen2_extra),
+    ])
+    .expect("two-branch supergraph must compose cleanly");
     assert!(
         comp.warnings.is_empty(),
         "clean branch inputs must produce zero composition warnings: {:?}",

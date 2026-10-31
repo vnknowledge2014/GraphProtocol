@@ -212,6 +212,47 @@ async fn status_422_on_validation_coercion_operation_resolution_and_unsupported_
         "application/graphql-response+json",
         "GAP_UNSUPPORTED_FEATURE",
     );
+
+    // 422e: ad-hoc `GET /graphql?query=...` without persisted operation hash (`Brief §3.2`)
+    let adhoc_get = send_oneshot(
+        &harness.router,
+        Request::builder()
+            .method("GET")
+            .uri("/graphql?query=%7BshopVersion%7D")
+            .body(Body::empty())
+            .expect("req"),
+    )
+    .await;
+    assert_request_error_envelope(
+        &adhoc_get,
+        StatusCode::UNPROCESSABLE_ENTITY,
+        "application/graphql-response+json",
+        "GAP_OPERATION_NOT_ALLOWED",
+    );
+
+    // 422f: planner cost budget exceeded (`extensions.gap.budget.costUnits: 1`)
+    let over_budget = send_oneshot(
+        &harness.router,
+        Request::builder()
+            .method("POST")
+            .uri("/graphql")
+            .header("content-type", "application/json")
+            .body(Body::from(
+                serde_json::to_vec(&json!({
+                    "query": "{ orders(first: 10) { id sku totalCents } }",
+                    "extensions": { "gap": { "budget": { "costUnits": 1 } } }
+                }))
+                .expect("json"),
+            ))
+            .expect("req"),
+    )
+    .await;
+    assert_request_error_envelope(
+        &over_budget,
+        StatusCode::UNPROCESSABLE_ENTITY,
+        "application/graphql-response+json",
+        "GAP_BUDGET_EXCEEDED",
+    );
 }
 
 // spec: SEC-001, SEC-002, SEC-010
@@ -378,6 +419,30 @@ async fn status_413_415_405_406_and_404_transport_errors() {
         Some("POST")
     );
 
+    // 405c: `GET /graphql/stream` (`POST`-only SSE alias) -> 405 + `Allow: POST`
+    let r405_stream = send_oneshot(
+        &harness.router,
+        Request::builder()
+            .method("GET")
+            .uri("/graphql/stream")
+            .body(Body::empty())
+            .expect("req"),
+    )
+    .await;
+    assert_request_error_envelope(
+        &r405_stream,
+        StatusCode::METHOD_NOT_ALLOWED,
+        "application/json",
+        "GAP_OPERATION_NOT_ALLOWED",
+    );
+    assert_eq!(
+        r405_stream
+            .headers
+            .get("allow")
+            .and_then(|v| v.to_str().ok()),
+        Some("POST")
+    );
+
     // 406: unacceptable `Accept` header
     let r406 = send_oneshot(
         &harness.router,
@@ -496,6 +561,11 @@ async fn status_429_and_503_with_retry_after_header() {
             .and_then(|v| v.to_str().ok()),
         Some("2")
     );
+
+    // Exact ceiling boundary: `1_000 ms -> 1`, `1_001 ms -> 2`, `None -> 1`.
+    assert_eq!(gap_transport::retry_after_seconds(Some(1_000)), 1);
+    assert_eq!(gap_transport::retry_after_seconds(Some(1_001)), 2);
+    assert_eq!(gap_transport::retry_after_seconds(None), 1);
 }
 
 // spec: GQL-003, GQL-050, GQL-051

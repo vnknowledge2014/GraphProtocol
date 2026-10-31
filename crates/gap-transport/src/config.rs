@@ -601,5 +601,46 @@ mod tests {
             assert_eq!(stats.records_inspected, 3);
             assert_eq!(stats.bytes_compared, 96);
         }
+
+        // Single-byte digest tampering at byte 0, byte 15, and byte 31 MUST all reject while
+        // inspecting all 32 bytes (kills `diff =` overwrite and `0..31` / `1..32` off-by-one loops).
+        let base_hex = records[0].blake3_hex.clone();
+        for byte_pos in [0_usize, 15, 31] {
+            let nibble_idx = byte_pos * 2 + 1;
+            let mut hex_bytes = base_hex.as_bytes().to_vec();
+            hex_bytes[nibble_idx] = if hex_bytes[nibble_idx] == b'0' {
+                b'1'
+            } else {
+                b'0'
+            };
+            let tampered_hex = String::from_utf8(hex_bytes).expect("ascii hex");
+            let tampered = vec![ApiKeyRecord::new(
+                "tampered",
+                tampered_hex,
+                TenantId::default_tenant(),
+                BTreeSet::from(["read".to_owned()]),
+            )];
+            let (found, stats) = verifier.verify_with_stats("alpha-secret", &tampered);
+            assert!(
+                found.is_none(),
+                "single-byte mismatch at byte {byte_pos} must reject"
+            );
+            assert_eq!(stats.records_inspected, 1);
+            assert_eq!(stats.bytes_compared, 32);
+        }
+
+        // Duplicate key IDs and zero deadlines must fail validation.
+        let mut dup_cfg = TransportConfig::for_profile(Profile::Prod);
+        dup_cfg.api_keys = vec![records[0].clone(), records[0].clone()];
+        assert_eq!(
+            dup_cfg.validate().expect_err("duplicate key id").field,
+            "api_keys.id"
+        );
+        let mut zero_dl = TransportConfig::for_profile(Profile::Dev);
+        zero_dl.default_deadline = Duration::ZERO;
+        assert_eq!(
+            zero_dl.validate().expect_err("zero deadline").field,
+            "default_deadline"
+        );
     }
 }

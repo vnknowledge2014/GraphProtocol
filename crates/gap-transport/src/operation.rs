@@ -86,7 +86,7 @@ pub struct GapRequestExtensions {
 /// Validated GraphQL operation output produced by [`prepare_http_operation`].
 #[derive(Debug, Clone)]
 pub struct PreparedHttpOperation {
-    ///Canonical SHA-256 persisted operation identifier.
+    /// Canonical SHA-256 persisted operation identifier.
     pub operation_id: PersistedOperationId,
     /// Whether the operation came from the registered persisted store.
     pub is_registered: bool,

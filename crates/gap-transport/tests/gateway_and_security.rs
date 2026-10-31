@@ -123,7 +123,31 @@ async fn gateway_request_id_echo_mint_and_reject_invalid_or_oversized() {
         Some(valid_uuid)
     );
 
-    // 3. Oversized `X-Request-Id` (`65` chars) MUST be rejected and replaced with a fresh UUIDv7!
+    // 3. Exact boundary lengths `1` and `64` are echoed verbatim; `65` is rejected -> UUIDv7!
+    for boundary_len in [1_usize, 64] {
+        let exact_id = "a".repeat(boundary_len);
+        let resp_exact = send_oneshot(
+            &harness.router,
+            Request::builder()
+                .method("POST")
+                .uri("/graphql")
+                .header("content-type", "application/json")
+                .header("x-request-id", &exact_id)
+                .body(Body::from(
+                    serde_json::to_vec(&json!({ "query": "{ shopVersion }" })).expect("json"),
+                ))
+                .expect("req"),
+        )
+        .await;
+        assert_eq!(
+            resp_exact
+                .headers
+                .get("x-request-id")
+                .and_then(|v| v.to_str().ok()),
+            Some(exact_id.as_str())
+        );
+    }
+
     let oversized_id = "a".repeat(65);
     let resp_over = send_oneshot(
         &harness.router,
@@ -257,6 +281,65 @@ async fn gateway_enforces_streaming_body_cap_without_buffering_full_stream_and_c
     assert_eq!(
         resp_vars.json()["errors"][0]["extensions"]["code"],
         "GAP_VALIDATION_ERROR"
+    );
+
+    // 4. Exact byte-cap boundary: `16_384` B padded JSON body succeeds (`200`), `16_385` B fails (`413`).
+    let prefix = br#"{"query":"{ shopVersion }","extensions":{"pad":""#;
+    let suffix = br#""}}"#;
+    let pad_len_ok = 16_384 - prefix.len() - suffix.len();
+    let mut exact_16k = Vec::with_capacity(16_384);
+    exact_16k.extend_from_slice(prefix);
+    exact_16k.resize(prefix.len() + pad_len_ok, b'x');
+    exact_16k.extend_from_slice(suffix);
+    assert_eq!(exact_16k.len(), 16_384);
+
+    let resp_exact_16k = send_oneshot(
+        &harness.router,
+        Request::builder()
+            .method("POST")
+            .uri("/graphql")
+            .header("content-type", "application/json")
+            .body(Body::from(exact_16k))
+            .expect("req"),
+    )
+    .await;
+    assert_eq!(resp_exact_16k.status, StatusCode::OK);
+    assert_eq!(resp_exact_16k.json()["data"]["shopVersion"], "shop-gen1");
+
+    // 5. Stalled slow-body stream times out cleanly (`408 GAP_DEADLINE_EXCEEDED`, no `data`).
+    struct StalledBodyStream {
+        sent_first: bool,
+    }
+    impl Stream for StalledBodyStream {
+        type Item = Result<Bytes, Infallible>;
+        fn poll_next(mut self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+            if !self.sent_first {
+                self.sent_first = true;
+                return Poll::Ready(Some(Ok(Bytes::from_static(b"{\"query\":"))));
+            }
+            Poll::Pending
+        }
+    }
+    let mut slow_cfg = TransportConfig::for_profile(Profile::Dev);
+    slow_cfg.default_deadline = std::time::Duration::from_millis(200);
+    slow_cfg.max_deadline = std::time::Duration::from_millis(500);
+    let slow_harness = TestHarness::new(slow_cfg);
+    let resp_slow = send_oneshot(
+        &slow_harness.router,
+        Request::builder()
+            .method("POST")
+            .uri("/graphql")
+            .header("content-type", "application/json")
+            .body(Body::from_stream(StalledBodyStream { sent_first: false }))
+            .expect("req"),
+    )
+    .await;
+    assert_eq!(resp_slow.status, StatusCode::REQUEST_TIMEOUT);
+    let slow_json = resp_slow.json();
+    assert!(slow_json.get("data").is_none());
+    assert_eq!(
+        slow_json["errors"][0]["extensions"]["code"],
+        "GAP_DEADLINE_EXCEEDED"
     );
 }
 
@@ -443,6 +526,23 @@ async fn authn_dev_and_prod_api_keys_constant_time_verifier_and_sec_010_tenant_i
             .expect("401 response body must never leak canary");
     }
 
+    // Simultaneous `Authorization` + `X-API-Key` is rejected as ambiguous (`401 GAP_UNAUTHENTICATED`).
+    let dual_creds = send_oneshot(
+        &harness.router,
+        Request::builder()
+            .method("POST")
+            .uri("/graphql")
+            .header("content-type", "application/json")
+            .header("authorization", format!("Bearer {raw_key_1}"))
+            .header("x-api-key", &raw_key_2)
+            .body(Body::from(
+                serde_json::to_vec(&json!({ "query": "{ shopVersion }" })).expect("json"),
+            ))
+            .expect("req"),
+    )
+    .await;
+    assert_eq!(dual_creds.status, StatusCode::UNAUTHORIZED);
+
     // 4. `prod` profile: missing key -> 401, wrong key -> 401, good key -> passes authn (reaches Authz 403).
     let mut prod_cfg = TransportConfig::for_profile(Profile::Prod);
     prod_cfg.api_keys = records;
@@ -542,6 +642,72 @@ fn inv_02_gap_transport_source_contains_zero_locks_on_request_path() {
                 "{} must not use `{token}` on the request path (INV-02)",
                 path.display()
             );
+        }
+    }
+}
+
+mod proptests {
+    #![allow(clippy::unwrap_used, clippy::expect_used)]
+
+    use axum::http::{HeaderMap, HeaderValue};
+    use gap_transport::{
+        Blake3ApiKeyVerifier, VerificationStats,
+        gateway::{is_valid_request_id, resolve_request_id},
+    };
+    use proptest::prelude::*;
+    use uuid::Uuid;
+
+    use crate::common::make_api_key;
+
+    proptest! {
+        #![proptest_config(ProptestConfig {
+            failure_persistence: None,
+            ..ProptestConfig::with_cases(48)
+        })]
+
+        // spec: OPS-010, GQL-003
+        #[test]
+        fn prop_request_id_echoes_valid_slugs_and_mints_uuidv7_on_invalid(
+            valid_slug in "[A-Za-z0-9-]{1,64}",
+            oversized in "[A-Za-z0-9-]{65,128}",
+        ) {
+            prop_assert!(is_valid_request_id(&valid_slug));
+            let mut h_ok = HeaderMap::new();
+            h_ok.insert("x-request-id", HeaderValue::from_str(&valid_slug).expect("ascii"));
+            prop_assert_eq!(resolve_request_id(&h_ok), valid_slug);
+
+            prop_assert!(!is_valid_request_id(&oversized));
+            let mut h_over = HeaderMap::new();
+            h_over.insert("x-request-id", HeaderValue::from_str(&oversized).expect("ascii"));
+            let minted = resolve_request_id(&h_over);
+            let parsed = Uuid::parse_str(&minted).expect("minted UUIDv7");
+            prop_assert_eq!(parsed.get_version_num(), 7);
+        }
+
+        // spec: SEC-001, SEC-010
+        #[test]
+        fn prop_blake3_verifier_always_inspects_all_records_and_bytes(
+            candidate in ".*",
+        ) {
+            let records = vec![
+                make_api_key("k1", "prop-fixed-secret-1", "acme", &["read"]),
+                make_api_key("k2", "prop-fixed-secret-2", "globex", &["read"]),
+                make_api_key("k3", "prop-fixed-secret-3", "initech", &["read"]),
+            ];
+            let (matched, stats) = Blake3ApiKeyVerifier.verify_with_stats(&candidate, &records);
+            prop_assert_eq!(
+                stats,
+                VerificationStats {
+                    records_inspected: 3,
+                    bytes_compared: 96,
+                }
+            );
+            if candidate != "prop-fixed-secret-1"
+                && candidate != "prop-fixed-secret-2"
+                && candidate != "prop-fixed-secret-3"
+            {
+                prop_assert!(matched.is_none());
+            }
         }
     }
 }

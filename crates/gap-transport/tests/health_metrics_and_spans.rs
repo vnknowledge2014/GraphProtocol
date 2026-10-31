@@ -73,9 +73,10 @@ async fn healthz_and_readyz_reflect_snapshot_draining_and_registry_conditions() 
         .as_array()
         .expect("failing array")
         .clone();
-    assert!(
-        drain_reasons.iter().any(|v| v == "draining"),
-        "expected `draining` in failing conditions: {drain_reasons:?}"
+    assert_eq!(
+        drain_reasons,
+        vec![json!("draining")],
+        "expected only `draining` when snapshot & registry are healthy"
     );
 
     let hz_while_draining = send_oneshot(
@@ -89,8 +90,51 @@ async fn healthz_and_readyz_reflect_snapshot_draining_and_registry_conditions() 
     .await;
     assert_eq!(hz_while_draining.status, StatusCode::OK);
 
-    // 4. Failing condition B: unloaded bootstrap snapshot (`Snapshot::empty(0)`) AND empty
-    //    `ConnectorRegistry` -> `/readyz` returns `503` listing both conditions!
+    // 4. Failing condition B alone: `snapshot_not_loaded` (not draining, registry non-empty).
+    let only_snap_missing = router(Arc::new(AppState::new(
+        Arc::new(SnapshotHandle::new(Snapshot::empty(0))),
+        Arc::clone(&harness.state.registry),
+        Arc::new(PlanCache::default()),
+        TransportConfig::for_profile(Profile::Dev),
+        Arc::new(TransportMetrics::new()),
+    )));
+    let rz_no_snap = send_oneshot(
+        &only_snap_missing,
+        Request::builder()
+            .method("GET")
+            .uri("/readyz")
+            .body(Body::empty())
+            .expect("req"),
+    )
+    .await;
+    assert_eq!(rz_no_snap.status, StatusCode::SERVICE_UNAVAILABLE);
+    assert_eq!(rz_no_snap.json()["failing"], json!(["snapshot_not_loaded"]));
+
+    // 5. Failing condition C alone: `no_branches_registered` (not draining, snapshot loaded).
+    let only_reg_empty = router(Arc::new(AppState::new(
+        Arc::clone(&harness.snapshot_handle),
+        Arc::new(ConnectorRegistry::empty()),
+        Arc::new(PlanCache::default()),
+        TransportConfig::for_profile(Profile::Dev),
+        Arc::new(TransportMetrics::new()),
+    )));
+    let rz_no_reg = send_oneshot(
+        &only_reg_empty,
+        Request::builder()
+            .method("GET")
+            .uri("/readyz")
+            .body(Body::empty())
+            .expect("req"),
+    )
+    .await;
+    assert_eq!(rz_no_reg.status, StatusCode::SERVICE_UNAVAILABLE);
+    assert_eq!(
+        rz_no_reg.json()["failing"],
+        json!(["no_branches_registered"])
+    );
+
+    // 6. Both `snapshot_not_loaded` and `no_branches_registered` together, plus wrong HTTP methods
+    //    on `/healthz`, `/readyz`, `/metrics` returning `405` + `Allow: GET` (`OPS-002`).
     let unloaded_state = Arc::new(AppState::new(
         Arc::new(SnapshotHandle::new(Snapshot::empty(0))),
         Arc::new(ConnectorRegistry::empty()),
@@ -110,20 +154,34 @@ async fn healthz_and_readyz_reflect_snapshot_draining_and_registry_conditions() 
     )
     .await;
     assert_eq!(rz_unloaded.status, StatusCode::SERVICE_UNAVAILABLE);
-    let unloaded_reasons = rz_unloaded.json()["failing"]
-        .as_array()
-        .expect("failing array")
-        .clone();
-    assert!(
-        unloaded_reasons.iter().any(|v| v == "snapshot_not_loaded"),
-        "expected `snapshot_not_loaded`, got {unloaded_reasons:?}"
+    assert_eq!(
+        rz_unloaded.json()["failing"],
+        json!(["snapshot_not_loaded", "no_branches_registered"])
     );
-    assert!(
-        unloaded_reasons
-            .iter()
-            .any(|v| v == "no_branches_registered"),
-        "expected `no_branches_registered`, got {unloaded_reasons:?}"
-    );
+
+    for path in ["/healthz", "/readyz", "/metrics"] {
+        let wrong_method = send_oneshot(
+            &unloaded_router,
+            Request::builder()
+                .method("POST")
+                .uri(path)
+                .body(Body::empty())
+                .expect("req"),
+        )
+        .await;
+        assert_eq!(
+            wrong_method.status,
+            StatusCode::METHOD_NOT_ALLOWED,
+            "POST {path} must return 405"
+        );
+        assert_eq!(
+            wrong_method
+                .headers
+                .get("allow")
+                .and_then(|v| v.to_str().ok()),
+            Some("GET")
+        );
+    }
 }
 
 // spec: OPS-002, OPS-020, INV-15
@@ -333,11 +391,42 @@ async fn ops_010_and_ops_011_spans_record_normative_names_and_hash_queries_witho
         Some("false")
     );
 
+    // Second identical request hits `PlanCache` and records `gap.plan_cache = "hit"` in `gap.plan`.
+    let resp_hit = tracing::instrument::WithSubscriber::with_subscriber(
+        send_oneshot(
+            &harness.router,
+            Request::builder()
+                .method("POST")
+                .uri("/graphql")
+                .header("content-type", "application/json")
+                .header("authorization", format!("Bearer {api_key_canary}"))
+                .body(Body::from(
+                    serde_json::to_vec(&json!({
+                        "query": raw_query,
+                        "operationName": "SpanCheck"
+                    }))
+                    .expect("json"),
+                ))
+                .expect("req"),
+        ),
+        capture.subscriber(),
+    )
+    .await;
+    assert_eq!(resp_hit.status, StatusCode::OK);
+
+    let all_spans = capture.spans();
+    let plan_cache_values: Vec<&str> = all_spans
+        .iter()
+        .filter(|s| s.name == SPAN_PLAN)
+        .filter_map(|s| s.fields.get("gap.plan_cache").map(String::as_str))
+        .collect();
+    assert_eq!(plan_cache_values, vec!["miss", "hit"]);
+
     // OPS-011 / INV-15: NO span or event attribute may contain the raw query string or API key canary!
     canary_sink
         .check_tracing(&capture)
         .expect("INV-15: spans and events must never contain API key canary");
-    for sp in &spans {
+    for sp in &all_spans {
         for (k, v) in &sp.fields {
             assert!(
                 !v.contains(&raw_query) && !v.contains(secret_query_literal),

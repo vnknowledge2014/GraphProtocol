@@ -868,16 +868,30 @@ where
             let inner_span = request_span.clone();
             let resp = async move {
                 let method = req.request.method();
-                if method != Method::GET && method != Method::POST {
-                    return build_transport_error_response(
-                        StatusCode::METHOD_NOT_ALLOWED,
-                        Some("GET, POST"),
-                        GapError::new(
-                            ErrorCode::OperationNotAllowed,
-                            format!("HTTP method `{method}` is not allowed; use GET or POST"),
-                        ),
-                        &request_id,
-                    );
+                match req.route {
+                    RouteLabel::GraphqlStream if method != Method::POST => {
+                        return build_transport_error_response(
+                            StatusCode::METHOD_NOT_ALLOWED,
+                            Some("POST"),
+                            GapError::new(
+                                ErrorCode::OperationNotAllowed,
+                                format!("HTTP method `{method}` is not allowed; use POST"),
+                            ),
+                            &request_id,
+                        );
+                    }
+                    _ if method != Method::GET && method != Method::POST => {
+                        return build_transport_error_response(
+                            StatusCode::METHOD_NOT_ALLOWED,
+                            Some("GET, POST"),
+                            GapError::new(
+                                ErrorCode::OperationNotAllowed,
+                                format!("HTTP method `{method}` is not allowed; use GET or POST"),
+                            ),
+                            &request_id,
+                        );
+                    }
+                    _ => {}
                 }
 
                 let media = match negotiate_accept(req.request.headers(), req.route) {
