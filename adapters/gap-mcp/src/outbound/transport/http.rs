@@ -699,10 +699,23 @@ mod tests {
             Script::new(vec![(200, vec![], vec![endless.into_bytes()])]),
             1 << 20,
         );
-        assert!(matches!(
-            t.request("m", json!({}), modern(), opts()).await,
-            Err(McpError::Protocol(_) | McpError::FrameTooLarge)
-        ));
+        assert_eq!(
+            t.request("m", json!({}), modern(), opts())
+                .await
+                .expect_err("too many events"),
+            McpError::Protocol("too many SSE events")
+        );
+        // the total byte cap (4 x the frame cap) stops a stream of many valid-sized events that never answers
+        let chunky: Vec<Vec<u8>> = (0..20)
+            .map(|_| format!("data: {{\"jsonrpc\":\"2.0\",\"method\":\"n\",\"params\":{{\"p\":\"{}\"}}}}\n\n", "x".repeat(600)).into_bytes())
+            .collect();
+        let t = HttpTransport::new(Script::new(vec![(200, vec![], chunky)]), 1_000);
+        assert_eq!(
+            t.request("m", json!({}), modern(), opts())
+                .await
+                .expect_err("total cap"),
+            McpError::FrameTooLarge
+        );
     }
 
     // spec: CMP-012

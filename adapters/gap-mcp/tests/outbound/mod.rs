@@ -2,6 +2,7 @@
 
 pub mod connector;
 pub mod real_child;
+pub mod real_http;
 pub mod wire;
 
 use std::collections::BTreeMap;
