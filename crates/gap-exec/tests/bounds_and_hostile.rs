@@ -345,12 +345,18 @@ async fn hostile_connectors_endless_stream_and_giant_row_bounded_safely() {
 
     // Hostile 1: Endless stream never sending `Complete`
     let endless_mock = MockConnector::new().on_query(|_req, _scope| {
-        let s = stream::repeat_with(|| {
-            Ok(rows_response(vec![json!({
-                "id": "inf",
-                "sku": "ENDLESS-STREAM",
-                "totalCents": 1
-            })]))
+        let s = stream::unfold(0_usize, |idx| async move {
+            if idx >= 2_000 {
+                tokio::time::sleep(Duration::from_millis(5)).await;
+            }
+            Some((
+                Ok(rows_response(vec![json!({
+                    "id": "inf",
+                    "sku": "ENDLESS-STREAM",
+                    "totalCents": 1
+                })])),
+                idx + 1,
+            ))
         });
         Ok(Box::pin(s))
     });
