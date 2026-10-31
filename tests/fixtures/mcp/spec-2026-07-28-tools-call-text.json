@@ -1,0 +1,14 @@
+{
+  "jsonrpc": "2.0",
+  "id": 2,
+  "result": {
+    "resultType": "complete",
+    "content": [
+      {
+        "type": "text",
+        "text": "Current weather in New York:\nTemperature: 72°F\nConditions: Partly cloudy"
+      }
+    ],
+    "isError": false
+  }
+}
