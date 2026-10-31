@@ -31,9 +31,7 @@ use tokio::time::{Instant, sleep_until};
 use crate::auth::{AuthConfig, AuthError, CredentialSource, ResolvedAuth, ValidatedBaseUrl};
 use crate::document::{ExtractError, ExtractLimits, OpenApiDocument};
 use crate::extract::{ExtractedOperation, ExtractionReport, NativeBatchSpec, extract_operations};
-use crate::request::{
-    BuiltRequest, build_request, json_number_as_exact_i64, validate_arguments,
-};
+use crate::request::{BuiltRequest, build_request, json_number_as_exact_i64, validate_arguments};
 use crate::schema::{GeneratedOperationSchema, build_schema_bundle};
 use crate::upstream::{
     DEFAULT_MAX_UPSTREAM_BODY_BYTES, HttpUpstream, Upstream, UpstreamError, UpstreamRequest,
@@ -612,7 +610,9 @@ impl<U: Upstream> ConnectorShared<U> {
                             self.config.max_upstream_body_bytes,
                             self.config.allow_binary,
                         )
-                        .map_err(|e| NgcErrorInfo::new(NgcErrorCode::UpstreamError, e.to_string()))?;
+                        .map_err(|e| {
+                            NgcErrorInfo::new(NgcErrorCode::UpstreamError, e.to_string())
+                        })?;
                         return Ok(Some(json_val));
                     }
 
@@ -697,11 +697,10 @@ impl<U: Upstream> ConnectorShared<U> {
             }
         }
 
-        Err(NgcErrorInfo::new(
-            NgcErrorCode::Unavailable,
-            "upstream retries exhausted",
+        Err(
+            NgcErrorInfo::new(NgcErrorCode::Unavailable, "upstream retries exhausted")
+                .with_retry(true, 0),
         )
-        .with_retry(true, 0))
     }
 }
 
@@ -1412,9 +1411,7 @@ impl<U: Upstream> Connector for OpenApiConnector<U> {
                 ));
             }
 
-            let Some(built_req) = st.built.take() else {
-                return None;
-            };
+            let built_req = st.built.take()?;
 
             let attempts = AtomicU32::new(0);
             let started = Instant::now();
@@ -1462,18 +1459,17 @@ impl<U: Upstream> Connector for OpenApiConnector<U> {
                     }
 
                     let emitted_u64 = u64::try_from(rows.len()).unwrap_or(u64::MAX);
-                    let next_cursor = if st.is_paginated
-                        && (has_more_page || (truncated && emitted_u64 > 0))
-                    {
-                        encode_cursor(
-                            &st.op_name,
-                            &st.args_hash,
-                            &st.scope.tenant_id,
-                            st.start_offset.saturating_add(emitted_u64),
-                        )
-                    } else {
-                        String::new()
-                    };
+                    let next_cursor =
+                        if st.is_paginated && (has_more_page || (truncated && emitted_u64 > 0)) {
+                            encode_cursor(
+                                &st.op_name,
+                                &st.args_hash,
+                                &st.scope.tenant_id,
+                                st.start_offset.saturating_add(emitted_u64),
+                            )
+                        } else {
+                            String::new()
+                        };
 
                     let latency_us =
                         u32::try_from(started.elapsed().as_micros()).unwrap_or(u32::MAX);
@@ -1506,11 +1502,7 @@ impl<U: Upstream> Connector for OpenApiConnector<U> {
         }))
     }
 
-    async fn health(
-        &self,
-        _request: HealthRequest,
-        scope: CallScope,
-    ) -> NgcResult<HealthResponse> {
+    async fn health(&self, _request: HealthRequest, scope: CallScope) -> NgcResult<HealthResponse> {
         let _ = ConnectorShared::<U>::check_scope_alive(&scope)?;
         let weight = self.shared.current_capacity_weight();
         let mut details = Map::with_capacity(1);
@@ -1674,7 +1666,10 @@ mod tests {
         .expect("build connector");
 
         // `servers[]` is recorded in the extraction report and NEVER replaces `config.base_url`.
-        assert_eq!(conn.base_url().as_url().as_str(), "http://127.0.0.1:18080/v2");
+        assert_eq!(
+            conn.base_url().as_url().as_str(),
+            "http://127.0.0.1:18080/v2"
+        );
         assert_eq!(
             conn.extraction_report().servers,
             vec!["http://10.99.99.99:9999/hijack".to_owned()]
@@ -2080,7 +2075,11 @@ mod tests {
 
         // Status table: 400, 422, 401, 403, 500, 502, 302 (redirect not followed).
         let cases = [
-            (StatusCode::BAD_REQUEST, NgcErrorCode::InvalidArgument, false),
+            (
+                StatusCode::BAD_REQUEST,
+                NgcErrorCode::InvalidArgument,
+                false,
+            ),
             (
                 StatusCode::UNPROCESSABLE_ENTITY,
                 NgcErrorCode::InvalidArgument,
@@ -2600,7 +2599,10 @@ mod tests {
         .await
         .expect("native foreach completes");
 
-        assert_eq!(complete.upstream_calls, 3, "expected 3 batched upstream calls");
+        assert_eq!(
+            complete.upstream_calls, 3,
+            "expected 3 batched upstream calls"
+        );
         assert_eq!(fixture.request_count(), 3);
         for rec in fixture.recorded_requests() {
             let ids_part = rec
@@ -2824,11 +2826,11 @@ mod tests {
 
         let rate_cases: &[(Option<&str>, Option<&str>, f64, bool)] = &[
             (Some("100"), Some("25"), 0.25, true),
-            (Some("100"), Some("0"), 0.0, false),  // strictly > 0.0 and <= 0.05
+            (Some("100"), Some("0"), 0.0, false), // strictly > 0.0 and <= 0.05
             (Some("100"), Some("250"), 1.0, true), // clamped to <= 1.0
             (Some("100"), Some("garbage"), 1.0, true),
-            (Some("0"), Some("10"), 1.0, true),    // limit <= 0 invalid -> 1.0
-            (Some("100"), Some("-5"), 1.0, true),  // negative remaining invalid -> 1.0
+            (Some("0"), Some("10"), 1.0, true), // limit <= 0 invalid -> 1.0
+            (Some("100"), Some("-5"), 1.0, true), // negative remaining invalid -> 1.0
             (None, None, 1.0, true),
         ];
         for &(lim, rem, expected, exact) in rate_cases {

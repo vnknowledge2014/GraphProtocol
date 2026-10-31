@@ -149,7 +149,9 @@ fn seed_customers() -> Vec<CustomerRow> {
 }
 
 fn seed_orders() -> Vec<OrderRow> {
-    let statuses = ["pending", "paid", "shipped", "paid", "pending", "shipped", "paid", "pending"];
+    let statuses = [
+        "pending", "paid", "shipped", "paid", "pending", "shipped", "paid", "pending",
+    ];
     (1..=FIXTURE_ORDER_COUNT)
         .map(|idx| {
             let id = i64::try_from(idx).unwrap_or(0);
@@ -334,7 +336,15 @@ impl FixtureService {
         }
     }
 
-    fn record_and_pop(&self, req: &UpstreamRequest) -> (Option<ScriptedStep>, Duration, Option<String>, Option<String>) {
+    fn record_and_pop(
+        &self,
+        req: &UpstreamRequest,
+    ) -> (
+        Option<ScriptedStep>,
+        Duration,
+        Option<String>,
+        Option<String>,
+    ) {
         self.requests_total.fetch_add(1, Ordering::SeqCst);
         let recorded_headers = req
             .headers
@@ -364,15 +374,13 @@ impl FixtureService {
             None => (path_and_query, None),
         };
         let query_pairs = parse_query_pairs(opt_query);
-        let segs: Vec<&str> = path
-            .strip_prefix('/')
-            .map_or_else(Vec::new, |rest| {
-                if rest.is_empty() {
-                    Vec::new()
-                } else {
-                    rest.split('/').collect()
-                }
-            });
+        let segs: Vec<&str> = path.strip_prefix('/').map_or_else(Vec::new, |rest| {
+            if rest.is_empty() {
+                Vec::new()
+            } else {
+                rest.split('/').collect()
+            }
+        });
 
         match segs.as_slice() {
             ["customers"] => {
@@ -404,11 +412,11 @@ impl FixtureService {
                 if let Some((_, sort)) = query_pairs.iter().find(|(k, _)| k == "sort") {
                     match sort.as_str() {
                         "id" => rows.sort_by_key(|c| c.id),
-                        "-id" => rows.sort_by(|a, b| b.id.cmp(&a.id)),
+                        "-id" => rows.sort_by_key(|a| std::cmp::Reverse(a.id)),
                         "name" => rows.sort_by(|a, b| a.name.cmp(&b.name)),
                         "-name" => rows.sort_by(|a, b| b.name.cmp(&a.name)),
                         "credit_cents" => rows.sort_by_key(|c| c.credit_cents),
-                        "-credit_cents" => rows.sort_by(|a, b| b.credit_cents.cmp(&a.credit_cents)),
+                        "-credit_cents" => rows.sort_by_key(|a| std::cmp::Reverse(a.credit_cents)),
                         _ => {
                             return Self::json_response(
                                 StatusCode::BAD_REQUEST,
@@ -497,9 +505,7 @@ impl FixtureService {
                 }
             }
             ["products", raw_sku] => {
-                let sku = percent_decode_str(raw_sku)
-                    .decode_utf8_lossy()
-                    .into_owned();
+                let sku = percent_decode_str(raw_sku).decode_utf8_lossy().into_owned();
                 if sku == "MISSING-SKU" {
                     return Self::json_response(
                         StatusCode::NOT_FOUND,

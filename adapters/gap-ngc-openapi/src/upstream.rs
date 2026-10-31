@@ -112,7 +112,8 @@ fn map_reqwest_error(err: &reqwest::Error) -> UpstreamError {
 /// Async chunk producer used by [`read_capped_chunks`] (`CMP-033`).
 pub trait ChunkSource {
     /// Yields the next body chunk, or `Ok(None)` at EOF.
-    fn next_chunk(&mut self) -> impl Future<Output = Result<Option<Vec<u8>>, UpstreamError>> + Send;
+    fn next_chunk(&mut self)
+    -> impl Future<Output = Result<Option<Vec<u8>>, UpstreamError>> + Send;
 }
 
 impl ChunkSource for reqwest::Response {
@@ -129,7 +130,9 @@ where
     F: FnMut() -> Fut + Send,
     Fut: Future<Output = Result<Option<Vec<u8>>, UpstreamError>> + Send,
 {
-    fn next_chunk(&mut self) -> impl Future<Output = Result<Option<Vec<u8>>, UpstreamError>> + Send {
+    fn next_chunk(
+        &mut self,
+    ) -> impl Future<Output = Result<Option<Vec<u8>>, UpstreamError>> + Send {
         (self)()
     }
 }

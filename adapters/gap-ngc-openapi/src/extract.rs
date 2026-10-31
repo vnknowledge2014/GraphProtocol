@@ -349,10 +349,7 @@ fn parse_path_template(path: &str) -> Result<Vec<PathSegment>, String> {
 fn extract_schema_type_str(schema: &Map<String, Value>) -> Option<&str> {
     match schema.get("type") {
         Some(Value::String(s)) => Some(s.as_str()),
-        Some(Value::Array(arr)) => arr
-            .iter()
-            .filter_map(Value::as_str)
-            .find(|t| *t != "null"),
+        Some(Value::Array(arr)) => arr.iter().filter_map(Value::as_str).find(|t| *t != "null"),
         _ => None,
     }
 }
@@ -653,7 +650,10 @@ pub fn extract_operations(doc: &OpenApiDocument) -> Result<Extraction, ExtractEr
                 skip_reason = Some("parameter is not an object".to_owned());
                 break;
             };
-            let Some(p_name) = p_obj.get("name").and_then(Value::as_str).filter(|s| !s.is_empty())
+            let Some(p_name) = p_obj
+                .get("name")
+                .and_then(Value::as_str)
+                .filter(|s| !s.is_empty())
             else {
                 skip_reason = Some("parameter is missing a non-empty `name`".to_owned());
                 break;
@@ -722,9 +722,8 @@ pub fn extract_operations(doc: &OpenApiDocument) -> Result<Extraction, ExtractEr
             match p_in {
                 "path" => {
                     if !matches!(raw_style, None | Some("simple")) {
-                        skip_reason = Some(format!(
-                            "path parameter `{p_name}` uses unsupported style"
-                        ));
+                        skip_reason =
+                            Some(format!("path parameter `{p_name}` uses unsupported style"));
                         break;
                     }
                     if p_obj.get("required").and_then(Value::as_bool) == Some(false) {
@@ -761,9 +760,8 @@ pub fn extract_operations(doc: &OpenApiDocument) -> Result<Extraction, ExtractEr
                 }
                 "query" => {
                     if !matches!(raw_style, None | Some("form")) {
-                        skip_reason = Some(format!(
-                            "query parameter `{p_name}` uses unsupported style"
-                        ));
+                        skip_reason =
+                            Some(format!("query parameter `{p_name}` uses unsupported style"));
                         break;
                     }
                     let explode = p_obj
@@ -852,9 +850,8 @@ pub fn extract_operations(doc: &OpenApiDocument) -> Result<Extraction, ExtractEr
             }
         }
         if template_mismatch.is_none() && !path_params_by_name.is_empty() {
-            template_mismatch = Some(
-                "declared path parameter does not appear in path template".to_owned(),
-            );
+            template_mismatch =
+                Some("declared path parameter does not appear in path template".to_owned());
         }
         if let Some(reason) = template_mismatch {
             skipped.push(SkippedOperation {
@@ -873,17 +870,17 @@ pub fn extract_operations(doc: &OpenApiDocument) -> Result<Extraction, ExtractEr
                 .cmp(&b.name.to_ascii_lowercase())
         });
 
-        let has_limit = query_params.iter().any(|p| {
-            p.name == "limit" && p.shape == ParamShape::Scalar(ParamPrimitive::Integer)
-        });
-        let has_offset = query_params.iter().any(|p| {
-            p.name == "offset" && p.shape == ParamShape::Scalar(ParamPrimitive::Integer)
-        });
+        let has_limit = query_params
+            .iter()
+            .any(|p| p.name == "limit" && p.shape == ParamShape::Scalar(ParamPrimitive::Integer));
+        let has_offset = query_params
+            .iter()
+            .any(|p| p.name == "offset" && p.shape == ParamShape::Scalar(ParamPrimitive::Integer));
         let has_offset_pagination = has_limit && has_offset;
 
-        let sort_param = query_params.iter().find(|p| {
-            p.name == "sort" && p.shape == ParamShape::Scalar(ParamPrimitive::String)
-        });
+        let sort_param = query_params
+            .iter()
+            .find(|p| p.name == "sort" && p.shape == ParamShape::Scalar(ParamPrimitive::String));
         let has_sort = sort_param.is_some();
         let sort_allowed_values = sort_param
             .and_then(|p| p.schema.get("enum"))
@@ -910,8 +907,9 @@ pub fn extract_operations(doc: &OpenApiDocument) -> Result<Extraction, ExtractEr
 
         let (response_type_hint, response_schema) = extract_response_schema(doc, op_obj)?;
 
-        let mut parameters =
-            Vec::with_capacity(ordered_path_params.len() + query_params.len() + header_params.len());
+        let mut parameters = Vec::with_capacity(
+            ordered_path_params.len() + query_params.len() + header_params.len(),
+        );
         parameters.extend(ordered_path_params);
         parameters.extend(query_params);
         parameters.extend(header_params);
@@ -1029,7 +1027,11 @@ mod tests {
             })
         );
         // `Authorization` header parameter in OpenAPI must be ignored, while `X-Request-Tag` is kept.
-        let param_names: Vec<&str> = customer.parameters.iter().map(|p| p.name.as_str()).collect();
+        let param_names: Vec<&str> = customer
+            .parameters
+            .iter()
+            .map(|p| p.name.as_str())
+            .collect();
         assert_eq!(param_names, vec!["id", "X-Request-Tag"]);
 
         let customers = ext1

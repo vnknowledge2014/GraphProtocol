@@ -284,7 +284,10 @@ fn parse_bounded_json(bytes: &[u8], limits: ExtractLimits) -> Result<Value, Extr
 }
 
 /// Unescapes a single RFC 6901 JSON Pointer segment (`~1` -> `/`, `~0` -> `~`).
-pub(crate) fn unescape_pointer_segment(segment: &str, full_ref: &str) -> Result<String, ExtractError> {
+pub(crate) fn unescape_pointer_segment(
+    segment: &str,
+    full_ref: &str,
+) -> Result<String, ExtractError> {
     if !segment.contains('~') {
         return Ok(segment.to_owned());
     }
@@ -385,7 +388,10 @@ impl OpenApiDocument {
                 ));
             };
             for entry in arr {
-                let Some(url) = entry.as_object().and_then(|o| o.get("url")).and_then(Value::as_str)
+                let Some(url) = entry
+                    .as_object()
+                    .and_then(|o| o.get("url"))
+                    .and_then(Value::as_str)
                 else {
                     return Err(ExtractError::InvalidStructure(
                         "each `servers[]` item must be an object with a string `url`".to_owned(),

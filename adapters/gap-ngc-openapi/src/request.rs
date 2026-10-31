@@ -66,14 +66,9 @@ pub fn encode_rfc3986_unreserved(raw: &str) -> String {
 }
 
 /// Encodes a single path parameter value so it cannot introduce `/`, `?`, `#`, empty segments, or `.`/`..` (`CMP-030`).
-pub fn encode_path_segment_value(
-    param_name: &str,
-    raw: &str,
-) -> Result<String, RequestBuildError> {
+pub fn encode_path_segment_value(param_name: &str, raw: &str) -> Result<String, RequestBuildError> {
     if raw.is_empty() {
-        return Err(RequestBuildError::EmptyPathParameter(
-            param_name.to_owned(),
-        ));
+        return Err(RequestBuildError::EmptyPathParameter(param_name.to_owned()));
     }
     let encoded = encode_rfc3986_unreserved(raw);
     match encoded.as_str() {
@@ -128,10 +123,7 @@ pub fn json_number_as_exact_i64(val: &Value) -> Option<i64> {
         return i64::try_from(u).ok();
     }
     let f = num.as_f64()?;
-    if f.is_finite()
-        && f.fract() == 0.0
-        && (-MAX_EXACT_F64_INT..=MAX_EXACT_F64_INT).contains(&f)
-    {
+    if f.is_finite() && f.fract() == 0.0 && (-MAX_EXACT_F64_INT..=MAX_EXACT_F64_INT).contains(&f) {
         #[allow(clippy::cast_possible_truncation)]
         return Some(f as i64);
     }
@@ -184,7 +176,9 @@ fn validate_value_against_schema(
     }
 
     if let Some(enum_arr) = obj.get("enum").and_then(Value::as_array)
-        && !enum_arr.iter().any(|allowed| json_values_equal(allowed, val))
+        && !enum_arr
+            .iter()
+            .any(|allowed| json_values_equal(allowed, val))
     {
         return Err(RequestBuildError::SchemaViolation(format!(
             "argument `{path}` is not one of the allowed enum values"
@@ -270,19 +264,21 @@ fn validate_object_map(
     arguments: &Map<String, Value>,
 ) -> Result<(), RequestBuildError> {
     let props = schema_obj.get("properties").and_then(Value::as_object);
-    let disallow_extra =
-        schema_obj.get("additionalProperties").and_then(Value::as_bool) == Some(false);
+    let disallow_extra = schema_obj
+        .get("additionalProperties")
+        .and_then(Value::as_bool)
+        == Some(false);
 
     if let Some(req_arr) = schema_obj.get("required").and_then(Value::as_array) {
         for req_key in req_arr.iter().filter_map(Value::as_str) {
-            let allows_null = props
-                .and_then(|p| p.get(req_key))
-                .is_some_and(|sub| value_matches_single_type("null", &Value::Null) && {
+            let allows_null = props.and_then(|p| p.get(req_key)).is_some_and(|sub| {
+                value_matches_single_type("null", &Value::Null) && {
                     sub.as_object()
                         .and_then(|o| o.get("type"))
                         .and_then(Value::as_array)
                         .is_some_and(|arr| arr.iter().any(|t| t.as_str() == Some("null")))
-                });
+                }
+            });
             match arguments.get(req_key) {
                 None => {
                     return Err(RequestBuildError::SchemaViolation(format!(
@@ -634,7 +630,10 @@ mod tests {
         ));
 
         // Array query encoding: `ids` has explode=false (`ids=1,2,3`), `status` on `orders` has explode=true
-        let customers = ops.iter().find(|o| o.name == "customers").expect("customers");
+        let customers = ops
+            .iter()
+            .find(|o| o.name == "customers")
+            .expect("customers");
         let cust_schema = &bundle.operations["customers"].input_json_schema;
         let args = json!({ "ids": [1, 2, 3], "region": "eu" })
             .as_object()

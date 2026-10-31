@@ -131,9 +131,9 @@ impl SdlBuilder {
         let pascal = to_pascal_case(hint);
         let base = if pascal.is_empty() {
             "OpenApiRecord".to_owned()
-        } else if pascal.bytes().next().is_some_and(|b| b.is_ascii_digit()) {
-            format!("OpenApi{pascal}")
-        } else if is_forbidden_sdl_type_name(&pascal) {
+        } else if pascal.bytes().next().is_some_and(|b| b.is_ascii_digit())
+            || is_forbidden_sdl_type_name(&pascal)
+        {
             format!("OpenApi{pascal}")
         } else {
             pascal
@@ -190,10 +190,7 @@ impl SdlBuilder {
 
         let type_str = match obj.get("type") {
             Some(Value::String(s)) => Some(s.as_str()),
-            Some(Value::Array(arr)) => arr
-                .iter()
-                .filter_map(Value::as_str)
-                .find(|t| *t != "null"),
+            Some(Value::Array(arr)) => arr.iter().filter_map(Value::as_str).find(|t| *t != "null"),
             _ => None,
         };
 
@@ -274,7 +271,9 @@ fn schema_allows_null(schema: &Value) -> bool {
 
 fn normalize_to_json_schema_2020_12(node: &Value) -> Value {
     match node {
-        Value::Array(items) => Value::Array(items.iter().map(normalize_to_json_schema_2020_12).collect()),
+        Value::Array(items) => {
+            Value::Array(items.iter().map(normalize_to_json_schema_2020_12).collect())
+        }
         Value::Object(map) => {
             let nullable = map.get("nullable").and_then(Value::as_bool) == Some(true);
             let mut out = Map::with_capacity(map.len());
@@ -282,11 +281,12 @@ fn normalize_to_json_schema_2020_12(node: &Value) -> Value {
                 if k == "nullable" || k.starts_with("x-") {
                     continue;
                 }
-                if k == "type" && nullable {
-                    if let Value::String(t) = v {
-                        out.insert("type".to_owned(), json!([t, "null"]));
-                        continue;
-                    }
+                if k == "type"
+                    && nullable
+                    && let Value::String(t) = v
+                {
+                    out.insert("type".to_owned(), json!([t, "null"]));
+                    continue;
                 }
                 out.insert(k.clone(), normalize_to_json_schema_2020_12(v));
             }
@@ -335,10 +335,7 @@ fn build_output_json_schema(op: &ExtractedOperation) -> Value {
             }
         }
         None => {
-            root.insert(
-                "type".to_owned(),
-                json!(["object", "array", "null"]),
-            );
+            root.insert("type".to_owned(), json!(["object", "array", "null"]));
         }
     }
     Value::Object(root)
@@ -353,20 +350,32 @@ fn sdl_primitive(p: ParamPrimitive) -> &'static str {
     }
 }
 
-fn build_arg_sdl_type(sdl: &mut SdlBuilder, op_name: &str, param: &crate::extract::ParameterSpec) -> String {
+fn build_arg_sdl_type(
+    sdl: &mut SdlBuilder,
+    op_name: &str,
+    param: &crate::extract::ParameterSpec,
+) -> String {
     let base = match param.shape {
         ParamShape::Scalar(ParamPrimitive::String) => sdl.base_sdl_type(
-            &format!("{}_{}", to_pascal_case(op_name), to_pascal_case(&param.name)),
+            &format!(
+                "{}_{}",
+                to_pascal_case(op_name),
+                to_pascal_case(&param.name)
+            ),
             &param.schema,
         ),
         ParamShape::Scalar(prim) => sdl_primitive(prim).to_owned(),
         ParamShape::Array(ParamPrimitive::String) => {
             if let Some(items) = param.schema.get("items") {
                 let elem = sdl.base_sdl_type(
-                    &format!("{}_{}", to_pascal_case(op_name), to_pascal_case(&param.name)),
+                    &format!(
+                        "{}_{}",
+                        to_pascal_case(op_name),
+                        to_pascal_case(&param.name)
+                    ),
                     items,
                 );
-                format!("[{elem}!]" )
+                format!("[{elem}!]")
             } else {
                 "[String!]".to_owned()
             }
@@ -398,7 +407,9 @@ pub fn build_schema_bundle(
             .as_object()
             .map(json_map_to_prost_struct)
             .ok_or_else(|| {
-                ExtractError::InvalidStructure("generated input schema must be an object".to_owned())
+                ExtractError::InvalidStructure(
+                    "generated input schema must be an object".to_owned(),
+                )
             })?;
         let output_struct = output_json_schema
             .as_object()

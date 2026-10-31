@@ -16,12 +16,8 @@ const BASE64_ALPHABET: &[u8; 64] =
     b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 
 /// Forbidden HTTP headers that an `ApiKey` header configuration must never override (`CMP-030`, `CMP-031`).
-const FORBIDDEN_AUTH_HEADERS: &[&str] = &[
-    "host",
-    "content-length",
-    "transfer-encoding",
-    "connection",
-];
+const FORBIDDEN_AUTH_HEADERS: &[&str] =
+    &["host", "content-length", "transfer-encoding", "connection"];
 
 /// Errors produced when validating upstream `base_url` or resolving connector credentials (`CMP-031`, `INV-15`).
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
@@ -328,11 +324,12 @@ impl ResolvedAuth {
                                 "invalid ApiKey header name `{name}`"
                             )));
                         }
-                        let header_name = HeaderName::from_bytes(name.as_bytes()).map_err(|_| {
-                            AuthError::InvalidAuthParameter(format!(
-                                "invalid ApiKey header name `{name}`"
-                            ))
-                        })?;
+                        let header_name =
+                            HeaderName::from_bytes(name.as_bytes()).map_err(|_| {
+                                AuthError::InvalidAuthParameter(format!(
+                                    "invalid ApiKey header name `{name}`"
+                                ))
+                            })?;
                         let _ = validate_secret_header_value(secret.expose_secret())?;
                         ResolvedAuthInner::Header {
                             name: header_name,
@@ -346,7 +343,9 @@ impl ResolvedAuth {
                 }
             }
             AuthConfig::Basic { user, credential } => {
-                if user.is_empty() || user.contains(':') || user.bytes().any(|b| b < 0x20 || b == 0x7f)
+                if user.is_empty()
+                    || user.contains(':')
+                    || user.bytes().any(|b| b < 0x20 || b == 0x7f)
                 {
                     return Err(AuthError::InvalidAuthParameter(
                         "Basic auth `user` must be non-empty and must not contain `:` or control characters"
