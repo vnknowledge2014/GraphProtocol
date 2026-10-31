@@ -1160,6 +1160,7 @@ dependencies = [
  "gap-ql",
  "im",
  "proptest",
+ "prost-types",
  "serde_json",
  "thiserror 2.0.21",
  "tokio",

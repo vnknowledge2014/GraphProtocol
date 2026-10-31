@@ -17,6 +17,7 @@ gap-plan.workspace = true
 gap-proto.workspace = true
 gap-ql.workspace = true
 im.workspace = true
+prost-types.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
