@@ -4697,4 +4697,68 @@ mod tests {
             "/customers?sort=credit_cents"
         );
     }
+
+    // spec: NGC-021, CMP-030, CMP-032
+    #[tokio::test]
+    async fn t19_page_limit_clamping_and_zero_limit() {
+        let fixture = Arc::new(FixtureService::new());
+        let conn = OpenApiConnector::from_document_bytes(
+            &shop_bytes(),
+            OpenApiConfig {
+                max_page_size: 200,
+                ..OpenApiConfig::default()
+            },
+            &StaticCredentialSource::new(),
+            Arc::clone(&fixture),
+        )
+        .expect("build");
+
+        // 1. `page.limit = 0` sends no `limit=` query parameter at all.
+        fixture.clear_recorded();
+        let _ = collect_stream(
+            conn.query(
+                QueryRequest {
+                    operation: "customers".to_owned(),
+                    page: Some(Page {
+                        cursor: String::new(),
+                        limit: 0,
+                        offset: 0,
+                    }),
+                    ..QueryRequest::default()
+                },
+                scope_in(Duration::from_secs(5)),
+            )
+            .await
+            .expect("limit=0 query starts"),
+        )
+        .await
+        .expect("limit=0 query completes");
+        assert_eq!(fixture.recorded_requests()[0].path_and_query, "/customers");
+
+        // 2. `page.limit = 500` with `max_page_size = 200` clamps to `200` and requests
+        //    lookahead `limit=201` upstream (exposes conflict when upstream `limit.maximum == 200`).
+        fixture.clear_recorded();
+        let _ = collect_stream(
+            conn.query(
+                QueryRequest {
+                    operation: "customers".to_owned(),
+                    page: Some(Page {
+                        cursor: String::new(),
+                        limit: 500,
+                        offset: 0,
+                    }),
+                    ..QueryRequest::default()
+                },
+                scope_in(Duration::from_secs(5)),
+            )
+            .await
+            .expect("clamped limit=500 query should succeed under max_page_size=200"),
+        )
+        .await
+        .expect("clamped limit=500 stream completes");
+        assert_eq!(
+            fixture.recorded_requests()[0].path_and_query,
+            "/customers?limit=201&offset=0"
+        );
+    }
 }
