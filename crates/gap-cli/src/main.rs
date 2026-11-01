@@ -1,4 +1,4 @@
-//! `gap` command-line interface (`serve`, `init`, `doctor`, `proposals`, `calibrate`, `audit`) (`L5`).
+//! `gap` command-line interface binary entry point (`L6`, `OPS-044`).
 #![forbid(unsafe_code)]
 #![deny(
     clippy::unwrap_used,
@@ -8,8 +8,10 @@
     clippy::unimplemented
 )]
 
-pub mod calibrate;
-pub mod commands;
-pub mod proposals;
-
-fn main() {}
+#[tokio::main]
+async fn main() {
+    let code = gap_cli::cli::run_from_env().await;
+    if code != 0 {
+        std::process::exit(code);
+    }
+}
