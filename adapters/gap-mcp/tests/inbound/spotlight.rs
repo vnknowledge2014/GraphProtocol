@@ -92,7 +92,12 @@ async fn spotlight_t1_wraps_t1_only_when_enabled_and_spotlight_false_disables_wr
     let (_, b1) = send_http_json(
         &default_fac,
         &ctx,
-        modern_http_post(json!(1), "tools/call", Some("gap_query"), query_args.clone()),
+        modern_http_post(
+            json!(1),
+            "tools/call",
+            Some("gap_query"),
+            query_args.clone(),
+        ),
     )
     .await;
     let t1_text = b1["result"]["content"][0]["text"].as_str().expect("text");
@@ -111,7 +116,12 @@ async fn spotlight_t1_wraps_t1_only_when_enabled_and_spotlight_false_disables_wr
     let (_, b2) = send_http_json(
         &fac_t1,
         &ctx,
-        modern_http_post(json!(2), "tools/call", Some("gap_query"), query_args.clone()),
+        modern_http_post(
+            json!(2),
+            "tools/call",
+            Some("gap_query"),
+            query_args.clone(),
+        ),
     )
     .await;
     let t2_text = b2["result"]["content"][0]["text"].as_str().expect("text");
@@ -171,7 +181,9 @@ async fn spotlight_escapes_forged_closing_and_opening_tags_case_insensitively() 
     let open_marker = "<gap:untrusted source=\"extnotes/extnotes_note\">";
     let close_marker = "</gap:untrusted>";
     let start = text.find(open_marker).expect("outer opening spotlight tag") + open_marker.len();
-    let end = text.rfind(close_marker).expect("outer closing spotlight tag");
+    let end = text
+        .rfind(close_marker)
+        .expect("outer closing spotlight tag");
     assert!(start < end);
 
     let inner = &text[start..end];
@@ -184,4 +196,48 @@ async fn spotlight_escapes_forged_closing_and_opening_tags_case_insensitively() 
         !inner_lower.contains("<gap:untrusted"),
         "forged opening tag survived inside spotlight wrapper: {inner}"
     );
+}
+
+// spec: CMP-007, SEC-083
+#[tokio::test]
+async fn spotlight_resolves_graphql_root_field_aliases_to_underlying_branch() {
+    let engine = FakeEngine::with_handler(|_ctx, _req| GraphqlResponse {
+        data: Some(json!({
+            "untrustedMemo": "external memo body",
+            "safeInv": { "id": "inv-1", "total": 10 }
+        })),
+        errors: Vec::new(),
+        extensions: serde_json::Map::new(),
+    });
+    let facade = McpFacade::builder(engine as Arc<dyn GraphqlEngine>)
+        .build()
+        .expect("build");
+    let snap = compose_two_branch_snapshot(true, 1);
+    let ctx = make_ctx(snap, "agent:1", "acme-corp", &[]);
+
+    let req = modern_http_post(
+        json!(1),
+        "tools/call",
+        Some("gap_query"),
+        json!({
+            "name": "gap_query",
+            "arguments": {
+                "query": "{ untrustedMemo: extnotes_note(id: \"1\") safeInv: billing_invoice(id: \"1\") { id total } }"
+            }
+        }),
+    );
+    let (_, body) = send_http_json(&facade, &ctx, req).await;
+    let text = body["result"]["content"][0]["text"].as_str().expect("text");
+    assert!(
+        text.contains("\"untrustedMemo\":<gap:untrusted source=\"extnotes/extnotes_note\">\"external memo body\"</gap:untrusted>"),
+        "aliased T2 root field must be wrapped with underlying branch/op: {text}"
+    );
+    assert!(!text.contains("source=\"billing/"));
+    let prov = body["result"]["structuredContent"]["extensions"]["gap"]["provenance"]
+        .as_array()
+        .expect("provenance");
+    assert_eq!(prov.len(), 1);
+    assert_eq!(prov[0]["field"], "untrustedMemo");
+    assert_eq!(prov[0]["branch"], "extnotes");
+    assert_eq!(prov[0]["trust"], "T2");
 }

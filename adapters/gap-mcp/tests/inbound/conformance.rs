@@ -133,9 +133,11 @@ fn subset_matches(expected: &Value, observed: &Value) -> bool {
             let mut used = vec![false; obs_items.len()];
             match_bipartite(exp_items, obs_items, &mut used)
         }
-        (Value::Object(exp_map), Value::Object(obs_map)) => exp_map
-            .iter()
-            .all(|(k, exp_val)| obs_map.get(k).is_some_and(|obs_val| subset_matches(exp_val, obs_val))),
+        (Value::Object(exp_map), Value::Object(obs_map)) => exp_map.iter().all(|(k, exp_val)| {
+            obs_map
+                .get(k)
+                .is_some_and(|obs_val| subset_matches(exp_val, obs_val))
+        }),
         _ => false,
     }
 }
@@ -194,7 +196,13 @@ async fn conformance_facade_mcp_fixtures_pass_and_cover_spec_ids() {
             panic!("unsupported snapshot preset `{}`", fixture.setup.snapshot);
         };
 
-        let scope_refs: Vec<&str> = fixture.setup.principal.scopes.iter().map(String::as_str).collect();
+        let scope_refs: Vec<&str> = fixture
+            .setup
+            .principal
+            .scopes
+            .iter()
+            .map(String::as_str)
+            .collect();
         let ctx = make_ctx(
             snap,
             &fixture.setup.principal.subject,
@@ -215,7 +223,10 @@ async fn conformance_facade_mcp_fixtures_pass_and_cover_spec_ids() {
         let ctx_for_stdio = ctx.clone();
         let facade_for_stdio = facade.clone();
         let stdio_task = tokio::spawn(async move {
-            let srv = StdioServer::new(facade_for_stdio, Arc::new(move || Ok(ctx_for_stdio.clone())));
+            let srv = StdioServer::new(
+                facade_for_stdio,
+                Arc::new(move || Ok(ctx_for_stdio.clone())),
+            );
             srv.serve(BufReader::new(server_read), server_write).await
         });
 
@@ -307,7 +318,10 @@ async fn conformance_facade_mcp_fixtures_pass_and_cover_spec_ids() {
                 }
             } else if let Some(stdio_msg) = &step.request.stdio {
                 let encoded = format!("{}\n", serde_json::to_string(stdio_msg).expect("json"));
-                stdio_in.write_all(encoded.as_bytes()).await.expect("stdio write");
+                stdio_in
+                    .write_all(encoded.as_bytes())
+                    .await
+                    .expect("stdio write");
                 stdio_in.flush().await.expect("stdio flush");
 
                 if let Some(exp_body) = &step.expect.body {
@@ -332,7 +346,10 @@ async fn conformance_facade_mcp_fixtures_pass_and_cover_spec_ids() {
                     );
                 }
             } else {
-                panic!("fixture `{}` step {step_idx} has neither http nor stdio", fixture.name);
+                panic!(
+                    "fixture `{}` step {step_idx} has neither http nor stdio",
+                    fixture.name
+                );
             }
         }
 

@@ -5,9 +5,7 @@ use std::time::Duration;
 
 use futures_util::future::join_all;
 use gap_core::error::{ErrorCode, GapError};
-use gap_core::traits::{
-    GraphqlEngine, GraphqlResponse, HttpExchangeRequest, HttpModule,
-};
+use gap_core::traits::{GraphqlEngine, GraphqlResponse, HttpExchangeRequest, HttpModule};
 use gap_mcp::inbound::{FacadeConfig, FacadeConfigError, McpFacade, StdioServer};
 use gap_snapshot::SnapshotHandle;
 use proptest::prelude::*;
@@ -182,10 +180,7 @@ async fn missing_meta_protocol_version_or_capabilities_returns_minus_32602() {
                 "accept".to_owned(),
                 "application/json, text/event-stream".to_owned(),
             ),
-            (
-                "mcp-protocol-version".to_owned(),
-                "2026-07-28".to_owned(),
-            ),
+            ("mcp-protocol-version".to_owned(), "2026-07-28".to_owned()),
             ("mcp-method".to_owned(), "tools/list".to_owned()),
         ],
         body: serde_json::to_vec(&json!({
@@ -222,10 +217,7 @@ async fn unsupported_protocol_version_returns_minus_32022_with_supported_list() 
                 "accept".to_owned(),
                 "application/json, text/event-stream".to_owned(),
             ),
-            (
-                "mcp-protocol-version".to_owned(),
-                "2099-01-01".to_owned(),
-            ),
+            ("mcp-protocol-version".to_owned(), "2099-01-01".to_owned()),
             ("mcp-method".to_owned(), "tools/list".to_owned()),
         ],
         body: serde_json::to_vec(&json!({
@@ -319,7 +311,7 @@ async fn hostile_mcp_method_header_never_overrides_body_method() {
 // spec: CMP-001
 #[tokio::test]
 async fn missing_or_mismatched_mcp_name_header_on_tools_call_and_resources_read_returns_minus_32020()
-{
+ {
     let (facade, _) = default_facade();
     let snap = compose_two_branch_snapshot(true, 1);
     let ctx = make_ctx(snap, "agent:1", "acme-corp", &[]);
@@ -581,10 +573,7 @@ async fn jsonrpc_batch_array_refused_with_minus_32600() {
                 "accept".to_owned(),
                 "application/json, text/event-stream".to_owned(),
             ),
-            (
-                "mcp-protocol-version".to_owned(),
-                "2026-07-28".to_owned(),
-            ),
+            ("mcp-protocol-version".to_owned(), "2026-07-28".to_owned()),
             ("mcp-method".to_owned(), "tools/list".to_owned()),
         ],
         body: batch_body,
@@ -628,7 +617,8 @@ async fn malformed_json_returns_minus_32700_and_unknown_method_returns_minus_326
     assert_eq!(resp.status, 400);
     assert_eq!(body["error"]["code"], -32700);
 
-    let unknown_req = modern_http_post(json!(7), "prompts/get", Some("p1"), json!({ "name": "p1" }));
+    let unknown_req =
+        modern_http_post(json!(7), "prompts/get", Some("p1"), json!({ "name": "p1" }));
     let (resp2, body2) = send_http_json(&facade, &ctx, unknown_req).await;
     assert_eq!(resp2.status, 404);
     assert_eq!(body2["error"]["code"], -32601);
@@ -845,7 +835,10 @@ async fn stdio_framing_partial_writes_multiple_lines_oversized_line_and_eof() {
     client_write.write_all(b"\n").await.expect("nl");
 
     // 2. Oversized line (> 512 bytes) followed by two valid requests in one write
-    let oversized = format!("{{\"jsonrpc\":\"2.0\",\"id\":99,\"pad\":\"{}\"}}\n", "a".repeat(600));
+    let oversized = format!(
+        "{{\"jsonrpc\":\"2.0\",\"id\":99,\"pad\":\"{}\"}}\n",
+        "a".repeat(600)
+    );
     let combined = format!("{oversized}{msg2}\n{msg1}\n");
     client_write
         .write_all(combined.as_bytes())
@@ -995,6 +988,151 @@ async fn inv_01_200_concurrent_stateless_requests_across_published_generations()
         });
     }
     join_all(futs).await;
+}
+
+// spec: CMP-001
+#[tokio::test]
+async fn legacy_http_delete_missing_session_400_and_stdio_legacy_session_lifecycle() {
+    let (facade, _) = default_facade();
+    let snap = compose_two_branch_snapshot(true, 1);
+    let ctx = make_ctx(
+        Arc::clone(&snap),
+        "agent:legacy",
+        "acme-corp",
+        &["read:all"],
+    );
+
+    // 1. Legacy 2025-11-25 HTTP request missing MCP-Session-Id -> 400
+    let missing_sid = HttpExchangeRequest {
+        method: "POST".to_owned(),
+        path: "/mcp".to_owned(),
+        query: None,
+        headers: vec![
+            ("content-type".to_owned(), "application/json".to_owned()),
+            (
+                "accept".to_owned(),
+                "application/json, text/event-stream".to_owned(),
+            ),
+            ("mcp-protocol-version".to_owned(), "2025-11-25".to_owned()),
+        ],
+        body: serde_json::to_vec(&json!({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "tools/list",
+            "params": {}
+        }))
+        .expect("json"),
+    };
+    let (r_missing, _) = send_http_json(&facade, &ctx, missing_sid).await;
+    assert_eq!(r_missing.status, 400);
+
+    // 2. Legacy initialize -> DELETE 200 -> subsequent POST 404
+    let init_req = HttpExchangeRequest {
+        method: "POST".to_owned(),
+        path: "/mcp".to_owned(),
+        query: None,
+        headers: vec![
+            ("content-type".to_owned(), "application/json".to_owned()),
+            (
+                "accept".to_owned(),
+                "application/json, text/event-stream".to_owned(),
+            ),
+        ],
+        body: serde_json::to_vec(&json!({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "initialize",
+            "params": {
+                "protocolVersion": "2025-11-25",
+                "capabilities": {},
+                "clientInfo": { "name": "legacy-host", "version": "1.0" }
+            }
+        }))
+        .expect("json"),
+    };
+    let (r_init, _) = send_http_json(&facade, &ctx, init_req).await;
+    assert_eq!(r_init.status, 200);
+    let sid = r_init
+        .headers
+        .iter()
+        .find(|(k, _)| k.eq_ignore_ascii_case("mcp-session-id"))
+        .map(|(_, v)| v.clone())
+        .expect("mcp-session-id");
+
+    let del_req = HttpExchangeRequest {
+        method: "DELETE".to_owned(),
+        path: "/mcp".to_owned(),
+        query: None,
+        headers: vec![("mcp-session-id".to_owned(), sid.clone())],
+        body: Vec::new(),
+    };
+    let r_del = facade.handle(&ctx, del_req).await.expect("delete");
+    assert_eq!(r_del.status, 200);
+
+    let after_del = HttpExchangeRequest {
+        method: "POST".to_owned(),
+        path: "/mcp".to_owned(),
+        query: None,
+        headers: vec![
+            ("content-type".to_owned(), "application/json".to_owned()),
+            (
+                "accept".to_owned(),
+                "application/json, text/event-stream".to_owned(),
+            ),
+            ("mcp-session-id".to_owned(), sid),
+        ],
+        body: serde_json::to_vec(&json!({
+            "jsonrpc": "2.0",
+            "id": 2,
+            "method": "tools/list",
+            "params": {}
+        }))
+        .expect("json"),
+    };
+    let (r_after, _) = send_http_json(&facade, &ctx, after_del).await;
+    assert_eq!(r_after.status, 404);
+
+    // 3. Process-scoped legacy session over stdio
+    let stdio_replies = run_stdio_session(
+        facade,
+        ctx,
+        &[
+            json!({
+                "jsonrpc": "2.0",
+                "id": 10,
+                "method": "initialize",
+                "params": {
+                    "protocolVersion": "2025-11-25",
+                    "capabilities": {},
+                    "clientInfo": { "name": "stdio-legacy", "version": "1.0" }
+                }
+            })
+            .to_string(),
+            json!({
+                "jsonrpc": "2.0",
+                "method": "notifications/initialized"
+            })
+            .to_string(),
+            json!({
+                "jsonrpc": "2.0",
+                "id": 11,
+                "method": "tools/list",
+                "params": {}
+            })
+            .to_string(),
+        ],
+    )
+    .await;
+    assert_eq!(stdio_replies.len(), 2);
+    assert_eq!(stdio_replies[0]["result"]["protocolVersion"], "2025-11-25");
+    assert_eq!(
+        stdio_replies[1]["result"]["tools"]
+            .as_array()
+            .expect("tools")
+            .len(),
+        5
+    );
+    assert!(stdio_replies[1]["result"].get("resultType").is_none());
 }
 
 proptest! {

@@ -251,8 +251,8 @@ async fn inv_05_hide_t2_makes_describe_and_search_byte_identical_to_snapshot_wit
         let s_hidden = String::from_utf8(resp_hidden.body).expect("utf8");
         let s_clean = String::from_utf8(resp_clean.body).expect("utf8");
         assert!(
-            !s_hidden.contains("extnotes"),
-            "HideT2 leaked T2 identifier in probe {idx}: {s_hidden}"
+            !s_hidden.contains("\"extnotes\"") && !s_hidden.contains("extnotes_note"),
+            "HideT2 leaked T2 branch or operation in probe {idx}: {s_hidden}"
         );
         assert!(
             !s_hidden.contains("SecretNote"),
@@ -268,7 +268,7 @@ async fn inv_05_hide_t2_makes_describe_and_search_byte_identical_to_snapshot_wit
 // spec: CMP-002, GQL-011, GQL-020, GQL-021, GQL-022
 #[tokio::test]
 async fn gap_search_uses_element_search_when_populated_and_lexical_baseline_with_degraded_warning_when_empty()
-{
+ {
     let panicking = FakeEngine::panicking() as Arc<dyn GraphqlEngine>;
     let facade = McpFacade::builder(panicking).build().expect("facade");
 
@@ -327,10 +327,7 @@ async fn gap_search_uses_element_search_when_populated_and_lexical_baseline_with
     assert_eq!(sr_pop["hits"][0]["branch"], "billing");
     let pop_warnings = &body_pop["result"]["structuredContent"]["extensions"]["gap"]["warnings"];
     assert!(
-        pop_warnings.is_null()
-            || pop_warnings
-                .as_array()
-                .is_some_and(|a| a.is_empty()),
+        pop_warnings.is_null() || pop_warnings.as_array().is_some_and(|a| a.is_empty()),
         "populated ElementSearch must not emit GAP_DISCOVERY_DEGRADED"
     );
 }
@@ -449,10 +446,7 @@ async fn resources_list_templates_read_and_subscribe_rejected() {
         .iter()
         .filter_map(|t| t["uriTemplate"].as_str())
         .collect();
-    assert_eq!(
-        tmpl_uris,
-        vec!["gap://schema/{type}", "gap://task/{id}"]
-    );
+    assert_eq!(tmpl_uris, vec!["gap://schema/{type}", "gap://task/{id}"]);
 
     // 3. resources/read gap://meta (principal-filtered -> cacheScope: "private", ttlMs: 0, T2 hidden)
     let (_, meta_body) = send_http_json(

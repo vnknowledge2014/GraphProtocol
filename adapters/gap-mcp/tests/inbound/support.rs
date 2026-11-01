@@ -8,15 +8,11 @@ use std::time::{Duration, Instant};
 use gap_core::clock::Timestamp;
 use gap_core::context::{Budget, Principal, PrincipalKind, RequestContext, TraceCtx};
 use gap_core::error::{ErrorCode, GapError, GapResult};
-use gap_core::ids::{
-    BranchId, BranchUid, IdempotencyKey, OperationId, TenantId, TenantScope,
-};
-use gap_core::snapshot::{
-    BranchStatus, Endpoint, Protocol, SideEffectLevel, Snapshot, TrustTier,
-};
+use gap_core::ids::{BranchId, BranchUid, IdempotencyKey, OperationId, TenantId, TenantScope};
+use gap_core::snapshot::{BranchStatus, Endpoint, Protocol, SideEffectLevel, Snapshot, TrustTier};
 use gap_core::traits::{
-    BoxFuture, ElementSearch, GraphqlEngine, GraphqlRequest, GraphqlResponse,
-    HttpExchangeRequest, HttpExchangeResponse, HttpModule, SearchHit,
+    BoxFuture, ElementSearch, GraphqlEngine, GraphqlRequest, GraphqlResponse, HttpExchangeRequest,
+    HttpExchangeResponse, HttpModule, SearchHit,
 };
 use gap_mcp::inbound::{
     FacadeConfig, McpFacade, OperationCatalog, OperationInfo, StdioServer, TaskBackend,
@@ -50,8 +46,7 @@ pub struct RecordedExecution {
     pub request: GraphqlRequest,
 }
 
-type EngineHandler =
-    Arc<dyn Fn(&RequestContext, &GraphqlRequest) -> GraphqlResponse + Send + Sync>;
+type EngineHandler = Arc<dyn Fn(&RequestContext, &GraphqlRequest) -> GraphqlResponse + Send + Sync>;
 
 /// Scripted deterministic [`GraphqlEngine`] for offline facade testing.
 pub struct FakeEngine {
@@ -236,12 +231,7 @@ impl FakeTaskBackend {
 
 impl TaskBackend for FakeTaskBackend {
     fn get<'a>(&'a self, _ctx: &'a RequestContext, id: &'a str) -> BoxFuture<'a, GapResult<Value>> {
-        let found = self
-            .tasks
-            .lock()
-            .expect("tasks mutex")
-            .get(id)
-            .cloned();
+        let found = self.tasks.lock().expect("tasks mutex").get(id).cloned();
         Box::pin(async move {
             found.ok_or_else(|| {
                 GapError::new(ErrorCode::TaskNotFound, format!("task `{id}` not found"))
@@ -429,7 +419,8 @@ pub fn billing_branch_input() -> BranchInput {
             connector_version: "1.0.0".to_owned(),
             ngc_version: "gap/0.1".to_owned(),
             meta: Some(MetaSummary {
-                synopsis_hint: "Billing invoices, hierarchy nodes, and account lifecycle".to_owned(),
+                synopsis_hint: "Billing invoices, hierarchy nodes, and account lifecycle"
+                    .to_owned(),
                 ..MetaSummary::default()
             }),
             schema_sdl: sdl.to_owned(),
@@ -572,7 +563,11 @@ pub fn partner_t1_branch_input() -> BranchInput {
 }
 
 /// Composes a real [`Snapshot`] from `inputs` at `generation` for `tenant_slug`.
-pub fn compose_snapshot(inputs: &[BranchInput], generation: u64, tenant_slug: &str) -> Arc<Snapshot> {
+pub fn compose_snapshot(
+    inputs: &[BranchInput],
+    generation: u64,
+    tenant_slug: &str,
+) -> Arc<Snapshot> {
     let tenant = TenantId::new(tenant_slug).expect("valid tenant slug");
     let base = Snapshot::empty_for_tenant(generation.saturating_sub(1), tenant);
     let comp = compose(inputs).expect("branch composition must succeed");
@@ -703,10 +698,7 @@ pub fn modern_http_post(
             "accept".to_owned(),
             "application/json, text/event-stream".to_owned(),
         ),
-        (
-            "mcp-protocol-version".to_owned(),
-            "2026-07-28".to_owned(),
-        ),
+        ("mcp-protocol-version".to_owned(), "2026-07-28".to_owned()),
         ("mcp-method".to_owned(), method.to_owned()),
     ];
     if let Some(name) = mcp_name {
@@ -734,7 +726,10 @@ pub async fn send_http_json(
     ctx: &RequestContext,
     req: HttpExchangeRequest,
 ) -> (HttpExchangeResponse, Value) {
-    let resp = facade.handle(ctx, req).await.expect("HttpModule::handle ok");
+    let resp = facade
+        .handle(ctx, req)
+        .await
+        .expect("HttpModule::handle ok");
     let parsed = if resp.body.is_empty() {
         Value::Null
     } else {
