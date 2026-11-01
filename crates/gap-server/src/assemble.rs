@@ -7,24 +7,57 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
+use std::time::Duration;
 
-use gap_core::config::{BranchProtocol, BranchSpec, ConfigError, GapConfig, SecretRef};
+use gap_core::config::{
+    BranchAuthKind, BranchAuthSpec, BranchProtocol, BranchSpec, ConfigError, GapConfig,
+    McpBranchSpec, McpTransportKind, OpenApiBranchSpec, Profile, SecretRef,
+};
 use gap_core::error::ErrorCode;
 use gap_core::ids::{BranchId, BranchUid};
 use gap_core::secret::SecretString;
+use gap_core::snapshot::{BranchDescriptor, BranchStatus, Endpoint, Protocol, Snapshot};
 use gap_core::traits::BoxFuture;
-use gap_exec::BranchClient;
-use gap_mcp::inbound::{FacadeConfigError, McpFacade};
+use gap_exec::{BranchClient, ConnectorRegistry, ExecLimits};
+use gap_mcp::inbound::{
+    AllVisible, DEFAULT_MAX_REQUEST_BYTES, FacadeConfig, FacadeConfigError, HARD_MAX_REQUEST_BYTES,
+    HideT2, McpFacade, Visibility,
+};
+use gap_mcp::outbound::error::McpError;
+use gap_mcp::outbound::launch::{AllowedBinary, LaunchPolicy, spawn_stdio};
+use gap_mcp::outbound::transport::http::{
+    HttpPost, HttpReply, HttpRequest, HttpTransport, ReqwestPost,
+};
+use gap_mcp::outbound::{McpConfig, McpConnector};
+use gap_ngc_openapi::auth::ValidatedBaseUrl;
+use gap_ngc_openapi::connector::{DEFAULT_MAX_IN_FLIGHT, DEFAULT_MAX_PAGE_SIZE};
+use gap_ngc_openapi::upstream::DEFAULT_MAX_UPSTREAM_BODY_BYTES;
+use gap_ngc_openapi::{
+    ApiKeyLocation, AuthConfig as OpenApiAuthConfig, HttpUpstream, OpenApiConfig, OpenApiConnector,
+    StaticCredentialSource,
+};
 use gap_ngc_sdk::connector::Connector;
 use gap_ngc_sdk::core::{ServerConfig as SdkServerConfig, ServerCore};
 use gap_ngc_sdk::testing::in_memory_grpc;
+use gap_plan::{PlanCache, PlanCacheConfig};
 use gap_proto::ngc::v1::{ConnectorDescription, DescribeRequest};
-use gap_snapshot::{CompositionWarning, PublishError, SnapshotHandle};
-use gap_transport::{AppState, ConfigValidationError, TransportEngine};
+use gap_snapshot::{
+    BranchInput, CompositionWarning, PublishError, SnapshotBuilder, SnapshotHandle, compose,
+};
+use gap_transport::config::HARD_MAX_DEADLINE;
+use gap_transport::{
+    ApiKeyRecord, AppState, ConfigValidationError, DEFAULT_MAX_DEADLINE, TransportConfig,
+    TransportEngine, TransportMetrics,
+};
+use http::header::{HeaderName, HeaderValue};
 use thiserror::Error;
 
 /// Opaque guard keeping background connector tasks or child processes alive for the lifetime of [`Assembled`].
 pub type BranchKeepAlive = Box<dyn Send + Sync + 'static>;
+
+/// Forbidden HTTP headers that an outbound `ApiKey` header configuration must never override (`CMP-030`, `CMP-031`).
+const FORBIDDEN_AUTH_HEADERS: &[&str] =
+    &["host", "content-length", "transfer-encoding", "connection"];
 
 /// Startup failure while reading or validating `gap.toml` and its referenced local files (`INV-15`).
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
@@ -368,6 +401,313 @@ pub trait BranchFactory: Send + Sync {
     ) -> BoxFuture<'a, Result<BranchRuntime, BranchBuildError>>;
 }
 
+/// `HttpPost` wrapper attaching a sensitive `ApiKey` header to `ReqwestPost` without exposing the secret (`INV-15`).
+struct ApiKeyHttpPost {
+    inner: ReqwestPost,
+    header_name: String,
+    secret: SecretString,
+}
+
+impl fmt::Debug for ApiKeyHttpPost {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("ApiKeyHttpPost")
+            .field("inner", &self.inner)
+            .field("header_name", &self.header_name)
+            .field("secret", &"[REDACTED]")
+            .finish()
+    }
+}
+
+impl HttpPost for ApiKeyHttpPost {
+    async fn post(&self, mut req: HttpRequest) -> Result<HttpReply, McpError> {
+        req.headers
+            .push((self.header_name.clone(), self.secret.expose_secret().to_owned()));
+        self.inner.post(req).await
+    }
+
+    async fn delete(&self, mut headers: Vec<(String, String)>) -> Result<u16, McpError> {
+        headers.push((self.header_name.clone(), self.secret.expose_secret().to_owned()));
+        self.inner.delete(headers).await
+    }
+}
+
+fn resolve_openapi_auth(
+    server_file: &ServerFile,
+    branch_index: usize,
+    branch_id: &BranchId,
+    auth: &BranchAuthSpec,
+) -> Result<(OpenApiAuthConfig, StaticCredentialSource), BranchBuildError> {
+    let secret_field = format!("branches[{branch_index}].openapi.auth.secret");
+    match auth.kind {
+        BranchAuthKind::None => Ok((OpenApiAuthConfig::None, StaticCredentialSource::new())),
+        BranchAuthKind::Bearer => {
+            let Some(secret_ref) = auth.secret.as_ref() else {
+                return Err(BranchBuildError::ConnectorInit {
+                    branch_id: branch_id.clone(),
+                    reason: format!("missing `{secret_field}` for bearer auth"),
+                });
+            };
+            let secret = server_file.resolve_secret(secret_ref, &secret_field)?;
+            let creds =
+                StaticCredentialSource::new().with_secret("branch_secret", secret.expose_secret());
+            Ok((
+                OpenApiAuthConfig::Bearer {
+                    credential: "branch_secret".to_owned(),
+                },
+                creds,
+            ))
+        }
+        BranchAuthKind::ApiKey => {
+            let Some(secret_ref) = auth.secret.as_ref() else {
+                return Err(BranchBuildError::ConnectorInit {
+                    branch_id: branch_id.clone(),
+                    reason: format!("missing `{secret_field}` for api_key auth"),
+                });
+            };
+            let Some(name) = auth.name.as_ref() else {
+                return Err(BranchBuildError::ConnectorInit {
+                    branch_id: branch_id.clone(),
+                    reason: format!(
+                        "missing `branches[{branch_index}].openapi.auth.name` for api_key auth"
+                    ),
+                });
+            };
+            let secret = server_file.resolve_secret(secret_ref, &secret_field)?;
+            let creds =
+                StaticCredentialSource::new().with_secret("branch_secret", secret.expose_secret());
+            Ok((
+                OpenApiAuthConfig::ApiKey {
+                    location: ApiKeyLocation::Header,
+                    name: name.clone(),
+                    credential: "branch_secret".to_owned(),
+                },
+                creds,
+            ))
+        }
+    }
+}
+
+async fn build_default_openapi_branch(
+    server_file: &ServerFile,
+    branch_index: usize,
+    branch_id: &BranchId,
+    spec: &OpenApiBranchSpec,
+) -> Result<BranchRuntime, BranchBuildError> {
+    let Some(doc_bytes) = server_file.openapi_document(branch_id) else {
+        return Err(BranchBuildError::ConnectorInit {
+            branch_id: branch_id.clone(),
+            reason: "OpenAPI specification bytes were not preloaded".to_owned(),
+        });
+    };
+    let (auth, creds) = resolve_openapi_auth(server_file, branch_index, branch_id, &spec.auth)?;
+    let validated_url = ValidatedBaseUrl::parse(
+        &spec.base_url,
+        auth.has_credentials(),
+        spec.allow_insecure_upstream,
+    )
+    .map_err(|err| BranchBuildError::ConnectorInit {
+        branch_id: branch_id.clone(),
+        reason: err.to_string(),
+    })?;
+    let upstream = HttpUpstream::new(validated_url, DEFAULT_MAX_UPSTREAM_BODY_BYTES, false)
+        .map_err(|err| BranchBuildError::ConnectorInit {
+            branch_id: branch_id.clone(),
+            reason: err.to_string(),
+        })?;
+    let cfg = OpenApiConfig {
+        connector_id: branch_id.to_string(),
+        base_url: spec.base_url.clone(),
+        auth,
+        allow_insecure_upstream: spec.allow_insecure_upstream,
+        request_timeout: Duration::from_millis(server_file.config().limits.request_deadline_ms),
+        max_in_flight: spec.max_in_flight.unwrap_or(DEFAULT_MAX_IN_FLIGHT),
+        max_page_size: spec.max_page_size.unwrap_or(DEFAULT_MAX_PAGE_SIZE),
+        max_response_bytes: server_file.config().limits.max_response_body_bytes,
+        ..OpenApiConfig::default()
+    };
+    let connector = OpenApiConnector::from_document_bytes(doc_bytes, cfg, &creds, upstream)
+        .map_err(|err| BranchBuildError::ConnectorInit {
+            branch_id: branch_id.clone(),
+            reason: err.to_string(),
+        })?;
+    wrap_connector(branch_id, connector).await
+}
+
+async fn build_default_mcp_branch(
+    server_file: &ServerFile,
+    branch_index: usize,
+    branch_id: &BranchId,
+    spec: &McpBranchSpec,
+) -> Result<BranchRuntime, BranchBuildError> {
+    let mut mcp_cfg = McpConfig {
+        connector_id: branch_id.to_string(),
+        call_timeout: Duration::from_millis(server_file.config().limits.request_deadline_ms),
+        max_response_bytes: server_file.config().limits.max_response_body_bytes,
+        ..McpConfig::default()
+    };
+
+    match spec.transport {
+        McpTransportKind::Http => {
+            let Some(url) = spec.url.as_deref() else {
+                return Err(BranchBuildError::ConnectorInit {
+                    branch_id: branch_id.clone(),
+                    reason: format!("missing `branches[{branch_index}].mcp.url`"),
+                });
+            };
+            let secret_field = format!("branches[{branch_index}].mcp.auth.secret");
+            match spec.auth.kind {
+                BranchAuthKind::None => {
+                    let post = ReqwestPost::new(url, None, spec.allow_insecure).map_err(|err| {
+                        BranchBuildError::ConnectorInit {
+                            branch_id: branch_id.clone(),
+                            reason: err.to_string(),
+                        }
+                    })?;
+                    let transport = Arc::new(HttpTransport::new(post, mcp_cfg.max_frame_bytes));
+                    let connector = McpConnector::new(transport, mcp_cfg).map_err(|err| {
+                        BranchBuildError::ConnectorInit {
+                            branch_id: branch_id.clone(),
+                            reason: err.to_string(),
+                        }
+                    })?;
+                    wrap_connector(branch_id, connector).await
+                }
+                BranchAuthKind::Bearer => {
+                    let Some(secret_ref) = spec.auth.secret.as_ref() else {
+                        return Err(BranchBuildError::ConnectorInit {
+                            branch_id: branch_id.clone(),
+                            reason: format!("missing `{secret_field}` for bearer auth"),
+                        });
+                    };
+                    let secret = server_file.resolve_secret(secret_ref, &secret_field)?;
+                    mcp_cfg.redact.push(secret.expose_secret().to_owned());
+                    let post = ReqwestPost::new(url, Some(secret), spec.allow_insecure).map_err(
+                        |err| BranchBuildError::ConnectorInit {
+                            branch_id: branch_id.clone(),
+                            reason: err.to_string(),
+                        },
+                    )?;
+                    let transport = Arc::new(HttpTransport::new(post, mcp_cfg.max_frame_bytes));
+                    let connector = McpConnector::new(transport, mcp_cfg).map_err(|err| {
+                        BranchBuildError::ConnectorInit {
+                            branch_id: branch_id.clone(),
+                            reason: err.to_string(),
+                        }
+                    })?;
+                    wrap_connector(branch_id, connector).await
+                }
+                BranchAuthKind::ApiKey => {
+                    let Some(secret_ref) = spec.auth.secret.as_ref() else {
+                        return Err(BranchBuildError::ConnectorInit {
+                            branch_id: branch_id.clone(),
+                            reason: format!("missing `{secret_field}` for api_key auth"),
+                        });
+                    };
+                    let Some(raw_header_name) = spec.auth.name.as_ref() else {
+                        return Err(BranchBuildError::ConnectorInit {
+                            branch_id: branch_id.clone(),
+                            reason: format!(
+                                "missing `branches[{branch_index}].mcp.auth.name` for api_key auth"
+                            ),
+                        });
+                    };
+                    let parsed_name = HeaderName::from_bytes(raw_header_name.as_bytes()).map_err(
+                        |_| BranchBuildError::ConnectorInit {
+                            branch_id: branch_id.clone(),
+                            reason: "invalid api_key header name".to_owned(),
+                        },
+                    )?;
+                    if FORBIDDEN_AUTH_HEADERS.contains(&parsed_name.as_str()) {
+                        return Err(BranchBuildError::ConnectorInit {
+                            branch_id: branch_id.clone(),
+                            reason: format!(
+                                "header `{}` cannot be overridden by api_key auth",
+                                parsed_name.as_str()
+                            ),
+                        });
+                    }
+                    let secret = server_file.resolve_secret(secret_ref, &secret_field)?;
+                    HeaderValue::from_str(secret.expose_secret()).map_err(|_| {
+                        BranchBuildError::ConnectorInit {
+                            branch_id: branch_id.clone(),
+                            reason: "resolved api_key secret contains invalid HTTP header bytes"
+                                .to_owned(),
+                        }
+                    })?;
+                    mcp_cfg.redact.push(secret.expose_secret().to_owned());
+
+                    // Enforce identical URL + loopback/cleartext-credentials policy as bearer tokens.
+                    let _guard = ReqwestPost::new(url, Some(secret.clone()), spec.allow_insecure)
+                        .map_err(|err| BranchBuildError::ConnectorInit {
+                            branch_id: branch_id.clone(),
+                            reason: err.to_string(),
+                        })?;
+                    let inner = ReqwestPost::new(url, None, spec.allow_insecure).map_err(|err| {
+                        BranchBuildError::ConnectorInit {
+                            branch_id: branch_id.clone(),
+                            reason: err.to_string(),
+                        }
+                    })?;
+                    let post = ApiKeyHttpPost {
+                        inner,
+                        header_name: parsed_name.as_str().to_owned(),
+                        secret,
+                    };
+                    let transport = Arc::new(HttpTransport::new(post, mcp_cfg.max_frame_bytes));
+                    let connector = McpConnector::new(transport, mcp_cfg).map_err(|err| {
+                        BranchBuildError::ConnectorInit {
+                            branch_id: branch_id.clone(),
+                            reason: err.to_string(),
+                        }
+                    })?;
+                    wrap_connector(branch_id, connector).await
+                }
+            }
+        }
+        McpTransportKind::Stdio => {
+            let Some(command) = spec.command.as_deref() else {
+                return Err(BranchBuildError::ConnectorInit {
+                    branch_id: branch_id.clone(),
+                    reason: format!("missing `branches[{branch_index}].mcp.command`"),
+                });
+            };
+            let Some(sha256) = spec.sha256.as_deref() else {
+                return Err(BranchBuildError::ConnectorInit {
+                    branch_id: branch_id.clone(),
+                    reason: format!("missing `branches[{branch_index}].mcp.sha256`"),
+                });
+            };
+            let exec_path = PathBuf::from(command);
+            let policy = match server_file.config().profile {
+                Profile::Prod => LaunchPolicy::Refuse,
+                Profile::Dev => LaunchPolicy::DevAllowList(vec![AllowedBinary {
+                    path: exec_path.clone(),
+                    sha256: sha256.to_owned(),
+                    args: spec.args.clone(),
+                    env: Vec::new(),
+                }]),
+            };
+            let (stdio_transport, child) =
+                spawn_stdio(&policy, &exec_path, mcp_cfg.max_frame_bytes).map_err(|err| {
+                    BranchBuildError::ConnectorInit {
+                        branch_id: branch_id.clone(),
+                        reason: err.to_string(),
+                    }
+                })?;
+            let connector =
+                McpConnector::new(Arc::new(stdio_transport), mcp_cfg).map_err(|err| {
+                    BranchBuildError::ConnectorInit {
+                        branch_id: branch_id.clone(),
+                        reason: err.to_string(),
+                    }
+                })?;
+            let mut runtime = wrap_connector(branch_id, connector).await?;
+            runtime.handle = Box::new((runtime.handle, child));
+            Ok(runtime)
+        }
+    }
+}
+
 /// Production [`BranchFactory`] constructing embedded `OpenApiConnector` and `McpConnector` instances
 /// over `ServerCore` and `in_memory_grpc` (`OPS-003` (c)).
 #[derive(Debug, Default, Clone, Copy)]
@@ -376,17 +716,32 @@ pub struct DefaultBranchFactory;
 impl BranchFactory for DefaultBranchFactory {
     fn build_branch<'a>(
         &'a self,
-        _server_file: &'a ServerFile,
-        _branch_index: usize,
+        server_file: &'a ServerFile,
+        branch_index: usize,
         branch: &'a BranchSpec,
         _uid: BranchUid,
     ) -> BoxFuture<'a, Result<BranchRuntime, BranchBuildError>> {
-        let branch_id = branch.id.clone();
         Box::pin(async move {
-            Err(BranchBuildError::ConnectorInit {
-                branch_id,
-                reason: "not yet implemented".to_owned(),
-            })
+            match branch.protocol {
+                BranchProtocol::Openapi => {
+                    let Some(spec) = branch.openapi.as_ref() else {
+                        return Err(BranchBuildError::ConnectorInit {
+                            branch_id: branch.id.clone(),
+                            reason: format!("missing `branches[{branch_index}].openapi` table"),
+                        });
+                    };
+                    build_default_openapi_branch(server_file, branch_index, &branch.id, spec).await
+                }
+                BranchProtocol::Mcp => {
+                    let Some(spec) = branch.mcp.as_ref() else {
+                        return Err(BranchBuildError::ConnectorInit {
+                            branch_id: branch.id.clone(),
+                            reason: format!("missing `branches[{branch_index}].mcp` table"),
+                        });
+                    };
+                    build_default_mcp_branch(server_file, branch_index, &branch.id, spec).await
+                }
+            }
         })
     }
 }
@@ -483,6 +838,47 @@ impl fmt::Debug for Assembled {
     }
 }
 
+fn branch_protocol_and_endpoint(branch: &BranchSpec) -> (Protocol, Endpoint) {
+    match branch.protocol {
+        BranchProtocol::Openapi => {
+            let uri = branch
+                .openapi
+                .as_ref()
+                .map_or_else(String::new, |s| s.base_url.clone());
+            (
+                Protocol::Rest,
+                Endpoint {
+                    uri,
+                    transport: "http".to_owned(),
+                },
+            )
+        }
+        BranchProtocol::Mcp => match branch.mcp.as_ref() {
+            Some(mcp) if mcp.transport == McpTransportKind::Stdio => (
+                Protocol::Mcp,
+                Endpoint {
+                    uri: mcp.command.clone().unwrap_or_default(),
+                    transport: "stdio".to_owned(),
+                },
+            ),
+            Some(mcp) => (
+                Protocol::Mcp,
+                Endpoint {
+                    uri: mcp.url.clone().unwrap_or_default(),
+                    transport: "http".to_owned(),
+                },
+            ),
+            None => (
+                Protocol::Mcp,
+                Endpoint {
+                    uri: String::new(),
+                    transport: "http".to_owned(),
+                },
+            ),
+        },
+    }
+}
+
 /// Assembles [`Assembled`] from `server_file` using `factory` (`Brief §3.2`).
 ///
 /// # Errors
@@ -490,12 +886,148 @@ impl fmt::Debug for Assembled {
 /// Returns [`AssembleError`] if any branch fails to build/describe, supergraph composition fails, or
 /// transport/facade validation fails.
 pub async fn assemble(
-    _server_file: &ServerFile,
-    _factory: &dyn BranchFactory,
+    server_file: &ServerFile,
+    factory: &dyn BranchFactory,
 ) -> Result<Assembled, AssembleError> {
-    Err(AssembleError::Config(ServerConfigError::Config(
-        ConfigError::Parse("not yet implemented".to_owned()),
-    )))
+    let cfg = server_file.config();
+    let mut branch_inputs = Vec::with_capacity(cfg.branches.len());
+    let mut built_clients: Vec<(BranchUid, Arc<dyn BranchClient>)> =
+        Vec::with_capacity(cfg.branches.len());
+    let mut branch_handles = Vec::with_capacity(cfg.branches.len());
+
+    for (idx, branch) in cfg.branches.iter().enumerate() {
+        let uid = branch.uid.unwrap_or_else(|| derive_branch_uid(&branch.id));
+        let runtime = factory.build_branch(server_file, idx, branch, uid).await?;
+        let (protocol, endpoint) = branch_protocol_and_endpoint(branch);
+        branch_inputs.push(BranchInput {
+            id: branch.id.clone(),
+            uid,
+            protocol,
+            trust: branch.trust_tier(),
+            endpoint,
+            description: runtime.description,
+            status: BranchStatus::Active,
+        });
+        built_clients.push((uid, runtime.client));
+        branch_handles.push(runtime.handle);
+    }
+
+    let composition = compose(&branch_inputs).map_err(|err| {
+        let code = err.code();
+        let branch = err
+            .branch_id
+            .as_ref()
+            .map_or_else(|| "<supergraph>".to_owned(), ToString::to_string);
+        AssembleError::Composition {
+            branch,
+            code,
+            message: err.error.to_string(),
+        }
+    })?;
+    let warnings = composition.warnings.clone();
+
+    let desc_by_uid: BTreeMap<BranchUid, &Arc<BranchDescriptor>> =
+        composition.branches.iter().map(|d| (d.uid, d)).collect();
+    let mut registry_builder = ConnectorRegistry::builder();
+    for (uid, client) in built_clients {
+        let max_in_flight = desc_by_uid
+            .get(&uid)
+            .map_or(DEFAULT_MAX_IN_FLIGHT, |d| d.limits.max_in_flight)
+            .max(1);
+        registry_builder = registry_builder.register(uid, client, max_in_flight);
+    }
+    let registry = Arc::new(registry_builder.build());
+
+    let base_snapshot = Snapshot::empty_for_tenant(0, cfg.gateway.default_tenant.clone());
+    let initial_snapshot = SnapshotBuilder::new(&base_snapshot, composition)
+        .builder("gap-server")
+        .build();
+    let snapshot_handle = Arc::new(SnapshotHandle::new(initial_snapshot));
+
+    let draining = Arc::new(AtomicBool::new(false));
+    let plan_cache = Arc::new(PlanCache::new(PlanCacheConfig::default()));
+    let metrics = Arc::new(TransportMetrics::new());
+
+    let default_deadline = Duration::from_millis(cfg.limits.request_deadline_ms);
+    let max_deadline = DEFAULT_MAX_DEADLINE
+        .max(default_deadline)
+        .min(HARD_MAX_DEADLINE);
+
+    let mut api_keys = Vec::with_capacity(cfg.api_keys.len());
+    for key in &cfg.api_keys {
+        api_keys.push(ApiKeyRecord::try_new(
+            &key.id,
+            &key.key_hash,
+            key.tenant.clone(),
+            key.scopes.iter().cloned().collect(),
+        )?);
+    }
+
+    let exec_limits = ExecLimits {
+        max_response_bytes: usize::try_from(cfg.limits.max_response_body_bytes)
+            .unwrap_or(usize::MAX),
+        ..ExecLimits::default()
+    };
+
+    let mut transport_config = TransportConfig::for_profile(cfg.profile);
+    transport_config.limits = cfg.limits.clone();
+    transport_config.default_deadline = default_deadline;
+    transport_config.max_deadline = max_deadline;
+    transport_config.exec = exec_limits;
+    transport_config.api_keys = api_keys;
+    transport_config.draining = Arc::clone(&draining);
+    transport_config.default_tenant = cfg.gateway.default_tenant.clone();
+    transport_config.operation_mode = cfg.gateway.operation_mode;
+
+    let engine_state = Arc::new(AppState::try_new(
+        Arc::clone(&snapshot_handle),
+        Arc::clone(&registry),
+        Arc::clone(&plan_cache),
+        transport_config.clone(),
+        Arc::clone(&metrics),
+    )?);
+    let engine = TransportEngine::new(engine_state);
+
+    let visibility: Arc<dyn Visibility> = match cfg.profile {
+        Profile::Prod => Arc::new(HideT2),
+        Profile::Dev => Arc::new(AllVisible),
+    };
+    let max_request_bytes = usize::try_from(cfg.limits.max_request_body_bytes)
+        .unwrap_or(DEFAULT_MAX_REQUEST_BYTES)
+        .min(HARD_MAX_REQUEST_BYTES);
+    let facade_cfg = FacadeConfig {
+        spotlight: cfg.gateway.facade_spotlight,
+        max_request_bytes,
+        server_name: "gap-server".to_owned(),
+        server_version: env!("CARGO_PKG_VERSION").to_owned(),
+        ..FacadeConfig::default()
+    };
+    let facade = McpFacade::builder(Arc::new(engine.clone()))
+        .visibility(visibility)
+        .config(facade_cfg)
+        .build()?;
+
+    let app_state = Arc::new(
+        AppState::try_new(
+            Arc::clone(&snapshot_handle),
+            registry,
+            plan_cache,
+            transport_config,
+            metrics,
+        )?
+        .with_http_module(Arc::new(facade.clone())),
+    );
+
+    Ok(Assembled {
+        app_state,
+        snapshot_handle,
+        facade,
+        engine,
+        draining,
+        config: cfg.clone(),
+        warnings,
+        branch_handles,
+    })
 }
 
 /// Assembles [`Assembled`] from `server_file` using [`DefaultBranchFactory`].

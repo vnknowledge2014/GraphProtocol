@@ -142,7 +142,10 @@ curl -sS http://127.0.0.1:8080/mcp \
     "id": 1,
     "method": "server/discover",
     "params": {
-      "_meta": { "io.modelcontextprotocol/protocolVersion": "2026-07-28" }
+      "_meta": {
+        "io.modelcontextprotocol/protocolVersion": "2026-07-28",
+        "io.modelcontextprotocol/clientCapabilities": {}
+      }
     }
   }'
 ```
@@ -164,14 +167,17 @@ curl -sS http://127.0.0.1:8080/mcp \
     "id": 2,
     "method": "tools/call",
     "params": {
-      "_meta": { "io.modelcontextprotocol/protocolVersion": "2026-07-28" },
+      "_meta": {
+        "io.modelcontextprotocol/protocolVersion": "2026-07-28",
+        "io.modelcontextprotocol/clientCapabilities": {}
+      },
       "name": "gap_describe",
       "arguments": { "overview": true }
     }
   }'
 ```
 
-Expected output (`HTTP 200`): `structuredContent.branches` lists both `notes` (`MCP`) and `shop` (`REST`).
+Expected output (`HTTP 200`): `structuredContent.data.overview.branches` lists both `notes` and `shop`.
 
 ```bash
 curl -sS http://127.0.0.1:8080/mcp \
@@ -186,7 +192,10 @@ curl -sS http://127.0.0.1:8080/mcp \
     "id": 3,
     "method": "tools/call",
     "params": {
-      "_meta": { "io.modelcontextprotocol/protocolVersion": "2026-07-28" },
+      "_meta": {
+        "io.modelcontextprotocol/protocolVersion": "2026-07-28",
+        "io.modelcontextprotocol/clientCapabilities": {}
+      },
       "name": "gap_query",
       "arguments": {
         "query": "{ customer(id: 2) { id name } customer_notes(customer_id: 2) }"
@@ -205,8 +214,8 @@ With the two Python fixtures still running on `127.0.0.1:9101` and `127.0.0.1:91
 
 ```bash
 printf '%s\n' \
-  '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{"_meta":{"io.modelcontextprotocol/protocolVersion":"2026-07-28"}}}' \
-  '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"_meta":{"io.modelcontextprotocol/protocolVersion":"2026-07-28"},"name":"gap_query","arguments":{"query":"{ customers(limit: 2) { id name } }"}}}' \
+  '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{"_meta":{"io.modelcontextprotocol/protocolVersion":"2026-07-28","io.modelcontextprotocol/clientCapabilities":{}}}}' \
+  '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"_meta":{"io.modelcontextprotocol/protocolVersion":"2026-07-28","io.modelcontextprotocol/clientCapabilities":{}},"name":"gap_query","arguments":{"query":"{ customers(limit: 2) { id name } }"}}}' \
   | cargo run -q -p gap-cli -- serve --config examples/walking-skeleton/gap.toml --stdio
 ```
 

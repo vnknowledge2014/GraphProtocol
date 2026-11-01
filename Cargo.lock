@@ -861,6 +861,7 @@ dependencies = [
  "clap",
  "gap-core",
  "gap-ingest",
+ "gap-mcp",
  "gap-models",
  "gap-route",
  "gap-sec",
@@ -1192,6 +1193,7 @@ dependencies = [
 name = "gap-server"
 version = "0.1.0"
 dependencies = [
+ "axum",
  "blake3",
  "gap-a2a",
  "gap-balance",
@@ -1217,6 +1219,7 @@ dependencies = [
  "gap-snapshot",
  "gap-store",
  "gap-transport",
+ "http",
  "proptest",
  "schemars",
  "serde",
