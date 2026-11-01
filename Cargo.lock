@@ -858,13 +858,20 @@ dependencies = [
 name = "gap-cli"
 version = "0.1.0"
 dependencies = [
+ "clap",
  "gap-core",
  "gap-ingest",
  "gap-models",
  "gap-route",
  "gap-sec",
+ "gap-server",
  "gap-snapshot",
  "gap-store",
+ "serde_json",
+ "tempfile",
+ "thiserror 2.0.21",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]
@@ -1185,6 +1192,7 @@ dependencies = [
 name = "gap-server"
 version = "0.1.0"
 dependencies = [
+ "blake3",
  "gap-a2a",
  "gap-balance",
  "gap-core",
@@ -1209,6 +1217,19 @@ dependencies = [
  "gap-snapshot",
  "gap-store",
  "gap-transport",
+ "proptest",
+ "schemars",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror 2.0.21",
+ "tokio",
+ "tokio-util",
+ "toml",
+ "tower",
+ "tracing",
+ "tracing-subscriber",
+ "uuid",
 ]
 
 [[package]]

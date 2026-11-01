@@ -11,10 +11,19 @@ name = "gap"
 path = "src/main.rs"
 
 [dependencies]
+clap = { workspace = true, features = ["derive"] }
 gap-core.workspace = true
+gap-server.workspace = true
 gap-ingest.workspace = true
 gap-models.workspace = true
 gap-route.workspace = true
 gap-sec.workspace = true
 gap-snapshot.workspace = true
 gap-store.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+tracing.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

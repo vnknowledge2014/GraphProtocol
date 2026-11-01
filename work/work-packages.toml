@@ -394,10 +394,10 @@ id = "WP-M1-12"
 title = "gap-server and gap-cli v0: wiring, config, serve/init/doctor"
 milestone = "M1"
 role = "coder"
-size = "M"
-depends_on = ["WP-M1-08", "WP-M1-10", "WP-M1-11", "WP-M1-09"]
+size = "L"
+depends_on = ["WP-M1-08", "WP-M1-10", "WP-M1-11", "WP-M1-09", "WP-M1-02"]
 owns = ["crates/gap-server/**", "crates/gap-cli/**", "examples/walking-skeleton/**"]
-spec_refs = ["OPS-001", "OPS-002", "OPS-044", "ARC-002"]
+spec_refs = ["OPS-001", "OPS-002", "OPS-044", "ARC-002", "RUN-090", "SEC-004"]
 deliverables = [
   "gap-server binary assembling snapshot (from gap.toml branches), exec, transport, MCP facade; graceful shutdown (RUN-090)",
   "gap CLI: serve, init (writes sample gap.toml + example branches), doctor (toolchain/sandbox/model checks as available), config schema/check; declares module stubs for later WPs: src/proposals/, src/calibrate/, src/commands/ (cli) and src/wiring_s1.rs (server)",

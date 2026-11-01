@@ -1,4 +1,4 @@
-//! GAP gateway server binary assembling execution, discovery, and control planes (`L5`).
+//! `gap-server` binary entry point (`WP-M1-12` implements it on top of the `gap_server` library).
 #![forbid(unsafe_code)]
 #![deny(
     clippy::unwrap_used,
@@ -7,7 +7,5 @@
     clippy::todo,
     clippy::unimplemented
 )]
-
-pub mod wiring_s1;
 
 fn main() {}

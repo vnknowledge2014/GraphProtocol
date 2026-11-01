@@ -47,6 +47,7 @@ gap-route = { path = "crates/gap-route", version = "0.1.0" }
 gap-s1 = { path = "crates/gap-s1", version = "0.1.0" }
 gap-sec = { path = "crates/gap-sec", version = "0.1.0" }
 gap-snapshot = { path = "crates/gap-snapshot", version = "0.1.0" }
+gap-server = { path = "crates/gap-server", version = "0.1.0" }
 gap-store = { path = "crates/gap-store", version = "0.1.0" }
 gap-testkit = { path = "crates/gap-testkit", version = "0.1.0" }
 gap-transport = { path = "crates/gap-transport", version = "0.1.0" }

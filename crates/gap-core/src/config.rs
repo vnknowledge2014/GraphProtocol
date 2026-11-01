@@ -14,6 +14,12 @@ use toml::Table;
 
 use crate::ids::TenantId;
 
+mod branches;
+pub use branches::{
+    ApiKeySpec, BranchAuthKind, BranchAuthSpec, BranchProtocol, BranchSpec, McpBranchSpec,
+    McpTransportKind, OpenApiBranchSpec, validate_branches_and_keys,
+};
+
 /// Prefix for environment variable overrides (`GAP_SERVER__LISTEN=...`).
 pub const ENV_OVERRIDE_PREFIX: &str = "GAP_";
 
@@ -43,6 +49,14 @@ pub enum ConfigError {
         /// Dotted configuration field path.
         field: &'static str,
         /// Violation detail.
+        reason: String,
+    },
+    /// A `[[branches]]` or `[[api_keys]]` entry is invalid; `path` names it (`branches[1].openapi.spec`).
+    #[error("invalid configuration entry `{path}`: {reason}")]
+    InvalidEntry {
+        /// Key path of the offending entry.
+        path: String,
+        /// Violation detail (never a secret value).
         reason: String,
     },
     /// JSON Schema serialization failed.
@@ -489,6 +503,10 @@ pub struct GapConfig {
     pub storage: StorageConfig,
     /// Structured logging and OpenTelemetry settings.
     pub telemetry: TelemetryConfig,
+    /// Branch inventory the gateway is assembled from (`[[branches]]`).
+    pub branches: Vec<BranchSpec>,
+    /// API keys the gateway accepts, as `blake3` digests (`[[api_keys]]`, `SEC-001`).
+    pub api_keys: Vec<ApiKeySpec>,
 }
 
 fn is_bool_leaf(path: &[String]) -> bool {
@@ -688,6 +706,7 @@ impl GapConfig {
             });
         }
 
+        validate_branches_and_keys(&self.branches, &self.api_keys)?;
         check_range("gateway.max_hops", self.gateway.max_hops, 1, 16)?;
         check_range(
             "limits.max_selection_depth",

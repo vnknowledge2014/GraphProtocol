@@ -4,12 +4,28 @@
   "description": "Root `gap.toml` configuration (`spec/00-conventions.md` §8).",
   "type": "object",
   "properties": {
+    "api_keys": {
+      "description": "API keys the gateway accepts, as `blake3` digests (`[[api_keys]]`, `SEC-001`).",
+      "type": "array",
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/ApiKeySpec"
+      }
+    },
     "auth": {
       "description": "Authentication settings.",
       "$ref": "#/$defs/AuthConfig",
       "default": {
         "allow_anonymous": false,
         "clock_skew_secs": 60
+      }
+    },
+    "branches": {
+      "description": "Branch inventory the gateway is assembled from (`[[branches]]`).",
+      "type": "array",
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/BranchSpec"
       }
     },
     "gateway": {
@@ -86,6 +102,38 @@
   },
   "additionalProperties": false,
   "$defs": {
+    "ApiKeySpec": {
+      "description": "One `[[api_keys]]` entry: the `blake3` digest of a key, never the key (`INV-15`).",
+      "type": "object",
+      "properties": {
+        "id": {
+          "description": "Stable non-secret identifier (becomes the principal id).",
+          "type": "string"
+        },
+        "key_hash": {
+          "description": "64 hex characters: `blake3-256` of the raw key.",
+          "type": "string"
+        },
+        "scopes": {
+          "description": "Authorization scopes granted to the key.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "type": "string"
+          }
+        },
+        "tenant": {
+          "description": "Tenant the key is bound to (`SEC-010`); the default tenant when absent.",
+          "$ref": "#/$defs/TenantId",
+          "default": "default"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "key_hash"
+      ]
+    },
     "AuthConfig": {
       "description": "`[auth]` OAuth 2.1 / mTLS / API-key settings (`SEC-001`, `SEC-002`, `INV-15`).",
       "type": "object",
@@ -136,6 +184,145 @@
         }
       },
       "additionalProperties": false
+    },
+    "BranchAuthKind": {
+      "description": "How a branch authenticates to its upstream.",
+      "oneOf": [
+        {
+          "description": "No upstream credentials.",
+          "type": "string",
+          "const": "none"
+        },
+        {
+          "description": "`Authorization: Bearer <secret>`.",
+          "type": "string",
+          "const": "bearer"
+        },
+        {
+          "description": "An API key sent in the header or query parameter named by `name`.",
+          "type": "string",
+          "const": "api_key"
+        }
+      ]
+    },
+    "BranchAuthSpec": {
+      "description": "Upstream authentication of a branch; the credential is only ever a [`SecretRef`] (`INV-15`).",
+      "type": "object",
+      "properties": {
+        "kind": {
+          "description": "Authentication scheme.",
+          "$ref": "#/$defs/BranchAuthKind",
+          "default": "none"
+        },
+        "name": {
+          "description": "Header or query-parameter name for [`BranchAuthKind::ApiKey`].",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "secret": {
+          "description": "Reference to the credential (`env://NAME`, `file:///abs/path`, `secret://vault/name`).",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SecretRef"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "BranchId": {
+      "type": "string",
+      "maxLength": 63,
+      "minLength": 2,
+      "pattern": "^[a-z][a-z0-9_-]{1,62}$"
+    },
+    "BranchProtocol": {
+      "description": "Wire protocol of a configured branch.",
+      "oneOf": [
+        {
+          "description": "An OpenAPI 3.x REST service (`gap-ngc-openapi`).",
+          "type": "string",
+          "const": "openapi"
+        },
+        {
+          "description": "A Model Context Protocol server (`gap-mcp` outbound).",
+          "type": "string",
+          "const": "mcp"
+        }
+      ]
+    },
+    "BranchSpec": {
+      "description": "One `[[branches]]` entry.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "description": "Unique branch slug.",
+          "$ref": "#/$defs/BranchId"
+        },
+        "mcp": {
+          "description": "MCP settings (`protocol = \"mcp\"`).",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/McpBranchSpec"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "openapi": {
+          "description": "OpenAPI settings (`protocol = \"openapi\"`).",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/OpenApiBranchSpec"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "protocol": {
+          "description": "Wire protocol; selects which of `openapi` / `mcp` must be present.",
+          "$ref": "#/$defs/BranchProtocol"
+        },
+        "trust": {
+          "description": "Trust tier (`ADR-013`); `T1` when absent.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TrustTier"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "uid": {
+          "description": "Explicit stable branch UUIDv7; derived from `id` when absent.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BranchUid"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "protocol"
+      ]
+    },
+    "BranchUid": {
+      "type": "string",
+      "format": "uuid",
+      "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$"
     },
     "GatewayConfig": {
       "description": "`[gateway]` tenant, operation-mode, and facade settings (`ADR-018`, `GQL-060`, `INV-20`, `SEC-083`).",
@@ -257,6 +444,124 @@
         }
       },
       "additionalProperties": false
+    },
+    "McpBranchSpec": {
+      "description": "`[branches.mcp]`: an MCP server upstream.",
+      "type": "object",
+      "properties": {
+        "allow_insecure": {
+          "description": "Permit cleartext `http://` to a non-loopback host.",
+          "type": "boolean",
+          "default": false
+        },
+        "args": {
+          "description": "Arguments of the child process.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "auth": {
+          "description": "Upstream authentication (HTTP only).",
+          "$ref": "#/$defs/BranchAuthSpec",
+          "default": {
+            "kind": "none"
+          }
+        },
+        "command": {
+          "description": "Absolute executable path for [`McpTransportKind::Stdio`].",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "sha256": {
+          "description": "Pinned `sha256` (64 hex characters) of the executable; required for stdio.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "transport": {
+          "description": "Transport.",
+          "$ref": "#/$defs/McpTransportKind"
+        },
+        "url": {
+          "description": "Endpoint for [`McpTransportKind::Http`].",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "transport"
+      ]
+    },
+    "McpTransportKind": {
+      "description": "Transport of an MCP branch.",
+      "oneOf": [
+        {
+          "description": "Streamable HTTP at `url`.",
+          "type": "string",
+          "const": "http"
+        },
+        {
+          "description": "A child process speaking newline-delimited JSON-RPC (allow-listed, hash-pinned).",
+          "type": "string",
+          "const": "stdio"
+        }
+      ]
+    },
+    "OpenApiBranchSpec": {
+      "description": "`[branches.openapi]`: an OpenAPI 3.x REST upstream.",
+      "type": "object",
+      "properties": {
+        "allow_insecure_upstream": {
+          "description": "Permit cleartext `http://` credentials to a non-loopback host.",
+          "type": "boolean",
+          "default": false
+        },
+        "auth": {
+          "description": "Upstream authentication.",
+          "$ref": "#/$defs/BranchAuthSpec",
+          "default": {
+            "kind": "none"
+          }
+        },
+        "base_url": {
+          "description": "Upstream origin and optional base path (`http://` or `https://`).",
+          "type": "string"
+        },
+        "max_in_flight": {
+          "description": "Connector-enforced concurrent in-flight RPC cap (`>= 1`).",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0
+        },
+        "max_page_size": {
+          "description": "Largest page the connector advertises (`>= 1`).",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0
+        },
+        "spec": {
+          "description": "OpenAPI document path, relative to the directory of `gap.toml` (no `..`, not absolute).",
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "spec",
+        "base_url"
+      ]
     },
     "OperationMode": {
       "description": "Gateway document allow-listing mode (`GQL-060`).",
@@ -471,6 +776,26 @@
       "maxLength": 63,
       "minLength": 2,
       "pattern": "^[a-z][a-z0-9_-]{1,62}$"
+    },
+    "TrustTier": {
+      "description": "Branch trust tier (`ADR-013`, `spec/07-security.md` §8).",
+      "oneOf": [
+        {
+          "description": "Organization-signed manifest (`SEC-060`).",
+          "type": "string",
+          "const": "T0"
+        },
+        {
+          "description": "Admin-approved with pinned hashes (`SEC-061`).",
+          "type": "string",
+          "const": "T1"
+        },
+        {
+          "description": "Untrusted / discovered / drifted (`SEC-061`, `INV-07`).",
+          "type": "string",
+          "const": "T2"
+        }
+      ]
     }
   }
 }

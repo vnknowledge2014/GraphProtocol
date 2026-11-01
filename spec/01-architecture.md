@@ -46,7 +46,8 @@ Crates are introduced by the milestone that needs them (see `docs/02-PLAN.md`). 
 | L2 | `gap-route` (discovery plane), `gap-plan`, `gap-ingest`, `gap-ngc-sdk` | L0–L1 |
 | L3 | `gap-snapshot`, `gap-exec`, `gap-s1` (Laya backends) | L0–L2 |
 | L4 | `gap-transport`, `adapters/*` (`gap-mcp`, `gap-a2a`, `gap-ngc-openapi`, `-grpc`, `-graphql`, `-sql`, `-cli`, `-code`) | L0–L3 |
-| L5 | `gap-server`, `gap-cli`, `gap-conformance` (black-box), `bench/*` binaries (`routebench`, `gapbench`, `enrichment-bench`) | L0–L4 |
+| L5 | `gap-server`, `gap-conformance` (black-box), `bench/*` binaries (`routebench`, `gapbench`, `enrichment-bench`) | L0–L4 |
+| L6 | `gap-cli` (the `gap` front-end: embeds `gap-server` for `gap serve`, reads the shared `gap.toml` model of `gap-core`) | L0–L5 |
 
 - **ARC-001** The layer rule MUST hold; violations fail CI.
 - **ARC-002** `gap-exec`, `gap-plan`, `gap-transport`, `gap-snapshot` and `gap-balance` MUST NOT depend (directly or transitively) on `gap-s1`, `gap-route`, `gap-models` or any ML runtime crate (`candle-*`, `ort`, `tokenizers`, `fastembed`). `gap-route` and `gap-s1` reach models only through traits; concrete backends are wired in `gap-server`. (ADR-003)
