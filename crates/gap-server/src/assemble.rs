@@ -420,13 +420,18 @@ impl fmt::Debug for ApiKeyHttpPost {
 
 impl HttpPost for ApiKeyHttpPost {
     async fn post(&self, mut req: HttpRequest) -> Result<HttpReply, McpError> {
-        req.headers
-            .push((self.header_name.clone(), self.secret.expose_secret().to_owned()));
+        req.headers.push((
+            self.header_name.clone(),
+            self.secret.expose_secret().to_owned(),
+        ));
         self.inner.post(req).await
     }
 
     async fn delete(&self, mut headers: Vec<(String, String)>) -> Result<u16, McpError> {
-        headers.push((self.header_name.clone(), self.secret.expose_secret().to_owned()));
+        headers.push((
+            self.header_name.clone(),
+            self.secret.expose_secret().to_owned(),
+        ));
         self.inner.delete(headers).await
     }
 }
@@ -611,12 +616,13 @@ async fn build_default_mcp_branch(
                             ),
                         });
                     };
-                    let parsed_name = HeaderName::from_bytes(raw_header_name.as_bytes()).map_err(
-                        |_| BranchBuildError::ConnectorInit {
-                            branch_id: branch_id.clone(),
-                            reason: "invalid api_key header name".to_owned(),
-                        },
-                    )?;
+                    let parsed_name =
+                        HeaderName::from_bytes(raw_header_name.as_bytes()).map_err(|_| {
+                            BranchBuildError::ConnectorInit {
+                                branch_id: branch_id.clone(),
+                                reason: "invalid api_key header name".to_owned(),
+                            }
+                        })?;
                     if FORBIDDEN_AUTH_HEADERS.contains(&parsed_name.as_str()) {
                         return Err(BranchBuildError::ConnectorInit {
                             branch_id: branch_id.clone(),
@@ -639,15 +645,16 @@ async fn build_default_mcp_branch(
                     // Enforce identical URL + loopback/cleartext-credentials policy as bearer tokens.
                     let _guard = ReqwestPost::new(url, Some(secret.clone()), spec.allow_insecure)
                         .map_err(|err| BranchBuildError::ConnectorInit {
-                            branch_id: branch_id.clone(),
-                            reason: err.to_string(),
-                        })?;
-                    let inner = ReqwestPost::new(url, None, spec.allow_insecure).map_err(|err| {
-                        BranchBuildError::ConnectorInit {
-                            branch_id: branch_id.clone(),
-                            reason: err.to_string(),
-                        }
+                        branch_id: branch_id.clone(),
+                        reason: err.to_string(),
                     })?;
+                    let inner =
+                        ReqwestPost::new(url, None, spec.allow_insecure).map_err(|err| {
+                            BranchBuildError::ConnectorInit {
+                                branch_id: branch_id.clone(),
+                                reason: err.to_string(),
+                            }
+                        })?;
                     let post = ApiKeyHttpPost {
                         inner,
                         header_name: parsed_name.as_str().to_owned(),

@@ -183,7 +183,11 @@ fn inv_15_no_canary_secret_appears_in_any_startup_or_secret_error() {
         .resolve_secret(&missing_env, "branches[0].mcp.auth.secret")
         .expect_err("missing env var must fail");
     assert!(!missing_err.to_string().contains(canary_env));
-    assert!(missing_err.to_string().contains("env://MISSING_UPSTREAM_TOKEN"));
+    assert!(
+        missing_err
+            .to_string()
+            .contains("env://MISSING_UPSTREAM_TOKEN")
+    );
 
     let vault_ref: SecretRef = "secret://vault/prod-token".parse().unwrap();
     let vault_err = sf
@@ -203,7 +207,13 @@ fn derive_branch_uid_is_deterministic_uuid_v7_and_distinct_per_slug() {
     let u2 = derive_branch_uid(&shop);
     let u_notes = derive_branch_uid(&notes);
 
-    assert_eq!(u1, u2, "same branch id must always derive the same BranchUid");
-    assert_ne!(u1, u_notes, "distinct branch ids must derive distinct BranchUids");
+    assert_eq!(
+        u1, u2,
+        "same branch id must always derive the same BranchUid"
+    );
+    assert_ne!(
+        u1, u_notes,
+        "distinct branch ids must derive distinct BranchUids"
+    );
     assert_eq!(u1.as_uuid().get_version_num(), 7);
 }

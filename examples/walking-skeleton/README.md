@@ -103,16 +103,14 @@ Expected JSON shape (`HTTP 200`):
       { "id": 103, "total_cents": 8500, "status": "pending" }
     ],
     "customer_notes": {
-      "structuredContent": {
-        "customer_id": 1,
-        "notes": [
-          {
-            "note_id": "n-1",
-            "customer_id": 1,
-            "summary": "Prefers consolidated monthly invoice"
-          }
-        ]
-      }
+      "customer_id": 1,
+      "notes": [
+        {
+          "note_id": "n-1",
+          "customer_id": 1,
+          "summary": "Prefers consolidated monthly invoice"
+        }
+      ]
     }
   },
   "extensions": {

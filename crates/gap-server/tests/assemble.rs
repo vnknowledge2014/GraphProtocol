@@ -465,10 +465,7 @@ async fn call_facade_overview(facade: &gap_mcp::inbound::McpFacade, ctx: &Reques
                 "accept".to_owned(),
                 "application/json, text/event-stream".to_owned(),
             ),
-            (
-                "mcp-protocol-version".to_owned(),
-                "2026-07-28".to_owned(),
-            ),
+            ("mcp-protocol-version".to_owned(), "2026-07-28".to_owned()),
             ("mcp-method".to_owned(), "tools/call".to_owned()),
             ("mcp-name".to_owned(), "gap_describe".to_owned()),
         ],
