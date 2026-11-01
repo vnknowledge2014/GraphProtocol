@@ -27,8 +27,8 @@ use tracing::Instrument as _;
 use crate::app::{AppState, RequestCorrelation};
 use crate::config::Profile;
 use crate::gateway::{
-    authenticate_headers, check_post_content_type, compute_request_deadline, read_body_bounded,
-    resolve_request_id, resolve_trace_context,
+    AdmissionGuard, AdmissionOutcome, authenticate_headers, check_post_content_type,
+    compute_request_deadline, read_body_bounded, resolve_request_id, resolve_trace_context,
 };
 use crate::metrics::RouteLabel;
 use crate::operation::{
@@ -480,6 +480,7 @@ impl Service<ExecStageRequest> for TransportExecService {
             Ok(PipelineOutput::Sse(SseStreamHandle {
                 rx,
                 cancel: stream_cancel,
+                admission: AdmissionGuard::none(),
             }))
         })
     }
@@ -538,6 +539,16 @@ where
                     errors: vec![err],
                 })
             })?;
+
+            // RUN-050: the planned cost is charged to the principal's per-minute budget before any branch is called.
+            state
+                .admission
+                .charge_cost(&authz.principal, cached_plan.request_cost.planned_cost)
+                .map_err(|error| PipelineError::Transport {
+                    status: StatusCode::TOO_MANY_REQUESTS,
+                    allow: None,
+                    error,
+                })?;
 
             // Execute with the variables coerced against the operation's definitions (GraphQL spec
             // "CoerceVariableValues"): declared defaults applied, undeclared variables dropped, input
@@ -698,11 +709,13 @@ where
 
 impl<S> Service<GatewayRequest> for GatewayService<S>
 where
-    S: Service<OperationRequest, Error = PipelineError> + Clone + Send + 'static,
-    S::Response: Send + 'static,
+    S: Service<OperationRequest, Response = PipelineOutput, Error = PipelineError>
+        + Clone
+        + Send
+        + 'static,
     S::Future: Send + 'static,
 {
-    type Response = S::Response;
+    type Response = PipelineOutput;
     type Error = PipelineError;
     type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>> + Send>>;
 
@@ -734,9 +747,10 @@ where
                 Ok::<_, PipelineError>(p)
             })?;
 
-            state
+            // The ticket is held until the response is complete (or, for a stream, until the body is dropped).
+            let admission = state
                 .admission
-                .check(&principal, req.request.headers())
+                .admit(&principal, req.request.headers())
                 .map_err(|error| {
                     let status = match error.code() {
                         ErrorCode::RateLimited => StatusCode::TOO_MANY_REQUESTS,
@@ -837,7 +851,43 @@ where
                 cancel: req.cancel,
             };
 
-            inner.call(op_req).await
+            let result = inner.call(op_req).await;
+            match &result {
+                Ok(PipelineOutput::Assembled(payload)) => {
+                    // An execution that ran out of time is the overload signal the limiter backs off on.
+                    let timed_out = payload.exec_response.errors.iter().any(|e| {
+                        matches!(
+                            e.extensions.code,
+                            ErrorCode::DeadlineExceeded | ErrorCode::BranchTimeout
+                        )
+                    });
+                    admission.set_outcome(if timed_out {
+                        AdmissionOutcome::Dropped
+                    } else {
+                        AdmissionOutcome::Success
+                    });
+                }
+                Ok(PipelineOutput::Sse(_)) | Err(_) => {
+                    admission.set_outcome(AdmissionOutcome::Ignore)
+                }
+            }
+            match result {
+                Ok(PipelineOutput::Sse(mut handle)) => {
+                    // A stream outlives the pipeline: its body keeps the ticket, and a watchdog frees it after the
+                    // longest request a client may ask for even if the consumer never drains the body (`RUN-051`).
+                    handle.admission = admission.share();
+                    let (watchdog, cancel) = (admission, handle.cancel.clone());
+                    let max_hold = state.config.max_deadline;
+                    tokio::spawn(async move {
+                        tokio::select! {
+                            () = tokio::time::sleep(max_hold) => watchdog.release(),
+                            () = cancel.cancelled() => {}
+                        }
+                    });
+                    Ok(PipelineOutput::Sse(handle))
+                }
+                other => other,
+            }
         })
     }
 }
