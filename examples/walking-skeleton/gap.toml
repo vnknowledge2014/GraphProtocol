@@ -1,0 +1,45 @@
+# GAP Walking-Skeleton Gateway Configuration (`spec/00-conventions.md` §8)
+# Raw development API key for `dev-agent` (never store raw keys in production configs):
+#   gap_dev_skeleton_key_01
+profile = "dev"
+
+[server]
+listen = "127.0.0.1:8080"
+shutdown_grace_ms = 5000
+
+[gateway]
+default_tenant = "default"
+facade_spotlight = true
+
+[auth]
+allow_anonymous = false
+
+[telemetry]
+log_level = "info"
+log_json = false
+service_name = "gap-walking-skeleton"
+
+[[branches]]
+id = "shop"
+protocol = "openapi"
+trust = "T1"
+
+[branches.openapi]
+spec = "shop.openapi.json"
+base_url = "http://127.0.0.1:9101"
+
+[[branches]]
+id = "notes"
+protocol = "mcp"
+trust = "T1"
+
+[branches.mcp]
+transport = "http"
+url = "http://127.0.0.1:9102/mcp"
+
+[[api_keys]]
+id = "dev-agent"
+# blake3("gap_dev_skeleton_key_01")
+key_hash = "8a7d1134387be2f4aeb799122161c9868d94bdbec857230c917947a746ac8ba3"
+tenant = "default"
+scopes = ["read"]
