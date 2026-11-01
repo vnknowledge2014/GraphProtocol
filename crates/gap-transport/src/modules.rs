@@ -17,7 +17,9 @@ use gap_core::traits::{HttpExchangeRequest, HttpModule};
 use uuid::Uuid;
 
 use crate::app::{AppState, RequestCorrelation};
-use crate::gateway::{authenticate_headers, read_body_bounded, resolve_trace_context};
+use crate::gateway::{
+    AdmissionOutcome, authenticate_headers, read_body_bounded, resolve_trace_context,
+};
 use crate::pipeline::build_transport_error_response;
 
 /// Response extension set by [`module_or_not_found`] so the telemetry layer labels the request `module`.
@@ -96,9 +98,10 @@ async fn serve_module(
         Ok(principal) => principal,
         Err(error) => return refuse(StatusCode::UNAUTHORIZED, error),
     };
-    if let Err(error) = state.admission.check(&principal, req.headers()) {
-        return refuse(status_for_error(error.code()), error);
-    }
+    let admission = match state.admission.admit(&principal, req.headers()) {
+        Ok(guard) => guard,
+        Err(error) => return refuse(status_for_error(error.code()), error),
+    };
 
     // INV-01: one snapshot per request, pinned right after authentication.
     let snapshot = state.snapshot.pin();
@@ -160,6 +163,11 @@ async fn serve_module(
 
     let remaining = deadline.saturating_duration_since(std::time::Instant::now());
     let handled = tokio::time::timeout(remaining, module.handle(&ctx, exchange)).await;
+    admission.set_outcome(match &handled {
+        Ok(Ok(_)) => AdmissionOutcome::Success,
+        Ok(Err(_)) => AdmissionOutcome::Ignore,
+        Err(_) => AdmissionOutcome::Dropped,
+    });
     match handled {
         Ok(Ok(out)) => module_response(out.status, &out.headers, out.body, &request_id),
         Ok(Err(error)) => refuse(status_for_error(error.code()), error),

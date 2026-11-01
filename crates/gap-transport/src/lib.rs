@@ -8,6 +8,7 @@
     clippy::unimplemented
 )]
 
+pub mod admission;
 pub mod app;
 pub mod config;
 pub mod engine;
@@ -22,6 +23,7 @@ pub mod serve;
 pub mod shed;
 pub mod sse;
 
+pub use admission::{AdmissionConfigError, GatewayAdmission};
 pub use app::{AppState, RequestCorrelation, router};
 pub use config::{
     ApiKeyRecord, ApiKeyVerifier, Blake3ApiKeyVerifier, ConfigValidationError, DEFAULT_DEADLINE,
@@ -29,7 +31,9 @@ pub use config::{
     TransportConfig, VerificationStats,
 };
 pub use engine::TransportEngine;
-pub use gateway::{AdmissionPolicy, AllowAllAdmission};
+pub use gateway::{
+    AdmissionGuard, AdmissionOutcome, AdmissionPermit, AdmissionPolicy, AllowAllAdmission,
+};
 pub use metrics::{DURATION_BUCKETS_SECS, InFlightGuard, RouteLabel, TransportMetrics};
 pub use operation::{NegotiatedMedia, ParsedHttpGraphqlRequest, retry_after_seconds};
 pub use pipeline::{
