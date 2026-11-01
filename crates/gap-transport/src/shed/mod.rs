@@ -166,9 +166,10 @@ struct Controller {
     limit: f64,
     /// No-load round-trip time, learned **only from samples taken at low load** (at most a quarter of the limit in
     /// flight): under overload every sample is queue-inflated, and an average over all samples would follow the latency
-    /// up and never see the degradation. Frozen while the gateway stays loaded; if no low-load sample arrives for
-    /// [`BASELINE_STALE_AFTER`] it drifts up slowly ([`BASELINE_DRIFT_PER_SEC`]) so a permanent upstream slowdown cannot
-    /// pin the limit at its floor forever.
+    /// up and never see the degradation. Frozen while the gateway stays loaded (a sustained overload must not let the
+    /// latency target creep up); only when the limit has collapsed to its floor *and* no low-load sample arrived for
+    /// [`BASELINE_STALE_AFTER`] does it drift up ([`BASELINE_DRIFT_PER_SEC`]), so a permanent upstream slowdown cannot pin
+    /// the limit at the floor forever.
     baseline_nanos: f64,
     /// Smallest low-load sample of the current and the previous window (the baseline is their minimum, so it
     /// forgets a regime that ended more than one to two windows ago).
@@ -188,7 +189,7 @@ const BASELINE_WINDOW: Duration = Duration::from_secs(150);
 /// Upward drift of a stale baseline: 2% per second (a permanent doubling is absorbed in about a minute).
 const BASELINE_DRIFT_PER_SEC: f64 = 1.02;
 
-/// A baseline with no low-load sample for this long starts to drift.
+/// A baseline with no low-load sample for this long (with the limit at its floor) starts to drift.
 const BASELINE_STALE_AFTER: Duration = Duration::from_secs(60);
 
 /// Smallest time between two limit updates.
@@ -424,14 +425,15 @@ impl AdaptiveLimiter {
             c.window_min_nanos[0] = c.window_min_nanos[0].min(rtt_nanos);
             c.baseline_nanos = c.window_min_nanos[0].min(c.window_min_nanos[1]);
             c.last_low_load = Some(now);
-        } else if c
-            .last_low_load
-            .is_some_and(|t| now.saturating_duration_since(t) > BASELINE_STALE_AFTER)
+        } else if c.limit <= f64::from(self.cfg.min_limit) + 1.0
+            && c.last_low_load
+                .is_some_and(|t| now.saturating_duration_since(t) > BASELINE_STALE_AFTER)
         {
             let drift = BASELINE_DRIFT_PER_SEC.powf(since_check);
-            c.baseline_nanos *= drift;
+            c.baseline_nanos = (c.baseline_nanos * drift).min(rtt_nanos);
+            let ceiling = c.baseline_nanos;
             for m in &mut c.window_min_nanos {
-                *m *= drift;
+                *m = (*m * drift).min(ceiling);
             }
         }
 
@@ -476,7 +478,7 @@ impl AdaptiveLimiter {
 pub struct LimitPermit {
     limiter: Arc<AdaptiveLimiter>,
     started: Instant,
-    /// Requests in flight when this one was admitted, itself included: the queueing it can have experienced.
+    /// Requests in flight when this one was admitted, itself included.
     admitted_at_load: u32,
     outcome: Outcome,
 }
@@ -513,9 +515,12 @@ impl Drop for LimitPermit {
             .clock
             .now_instant()
             .saturating_duration_since(self.started);
-        self.limiter.in_flight.fetch_sub(1, Ordering::AcqRel);
+        let before_release = self.limiter.in_flight.fetch_sub(1, Ordering::AcqRel);
+        // The load this request lived through: the higher of the concurrency it was admitted into and the one it leaves
+        // behind. Either alone misleads (the first request of a burst is admitted into an empty gateway, the last one
+        // completes into one).
         self.limiter
-            .release(rtt, self.outcome, self.admitted_at_load);
+            .release(rtt, self.outcome, before_release.max(self.admitted_at_load));
     }
 }
 
@@ -763,5 +768,139 @@ mod tests {
             drop(p);
         }
         assert_eq!(l.limit(), 16, "the floor holds");
+    }
+
+    // spec: RUN-040
+    #[test]
+    fn retry_after_follows_the_latency_within_its_bounds() {
+        let (l, clock) = limiter(LimiterConfig {
+            initial_limit: 16,
+            min_limit: 16,
+            max_limit: 16,
+            ..LimiterConfig::default()
+        });
+        let after = |l: &Arc<AdaptiveLimiter>| {
+            let held: Vec<_> = (0..16)
+                .map(|_| l.try_acquire(Priority::Interactive).unwrap())
+                .collect();
+            let err = l.try_acquire(Priority::Interactive).expect_err("saturated");
+            drop(held);
+            err.extensions.retry.after_ms.unwrap()
+        };
+        assert_eq!(after(&l), 1_000, "no sample yet: one second");
+        for (rtt, expected) in [
+            (Duration::from_millis(1), 100),
+            (Duration::from_millis(200), 400),
+            (Duration::from_secs(30), 5_000),
+        ] {
+            // Enough samples for the fast average to settle on `rtt`.
+            for _ in 0..60 {
+                let p = l.try_acquire(Priority::Interactive).unwrap();
+                clock.advance(rtt);
+                drop(p);
+            }
+            let got = after(&l);
+            assert!(
+                (expected - expected / 10..=expected + expected / 10).contains(&got),
+                "rtt {rtt:?}: Retry-After {got} ms, expected about {expected}"
+            );
+        }
+    }
+
+    // spec: RUN-040
+    #[test]
+    fn a_sustained_overload_never_lets_the_baseline_creep_up() {
+        // Minutes of permanent overload must not raise the latency the limiter aims for (no drift while the limit
+        // is above its floor): the baseline stays at the low-load value learned at the start.
+        let (l, clock) = limiter(LimiterConfig::default());
+        for _ in 0..20 {
+            let p = l.try_acquire(Priority::Interactive).unwrap();
+            clock.advance(Duration::from_millis(10));
+            drop(p);
+        }
+        let learned = l.snapshot().baseline_rtt.expect("learned");
+        for _ in 0..(10 * 60 * 10) {
+            // 10 minutes in 100 ms rounds: fill the limiter, finish everything after the latency a service with a
+            // knee at 50 concurrent requests would show.
+            let mut held = Vec::new();
+            while let Ok(p) = l.try_acquire(Priority::Interactive) {
+                held.push(p);
+            }
+            let latency = simulated_latency(
+                Duration::from_millis(10),
+                50,
+                u32::try_from(held.len()).unwrap(),
+            );
+            clock.advance(latency);
+            drop(held);
+            clock.advance(Duration::from_millis(100).saturating_sub(latency));
+        }
+        assert!(l.limit() > 16, "the limit stays above the floor");
+        assert_eq!(
+            l.snapshot().baseline_rtt,
+            Some(learned),
+            "the baseline did not move under sustained load"
+        );
+    }
+
+    /// Fills the limiter, completes every permit after `latency`, and idles to the end of a 100 ms round.
+    fn saturated_rounds(
+        l: &Arc<AdaptiveLimiter>,
+        clock: &ManualClock,
+        rounds: u32,
+        latency: Duration,
+    ) {
+        for _ in 0..rounds {
+            let mut held = Vec::new();
+            while let Ok(p) = l.try_acquire(Priority::Interactive) {
+                held.push(p);
+            }
+            clock.advance(latency);
+            drop(held);
+            clock.advance(Duration::from_millis(100).saturating_sub(latency));
+        }
+    }
+
+    // spec: RUN-040
+    #[test]
+    fn after_a_permanent_slowdown_the_limit_leaves_its_floor_and_the_baseline_is_relearned_at_low_load()
+     {
+        let (l, clock) = limiter(LimiterConfig::default());
+        for _ in 0..20 {
+            let p = l.try_acquire(Priority::Interactive).unwrap();
+            clock.advance(Duration::from_millis(10));
+            drop(p);
+        }
+        // The upstream becomes 8x slower and the gateway stays saturated: drops push the limit to its floor.
+        for _ in 0..300 {
+            clock.advance(Duration::from_millis(150));
+            let mut p = l.try_acquire(Priority::Interactive).unwrap();
+            p.set_outcome(Outcome::Dropped);
+            drop(p);
+        }
+        assert_eq!(l.limit(), 16);
+        // Saturated at the floor with 80 ms requests: after the stale period the baseline drifts up and the limit
+        // climbs off the floor (it does not collapse for good).
+        saturated_rounds(&l, &clock, 5 * 60 * 10, Duration::from_millis(80));
+        assert!(
+            l.limit() > 16,
+            "the limit left its floor: {:?}",
+            l.snapshot()
+        );
+        // When load subsides, low-load requests teach the baseline the new service time within two windows.
+        for _ in 0..(6 * 60 * 2) {
+            let p = l.try_acquire(Priority::Interactive).unwrap();
+            clock.advance(Duration::from_millis(80));
+            drop(p);
+            clock.advance(Duration::from_millis(420));
+        }
+        let baseline = l.snapshot().baseline_rtt.expect("baseline");
+        assert!(
+            baseline >= Duration::from_millis(75),
+            "the baseline was relearned at low load: {baseline:?}"
+        );
+        // Saturated again at the new service time: the limit grows well beyond the floor.
+        saturated_rounds(&l, &clock, 60 * 10, Duration::from_millis(80));
+        assert!(l.limit() >= 30, "recovered: {:?}", l.snapshot());
     }
 }

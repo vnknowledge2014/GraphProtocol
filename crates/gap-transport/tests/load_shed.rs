@@ -174,3 +174,17 @@ fn the_guarantee_holds_across_interactive_shares_and_the_gateway_recovers_after_
     let p = p99(calm.interactive_latencies);
     assert!(p <= 2 * SERVICE_MS, "p99 {p} ms at 80% utilisation");
 }
+
+// spec: RUN-040
+#[test]
+fn the_latency_guarantee_does_not_degrade_over_a_six_minute_overload() {
+    // A baseline that followed the loaded latency (instead of the low-load one) would let p99 creep up as windows
+    // rotate: six minutes cover two baseline windows.
+    let report = simulate(360, 100, 1_400, LimiterConfig::default());
+    let p = p99(report.interactive_latencies);
+    assert!(
+        p <= 2 * SERVICE_MS,
+        "p99 {p} ms after six minutes of 3x overload"
+    );
+    assert_eq!(report.shed[0], 0);
+}

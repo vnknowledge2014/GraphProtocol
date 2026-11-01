@@ -662,8 +662,8 @@ title = "Adaptive concurrency limiter, load shedding, rate limits"
 milestone = "M3"
 role = "coder"
 size = "M"
-depends_on = ["WP-M1-08"]
-owns = ["crates/gap-transport/src/shed/**", "crates/gap-transport/src/ratelimit/**"]
+depends_on = ["WP-M1-08", "WP-M1-02"]
+owns = ["crates/gap-transport/src/shed/**", "crates/gap-transport/src/ratelimit/**", "crates/gap-transport/src/admission.rs", "crates/gap-transport/src/gateway.rs", "crates/gap-transport/src/pipeline.rs", "crates/gap-transport/src/modules.rs", "crates/gap-transport/src/sse.rs", "crates/gap-transport/src/lib.rs", "crates/gap-transport/tests/admission.rs", "crates/gap-transport/tests/load_shed.rs"]
 spec_refs = ["RUN-040", "RUN-050", "RUN-051", "ARC-011"]
 deliverables = [
   "gradient/AIMD limiter (initial 256, min 16, max 8192), priority classes, GAP_OVERLOADED/503+Retry-After, per-(tenant,principal) token bucket and cost-unit limiter (governor), streaming stall protection",

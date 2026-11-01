@@ -501,4 +501,62 @@ mod tests {
         }
         assert!(l.subjects() <= 16);
     }
+
+    // spec: RUN-050
+    #[test]
+    fn the_cost_budget_refills_at_exactly_the_configured_per_minute_rate() {
+        let (l, clock) = limiter(RateLimitConfig {
+            cost_units_per_min: 6_000,
+            ..RateLimitConfig::default()
+        });
+        let s = subject("acme", "agent-1");
+        l.charge_cost(&s, 6_000).unwrap();
+        clock.advance(Duration::from_secs(3));
+        // 3 s x 100 units/s = 300 units back: 301 must still fail, 300 must pass.
+        assert!(
+            l.charge_cost(&s, 301).is_err(),
+            "refill is not faster than the rate"
+        );
+        l.charge_cost(&s, 300).expect("exactly the refilled amount");
+        assert!(l.charge_cost(&s, 1).is_err());
+    }
+
+    // spec: INV-02
+    #[test]
+    fn at_the_cap_the_least_recently_used_subject_is_evicted_not_the_most_recent() {
+        let (l, clock) = limiter(RateLimitConfig {
+            max_subjects: 32,
+            burst: 2,
+            rate_per_sec: 1,
+            ..RateLimitConfig::default()
+        });
+        // Three subjects that share one shard (per-shard capacity is 2).
+        let mut same: Vec<Subject> = Vec::new();
+        let mut i = 0;
+        while same.len() < 3 {
+            let cand = subject("acme", &format!("agent-{i}"));
+            i += 1;
+            if same
+                .first()
+                .is_none_or(|first| first.shard() == cand.shard())
+            {
+                same.push(cand);
+            }
+        }
+        let (a, b, c) = (&same[0], &same[1], &same[2]);
+        // Drain A, touch B later, touch A again (A is now more recent than B), then C forces an eviction.
+        l.check_request(a).unwrap();
+        l.check_request(a).unwrap();
+        clock.advance(Duration::from_millis(10));
+        l.check_request(b).unwrap();
+        clock.advance(Duration::from_millis(10));
+        assert!(l.check_request(a).is_err(), "A is drained");
+        clock.advance(Duration::from_millis(10));
+        l.check_request(c).unwrap();
+        // B (least recently used) was evicted; A kept its drained bucket.
+        assert!(
+            l.check_request(a).is_err(),
+            "the recently used subject kept its state"
+        );
+    }
 }
