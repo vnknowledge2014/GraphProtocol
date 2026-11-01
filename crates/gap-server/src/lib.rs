@@ -4,14 +4,14 @@
 //! # Scope in `M1` (`WP-M1-12`)
 //!
 //! This crate wires:
-//! - [`assemble`]: loads `gap.toml` ([`assemble::ServerFile`]), resolves relative OpenAPI documents and
+//! - [`mod@assemble`]: loads `gap.toml` ([`assemble::ServerFile`]), resolves relative OpenAPI documents and
 //!   redacted [`SecretRef`](gap_core::config::SecretRef) credentials, derives deterministic UUIDv7
 //!   [`BranchUid`](gap_core::ids::BranchUid)s when omitted, starts embedded OpenAPI and MCP connectors
 //!   through [`assemble::BranchFactory`], composes the initial immutable [`Snapshot`](gap_core::snapshot::Snapshot),
 //!   registers branch clients in [`ConnectorRegistry`](gap_exec::ConnectorRegistry), builds
 //!   [`AppState`](gap_transport::AppState), and mounts [`McpFacade`](gap_mcp::inbound::McpFacade) behind
 //!   shared authentication and snapshot pinning.
-//! - [`run`]: serves HTTP (`/graphql`, `/graphql/stream`, `/mcp`, `/healthz`, `/readyz`, `/metrics`) via
+//! - [`mod@run`]: serves HTTP (`/graphql`, `/graphql/stream`, `/mcp`, `/healthz`, `/readyz`, `/metrics`) via
 //!   [`run::serve_http`] with two-stage `SIGTERM`/`SIGINT` [`run::Shutdown`] (`RUN-090`), serves MCP over
 //!   newline-delimited `stdio` via [`run::serve_stdio`] (`SEC-004`), and configures `stderr`-only structured
 //!   logging (`OPS-011`).
