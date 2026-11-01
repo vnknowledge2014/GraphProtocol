@@ -27,6 +27,9 @@ use serde_json::{Value, json};
 use tempfile::TempDir;
 use tower::ServiceExt as _;
 
+/// Raw development key of `examples/walking-skeleton/gap.toml` (its config forbids anonymous access).
+const DEV_KEY: &str = "gap_dev_skeleton_key_01";
+
 fn repo_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../..")
@@ -227,6 +230,7 @@ async fn e2e_graphql_queries_across_both_openapi_and_mcp_branches_with_generatio
         .method(Method::POST)
         .uri("/graphql")
         .header(CONTENT_TYPE, "application/json")
+        .header(AUTHORIZATION, format!("Bearer {DEV_KEY}"))
         .header(ACCEPT, "application/graphql-response+json")
         .body(Body::from(serde_json::to_vec(&gql_body).unwrap()))
         .unwrap();
@@ -276,7 +280,7 @@ async fn e2e_mcp_http_discover_list_describe_search_query_and_refused_mutation()
     let discover_req = mcp_post_request(
         "server/discover",
         None,
-        None,
+        Some(DEV_KEY),
         &json!({
             "jsonrpc": "2.0",
             "id": 1,
@@ -299,7 +303,7 @@ async fn e2e_mcp_http_discover_list_describe_search_query_and_refused_mutation()
     let list_req = mcp_post_request(
         "tools/list",
         None,
-        None,
+        Some(DEV_KEY),
         &json!({
             "jsonrpc": "2.0",
             "id": 2,
@@ -331,7 +335,7 @@ async fn e2e_mcp_http_discover_list_describe_search_query_and_refused_mutation()
     let describe_req = mcp_post_request(
         "tools/call",
         Some("gap_describe"),
-        None,
+        Some(DEV_KEY),
         &json!({
             "jsonrpc": "2.0",
             "id": 3,
@@ -361,7 +365,7 @@ async fn e2e_mcp_http_discover_list_describe_search_query_and_refused_mutation()
     let search_req = mcp_post_request(
         "tools/call",
         Some("gap_search"),
-        None,
+        Some(DEV_KEY),
         &json!({
             "jsonrpc": "2.0",
             "id": 4,
@@ -389,7 +393,7 @@ async fn e2e_mcp_http_discover_list_describe_search_query_and_refused_mutation()
     let query_req = mcp_post_request(
         "tools/call",
         Some("gap_query"),
-        None,
+        Some(DEV_KEY),
         &json!({
             "jsonrpc": "2.0",
             "id": 5,
@@ -424,7 +428,7 @@ async fn e2e_mcp_http_discover_list_describe_search_query_and_refused_mutation()
     let mut_req = mcp_post_request(
         "tools/call",
         Some("gap_query"),
-        None,
+        Some(DEV_KEY),
         &json!({
             "jsonrpc": "2.0",
             "id": 6,
@@ -681,4 +685,83 @@ async fn e2e_healthz_readyz_draining_transition_and_metrics() {
         ct.contains("text/plain"),
         "expected Prometheus text/plain content-type, got: {ct}"
     );
+}
+
+// spec: SEC-002, SEC-010, OPS-001
+#[tokio::test]
+async fn e2e_dev_profile_serves_anonymous_requests_only_when_allow_anonymous_is_true() {
+    let meta = json!({
+        "io.modelcontextprotocol/protocolVersion": "2026-07-28",
+        "io.modelcontextprotocol/clientCapabilities": {}
+    });
+    for (allow, expected) in [
+        ("false", StatusCode::UNAUTHORIZED),
+        ("true", StatusCode::OK),
+    ] {
+        let tmp = TempDir::new().unwrap();
+        fs::copy(
+            repo_root().join("examples/walking-skeleton/shop.openapi.json"),
+            tmp.path().join("shop.openapi.json"),
+        )
+        .unwrap();
+        let toml = tmp.path().join("gap.toml");
+        fs::write(
+            &toml,
+            format!(
+                r#"
+profile = "dev"
+
+[auth]
+allow_anonymous = {allow}
+
+[[branches]]
+id = "shop"
+protocol = "openapi"
+trust = "T1"
+[branches.openapi]
+spec = "shop.openapi.json"
+base_url = "http://127.0.0.1:9101"
+
+[[branches]]
+id = "notes"
+protocol = "mcp"
+trust = "T1"
+[branches.mcp]
+transport = "http"
+url = "http://127.0.0.1:9102/mcp"
+"#
+            ),
+        )
+        .unwrap();
+        let sf = ServerFile::load(&toml).unwrap();
+        let assembled = assemble(&sf, &FakeBranchFactory).await.unwrap();
+        let app = gap_transport::router(Arc::clone(&assembled.app_state));
+
+        let graphql = Request::builder()
+            .method(Method::POST)
+            .uri("/graphql")
+            .header(CONTENT_TYPE, "application/json")
+            .body(Body::from(r#"{"query":"{ customer(id: 1) { id } }"}"#))
+            .unwrap();
+        let (status, _, body) =
+            read_response_bytes(app.clone().oneshot(graphql).await.unwrap()).await;
+        assert_eq!(
+            status,
+            expected,
+            "/graphql with allow_anonymous = {allow}: {}",
+            String::from_utf8_lossy(&body)
+        );
+
+        let mcp = mcp_post_request(
+            "tools/call",
+            Some("gap_describe"),
+            None,
+            &json!({
+                "jsonrpc": "2.0", "id": 1, "method": "tools/call",
+                "params": { "_meta": meta, "name": "gap_describe", "arguments": { "overview": true } }
+            }),
+        );
+        let (status, _, _) = read_response_bytes(app.clone().oneshot(mcp).await.unwrap()).await;
+        assert_eq!(status, expected, "/mcp with allow_anonymous = {allow}");
+    }
 }
