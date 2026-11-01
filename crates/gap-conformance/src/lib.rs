@@ -16,3 +16,4 @@ pub mod ngc_kit;
 pub mod offline;
 pub mod report;
 pub mod runner;
+pub mod spawn;
