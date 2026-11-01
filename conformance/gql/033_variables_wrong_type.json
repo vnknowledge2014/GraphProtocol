@@ -1,0 +1,30 @@
+{
+  "name": "a string for an Int variable fails coercion",
+  "class": [
+    "Core"
+  ],
+  "spec": [
+    "GQL-002"
+  ],
+  "schema": "fixtures/shop.graphql",
+  "request": {
+    "query": "query Q($n: Int) { orders(first: $n) { id } }",
+    "variables": {
+      "n": "two"
+    }
+  },
+  "expect": {
+    "status": 422,
+    "dataNull": true,
+    "headers": {
+      "content-type": "application/graphql-response+json; charset=utf-8"
+    },
+    "errors": [
+      {
+        "extensions": {
+          "code": "GAP_TYPE_MISMATCH"
+        }
+      }
+    ]
+  }
+}

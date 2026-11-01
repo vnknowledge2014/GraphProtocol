@@ -1,0 +1,27 @@
+{
+  "name": "two fields under one response key with different arguments conflict",
+  "class": [
+    "Core"
+  ],
+  "spec": [
+    "GQL-002"
+  ],
+  "schema": "fixtures/shop.graphql",
+  "request": {
+    "query": "{ a: order(id: \"1\") { id } a: order(id: \"2\") { sku } }"
+  },
+  "expect": {
+    "status": 422,
+    "dataNull": true,
+    "headers": {
+      "content-type": "application/graphql-response+json; charset=utf-8"
+    },
+    "errors": [
+      {
+        "extensions": {
+          "code": "GAP_VALIDATION_ERROR"
+        }
+      }
+    ]
+  }
+}

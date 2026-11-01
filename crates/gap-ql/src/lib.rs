@@ -52,7 +52,7 @@ pub use crate::suggest::{
 pub use crate::validate::{
     ValidatedOperation, classify_validation_message, parse_executable_ast, validate_document,
     validate_document_with_visibility, validate_executable_reserved_names, validate_query,
-    validate_query_with_visibility,
+    validate_query_with_visibility, validate_unique_input_object_fields,
 };
 pub use crate::visibility::{
     AllowAllVisibility, FnVisibility, HiddenSetVisibility, Visibility,

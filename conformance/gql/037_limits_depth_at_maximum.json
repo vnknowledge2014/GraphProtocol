@@ -1,0 +1,20 @@
+{
+  "name": "a selection exactly at max_selection_depth (12) is accepted",
+  "class": [
+    "Core"
+  ],
+  "spec": [
+    "GQL-040"
+  ],
+  "schema": "fixtures/shop.graphql",
+  "request": {
+    "query": "{ node(id: \"1\") { id next { id next { id next { id next { id next { id next { id next { id next { id next { id next { id } } } } } } } } } } } }"
+  },
+  "expect": {
+    "status": 200,
+    "data": {
+      "node": null
+    },
+    "errors": []
+  }
+}

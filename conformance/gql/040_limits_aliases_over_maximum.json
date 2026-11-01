@@ -1,0 +1,27 @@
+{
+  "name": "51 aliases exceed max_aliases",
+  "class": [
+    "Core"
+  ],
+  "spec": [
+    "GQL-040"
+  ],
+  "schema": "fixtures/shop.graphql",
+  "request": {
+    "query": "{ a0: shopVersion a1: shopVersion a2: shopVersion a3: shopVersion a4: shopVersion a5: shopVersion a6: shopVersion a7: shopVersion a8: shopVersion a9: shopVersion a10: shopVersion a11: shopVersion a12: shopVersion a13: shopVersion a14: shopVersion a15: shopVersion a16: shopVersion a17: shopVersion a18: shopVersion a19: shopVersion a20: shopVersion a21: shopVersion a22: shopVersion a23: shopVersion a24: shopVersion a25: shopVersion a26: shopVersion a27: shopVersion a28: shopVersion a29: shopVersion a30: shopVersion a31: shopVersion a32: shopVersion a33: shopVersion a34: shopVersion a35: shopVersion a36: shopVersion a37: shopVersion a38: shopVersion a39: shopVersion a40: shopVersion a41: shopVersion a42: shopVersion a43: shopVersion a44: shopVersion a45: shopVersion a46: shopVersion a47: shopVersion a48: shopVersion a49: shopVersion a50: shopVersion }"
+  },
+  "expect": {
+    "status": 422,
+    "dataNull": true,
+    "headers": {
+      "content-type": "application/graphql-response+json; charset=utf-8"
+    },
+    "errors": [
+      {
+        "extensions": {
+          "code": "GAP_COMPLEXITY_EXCEEDED"
+        }
+      }
+    ]
+  }
+}

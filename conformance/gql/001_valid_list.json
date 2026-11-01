@@ -1,0 +1,25 @@
+{
+  "name": "a valid query executes and answers in graphql-response+json",
+  "class": [
+    "Core"
+  ],
+  "spec": [
+    "GQL-001",
+    "GQL-003"
+  ],
+  "schema": "fixtures/shop.graphql",
+  "request": {
+    "query": "{ orders(first: 2) { id sku } }"
+  },
+  "expect": {
+    "status": 200,
+    "headers": {
+      "content-type": "application/graphql-response+json; charset=utf-8"
+    },
+    "data": {
+      "orders": []
+    },
+    "dataNull": false,
+    "errors": []
+  }
+}

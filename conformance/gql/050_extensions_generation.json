@@ -1,0 +1,22 @@
+{
+  "name": "every executed response carries the pinned snapshot generation",
+  "class": [
+    "Core"
+  ],
+  "spec": [
+    "GQL-050"
+  ],
+  "schema": "fixtures/shop.graphql",
+  "request": {
+    "query": "{ shopVersion }"
+  },
+  "expect": {
+    "status": 200,
+    "extensions": {
+      "gap": {
+        "generation": 1,
+        "partial": false
+      }
+    }
+  }
+}

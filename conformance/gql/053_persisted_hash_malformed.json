@@ -1,0 +1,33 @@
+{
+  "name": "a persistedQuery hash that is not 64 hex characters is refused",
+  "class": [
+    "Core"
+  ],
+  "spec": [
+    "GQL-061"
+  ],
+  "schema": "fixtures/shop.graphql",
+  "request": {
+    "query": "{ orders { id } }",
+    "extensions": {
+      "persistedQuery": {
+        "version": 1,
+        "sha256Hash": "nothex"
+      }
+    }
+  },
+  "expect": {
+    "status": 422,
+    "dataNull": true,
+    "headers": {
+      "content-type": "application/graphql-response+json; charset=utf-8"
+    },
+    "errors": [
+      {
+        "extensions": {
+          "code": "GAP_VALIDATION_ERROR"
+        }
+      }
+    ]
+  }
+}

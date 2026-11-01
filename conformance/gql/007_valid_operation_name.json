@@ -1,0 +1,22 @@
+{
+  "name": "operationName selects one operation of a multi-operation document",
+  "class": [
+    "Core"
+  ],
+  "spec": [
+    "GQL-001",
+    "GQL-002"
+  ],
+  "schema": "fixtures/shop.graphql",
+  "request": {
+    "query": "query A { orders { id } } query B { shopVersion }",
+    "operationName": "B"
+  },
+  "expect": {
+    "status": 200,
+    "data": {
+      "shopVersion": null
+    },
+    "errors": []
+  }
+}

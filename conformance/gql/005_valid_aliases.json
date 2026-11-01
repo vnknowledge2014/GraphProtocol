@@ -1,0 +1,22 @@
+{
+  "name": "aliases answer under their own response key",
+  "class": [
+    "Core"
+  ],
+  "spec": [
+    "GQL-001",
+    "GQL-002"
+  ],
+  "schema": "fixtures/shop.graphql",
+  "request": {
+    "query": "{ first: order(id: \"1\") { id } second: order(id: \"2\") { id } }"
+  },
+  "expect": {
+    "status": 200,
+    "data": {
+      "first": null,
+      "second": null
+    },
+    "errors": []
+  }
+}

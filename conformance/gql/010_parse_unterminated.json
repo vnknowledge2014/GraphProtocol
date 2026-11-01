@@ -1,0 +1,28 @@
+{
+  "name": "an unterminated selection set is a parse failure",
+  "class": [
+    "Core"
+  ],
+  "spec": [
+    "GQL-001",
+    "GQL-003"
+  ],
+  "schema": "fixtures/shop.graphql",
+  "request": {
+    "query": "{ shopVersion "
+  },
+  "expect": {
+    "status": 400,
+    "dataNull": true,
+    "headers": {
+      "content-type": "application/graphql-response+json; charset=utf-8"
+    },
+    "errors": [
+      {
+        "extensions": {
+          "code": "GAP_PARSE_ERROR"
+        }
+      }
+    ]
+  }
+}

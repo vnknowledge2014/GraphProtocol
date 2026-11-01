@@ -1,0 +1,25 @@
+{
+  "name": "gap.metaGraph answers with the pinned generation",
+  "class": [
+    "Discovery"
+  ],
+  "spec": [
+    "GQL-010",
+    "GQL-023"
+  ],
+  "schema": "fixtures/shop.graphql",
+  "request": {
+    "query": "{ gap { metaGraph { generation } } }"
+  },
+  "expect": {
+    "status": 200,
+    "data": {
+      "gap": {
+        "metaGraph": {
+          "generation": 1
+        }
+      }
+    },
+    "errors": []
+  }
+}

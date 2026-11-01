@@ -1,0 +1,30 @@
+{
+  "name": "null for a non-null variable fails coercion",
+  "class": [
+    "Core"
+  ],
+  "spec": [
+    "GQL-002"
+  ],
+  "schema": "fixtures/shop.graphql",
+  "request": {
+    "query": "query Q($id: ID!) { order(id: $id) { id } }",
+    "variables": {
+      "id": null
+    }
+  },
+  "expect": {
+    "status": 422,
+    "dataNull": true,
+    "headers": {
+      "content-type": "application/graphql-response+json; charset=utf-8"
+    },
+    "errors": [
+      {
+        "extensions": {
+          "code": "GAP_TYPE_MISMATCH"
+        }
+      }
+    ]
+  }
+}

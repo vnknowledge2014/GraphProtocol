@@ -1,0 +1,17 @@
+{
+  "name": "50 aliases (max_aliases) are accepted",
+  "class": [
+    "Core"
+  ],
+  "spec": [
+    "GQL-040"
+  ],
+  "schema": "fixtures/shop.graphql",
+  "request": {
+    "query": "{ a0: shopVersion a1: shopVersion a2: shopVersion a3: shopVersion a4: shopVersion a5: shopVersion a6: shopVersion a7: shopVersion a8: shopVersion a9: shopVersion a10: shopVersion a11: shopVersion a12: shopVersion a13: shopVersion a14: shopVersion a15: shopVersion a16: shopVersion a17: shopVersion a18: shopVersion a19: shopVersion }"
+  },
+  "expect": {
+    "status": 200,
+    "errors": []
+  }
+}

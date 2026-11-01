@@ -1,0 +1,9 @@
+{
+  "name": "gap-differential",
+  "private": true,
+  "description": "Differential validation corpus: graphql-js (pinned) versus gap-ql. Install with `npm ci` in CI; offline, point GAP_GRAPHQL_JS_DIR at any graphql 16.x package directory.",
+  "type": "module",
+  "dependencies": {
+    "graphql": "16.13.2"
+  }
+}

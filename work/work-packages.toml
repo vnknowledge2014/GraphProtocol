@@ -200,15 +200,20 @@ title = "GAP-QL conformance corpus, differential test vs graphql-js, parser fuzz
 milestone = "M1"
 role = "tester"
 size = "M"
-depends_on = ["WP-M1-01", "WP-M0-09"]
-owns = ["conformance/gql/**", "tests/differential/**", "fuzz/fuzz_targets/fuzz_gapql_parse.rs"]
+depends_on = ["WP-M1-01", "WP-M0-09", "WP-M1-08", "WP-M1-04", "WP-M1-09", "WP-M1-11"]
+owns = ["conformance/gql/**", "tests/differential/**", "fuzz/fuzz_targets/fuzz_gapql_parse.rs", "crates/gap-conformance/src/offline.rs", "crates/gap-conformance/src/cli.rs", "crates/gap-conformance/Cargo.toml", "crates/gap-conformance/tests/conformance_gql.rs", "crates/gap-conformance/tests/differential_gql.rs", "crates/gap-ql/src/validate.rs", "crates/gap-ql/src/lib.rs", "crates/gap-transport/src/pipeline.rs", "crates/gap-transport/tests/variables.rs"]
 spec_refs = ["GQL-002", "GQL-062", "GQL-070", "GQL-041"]
 deliverables = [
   "conformance/gql fixtures covering every GQL-* MUST (valid/invalid documents, limits, cost, errors, hidden-vs-unknown)",
   "differential harness: same corpus validated by graphql-js (node, pinned) and gap-ql; disagreements fail except an allow-list documenting intentional deviations (§7)",
   "fuzz_gapql_parse target (no panics, bounded time/memory); 10-minute smoke run in CI",
 ]
-acceptance = ["cargo nextest run -p gap-ql -E 'test(conformance)'", "cargo run -p gap-conformance -- --class Core --offline conformance/gql", "cd fuzz && cargo fuzz run fuzz_gapql_parse -- -max_total_time=60"]
+acceptance = [
+  "cargo nextest run -p gap-conformance -E 'test(conformance_gql) or test(differential)'",
+  "cargo run -p gap-conformance -- --class Core --offline conformance/gql",
+  "GAP_GRAPHQL_JS_DIR=<graphql 16.x package dir> cargo test -p gap-conformance --test differential_gql -- --ignored",
+  "cd fuzz && cargo fuzz run fuzz_gapql_parse -- -max_total_time=60",
+]
 
 [[wp]]
 id = "WP-M1-03"

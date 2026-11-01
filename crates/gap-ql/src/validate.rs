@@ -328,6 +328,144 @@ fn check_selections_reserved(
     }
 }
 
+fn check_unique_input_fields_in_value(
+    value: &Value,
+    sources: &SourceMap,
+    errors: &mut Vec<GapError>,
+) {
+    match value {
+        Value::List(items) => {
+            for item in items {
+                check_unique_input_fields_in_value(item, sources, errors);
+            }
+        }
+        Value::Object(entries) => {
+            let mut seen: Vec<&str> = Vec::with_capacity(entries.len());
+            for (field_name, field_val) in entries {
+                if seen.contains(&field_name.as_str()) {
+                    errors.push(attach_span(
+                        GapError::new(
+                            ErrorCode::ValidationError,
+                            format!(
+                                "the input object has multiple fields named `{}`",
+                                field_name.as_str()
+                            ),
+                        ),
+                        field_name.location(),
+                        sources,
+                    ));
+                } else {
+                    seen.push(field_name.as_str());
+                }
+                check_unique_input_fields_in_value(field_val, sources, errors);
+            }
+        }
+        Value::Null
+        | Value::Enum(_)
+        | Value::Variable(_)
+        | Value::String(_)
+        | Value::Float(_)
+        | Value::Int(_)
+        | Value::Boolean(_) => {}
+    }
+}
+
+fn check_unique_input_fields_in_directives(
+    directives: &ast::DirectiveList,
+    sources: &SourceMap,
+    errors: &mut Vec<GapError>,
+) {
+    for dir in directives {
+        for arg in &dir.arguments {
+            check_unique_input_fields_in_value(&arg.value, sources, errors);
+        }
+    }
+}
+
+fn check_unique_input_fields_in_selections(
+    selections: &[Selection],
+    sources: &SourceMap,
+    errors: &mut Vec<GapError>,
+) {
+    for sel in selections {
+        match sel {
+            Selection::Field(field) => {
+                for arg in &field.arguments {
+                    check_unique_input_fields_in_value(&arg.value, sources, errors);
+                }
+                check_unique_input_fields_in_directives(&field.directives, sources, errors);
+                check_unique_input_fields_in_selections(&field.selection_set, sources, errors);
+            }
+            Selection::FragmentSpread(spread) => {
+                check_unique_input_fields_in_directives(&spread.directives, sources, errors);
+            }
+            Selection::InlineFragment(inline) => {
+                check_unique_input_fields_in_directives(&inline.directives, sources, errors);
+                check_unique_input_fields_in_selections(&inline.selection_set, sources, errors);
+            }
+        }
+    }
+}
+
+/// Enforces the GraphQL `UniqueInputFieldNames` rule (`GQL-002`): an input object literal must not name
+/// a field twice. `apollo-compiler` does not implement this rule, graphql-js and the specification do
+/// (found by the differential corpus, `tests/differential`).
+///
+/// # Errors
+///
+/// Returns one [`ErrorCode::ValidationError`] per duplicated field.
+pub fn validate_unique_input_object_fields(ast_doc: &ast::Document) -> Result<(), Vec<GapError>> {
+    let mut errors = Vec::new();
+    for def in &ast_doc.definitions {
+        match def {
+            Definition::OperationDefinition(op) => {
+                for var in &op.variables {
+                    if let Some(default_val) = &var.default_value {
+                        check_unique_input_fields_in_value(
+                            default_val,
+                            &ast_doc.sources,
+                            &mut errors,
+                        );
+                    }
+                    check_unique_input_fields_in_directives(
+                        &var.directives,
+                        &ast_doc.sources,
+                        &mut errors,
+                    );
+                }
+                check_unique_input_fields_in_directives(
+                    &op.directives,
+                    &ast_doc.sources,
+                    &mut errors,
+                );
+                check_unique_input_fields_in_selections(
+                    &op.selection_set,
+                    &ast_doc.sources,
+                    &mut errors,
+                );
+            }
+            Definition::FragmentDefinition(frag) => {
+                check_unique_input_fields_in_directives(
+                    &frag.directives,
+                    &ast_doc.sources,
+                    &mut errors,
+                );
+                check_unique_input_fields_in_selections(
+                    &frag.selection_set,
+                    &ast_doc.sources,
+                    &mut errors,
+                );
+            }
+            _ => {}
+        }
+    }
+    if errors.is_empty() {
+        Ok(())
+    } else {
+        Err(errors)
+    }
+}
+
 /// Enforces `GQL-004` on an executable AST document, rejecting non-introspection `__`-prefixed
 /// names in operations, fragments, variables, fields, aliases, arguments, and directives.
 pub fn validate_executable_reserved_names(ast_doc: &ast::Document) -> Result<(), Vec<GapError>> {
@@ -739,6 +877,7 @@ pub(crate) fn validate_parsed_ast_against_projected_schema(
     variables: &serde_json::Map<String, serde_json::Value>,
     visibility: &dyn crate::visibility::Visibility,
 ) -> Result<ValidatedOperation, Vec<GapError>> {
+    validate_unique_input_object_fields(ast_doc)?;
     let non_empty_spans = non_empty_ast_field_spans(ast_doc);
     let valid_doc = ast_doc
         .to_executable_validate(projected_schema)
@@ -921,6 +1060,46 @@ mod tests {
             "#,
         )
         .expect("compose test supergraph")
+    }
+
+    // spec: GQL-002
+    #[test]
+    fn duplicate_input_object_fields_are_rejected_everywhere_a_value_can_appear() {
+        let schema = test_supergraph();
+        for doc in [
+            // field argument
+            r#"{ billing { invoice(id: "1") { id } } }"#.replace("id: \"1\"", "id: {a: 1, a: 2}"),
+            // nested object inside a list inside an object
+            r#"{ billing { invoice(id: [{x: {a: 1, a: 2}}]) { id } } }"#.to_owned(),
+            // directive argument
+            r#"{ billing @skip(if: {a: 1, a: 2}) { invoice(id: "1") { id } } }"#.to_owned(),
+            // variable default value
+            r#"query Q($v: String = {a: 1, a: 2}) { billing { invoice(id: "1") { id } } }"#
+                .to_owned(),
+            // inside a fragment definition and an inline fragment
+            r#"{ ...F } fragment F on Query { billing { invoice(id: {a: 1, a: 2}) { id } } }"#
+                .to_owned(),
+            r#"{ ... on Query { billing { invoice(id: {a: 1, a: 2}) { id } } } }"#.to_owned(),
+        ] {
+            let ast_doc = parse_executable_ast(&doc, "t.graphql").expect("syntactically valid");
+            let errors = validate_unique_input_object_fields(&ast_doc).expect_err(&doc);
+            assert!(
+                errors.iter().all(|e| e.code() == ErrorCode::ValidationError
+                    && e.message().contains("multiple fields named `a`")),
+                "{doc}: {errors:?}"
+            );
+        }
+        // Distinct names (also repeated across different objects) are fine, and so is the full pipeline.
+        let ok = r#"{ billing { invoice(id: {a: 1, b: {a: 2}}) { id } i2: invoice(id: {a: 3}) { id } } }"#;
+        let ast_doc = parse_executable_ast(ok, "t.graphql").expect("parses");
+        assert!(validate_unique_input_object_fields(&ast_doc).is_ok());
+        let dup = r#"{ billing { invoice(id: {a: 1, a: 2}) { id } } }"#;
+        let error =
+            validate_query(&schema, dup).expect_err("duplicate field must fail the full pipeline");
+        assert!(
+            error.message().contains("multiple fields named `a`"),
+            "{error:?}"
+        );
     }
 
     // spec: GQL-001, GQL-002 (ADR-001)

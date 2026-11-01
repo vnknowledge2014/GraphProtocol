@@ -1,0 +1,21 @@
+{
+  "name": "__typename is answerable on the query root",
+  "class": [
+    "Discovery"
+  ],
+  "spec": [
+    "GQL-001",
+    "GQL-024"
+  ],
+  "schema": "fixtures/shop.graphql",
+  "request": {
+    "query": "{ __typename }"
+  },
+  "expect": {
+    "status": 200,
+    "data": {
+      "__typename": "Query"
+    },
+    "errors": []
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "name": "an Int literal is a valid ID argument",
+  "class": [
+    "Core"
+  ],
+  "spec": [
+    "GQL-002"
+  ],
+  "schema": "fixtures/shop.graphql",
+  "request": {
+    "query": "{ order(id: 5) { id } }"
+  },
+  "expect": {
+    "status": 200,
+    "data": {
+      "order": null
+    },
+    "errors": []
+  }
+}

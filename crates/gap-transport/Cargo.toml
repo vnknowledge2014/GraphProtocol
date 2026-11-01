@@ -21,10 +21,11 @@ gap-ql.workspace = true
 gap-sec.workspace = true
 gap-snapshot.workspace = true
 http-body-util.workspace = true
+hyper-util = { workspace = true, features = ["http1", "http2", "server-auto", "server-graceful", "service", "tokio"] }
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
 thiserror.workspace = true
-tokio = { workspace = true, features = ["macros", "rt", "sync", "time"] }
+tokio = { workspace = true, features = ["macros", "net", "rt", "sync", "time"] }
 tokio-util.workspace = true
 tower.workspace = true
 tracing.workspace = true

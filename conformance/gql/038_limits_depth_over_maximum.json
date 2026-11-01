@@ -1,0 +1,27 @@
+{
+  "name": "a selection one level deeper than max_selection_depth is refused before any branch call",
+  "class": [
+    "Core"
+  ],
+  "spec": [
+    "GQL-040"
+  ],
+  "schema": "fixtures/shop.graphql",
+  "request": {
+    "query": "{ node(id: \"1\") { id next { id next { id next { id next { id next { id next { id next { id next { id next { id next { id next { id } } } } } } } } } } } } }"
+  },
+  "expect": {
+    "status": 422,
+    "dataNull": true,
+    "headers": {
+      "content-type": "application/graphql-response+json; charset=utf-8"
+    },
+    "errors": [
+      {
+        "extensions": {
+          "code": "GAP_DEPTH_EXCEEDED"
+        }
+      }
+    ]
+  }
+}

@@ -1,0 +1,30 @@
+{
+  "name": "an unknown enum value in a variable fails coercion",
+  "class": [
+    "Core"
+  ],
+  "spec": [
+    "GQL-002"
+  ],
+  "schema": "fixtures/shop.graphql",
+  "request": {
+    "query": "query Q($s: shop_OrderStatus) { orders(status: $s) { id } }",
+    "variables": {
+      "s": "NOPE"
+    }
+  },
+  "expect": {
+    "status": 422,
+    "dataNull": true,
+    "headers": {
+      "content-type": "application/graphql-response+json; charset=utf-8"
+    },
+    "errors": [
+      {
+        "extensions": {
+          "code": "GAP_TYPE_MISMATCH"
+        }
+      }
+    ]
+  }
+}

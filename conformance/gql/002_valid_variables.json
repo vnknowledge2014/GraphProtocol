@@ -1,0 +1,21 @@
+{
+  "name": "variables and a default value are coerced",
+  "class": [
+    "Core"
+  ],
+  "spec": [
+    "GQL-001",
+    "GQL-002"
+  ],
+  "schema": "fixtures/shop.graphql",
+  "request": {
+    "query": "query Q($id: ID! = \"7\") { order(id: $id) { id } }"
+  },
+  "expect": {
+    "status": 200,
+    "data": {
+      "order": null
+    },
+    "errors": []
+  }
+}

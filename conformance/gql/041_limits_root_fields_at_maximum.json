@@ -1,0 +1,17 @@
+{
+  "name": "20 root fields (max_root_fields) are accepted",
+  "class": [
+    "Core"
+  ],
+  "spec": [
+    "GQL-040"
+  ],
+  "schema": "fixtures/shop.graphql",
+  "request": {
+    "query": "{ a0: order(id: \"1\") { id } a1: order(id: \"1\") { id } a2: order(id: \"1\") { id } a3: order(id: \"1\") { id } a4: order(id: \"1\") { id } a5: order(id: \"1\") { id } a6: order(id: \"1\") { id } a7: order(id: \"1\") { id } a8: order(id: \"1\") { id } a9: order(id: \"1\") { id } a10: order(id: \"1\") { id } a11: order(id: \"1\") { id } a12: order(id: \"1\") { id } a13: order(id: \"1\") { id } a14: order(id: \"1\") { id } a15: order(id: \"1\") { id } a16: order(id: \"1\") { id } a17: order(id: \"1\") { id } a18: order(id: \"1\") { id } a19: order(id: \"1\") { id } }"
+  },
+  "expect": {
+    "status": 200,
+    "errors": []
+  }
+}

@@ -1,0 +1,40 @@
+{
+  "name": "an unknown field gets didYouMean from visible names",
+  "class": [
+    "Core"
+  ],
+  "spec": [
+    "GQL-002",
+    "GQL-070"
+  ],
+  "schema": "fixtures/shop.graphql",
+  "request": {
+    "query": "{ ordr(id: \"1\") { id } }"
+  },
+  "expect": {
+    "status": 422,
+    "dataNull": true,
+    "headers": {
+      "content-type": "application/graphql-response+json; charset=utf-8"
+    },
+    "errors": [
+      {
+        "extensions": {
+          "code": "GAP_UNKNOWN_FIELD",
+          "suggestion": {
+            "didYouMean": [
+              "order",
+              "orders"
+            ]
+          }
+        },
+        "locations": [
+          {
+            "line": 1,
+            "column": 3
+          }
+        ]
+      }
+    ]
+  }
+}

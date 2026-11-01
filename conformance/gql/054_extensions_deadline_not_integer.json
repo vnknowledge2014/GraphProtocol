@@ -1,0 +1,32 @@
+{
+  "name": "extensions.gap.deadlineMs must be a positive integer",
+  "class": [
+    "Core"
+  ],
+  "spec": [
+    "GQL-003"
+  ],
+  "schema": "fixtures/shop.graphql",
+  "request": {
+    "query": "{ orders { id } }",
+    "extensions": {
+      "gap": {
+        "deadlineMs": "soon"
+      }
+    }
+  },
+  "expect": {
+    "status": 422,
+    "dataNull": true,
+    "headers": {
+      "content-type": "application/graphql-response+json; charset=utf-8"
+    },
+    "errors": [
+      {
+        "extensions": {
+          "code": "GAP_VALIDATION_ERROR"
+        }
+      }
+    ]
+  }
+}

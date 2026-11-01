@@ -33,11 +33,13 @@ pub enum RouteLabel {
     Metrics = 4,
     /// Any unmatched URI path (`404`).
     Unmatched = 5,
+    /// A path served by a mounted protocol facade (`HttpModule`: `/mcp`, `/.well-known/...`); one bounded label for all.
+    Module = 6,
 }
 
 impl RouteLabel {
     /// Total number of closed [`RouteLabel`] variants.
-    pub const COUNT: usize = 6;
+    pub const COUNT: usize = 7;
 
     /// Ordered slice of all [`RouteLabel`] variants.
     pub const ALL: [Self; Self::COUNT] = [
@@ -47,6 +49,7 @@ impl RouteLabel {
         Self::Readyz,
         Self::Metrics,
         Self::Unmatched,
+        Self::Module,
     ];
 
     /// Maps an incoming URI path to its closed [`RouteLabel`] (`INV-15`, `OPS-020`).
@@ -72,6 +75,7 @@ impl RouteLabel {
             Self::Readyz => "/readyz",
             Self::Metrics => "/metrics",
             Self::Unmatched => "unmatched",
+            Self::Module => "module",
         }
     }
 }
