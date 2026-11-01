@@ -1285,6 +1285,7 @@ dependencies = [
  "gap-snapshot",
  "gap-testkit",
  "http-body-util",
+ "hyper-util",
  "proptest",
  "serde",
  "serde_json",

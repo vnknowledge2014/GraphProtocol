@@ -396,6 +396,55 @@ impl TestHarness {
         persisted: Option<Arc<dyn PersistedOperationStore>>,
         admission: Option<Arc<dyn AdmissionPolicy>>,
     ) -> Self {
+        Self::build(
+            config,
+            shop_mock,
+            crm_mock,
+            persisted,
+            admission,
+            Vec::new(),
+        )
+    }
+
+    /// Default mocks plus mounted protocol facades (`HttpModule`).
+    pub fn with_modules(
+        config: TransportConfig,
+        modules: Vec<Arc<dyn gap_core::traits::HttpModule>>,
+    ) -> Self {
+        Self::build(
+            config,
+            default_shop_mock(),
+            default_crm_mock(),
+            None,
+            None,
+            modules,
+        )
+    }
+
+    /// Mounted facades behind a custom admission policy (`429`/`503` seam).
+    pub fn with_modules_and_admission(
+        config: TransportConfig,
+        modules: Vec<Arc<dyn gap_core::traits::HttpModule>>,
+        admission: Arc<dyn AdmissionPolicy>,
+    ) -> Self {
+        Self::build(
+            config,
+            default_shop_mock(),
+            default_crm_mock(),
+            None,
+            Some(admission),
+            modules,
+        )
+    }
+
+    fn build(
+        config: TransportConfig,
+        shop_mock: MockConnector,
+        crm_mock: MockConnector,
+        persisted: Option<Arc<dyn PersistedOperationStore>>,
+        admission: Option<Arc<dyn AdmissionPolicy>>,
+        modules: Vec<Arc<dyn gap_core::traits::HttpModule>>,
+    ) -> Self {
         let clock = test_clock();
         let clock_dyn: Arc<dyn Clock> = clock.clone();
         let snap = build_gen1_snapshot_for_tenant(config.default_tenant.clone());
@@ -427,6 +476,9 @@ impl TestHarness {
         }
         if let Some(adm) = admission {
             app_state = app_state.with_admission_policy(adm);
+        }
+        for module in modules {
+            app_state = app_state.with_http_module(module);
         }
 
         let state = Arc::new(app_state);

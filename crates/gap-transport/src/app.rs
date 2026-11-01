@@ -16,6 +16,7 @@ use axum::routing::any;
 use gap_core::clock::{Clock, SystemClock};
 use gap_core::context::TraceCtx;
 use gap_core::error::{ErrorCode, GapError};
+use gap_core::traits::HttpModule;
 use gap_exec::ConnectorRegistry;
 use gap_plan::PlanCache;
 use gap_ql::{EmptyPersistedStore, PersistedOperationStore};
@@ -63,6 +64,8 @@ pub struct AppState {
     pub api_key_verifier: Arc<dyn ApiKeyVerifier>,
     /// Pluggable transport admission policy (`429`/`503` seam for `WP-M3-07`).
     pub admission: Arc<dyn AdmissionPolicy>,
+    /// Protocol facades mounted by path prefix (`ARC-007`: `gap-mcp`, `gap-a2a`).
+    pub modules: Vec<Arc<dyn HttpModule>>,
 }
 
 impl fmt::Debug for AppState {
@@ -75,6 +78,14 @@ impl fmt::Debug for AppState {
             .field("metrics", &self.metrics)
             .field("api_key_verifier", &self.api_key_verifier)
             .field("admission", &self.admission)
+            .field(
+                "modules",
+                &self
+                    .modules
+                    .iter()
+                    .map(|m| m.module_name())
+                    .collect::<Vec<_>>(),
+            )
             .finish()
     }
 }
@@ -100,6 +111,7 @@ impl AppState {
             persisted_store: Arc::new(EmptyPersistedStore),
             api_key_verifier: Arc::new(Blake3ApiKeyVerifier),
             admission: Arc::new(AllowAllAdmission),
+            modules: Vec::new(),
         }
     }
 
@@ -150,6 +162,14 @@ impl AppState {
     #[must_use]
     pub fn with_admission_policy(mut self, admission: Arc<dyn AdmissionPolicy>) -> Self {
         self.admission = admission;
+        self
+    }
+
+    /// Mounts a protocol facade under the path prefixes it declares (`ARC-007`); the facade runs behind the
+    /// same authentication, admission control and snapshot pinning as `/graphql`.
+    #[must_use]
+    pub fn with_http_module(mut self, module: Arc<dyn HttpModule>) -> Self {
+        self.modules.push(module);
         self
     }
 }
@@ -212,6 +232,15 @@ where
             let mut resp = match inner.call(req).await {
                 Ok(r) => r,
                 Err(never) => match never {},
+            };
+            let route = if resp
+                .extensions()
+                .get::<crate::modules::ModuleRoute>()
+                .is_some()
+            {
+                RouteLabel::Module
+            } else {
+                route
             };
 
             let headers = resp.headers_mut();
@@ -307,7 +336,7 @@ async fn guarded_metrics(state: State<Arc<AppState>>, req: Request<Body>) -> Res
     metrics_handler(state).await
 }
 
-async fn not_found_handler(req: Request<Body>) -> Response<Body> {
+pub(crate) async fn not_found_handler(req: Request<Body>) -> Response<Body> {
     let request_id = correlation_id_from_req(&req);
     build_transport_error_response(
         StatusCode::NOT_FOUND,
@@ -326,7 +355,7 @@ pub fn router(state: Arc<AppState>) -> Router {
         .route("/healthz", any(guarded_healthz))
         .route("/readyz", any(guarded_readyz))
         .route("/metrics", any(guarded_metrics))
-        .fallback(not_found_handler)
+        .fallback(crate::modules::module_or_not_found)
         .with_state(Arc::clone(&state))
         .layer(RouterTelemetryLayer { state })
 }
