@@ -1,0 +1,64 @@
+{
+  "name": "stateless 2026-07-28 server/discover returns supported versions and capabilities",
+  "class": ["Facade-MCP"],
+  "spec": ["CMP-001"],
+  "setup": {
+    "snapshot": "two-branch",
+    "principal": {
+      "subject": "user:alice",
+      "tenant": "acme-corp",
+      "scopes": ["read:all"]
+    }
+  },
+  "steps": [
+    {
+      "request": {
+        "http": {
+          "method": "POST",
+          "path": "/mcp",
+          "headers": {
+            "content-type": "application/json",
+            "accept": "application/json, text/event-stream",
+            "mcp-protocol-version": "2026-07-28",
+            "mcp-method": "server/discover"
+          }
+        },
+        "body": {
+          "jsonrpc": "2.0",
+          "id": "disc-1",
+          "method": "server/discover",
+          "params": {
+            "_meta": {
+              "io.modelcontextprotocol/protocolVersion": "2026-07-28",
+              "io.modelcontextprotocol/clientCapabilities": {}
+            }
+          }
+        }
+      },
+      "expect": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "jsonrpc": "2.0",
+          "id": "disc-1",
+          "result": {
+            "resultType": "complete",
+            "supportedVersions": ["2026-07-28", "2025-11-25"],
+            "capabilities": {
+              "tools": {
+                "listChanged": false
+              },
+              "resources": {
+                "subscribe": false,
+                "listChanged": false
+              }
+            },
+            "cacheScope": "public"
+          }
+        }
+      }
+    }
+  ]
+}

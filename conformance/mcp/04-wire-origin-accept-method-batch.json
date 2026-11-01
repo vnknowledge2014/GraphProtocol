@@ -1,0 +1,120 @@
+{
+  "name": "Streamable HTTP rejects disallowed Origin (403), wrong Accept (406), GET (405 + Allow: POST), and JSON-RPC batch (-32600)",
+  "class": ["Facade-MCP"],
+  "spec": ["CMP-001"],
+  "setup": {
+    "snapshot": "two-branch",
+    "principal": {
+      "subject": "user:alice",
+      "tenant": "acme-corp",
+      "scopes": ["read:all"]
+    }
+  },
+  "steps": [
+    {
+      "request": {
+        "http": {
+          "method": "POST",
+          "path": "/mcp",
+          "headers": {
+            "origin": "https://evil.example",
+            "content-type": "application/json",
+            "accept": "application/json, text/event-stream",
+            "mcp-protocol-version": "2026-07-28",
+            "mcp-method": "tools/list"
+          }
+        },
+        "body": {
+          "jsonrpc": "2.0",
+          "id": 1,
+          "method": "tools/list",
+          "params": {
+            "_meta": {
+              "io.modelcontextprotocol/protocolVersion": "2026-07-28",
+              "io.modelcontextprotocol/clientCapabilities": {}
+            }
+          }
+        }
+      },
+      "expect": {
+        "status": 403
+      }
+    },
+    {
+      "request": {
+        "http": {
+          "method": "POST",
+          "path": "/mcp",
+          "headers": {
+            "content-type": "application/json",
+            "accept": "application/json",
+            "mcp-protocol-version": "2026-07-28",
+            "mcp-method": "tools/list"
+          }
+        },
+        "body": {
+          "jsonrpc": "2.0",
+          "id": 2,
+          "method": "tools/list",
+          "params": {
+            "_meta": {
+              "io.modelcontextprotocol/protocolVersion": "2026-07-28",
+              "io.modelcontextprotocol/clientCapabilities": {}
+            }
+          }
+        }
+      },
+      "expect": {
+        "status": 406
+      }
+    },
+    {
+      "request": {
+        "http": {
+          "method": "GET",
+          "path": "/mcp",
+          "headers": {
+            "accept": "text/event-stream"
+          }
+        }
+      },
+      "expect": {
+        "status": 405,
+        "headers": {
+          "allow": "POST"
+        }
+      }
+    },
+    {
+      "request": {
+        "http": {
+          "method": "POST",
+          "path": "/mcp",
+          "headers": {
+            "content-type": "application/json",
+            "accept": "application/json, text/event-stream",
+            "mcp-protocol-version": "2026-07-28",
+            "mcp-method": "tools/list"
+          }
+        },
+        "body": [
+          {
+            "jsonrpc": "2.0",
+            "id": 3,
+            "method": "tools/list",
+            "params": {}
+          }
+        ]
+      },
+      "expect": {
+        "status": 400,
+        "body": {
+          "jsonrpc": "2.0",
+          "error": {
+            "code": -32600
+          }
+        }
+      }
+    }
+  ]
+}

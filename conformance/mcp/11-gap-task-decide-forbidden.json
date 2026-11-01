@@ -1,0 +1,94 @@
+{
+  "name": "gap_task get succeeds while decide without tasks:decide scope returns GAP_FORBIDDEN",
+  "class": ["Facade-MCP"],
+  "spec": ["CMP-002", "CMP-004"],
+  "setup": {
+    "snapshot": "two-branch",
+    "principal": {
+      "subject": "user:alice",
+      "tenant": "acme-corp",
+      "scopes": ["read:all"]
+    }
+  },
+  "steps": [
+    {
+      "request": {
+        "stdio": {
+          "jsonrpc": "2.0",
+          "id": 1,
+          "method": "tools/call",
+          "params": {
+            "name": "gap_task",
+            "arguments": {
+              "action": "get",
+              "id": "task-1"
+            },
+            "_meta": {
+              "io.modelcontextprotocol/protocolVersion": "2026-07-28",
+              "io.modelcontextprotocol/clientCapabilities": {}
+            }
+          }
+        }
+      },
+      "expect": {
+        "body": {
+          "jsonrpc": "2.0",
+          "id": 1,
+          "result": {
+            "resultType": "complete",
+            "isError": false,
+            "structuredContent": {
+              "data": {
+                "task": {
+                  "id": "task-1",
+                  "state": "WORKING"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "stdio": {
+          "jsonrpc": "2.0",
+          "id": 2,
+          "method": "tools/call",
+          "params": {
+            "name": "gap_task",
+            "arguments": {
+              "action": "decide",
+              "id": "task-1",
+              "decision": "approve",
+              "note": "looks good"
+            },
+            "_meta": {
+              "io.modelcontextprotocol/protocolVersion": "2026-07-28",
+              "io.modelcontextprotocol/clientCapabilities": {}
+            }
+          }
+        }
+      },
+      "expect": {
+        "body": {
+          "jsonrpc": "2.0",
+          "id": 2,
+          "result": {
+            "resultType": "complete",
+            "isError": true,
+            "structuredContent": {
+              "errors": [
+                {
+                  "extensions": {
+                    "code": "GAP_FORBIDDEN"
+                  }
+                }
+              ]
+            }
+          }
+        }
+      }
+    }
+  ]
+}

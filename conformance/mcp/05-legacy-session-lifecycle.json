@@ -1,0 +1,172 @@
+{
+  "name": "legacy 2025-11-25 initialize mints MCP-Session-Id, serves session requests, 404s unknown session, and terminates on DELETE",
+  "class": ["Facade-MCP"],
+  "spec": ["CMP-001"],
+  "setup": {
+    "snapshot": "two-branch",
+    "principal": {
+      "subject": "user:alice",
+      "tenant": "acme-corp",
+      "scopes": ["read:all"]
+    }
+  },
+  "steps": [
+    {
+      "request": {
+        "http": {
+          "method": "POST",
+          "path": "/mcp",
+          "headers": {
+            "content-type": "application/json",
+            "accept": "application/json, text/event-stream"
+          }
+        },
+        "body": {
+          "jsonrpc": "2.0",
+          "id": 1,
+          "method": "initialize",
+          "params": {
+            "protocolVersion": "2025-11-25",
+            "capabilities": {},
+            "clientInfo": {
+              "name": "LegacyClient",
+              "version": "1.0.0"
+            }
+          }
+        }
+      },
+      "expect": {
+        "status": 200,
+        "body": {
+          "jsonrpc": "2.0",
+          "id": 1,
+          "result": {
+            "protocolVersion": "2025-11-25",
+            "capabilities": {
+              "tools": {
+                "listChanged": false
+              },
+              "resources": {
+                "subscribe": false,
+                "listChanged": false
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "http": {
+          "method": "POST",
+          "path": "/mcp",
+          "headers": {
+            "content-type": "application/json",
+            "accept": "application/json, text/event-stream",
+            "mcp-session-id": "$session_id"
+          }
+        },
+        "body": {
+          "jsonrpc": "2.0",
+          "method": "notifications/initialized"
+        }
+      },
+      "expect": {
+        "status": 202
+      }
+    },
+    {
+      "request": {
+        "http": {
+          "method": "POST",
+          "path": "/mcp",
+          "headers": {
+            "content-type": "application/json",
+            "accept": "application/json, text/event-stream",
+            "mcp-session-id": "$session_id"
+          }
+        },
+        "body": {
+          "jsonrpc": "2.0",
+          "id": 2,
+          "method": "tools/list",
+          "params": {}
+        }
+      },
+      "expect": {
+        "status": 200,
+        "body": {
+          "jsonrpc": "2.0",
+          "id": 2,
+          "result": {
+            "tools": [
+              { "name": "gap_search" },
+              { "name": "gap_describe" },
+              { "name": "gap_query" },
+              { "name": "gap_mutate" },
+              { "name": "gap_task" }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "http": {
+          "method": "POST",
+          "path": "/mcp",
+          "headers": {
+            "content-type": "application/json",
+            "accept": "application/json, text/event-stream",
+            "mcp-session-id": "00000000-0000-7000-8000-000000000000"
+          }
+        },
+        "body": {
+          "jsonrpc": "2.0",
+          "id": 3,
+          "method": "tools/list",
+          "params": {}
+        }
+      },
+      "expect": {
+        "status": 404
+      }
+    },
+    {
+      "request": {
+        "http": {
+          "method": "DELETE",
+          "path": "/mcp",
+          "headers": {
+            "mcp-session-id": "$session_id"
+          }
+        }
+      },
+      "expect": {
+        "status": 200
+      }
+    },
+    {
+      "request": {
+        "http": {
+          "method": "POST",
+          "path": "/mcp",
+          "headers": {
+            "content-type": "application/json",
+            "accept": "application/json, text/event-stream",
+            "mcp-session-id": "$session_id"
+          }
+        },
+        "body": {
+          "jsonrpc": "2.0",
+          "id": 4,
+          "method": "tools/list",
+          "params": {}
+        }
+      },
+      "expect": {
+        "status": 404
+      }
+    }
+  ]
+}

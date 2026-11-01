@@ -1,0 +1,78 @@
+{
+  "name": "tools/list serves the five static tools unchanged on a 200-branch snapshot",
+  "class": ["Facade-MCP"],
+  "spec": ["CMP-002", "CMP-003", "CMP-004", "CMP-008"],
+  "setup": {
+    "snapshot": "n-branches:200",
+    "principal": {
+      "subject": "user:alice",
+      "tenant": "acme-corp",
+      "scopes": ["read:all"]
+    }
+  },
+  "steps": [
+    {
+      "request": {
+        "http": {
+          "method": "POST",
+          "path": "/mcp",
+          "headers": {
+            "content-type": "application/json",
+            "accept": "application/json, text/event-stream",
+            "mcp-protocol-version": "2026-07-28",
+            "mcp-method": "tools/list"
+          }
+        },
+        "body": {
+          "jsonrpc": "2.0",
+          "id": 1,
+          "method": "tools/list",
+          "params": {
+            "_meta": {
+              "io.modelcontextprotocol/protocolVersion": "2026-07-28",
+              "io.modelcontextprotocol/clientCapabilities": {}
+            }
+          }
+        }
+      },
+      "expect": {
+        "status": 200,
+        "body": {
+          "jsonrpc": "2.0",
+          "id": 1,
+          "result": {
+            "resultType": "complete",
+            "cacheScope": "public",
+            "tools": [
+              {
+                "name": "gap_search",
+                "annotations": { "readOnlyHint": true }
+              },
+              {
+                "name": "gap_describe",
+                "annotations": { "readOnlyHint": true }
+              },
+              {
+                "name": "gap_query",
+                "annotations": { "readOnlyHint": true }
+              },
+              {
+                "name": "gap_mutate",
+                "annotations": { "destructiveHint": true, "idempotentHint": false }
+              },
+              {
+                "name": "gap_task",
+                "annotations": {
+                  "readOnlyHint": false,
+                  "destructiveHint": false,
+                  "idempotentHint": false,
+                  "openWorldHint": false
+                }
+              }
+            ]
+          }
+        }
+      }
+    }
+  ]
+}

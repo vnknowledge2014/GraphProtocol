@@ -1,0 +1,77 @@
+{
+  "name": "unsupported protocol version returns -32022 with supported list and missing _meta returns -32602",
+  "class": ["Facade-MCP"],
+  "spec": ["CMP-001"],
+  "setup": {
+    "snapshot": "two-branch",
+    "principal": {
+      "subject": "user:alice",
+      "tenant": "acme-corp",
+      "scopes": ["read:all"]
+    }
+  },
+  "steps": [
+    {
+      "request": {
+        "http": {
+          "method": "POST",
+          "path": "/mcp",
+          "headers": {
+            "content-type": "application/json",
+            "accept": "application/json, text/event-stream",
+            "mcp-protocol-version": "1900-01-01",
+            "mcp-method": "tools/list"
+          }
+        },
+        "body": {
+          "jsonrpc": "2.0",
+          "id": "ver-1",
+          "method": "tools/list",
+          "params": {
+            "_meta": {
+              "io.modelcontextprotocol/protocolVersion": "1900-01-01",
+              "io.modelcontextprotocol/clientCapabilities": {}
+            }
+          }
+        }
+      },
+      "expect": {
+        "status": 400,
+        "body": {
+          "jsonrpc": "2.0",
+          "id": "ver-1",
+          "error": {
+            "code": -32022,
+            "data": {
+              "supported": ["2026-07-28", "2025-11-25"],
+              "requested": "1900-01-01"
+            }
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "stdio": {
+          "jsonrpc": "2.0",
+          "id": "ver-2",
+          "method": "tools/list",
+          "params": {
+            "_meta": {
+              "io.modelcontextprotocol/protocolVersion": "2026-07-28"
+            }
+          }
+        }
+      },
+      "expect": {
+        "body": {
+          "jsonrpc": "2.0",
+          "id": "ver-2",
+          "error": {
+            "code": -32602
+          }
+        }
+      }
+    }
+  ]
+}

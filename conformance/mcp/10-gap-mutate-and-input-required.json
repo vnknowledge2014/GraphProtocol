@@ -1,0 +1,93 @@
+{
+  "name": "gap_mutate executes mutations with dry_run/idempotency_key and maps INPUT_REQUIRED to resultType input_required",
+  "class": ["Facade-MCP"],
+  "spec": ["CMP-002", "CMP-004"],
+  "setup": {
+    "snapshot": "two-branch",
+    "principal": {
+      "subject": "user:alice",
+      "tenant": "acme-corp",
+      "scopes": ["write:billing"]
+    }
+  },
+  "steps": [
+    {
+      "request": {
+        "stdio": {
+          "jsonrpc": "2.0",
+          "id": 1,
+          "method": "tools/call",
+          "params": {
+            "name": "gap_mutate",
+            "arguments": {
+              "query": "mutation { billing_createInvoice(amount: 500) { id total } }",
+              "dry_run": true,
+              "idempotency_key": "idem-001"
+            },
+            "_meta": {
+              "io.modelcontextprotocol/protocolVersion": "2026-07-28",
+              "io.modelcontextprotocol/clientCapabilities": {}
+            }
+          }
+        }
+      },
+      "expect": {
+        "body": {
+          "jsonrpc": "2.0",
+          "id": 1,
+          "result": {
+            "resultType": "complete",
+            "isError": false,
+            "structuredContent": {
+              "data": {
+                "billing_createInvoice": {
+                  "id": "inv-created",
+                  "total": 500
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "stdio": {
+          "jsonrpc": "2.0",
+          "id": 2,
+          "method": "tools/call",
+          "params": {
+            "name": "gap_mutate",
+            "arguments": {
+              "query": "mutation { billing_closeAccount(id: \"acc-1\") }"
+            },
+            "_meta": {
+              "io.modelcontextprotocol/protocolVersion": "2026-07-28",
+              "io.modelcontextprotocol/clientCapabilities": {}
+            }
+          }
+        }
+      },
+      "expect": {
+        "body": {
+          "jsonrpc": "2.0",
+          "id": 2,
+          "result": {
+            "resultType": "input_required",
+            "isError": false,
+            "structuredContent": {
+              "extensions": {
+                "gap": {
+                  "inputRequired": {
+                    "taskId": "task-approve-1",
+                    "summary": "Approve closing account acc-1"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}
