@@ -257,6 +257,17 @@ async fn missing_or_mismatched_mcp_method_header_returns_400_minus_32020() {
     assert_eq!(resp.status, 400);
     assert_eq!(body["error"]["code"], -32020);
 
+    // Mismatched Mcp-Method header vs JSON-RPC body method
+    let mut req_mismatch = modern_http_post(json!(99), "tools/list", None, json!({}));
+    for (k, v) in &mut req_mismatch.headers {
+        if k == "mcp-method" {
+            *v = "ping".to_owned();
+        }
+    }
+    let (resp_mm, body_mm) = send_http_json(&facade, &ctx, req_mismatch).await;
+    assert_eq!(resp_mm.status, 400);
+    assert_eq!(body_mm["error"]["code"], -32020);
+
     // Mismatched MCP-Protocol-Version header vs _meta
     let mut req2 = modern_http_post(json!(2), "tools/list", None, json!({}));
     for (k, v) in &mut req2.headers {
