@@ -199,3 +199,49 @@ pub(crate) fn build_data_tool_result(
         budget_tokens,
     )
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // spec: GQL-022, CMP-004
+    #[test]
+    fn token_estimate_is_ceil_of_utf8_bytes_over_3_6() {
+        // ceil(bytes / 3.6): the boundary values distinguish ceil from floor and from rounding.
+        for (bytes, expected) in [
+            (0_usize, 0_usize),
+            (1, 1),
+            (3, 1),
+            (4, 2),
+            (18, 5),
+            (19, 6),
+            (36, 10),
+            (37, 11),
+            (360, 100),
+            (361, 101),
+        ] {
+            let text = "x".repeat(bytes);
+            assert_eq!(estimate_tokens_gql022(&text), expected, "{bytes} bytes");
+        }
+        // Multi-byte scalars count by UTF-8 bytes, not characters.
+        assert_eq!(estimate_tokens_gql022("é"), 1);
+        assert_eq!(estimate_tokens_gql022(&"é".repeat(10)), 6);
+    }
+
+    // spec: GQL-022
+    #[test]
+    fn truncation_keeps_text_within_the_budget_and_marks_the_cut() {
+        let text = "a".repeat(100);
+        assert_eq!(
+            truncate_text_to_budget(text.clone(), Some(100)),
+            text,
+            "fits: untouched"
+        );
+        let cut = truncate_text_to_budget(text.clone(), Some(10));
+        assert!(cut.ends_with(TRUNCATION_SUFFIX), "{cut}");
+        let kept = &cut[..cut.len() - TRUNCATION_SUFFIX.len()];
+        assert_eq!(kept.len(), 36, "10 tokens = 36 bytes");
+        assert!(estimate_tokens_gql022(kept) <= 10);
+        assert_eq!(truncate_text_to_budget(text.clone(), None), text);
+    }
+}
