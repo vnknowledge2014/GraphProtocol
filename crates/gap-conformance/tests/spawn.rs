@@ -114,7 +114,7 @@ ready_http = "http://127.0.0.1:{port}/readyz"
     )
 }
 
-// spec: VER-011, SEC-010
+// spec: SEC-010
 #[tokio::test]
 async fn conformance_spawn_runs_the_fixtures_against_the_started_deployment_and_stops_it() {
     let port = free_port();
@@ -133,7 +133,7 @@ async fn conformance_spawn_runs_the_fixtures_against_the_started_deployment_and_
     );
 }
 
-// spec: VER-011
+// spec: GQL-003
 #[tokio::test]
 async fn conformance_spawn_reports_failing_fixtures_with_exit_1_and_still_stops_the_children() {
     let port = free_port();
@@ -151,7 +151,7 @@ async fn conformance_spawn_reports_failing_fixtures_with_exit_1_and_still_stops_
     assert!(!alive(&dir.path().join("server.pid")));
 }
 
-// spec: VER-011
+// spec: GQL-003
 #[tokio::test]
 async fn conformance_spawn_a_process_that_exits_before_ready_is_a_usage_error_and_earlier_children_are_stopped()
  {
@@ -180,7 +180,7 @@ ready_stdout = "never printed"
     );
 }
 
-// spec: VER-011
+// spec: GQL-003
 #[tokio::test]
 async fn conformance_spawn_readiness_timeout_is_a_usage_error_and_children_are_stopped() {
     let dir = example(
@@ -200,7 +200,7 @@ ready_stdout = "text that never appears"
     assert!(!alive(&dir.path().join("sleeper.pid")));
 }
 
-// spec: VER-011
+// spec: GQL-003
 #[test]
 fn conformance_spawn_description_is_validated() {
     let bad = |toml: &str| {
