@@ -1,5 +1,5 @@
 {
-  "project_root": "/Users/mike/Documents/GraphProtocol",
+  "project_root": "/private/tmp/claude-501/-Users-mike-Documents-GraphProtocol/09a78b8f-42e5-4ea0-94e5-3e7a81f78d77/scratchpad/wt-m110",
   "tdd": true,
   "auto_commit": false,
   "tasks": [
@@ -12,12 +12,16 @@
     },
     {
       "id": 2,
-      "title": "WP-M1-02 GAP-QL conformance corpus, differential test vs graphql-js, parser fuzz target. Deliverables: conformance/gql fixtures covering every GQL-* MUST (valid/invalid documents, limits, cost, errors, hidden-vs-unknown); differential harness: same corpus validated by graphql-js (node, pinned) and gap-ql; disagreements fail except an allow-list documenting intentional deviations (§7); fuzz_gapql_parse target (no panics, bounded time/memory); 10-minute smoke run in CI. Acceptance (must pass): cargo nextest run -p gap-ql -E 'test(conformance)' && cargo run -p gap-conformance -- --class Core --offline conformance/gql && cd fuzz && cargo fuzz run fuzz_gapql_parse -- -max_total_time=60",
+      "title": "WP-M1-02 GAP-QL conformance corpus, differential test vs graphql-js, parser fuzz target. Deliverables: conformance/gql fixtures covering every GQL-* MUST (valid/invalid documents, limits, cost, errors, hidden-vs-unknown); differential harness: same corpus validated by graphql-js (node, pinned) and gap-ql; disagreements fail except an allow-list documenting intentional deviations (§7); fuzz_gapql_parse target (no panics, bounded time/memory); 10-minute smoke run in CI. Acceptance (must pass): cargo nextest run -p gap-conformance -E 'test(conformance_gql) or test(differential)' && cargo run -p gap-conformance -- --class Core --offline conformance/gql && GAP_GRAPHQL_JS_DIR=<graphql 16.x package dir> cargo test -p gap-conformance --test differential_gql -- --ignored && cd fuzz && cargo fuzz run fuzz_gapql_parse -- -max_total_time=60",
       "role": "tester",
       "depends_on": [
-        1
+        1,
+        4,
+        8,
+        9,
+        11
       ],
-      "system_prompt": "Read AGENTS.md and docs/AGENT-GUIDE.md first. Work ONLY inside these paths: conformance/gql/**, tests/differential/**, fuzz/fuzz_targets/fuzz_gapql_parse.rs. Spec refs: GQL-002, GQL-062, GQL-070, GQL-041. Expand this work package into 2-5 minute steps before coding."
+      "system_prompt": "Read AGENTS.md and docs/AGENT-GUIDE.md first. Work ONLY inside these paths: conformance/gql/**, tests/differential/**, fuzz/fuzz_targets/fuzz_gapql_parse.rs, crates/gap-conformance/src/offline.rs, crates/gap-conformance/src/cli.rs, crates/gap-conformance/Cargo.toml, crates/gap-conformance/tests/conformance_gql.rs, crates/gap-conformance/tests/differential_gql.rs, crates/gap-ql/src/validate.rs, crates/gap-ql/src/lib.rs, crates/gap-transport/src/pipeline.rs, crates/gap-transport/tests/variables.rs. Spec refs: GQL-002, GQL-062, GQL-070, GQL-041. Expand this work package into 2-5 minute steps before coding."
     },
     {
       "id": 3,
@@ -86,12 +90,12 @@
     },
     {
       "id": 10,
-      "title": "WP-M1-10 gap-mcp inbound facade: five static tools, resources, stateless handling, size gate. Deliverables: Streamable HTTP + stdio MCP server exposing gap_search, gap_describe, gap_query, gap_mutate, gap_task with exact schemas/annotations from spec/09 §1; resources gap://meta, schema/{type}, operations, task/{id}; stateless semantics per MCP 2026-07-28 (no initialize/session; _meta handling), result mapping (content+structuredContent+isError), budget truncation hints, spotlighting wrapper; tests: tools/list token size <= 1,200 (two tokenizers) for N=5..1000 branches (Gate G-F1), interleaved stateless requests, read-only enforcement of gap_query. Acceptance (must pass): cargo nextest run -p gap-mcp -E 'test(inbound) or test(facade_tools_list_size)' && cargo run -p gap-conformance -- --class Facade-MCP --offline conformance/mcp",
+      "title": "WP-M1-10 gap-mcp inbound facade: five static tools, resources, stateless handling, size gate. Deliverables: Streamable HTTP + stdio MCP server exposing gap_search, gap_describe, gap_query, gap_mutate, gap_task with exact schemas/annotations from spec/09 §1; resources gap://meta, schema/{type}, operations, task/{id}; stateless semantics per MCP 2026-07-28 (no initialize/session; _meta handling), result mapping (content+structuredContent+isError), budget truncation hints, spotlighting wrapper; tests: tools/list token size <= 1,200 (two tokenizers) for N=5..1000 branches (Gate G-F1), interleaved stateless requests, read-only enforcement of gap_query. Acceptance (must pass): cargo nextest run -p gap-mcp -E 'test(inbound) or test(facade_tools_list_size) or test(conformance_facade_mcp)' && cargo clippy -p gap-mcp --all-targets -- -D warnings",
       "role": "coder",
       "depends_on": [
         8
       ],
-      "system_prompt": "Read AGENTS.md and docs/AGENT-GUIDE.md first. Work ONLY inside these paths: adapters/gap-mcp/src/inbound/**, adapters/gap-mcp/tests/inbound/**, conformance/mcp/**. Spec refs: CMP-001, CMP-002, CMP-003, CMP-004, CMP-005, CMP-007, CMP-008, SEC-083. Expand this work package into 2-5 minute steps before coding."
+      "system_prompt": "Read AGENTS.md and docs/AGENT-GUIDE.md first. Work ONLY inside these paths: adapters/gap-mcp/src/inbound/**, adapters/gap-mcp/tests/inbound_facade.rs, adapters/gap-mcp/tests/inbound/**, conformance/mcp/**. Spec refs: CMP-001, CMP-002, CMP-003, CMP-004, CMP-005, CMP-007, CMP-008, SEC-083. Expand this work package into 2-5 minute steps before coding."
     },
     {
       "id": 11,
