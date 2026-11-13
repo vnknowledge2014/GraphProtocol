@@ -14,6 +14,7 @@ use gap_core::error::GapError;
 use tokio::sync::mpsc;
 use tokio_util::sync::{CancellationToken, DropGuard};
 
+use crate::gateway::AdmissionGuard;
 use crate::metrics::TransportMetrics;
 use crate::operation::{CONTENT_TYPE_EVENT_STREAM, serialize_errors_envelope};
 
@@ -51,6 +52,8 @@ pub struct SseStreamHandle {
     pub rx: mpsc::Receiver<Bytes>,
     /// Connection cancellation token cancelled when the HTTP stream drops (`RUN-031`).
     pub cancel: CancellationToken,
+    /// Admission ticket held for as long as the response body lives (`RUN-040`, `RUN-051`).
+    pub admission: AdmissionGuard,
 }
 
 /// `Stream` adapter over a bounded `mpsc::Receiver<Bytes>` holding a [`DropGuard`] so dropping the
@@ -58,15 +61,21 @@ pub struct SseStreamHandle {
 pub struct SseBodyStream {
     rx: mpsc::Receiver<Bytes>,
     _cancel_drop_guard: DropGuard,
+    _admission: AdmissionGuard,
 }
 
 impl SseBodyStream {
     /// Wraps `rx` and `cancel_drop_guard` into an HTTP body [`Stream`].
     #[must_use]
-    pub fn new(rx: mpsc::Receiver<Bytes>, cancel_drop_guard: DropGuard) -> Self {
+    pub fn new(
+        rx: mpsc::Receiver<Bytes>,
+        cancel_drop_guard: DropGuard,
+        admission: AdmissionGuard,
+    ) -> Self {
         Self {
             rx,
             _cancel_drop_guard: cancel_drop_guard,
+            _admission: admission,
         }
     }
 }
@@ -83,7 +92,7 @@ impl Stream for SseBodyStream {
 #[must_use]
 pub fn build_sse_response(handle: SseStreamHandle) -> Response<Body> {
     let drop_guard = handle.cancel.drop_guard();
-    let stream = SseBodyStream::new(handle.rx, drop_guard);
+    let stream = SseBodyStream::new(handle.rx, drop_guard, handle.admission);
     let mut resp = Response::new(Body::from_stream(stream));
     *resp.status_mut() = StatusCode::OK;
     let headers = resp.headers_mut();
@@ -146,5 +155,9 @@ pub fn sse_request_error_response(
         send_next_and_complete(tx, next_frame, producer_cancel).await;
     });
 
-    build_sse_response(SseStreamHandle { rx, cancel })
+    build_sse_response(SseStreamHandle {
+        rx,
+        cancel,
+        admission: AdmissionGuard::none(),
+    })
 }

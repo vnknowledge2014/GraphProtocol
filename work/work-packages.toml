@@ -617,7 +617,7 @@ milestone = "M3"
 role = "coder"
 size = "M"
 depends_on = ["WP-M3-01", "WP-M1-07"]
-owns = ["crates/gap-exec/src/connector_layer/**"]
+owns = ["crates/gap-exec/src/connector_layer/**", "crates/gap-exec/tests/connector_layer_v1.rs", "crates/gap-exec/tests/connector_layer_v1/**"]
 spec_refs = ["RTE-073", "RTE-074", "RTE-081", "RTE-083", "RTE-090", "RUN-030", "RUN-031", "INV-12", "NGC-072"]
 deliverables = [
   "tower layer per branch composing gap-balance (P2C within capability group), breaker rejection (GAP_BRANCH_UNAVAILABLE with afterMs), retries for idempotent reads only with budget and jittered backoff, Health polling every 5 s (jittered), deadline margin rule",
@@ -662,8 +662,8 @@ title = "Adaptive concurrency limiter, load shedding, rate limits"
 milestone = "M3"
 role = "coder"
 size = "M"
-depends_on = ["WP-M1-08"]
-owns = ["crates/gap-transport/src/shed/**", "crates/gap-transport/src/ratelimit/**"]
+depends_on = ["WP-M1-08", "WP-M1-02"]
+owns = ["crates/gap-transport/src/shed/**", "crates/gap-transport/src/ratelimit/**", "crates/gap-transport/src/admission.rs", "crates/gap-transport/src/gateway.rs", "crates/gap-transport/src/pipeline.rs", "crates/gap-transport/src/modules.rs", "crates/gap-transport/src/sse.rs", "crates/gap-transport/src/lib.rs", "crates/gap-transport/tests/admission.rs", "crates/gap-transport/tests/load_shed.rs"]
 spec_refs = ["RUN-040", "RUN-050", "RUN-051", "ARC-011"]
 deliverables = [
   "gradient/AIMD limiter (initial 256, min 16, max 8192), priority classes, GAP_OVERLOADED/503+Retry-After, per-(tenant,principal) token bucket and cost-unit limiter (governor), streaming stall protection",

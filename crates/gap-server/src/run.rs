@@ -270,19 +270,25 @@ fn os_service_principal_id() -> String {
 }
 
 fn resolve_stdio_scopes(assembled: &Assembled) -> BTreeSet<String> {
-    let default_tenant = &assembled.config.gateway.default_tenant;
+    stdio_scopes(&assembled.config)
+}
+
+/// Scopes of the `Service` principal a stdio session runs as (`SEC-004`): the union of the scopes of the API keys bound to
+/// the default tenant; if none is, those of the first key; in `dev` with no key at all, `read`.
+fn stdio_scopes(config: &gap_core::config::GapConfig) -> BTreeSet<String> {
+    let default_tenant = &config.gateway.default_tenant;
     let mut scopes = BTreeSet::new();
-    for key in &assembled.config.api_keys {
+    for key in &config.api_keys {
         if &key.tenant == default_tenant {
             scopes.extend(key.scopes.iter().cloned());
         }
     }
     if scopes.is_empty()
-        && let Some(first) = assembled.config.api_keys.first()
+        && let Some(first) = config.api_keys.first()
     {
         scopes.extend(first.scopes.iter().cloned());
     }
-    if scopes.is_empty() && assembled.config.profile == Profile::Dev {
+    if scopes.is_empty() && config.profile == Profile::Dev {
         scopes.insert("read".to_owned());
     }
     scopes
@@ -324,6 +330,15 @@ pub fn build_stdio_context_factory(assembled: &Assembled) -> ContextFactory {
     })
 }
 
+/// Listener hardening of `gap serve`: the drain window is `[server].shutdown_grace_ms` (`RUN-090`); the header-read timeout and
+/// the connection cap keep their `gap_transport` defaults.
+fn serve_options(config: &gap_core::config::GapConfig) -> ServeOptions {
+    ServeOptions {
+        shutdown_grace: Duration::from_millis(config.server.shutdown_grace_ms),
+        ..ServeOptions::default()
+    }
+}
+
 /// Serves `assembled` over `listener` with OS `SIGTERM`/`SIGINT` graceful shutdown (`RUN-090`).
 ///
 /// # Errors
@@ -332,10 +347,7 @@ pub fn build_stdio_context_factory(assembled: &Assembled) -> ContextFactory {
 pub async fn serve_http(assembled: Assembled, listener: TcpListener) -> Result<(), RunError> {
     let shutdown = Shutdown::os(Arc::clone(&assembled.draining))?;
     let app = gap_transport::router(Arc::clone(&assembled.app_state));
-    let options = ServeOptions {
-        shutdown_grace: Duration::from_millis(assembled.config.server.shutdown_grace_ms),
-        ..ServeOptions::default()
-    };
+    let options = serve_options(&assembled.config);
     tracing::info!(
         generation = assembled.snapshot_handle.generation(),
         shutdown_grace_ms = assembled.config.server.shutdown_grace_ms,
@@ -507,5 +519,82 @@ pub async fn run_server_from_path(config_path: &Path, stdio: bool) -> i32 {
                 EXIT_RUNTIME_ERROR
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod option_tests {
+    use super::*;
+    use gap_core::config::GapConfig;
+
+    const HASH: &str = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+
+    fn config(toml: &str) -> GapConfig {
+        GapConfig::from_toml_str(toml).expect("valid config")
+    }
+
+    // spec: RUN-090
+    #[test]
+    fn the_drain_window_is_the_configured_shutdown_grace() {
+        let cfg = config("[server]\nshutdown_grace_ms = 1234\n");
+        assert_eq!(
+            serve_options(&cfg).shutdown_grace,
+            Duration::from_millis(1234)
+        );
+        assert_eq!(
+            serve_options(&config("")).shutdown_grace,
+            Duration::from_millis(30_000),
+            "default 30 s"
+        );
+    }
+
+    // spec: SEC-004, SEC-010
+    #[test]
+    fn stdio_scopes_are_the_union_of_the_default_tenant_keys_with_documented_fallbacks() {
+        let key = |id: &str, tenant: &str, scopes: &str| {
+            format!(
+                "[[api_keys]]\nid = \"{id}\"\nkey_hash = \"{HASH}\"\ntenant = \"{tenant}\"\nscopes = [{scopes}]\n"
+            )
+        };
+        let set = |v: &[&str]| v.iter().map(|s| (*s).to_owned()).collect::<BTreeSet<_>>();
+
+        let two = config(&format!(
+            "{}{}",
+            key("a", "default", "\"read\""),
+            key("b", "default", "\"write\", \"read\"")
+        ));
+        assert_eq!(
+            stdio_scopes(&two),
+            set(&["read", "write"]),
+            "union of the default tenant's keys"
+        );
+
+        let mixed = config(&format!(
+            "{}{}",
+            key("a", "default", "\"read\""),
+            key("b", "other", "\"admin\"")
+        ));
+        assert_eq!(
+            stdio_scopes(&mixed),
+            set(&["read"]),
+            "another tenant's key never widens the session"
+        );
+
+        let only_other = config(&key("b", "other", "\"admin\""));
+        assert_eq!(
+            stdio_scopes(&only_other),
+            set(&["admin"]),
+            "no key of the default tenant: the first key"
+        );
+
+        assert_eq!(
+            stdio_scopes(&config("profile = \"dev\"\n")),
+            set(&["read"]),
+            "dev without keys: read"
+        );
+        assert!(
+            stdio_scopes(&config("profile = \"prod\"\n")).is_empty(),
+            "prod without keys: nothing"
+        );
     }
 }

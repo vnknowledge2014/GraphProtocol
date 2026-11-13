@@ -28,7 +28,7 @@ use gap_proto::ngc::v1::{
 };
 use gap_server::assemble::{
     AssembleError, BranchBuildError, BranchFactory, BranchRuntime, DefaultBranchFactory,
-    ServerFile, assemble, wrap_connector,
+    ServerFile, assemble, derive_branch_uid, wrap_connector,
 };
 use serde_json::{Value, json};
 use tempfile::TempDir;
@@ -691,4 +691,67 @@ sha256 = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
         .await
         .expect_err("stdio MCP must be refused in prod");
     assert!(err_stdio.to_string().contains("local_mcp"));
+}
+
+// spec: ARC-007, INV-02, NGC-071
+struct SmallBulkheadFactory;
+
+impl BranchFactory for SmallBulkheadFactory {
+    fn build_branch<'a>(
+        &'a self,
+        server_file: &'a ServerFile,
+        index: usize,
+        branch: &'a BranchSpec,
+        uid: BranchUid,
+    ) -> BoxFuture<'a, Result<BranchRuntime, BranchBuildError>> {
+        Box::pin(async move {
+            if branch.protocol != BranchProtocol::Openapi {
+                return FakeBranchFactory
+                    .build_branch(server_file, index, branch, uid)
+                    .await;
+            }
+            let doc_bytes = server_file
+                .openapi_document(&branch.id)
+                .expect("preloaded OpenAPI bytes");
+            let spec = branch.openapi.as_ref().unwrap();
+            let cfg = OpenApiConfig {
+                connector_id: branch.id.to_string(),
+                base_url: spec.base_url.clone(),
+                allow_insecure_upstream: spec.allow_insecure_upstream,
+                auth: AuthConfig::None,
+                max_in_flight: 7,
+                ..OpenApiConfig::default()
+            };
+            let creds = StaticCredentialSource::new();
+            let connector =
+                OpenApiConnector::from_document_bytes(doc_bytes, cfg, &creds, FakeShopUpstream)
+                    .map_err(|err| BranchBuildError::ConnectorInit {
+                        branch_id: branch.id.clone(),
+                        reason: err.to_string(),
+                    })?;
+            wrap_connector(&branch.id, connector).await
+        })
+    }
+}
+
+#[tokio::test]
+async fn the_branch_bulkhead_is_the_max_in_flight_the_connector_describes() {
+    let sf = ServerFile::load(repo_root().join("examples/walking-skeleton/gap.toml")).unwrap();
+    let assembled = assemble(&sf, &SmallBulkheadFactory).await.unwrap();
+    let shop = derive_branch_uid(&BranchId::new("shop").unwrap());
+    assert_eq!(assembled.app_state.registry.max_in_flight(&shop), Some(7));
+    assert_eq!(
+        assembled.app_state.registry.available_permits(&shop),
+        Some(7)
+    );
+}
+
+// spec: ARC-007
+#[test]
+fn derived_branch_uids_are_pinned_so_snapshots_stay_reproducible_across_releases() {
+    // A change of the derivation changes every generated branch uid, hence every plan-cache key and telemetry slot.
+    let uid = |id: &str| derive_branch_uid(&BranchId::new(id).unwrap()).to_string();
+    assert_eq!(uid("shop"), "e0fd74ae-a7cc-776b-a45e-bfa9b2ffbf7c");
+    assert_eq!(uid("notes"), "15c63a7a-0bbe-7802-9a1f-7ec18cfceddb");
+    assert_ne!(uid("shop"), uid("notes"));
 }

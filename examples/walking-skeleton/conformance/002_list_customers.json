@@ -1,0 +1,36 @@
+{
+  "name": "list all customers from shop REST branch",
+  "class": [
+    "Core"
+  ],
+  "spec": [
+    "GQL-002",
+    "RUN-001"
+  ],
+  "principal": "dev-agent",
+  "request": {
+    "query": "{ customers { id name tier } }"
+  },
+  "expect": {
+    "status": 200,
+    "data": {
+      "customers": [
+        {
+          "id": 1,
+          "name": "Ada Lovelace",
+          "tier": "vip"
+        },
+        {
+          "id": 2,
+          "name": "Alan Turing",
+          "tier": "standard"
+        },
+        {
+          "id": 3,
+          "name": "Grace Hopper",
+          "tier": "vip"
+        }
+      ]
+    }
+  }
+}

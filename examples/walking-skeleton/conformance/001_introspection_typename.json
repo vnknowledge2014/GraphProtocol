@@ -1,0 +1,15 @@
+{
+  "name": "introspection __typename on Query root",
+  "class": ["Core"],
+  "spec": ["GQL-001"],
+  "principal": "dev-agent",
+  "request": {
+    "query": "{ __typename }"
+  },
+  "expect": {
+    "status": 200,
+    "data": {
+      "__typename": "Query"
+    }
+  }
+}

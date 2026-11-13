@@ -2,6 +2,7 @@
 //! admission seam, and `dev`/`prod` API-key authentication (`Brief §3.4`, `SEC-010`, `RUN-030`).
 
 use std::fmt;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use axum::body::Body;
@@ -19,7 +20,95 @@ use crate::config::{ApiKeyVerifier, Profile, TransportConfig};
 /// oversized `Content-Length` allocation spikes before chunks actually arrive.
 const MAX_INITIAL_BODY_ALLOC: usize = 65_536;
 
-/// Pluggable transport-level admission check (`429` rate limit / `503` load shed seam for `WP-M3-07`).
+/// How a request ended, as far as admission control is concerned.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AdmissionOutcome {
+    /// Served normally: its duration is a service-time sample.
+    Success,
+    /// Failed or timed out because the service is overloaded: tells a latency-driven limiter to back off.
+    Dropped,
+    /// Says nothing about load (a client error, a cancellation, a long-lived stream): no sample.
+    Ignore,
+}
+
+/// Resource a request holds while it runs (a concurrency permit): released when dropped, and told how the
+/// request ended.
+pub trait AdmissionPermit: Send + Sync {
+    /// Records how the request ended; called at most a few times before the permit is dropped, the last call wins.
+    fn set_outcome(&mut self, _outcome: AdmissionOutcome) {}
+}
+
+/// A permit shared between a guard and its stall watchdog.
+type SharedPermit = Arc<Mutex<Option<Box<dyn AdmissionPermit>>>>;
+
+/// RAII admission ticket returned by [`AdmissionPolicy::admit`]: dropping it releases the held resources (the
+/// concurrency permit) and, for ordinary requests, records the service time.
+#[derive(Default)]
+pub struct AdmissionGuard {
+    permit: Option<SharedPermit>,
+}
+
+impl fmt::Debug for AdmissionGuard {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("AdmissionGuard")
+            .field("held", &self.is_held())
+            .finish()
+    }
+}
+
+impl AdmissionGuard {
+    /// A guard that holds nothing (policies without per-request state).
+    #[must_use]
+    pub fn none() -> Self {
+        Self::default()
+    }
+
+    /// Wraps `permit`; it is released when the last clone of the guard is dropped or [`Self::release`] is called.
+    #[must_use]
+    pub fn new(permit: impl AdmissionPermit + 'static) -> Self {
+        Self {
+            permit: Some(Arc::new(Mutex::new(Some(Box::new(permit))))),
+        }
+    }
+
+    /// `true` while a permit is still held.
+    #[must_use]
+    pub fn is_held(&self) -> bool {
+        self.permit
+            .as_ref()
+            .is_some_and(|p| p.lock().is_ok_and(|g| g.is_some()))
+    }
+
+    /// Records how the request ended (the last call before the release wins).
+    pub fn set_outcome(&self, outcome: AdmissionOutcome) {
+        if let Some(permit) = &self.permit
+            && let Ok(mut guard) = permit.lock()
+            && let Some(inner) = guard.as_mut()
+        {
+            inner.set_outcome(outcome);
+        }
+    }
+
+    /// Releases the permit now (idempotent).
+    pub fn release(&self) {
+        if let Some(permit) = &self.permit
+            && let Ok(mut guard) = permit.lock()
+        {
+            guard.take();
+        }
+    }
+
+    /// A second handle to the same permit: it is released when `release` is called on either handle or when
+    /// both are dropped. Used by the stall watchdog of streaming responses (`RUN-051`).
+    #[must_use]
+    pub fn share(&self) -> Self {
+        Self {
+            permit: self.permit.clone(),
+        }
+    }
+}
+
+/// Pluggable transport-level admission control (`429` rate limit / `503` load shed; `RUN-040`, `RUN-050`).
 pub trait AdmissionPolicy: Send + Sync + fmt::Debug {
     /// Checks whether a request authenticated as `principal` may proceed to operation validation.
     ///
@@ -29,9 +118,34 @@ pub trait AdmissionPolicy: Send + Sync + fmt::Debug {
     /// (carrying optional `extensions.retry.after_ms` converted into HTTP `Retry-After`) when the
     /// request is shed before execution.
     fn check(&self, principal: &Principal, headers: &HeaderMap) -> Result<(), GapError>;
+
+    /// Admits a request and returns the ticket it holds while it runs. The default forwards to
+    /// [`Self::check`] and holds nothing; limiters override it.
+    ///
+    /// # Errors
+    ///
+    /// Same as [`Self::check`].
+    fn admit(
+        &self,
+        principal: &Principal,
+        headers: &HeaderMap,
+    ) -> Result<AdmissionGuard, GapError> {
+        self.check(principal, headers)
+            .map(|()| AdmissionGuard::none())
+    }
+
+    /// Charges `units` of planned cost against the principal's cost budget (`RUN-050`), after planning and
+    /// before execution. The default accepts everything.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`GapError`] with `ErrorCode::RateLimited` when the budget is exhausted.
+    fn charge_cost(&self, _principal: &Principal, _units: u64) -> Result<(), GapError> {
+        Ok(())
+    }
 }
 
-/// Default [`AdmissionPolicy`] allowing all requests until `WP-M3-07` wires `ratelimit` and `shed`.
+/// Default [`AdmissionPolicy`] allowing every request (no limits).
 #[derive(Debug, Default, Clone, Copy)]
 pub struct AllowAllAdmission;
 
@@ -304,7 +418,7 @@ pub fn authenticate_headers(
     }
 
     match config.profile {
-        Profile::Dev => {
+        Profile::Dev if config.allow_anonymous => {
             let mut anon = Principal::new(
                 "anonymous",
                 PrincipalKind::Human,
@@ -313,7 +427,7 @@ pub fn authenticate_headers(
             anon.scopes.insert("read".to_owned());
             Ok(anon)
         }
-        Profile::Prod => Err(GapError::new(
+        Profile::Dev | Profile::Prod => Err(GapError::new(
             ErrorCode::Unauthenticated,
             "authentication required",
         )),
@@ -368,6 +482,25 @@ mod tests {
         let too_deep = br#"{"a":{"b":{"c":1}}}"#;
         assert!(check_json_depth(too_deep, 2).is_err());
         assert!(check_json_depth(too_deep, 3).is_ok());
+    }
+
+    // spec: SEC-002, SEC-010
+    #[test]
+    fn allow_anonymous_false_makes_dev_require_credentials_but_never_loosens_prod() {
+        let mut dev = TransportConfig::for_profile(Profile::Dev);
+        assert!(dev.allow_anonymous, "dev allows anonymous by default");
+        dev.allow_anonymous = false;
+        let err = authenticate_headers(&HeaderMap::new(), &dev, &Blake3ApiKeyVerifier)
+            .expect_err("dev with allow_anonymous = false needs credentials");
+        assert_eq!(err.code(), ErrorCode::Unauthenticated);
+
+        let mut prod = TransportConfig::for_profile(Profile::Prod);
+        assert!(!prod.allow_anonymous);
+        prod.allow_anonymous = true;
+        assert!(
+            authenticate_headers(&HeaderMap::new(), &prod, &Blake3ApiKeyVerifier).is_err(),
+            "prod never serves anonymous requests, whatever the flag says"
+        );
     }
 
     // spec: SEC-010, INV-15

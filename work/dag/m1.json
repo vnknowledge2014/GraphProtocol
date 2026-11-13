@@ -1,5 +1,5 @@
 {
-  "project_root": "/private/tmp/claude-501/-Users-mike-Documents-GraphProtocol/09a78b8f-42e5-4ea0-94e5-3e7a81f78d77/scratchpad/wt-m110",
+  "project_root": "/private/tmp/claude-501/-Users-mike-Documents-GraphProtocol/2b2692d8-51bd-4f11-bbf0-13992a653443/scratchpad/wt-m112r",
   "tdd": true,
   "auto_commit": false,
   "tasks": [
@@ -112,12 +112,13 @@
       "title": "WP-M1-12 gap-server and gap-cli v0: wiring, config, serve/init/doctor. Deliverables: gap-server binary assembling snapshot (from gap.toml branches), exec, transport, MCP facade; graceful shutdown (RUN-090); gap CLI: serve, init (writes sample gap.toml + example branches), doctor (toolchain/sandbox/model checks as available), config schema/check; declares module stubs for later WPs: src/proposals/, src/calibrate/, src/commands/ (cli) and src/wiring_s1.rs (server); examples/walking-skeleton: REST fixture + an MCP branch + gap.toml + README that works end to end. Acceptance (must pass): cargo build -p gap-server -p gap-cli --release && cargo run -p gap-cli -- config check examples/walking-skeleton/gap.toml && python3 tools/check_layers.py",
       "role": "coder",
       "depends_on": [
+        2,
         8,
         9,
         10,
         11
       ],
-      "system_prompt": "Read AGENTS.md and docs/AGENT-GUIDE.md first. Work ONLY inside these paths: crates/gap-server/**, crates/gap-cli/**, examples/walking-skeleton/**. Spec refs: OPS-001, OPS-002, OPS-044, ARC-002. Expand this work package into 2-5 minute steps before coding."
+      "system_prompt": "Read AGENTS.md and docs/AGENT-GUIDE.md first. Work ONLY inside these paths: crates/gap-server/**, crates/gap-cli/**, examples/walking-skeleton/**. Spec refs: OPS-001, OPS-002, OPS-044, ARC-002, RUN-090, SEC-004. Expand this work package into 2-5 minute steps before coding."
     },
     {
       "id": 13,

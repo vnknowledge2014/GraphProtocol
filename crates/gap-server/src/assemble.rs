@@ -983,6 +983,8 @@ pub async fn assemble(
     transport_config.exec = exec_limits;
     transport_config.api_keys = api_keys;
     transport_config.draining = Arc::clone(&draining);
+    // `[auth].allow_anonymous` decides whether a credential-less request is served (`SEC-002`); `prod` never allows it.
+    transport_config.allow_anonymous = cfg.auth.allow_anonymous && cfg.profile == Profile::Dev;
     transport_config.default_tenant = cfg.gateway.default_tenant.clone();
     transport_config.operation_mode = cfg.gateway.operation_mode;
 

@@ -13,6 +13,7 @@ use crate::fixture::{ConformanceClass, LoadedFixture, load_fixtures_dir};
 use crate::offline::{OfflineDriver, group_by_schema};
 use crate::report::ConformanceReport;
 use crate::runner::{RunnerConfig, run_suite};
+use crate::spawn::{Deployment, SpawnSpec};
 
 /// Exit code when all executed fixtures passed (`VER-011`).
 pub const EXIT_OK: u8 = 0;
@@ -99,12 +100,8 @@ where
         return execute_offline_mode(&cli, dir, stdout, stderr).await;
     }
 
-    if cli.spawn.is_some() {
-        let _ = writeln!(
-            stderr,
-            "error: --spawn mode is not yet implemented; WP-M1-12 and WP-M1-13 provide spawned example execution."
-        );
-        return EXIT_USAGE_OR_UNSUPPORTED;
+    if let Some(ref example) = cli.spawn {
+        return execute_spawn_mode(&cli, Path::new(example), stdout, stderr).await;
     }
 
     let Some(ref target_url) = cli.target else {
@@ -285,6 +282,52 @@ fn emit_report(
     } else {
         EXIT_CONFORMANCE_FAILURE
     }
+}
+
+/// Starts the deployment described by `<example>/spawn.toml`, runs its fixtures over HTTP and stops it again
+/// (`--spawn`, see [`crate::spawn`]). The children are terminated whatever the verdict.
+async fn execute_spawn_mode(
+    cli: &CliArgs,
+    example: &Path,
+    stdout: &mut dyn Write,
+    stderr: &mut dyn Write,
+) -> u8 {
+    let spec = match SpawnSpec::load(example) {
+        Ok(spec) => spec,
+        Err(err) => {
+            let _ = writeln!(stderr, "error: {err}");
+            return EXIT_USAGE_OR_UNSUPPORTED;
+        }
+    };
+    let fixtures_dir = spec.fixtures_dir(example);
+    let fixtures = match load_fixtures_dir(&fixtures_dir) {
+        Ok(list) => list,
+        Err(err) => {
+            let _ = writeln!(stderr, "error: {err}");
+            return EXIT_USAGE_OR_UNSUPPORTED;
+        }
+    };
+    let driver = match HttpDriver::new(&spec.target) {
+        Ok(driver) => driver,
+        Err(err) => {
+            let _ = writeln!(stderr, "error: {err}");
+            return EXIT_USAGE_OR_UNSUPPORTED;
+        }
+    };
+    let mut deployment = match Deployment::start(&spec, example).await {
+        Ok(deployment) => deployment,
+        Err(err) => {
+            let _ = writeln!(stderr, "error: {err}");
+            return EXIT_USAGE_OR_UNSUPPORTED;
+        }
+    };
+    let config = RunnerConfig {
+        classes: cli.classes.clone(),
+        principals: PrincipalsMap::from_entries(spec.principals.clone()),
+    };
+    let report = run_suite(&driver, &fixtures, &config, None).await;
+    deployment.shutdown().await;
+    emit_report(&report, cli, &fixtures_dir, stdout, stderr)
 }
 
 /// Runs the fixtures under `dir` against in-process test servers built from their `schema` SDL files
@@ -488,7 +531,7 @@ mod tests {
 
     // spec: GQL-002, NGC-091 (VER-011)
     #[tokio::test]
-    async fn cli_help_exits_0_and_staged_modes_exit_2_naming_owning_work_packages() {
+    async fn cli_help_exits_0_and_unusable_modes_exit_2() {
         let mut out = Vec::new();
         let mut err = Vec::new();
         let code_help = run_cli_from_args(["gap-conformance", "--help"], &mut out, &mut err).await;
@@ -496,25 +539,19 @@ mod tests {
         assert!(String::from_utf8_lossy(&out).contains("gap-conformance"));
         assert!(err.is_empty());
 
-        for (args, expected_wp) in [(
-            vec!["gap-conformance", "--spawn", "examples/walking-skeleton"],
-            "WP-M1-12",
-        )] {
-            let mut out_buf = Vec::new();
-            let mut err_buf = Vec::new();
-            let code = run_cli_from_args(args.clone(), &mut out_buf, &mut err_buf).await;
-            assert_eq!(code, 2, "args {args:?} must return exit code 2");
-            let msg = String::from_utf8(err_buf).expect("utf8 stderr");
-            assert_eq!(
-                msg.lines().count(),
-                1,
-                "unsupported mode message must be exactly one line: {msg:?}"
-            );
-            assert!(
-                msg.contains(expected_wp),
-                "expected `{expected_wp}` in `{msg}`"
-            );
-        }
+        // `--spawn` needs a description: a missing `spawn.toml` is a usage error (exit 2, one line).
+        let mut out_buf = Vec::new();
+        let mut err_buf = Vec::new();
+        let code = run_cli_from_args(
+            ["gap-conformance", "--spawn", "no/such/example"],
+            &mut out_buf,
+            &mut err_buf,
+        )
+        .await;
+        assert_eq!(code, 2);
+        let msg = String::from_utf8(err_buf).expect("utf8 stderr");
+        assert_eq!(msg.lines().count(), 1, "{msg:?}");
+        assert!(msg.contains("spawn.toml"), "{msg}");
 
         // Unknown `--class` value, missing mode, and `https://` target must all exit 2.
         for bad_args in [
@@ -543,7 +580,7 @@ mod tests {
         }
     }
 
-    // spec: GQL-003, GQL-070, VER-011
+    // spec: GQL-003, GQL-070
     #[tokio::test]
     async fn offline_mode_runs_fixtures_against_the_in_process_server() {
         let tmp = TempDir::new().expect("tempdir");

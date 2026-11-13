@@ -1,0 +1,15 @@
+{
+  "name": "missing bearer token is rejected with UNAUTHENTICATED",
+  "class": [
+    "Core"
+  ],
+  "spec": [
+    "SEC-052"
+  ],
+  "request": {
+    "query": "{ __typename }"
+  },
+  "expect": {
+    "status": 401
+  }
+}
