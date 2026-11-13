@@ -418,7 +418,7 @@ pub fn authenticate_headers(
     }
 
     match config.profile {
-        Profile::Dev => {
+        Profile::Dev if config.allow_anonymous => {
             let mut anon = Principal::new(
                 "anonymous",
                 PrincipalKind::Human,
@@ -427,7 +427,7 @@ pub fn authenticate_headers(
             anon.scopes.insert("read".to_owned());
             Ok(anon)
         }
-        Profile::Prod => Err(GapError::new(
+        Profile::Dev | Profile::Prod => Err(GapError::new(
             ErrorCode::Unauthenticated,
             "authentication required",
         )),
@@ -482,6 +482,25 @@ mod tests {
         let too_deep = br#"{"a":{"b":{"c":1}}}"#;
         assert!(check_json_depth(too_deep, 2).is_err());
         assert!(check_json_depth(too_deep, 3).is_ok());
+    }
+
+    // spec: SEC-002, SEC-010
+    #[test]
+    fn allow_anonymous_false_makes_dev_require_credentials_but_never_loosens_prod() {
+        let mut dev = TransportConfig::for_profile(Profile::Dev);
+        assert!(dev.allow_anonymous, "dev allows anonymous by default");
+        dev.allow_anonymous = false;
+        let err = authenticate_headers(&HeaderMap::new(), &dev, &Blake3ApiKeyVerifier)
+            .expect_err("dev with allow_anonymous = false needs credentials");
+        assert_eq!(err.code(), ErrorCode::Unauthenticated);
+
+        let mut prod = TransportConfig::for_profile(Profile::Prod);
+        assert!(!prod.allow_anonymous);
+        prod.allow_anonymous = true;
+        assert!(
+            authenticate_headers(&HeaderMap::new(), &prod, &Blake3ApiKeyVerifier).is_err(),
+            "prod never serves anonymous requests, whatever the flag says"
+        );
     }
 
     // spec: SEC-010, INV-15

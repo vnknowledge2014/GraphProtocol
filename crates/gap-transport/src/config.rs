@@ -264,6 +264,10 @@ impl ApiKeyVerifier for Blake3ApiKeyVerifier {
 pub struct TransportConfig {
     /// Active deployment profile (`Dev` allows anonymous read-scoped principal; `Prod` requires credentials).
     pub profile: Profile,
+    /// Whether a request without credentials becomes the anonymous read-scoped principal. Defaults to `true` in `Dev` and
+    /// `false` in `Prod`; `gap-server` sets it from `[auth].allow_anonymous`, so a `dev` deployment that forbids anonymous
+    /// access really does (`SEC-002`). A presented but wrong credential is refused whatever this says.
+    pub allow_anonymous: bool,
     /// Query size, variable, depth, alias, root-field, and complexity limits (`spec/02-gap-ql.md` §8).
     pub limits: LimitsConfig,
     /// Hard cap on per-request execution deadline (`default 60 s`, `RUN-030`).
@@ -316,6 +320,7 @@ impl TransportConfig {
     pub fn for_profile(profile: Profile) -> Self {
         Self {
             profile,
+            allow_anonymous: matches!(profile, Profile::Dev),
             limits: LimitsConfig::default(),
             max_deadline: DEFAULT_MAX_DEADLINE,
             default_deadline: DEFAULT_DEADLINE,
@@ -347,6 +352,7 @@ impl TransportConfig {
     ) -> Result<Self, ConfigValidationError> {
         let cfg = Self {
             profile,
+            allow_anonymous: matches!(profile, Profile::Dev),
             limits,
             max_deadline,
             default_deadline,

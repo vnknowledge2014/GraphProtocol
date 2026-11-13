@@ -36,6 +36,7 @@ gap-snapshot.workspace = true
 gap-store.workspace = true
 gap-transport.workspace = true
 blake3.workspace = true
+http.workspace = true
 schemars.workspace = true
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
@@ -48,6 +49,7 @@ tracing-subscriber = { workspace = true, features = ["env-filter", "json"] }
 uuid = { workspace = true, features = ["v7"] }
 
 [dev-dependencies]
+axum.workspace = true
 proptest.workspace = true
 tempfile.workspace = true
 tower = { workspace = true, features = ["util"] }
