@@ -1,0 +1,27 @@
+# Walking-skeleton deployment description for `gap-conformance --spawn` (`WP-M1-13`).
+#
+# Starts the REST fixture, the MCP fixture, and the gap server in order.
+# Children are killed (SIGTERM + SIGKILL after 5 s) whatever the outcome.
+
+target            = "http://127.0.0.1:8080/graphql"
+ready_timeout_ms  = 60000
+fixtures          = "conformance"
+
+[principals]
+# Raw development API key — never use raw keys outside dev fixtures.
+dev-agent = "gap_dev_skeleton_key_01"
+
+[[process]]
+name         = "rest"
+command      = ["python3", "fixtures/rest_fixture.py", "--port", "9101"]
+ready_stdout = "rest_fixture listening on"
+
+[[process]]
+name         = "notes"
+command      = ["python3", "fixtures/mcp_fixture.py", "--port", "9102"]
+ready_stdout = "mcp_fixture listening on"
+
+[[process]]
+name         = "gap"
+command      = ["${GAP_BIN}", "serve", "gap.toml"]
+ready_http   = "http://127.0.0.1:8080/healthz"

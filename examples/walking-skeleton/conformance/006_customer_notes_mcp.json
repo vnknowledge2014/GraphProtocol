@@ -1,0 +1,29 @@
+{
+  "name": "call customer_notes tool on MCP notes branch returns JSON",
+  "class": [
+    "Core"
+  ],
+  "spec": [
+    "GQL-002",
+    "RUN-001"
+  ],
+  "principal": "dev-agent",
+  "request": {
+    "query": "{ customer_notes(customer_id: 1) }"
+  },
+  "expect": {
+    "status": 200,
+    "data": {
+      "customer_notes": {
+        "customer_id": 1,
+        "notes": [
+          {
+            "note_id": "n-1",
+            "customer_id": 1,
+            "summary": "Prefers consolidated monthly invoice"
+          }
+        ]
+      }
+    }
+  }
+}

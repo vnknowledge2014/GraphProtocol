@@ -1,0 +1,31 @@
+{
+  "name": "list orders filtered by customer_id",
+  "class": [
+    "Core"
+  ],
+  "spec": [
+    "GQL-002",
+    "RUN-001"
+  ],
+  "principal": "dev-agent",
+  "request": {
+    "query": "{ orders(customer_id: 1) { id total_cents status } }"
+  },
+  "expect": {
+    "status": 200,
+    "data": {
+      "orders": [
+        {
+          "id": 101,
+          "total_cents": 4200,
+          "status": "paid"
+        },
+        {
+          "id": 103,
+          "total_cents": 8500,
+          "status": "pending"
+        }
+      ]
+    }
+  }
+}

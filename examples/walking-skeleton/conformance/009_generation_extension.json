@@ -1,0 +1,21 @@
+{
+  "name": "response carries gap.generation extension >= 1",
+  "class": [
+    "Core"
+  ],
+  "spec": [
+    "RUN-013"
+  ],
+  "principal": "dev-agent",
+  "request": {
+    "query": "{ __typename }"
+  },
+  "expect": {
+    "status": 200,
+    "extensions": {
+      "gap": {
+        "generation": 1
+      }
+    }
+  }
+}

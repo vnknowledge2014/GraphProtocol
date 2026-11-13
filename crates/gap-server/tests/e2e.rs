@@ -765,3 +765,47 @@ url = "http://127.0.0.1:9102/mcp"
         assert_eq!(status, expected, "/mcp with allow_anonymous = {allow}");
     }
 }
+
+// spec: RUN-013, CMP-008
+#[tokio::test]
+async fn e2e_typed_path_overhead_p99_under_10ms_with_zero_io_mocks() {
+    // Measures GAP typed-path overhead (parse + plan + exec) over zero-I/O mocks.
+    // Gate: p99 of 200 iterations must be < 10 ms (RUN-013 ceiling at 1 ms upstream mocks;
+    // zero-I/O mocks give the full 10 ms budget to the GAP layer itself).
+    use std::time::Instant;
+
+    let sf = ServerFile::load(repo_root().join("examples/walking-skeleton/gap.toml")).unwrap();
+    let assembled = assemble(&sf, &FakeBranchFactory).await.unwrap();
+    let app = gap_transport::router(Arc::clone(&assembled.app_state));
+
+    const ITERATIONS: usize = 200;
+    let gql_body = serde_json::to_vec(&json!({"query": "{ __typename }"})).unwrap();
+    let mut durations_us: Vec<u128> = Vec::with_capacity(ITERATIONS);
+
+    for _ in 0..ITERATIONS {
+        let req = Request::builder()
+            .method(Method::POST)
+            .uri("/graphql")
+            .header(CONTENT_TYPE, "application/json")
+            .header(AUTHORIZATION, format!("Bearer {DEV_KEY}"))
+            .body(Body::from(gql_body.clone()))
+            .unwrap();
+        let t0 = Instant::now();
+        let resp = app.clone().oneshot(req).await.unwrap();
+        let _ = axum::body::to_bytes(resp.into_body(), 1024 * 1024)
+            .await
+            .unwrap();
+        durations_us.push(t0.elapsed().as_micros());
+    }
+
+    durations_us.sort_unstable();
+    let p99_us = durations_us[ITERATIONS * 99 / 100];
+    let p99_ms = p99_us as f64 / 1000.0;
+    assert!(
+        p99_ms < 10.0,
+        "typed-path p99 {p99_ms:.2} ms exceeds 10 ms ceiling (RUN-013); \
+         median={:.2} ms, max={:.2} ms",
+        durations_us[ITERATIONS / 2] as f64 / 1000.0,
+        durations_us[ITERATIONS - 1] as f64 / 1000.0
+    );
+}

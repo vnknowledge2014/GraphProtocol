@@ -1,0 +1,25 @@
+{
+  "name": "fetch single order by id",
+  "class": [
+    "Core"
+  ],
+  "spec": [
+    "GQL-002",
+    "RUN-001"
+  ],
+  "principal": "dev-agent",
+  "request": {
+    "query": "{ order(id: 102) { id customer_id total_cents status } }"
+  },
+  "expect": {
+    "status": 200,
+    "data": {
+      "order": {
+        "id": 102,
+        "customer_id": 2,
+        "total_cents": 1900,
+        "status": "shipped"
+      }
+    }
+  }
+}

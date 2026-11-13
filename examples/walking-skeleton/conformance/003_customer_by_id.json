@@ -1,0 +1,24 @@
+{
+  "name": "fetch single customer by id",
+  "class": [
+    "Core"
+  ],
+  "spec": [
+    "GQL-002",
+    "RUN-001"
+  ],
+  "principal": "dev-agent",
+  "request": {
+    "query": "{ customer(id: 2) { id name tier } }"
+  },
+  "expect": {
+    "status": 200,
+    "data": {
+      "customer": {
+        "id": 2,
+        "name": "Alan Turing",
+        "tier": "standard"
+      }
+    }
+  }
+}

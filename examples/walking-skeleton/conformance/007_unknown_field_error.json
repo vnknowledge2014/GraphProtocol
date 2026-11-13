@@ -1,0 +1,24 @@
+{
+  "name": "unknown root field produces GAP_UNKNOWN_FIELD error",
+  "class": [
+    "Core"
+  ],
+  "spec": [
+    "GQL-010",
+    "GQL-050"
+  ],
+  "principal": "dev-agent",
+  "request": {
+    "query": "{ no_such_field }"
+  },
+  "expect": {
+    "status": 200,
+    "errors": [
+      {
+        "extensions": {
+          "code": "GAP_UNKNOWN_FIELD"
+        }
+      }
+    ]
+  }
+}
