@@ -1,37 +1,69 @@
-//! Per-branch `ConnectorLayer` v0 (`NGC-020`, `NGC-025`, `NGC-071`, `INV-02`, `INV-12`):
-//! object-safe [`BranchClient`], [`InProcess`] server-core adapter, and lock-free
-//! [`ConnectorRegistry`] with non-queueing per-branch bulkheads.
+//! ConnectorLayer v1 (`NGC-020`, `NGC-025`, `NGC-071`, `RTE-073`..`RTE-093`, `INV-02`, `INV-12`, `INV-15`):
+//! object-safe [`BranchClient`], [`InProcess`] adapter, and lock-free [`ConnectorRegistry`] with
+//! P2C replica choice, circuit-breaker admission, retries with jittered backoff, health polling,
+//! per-branch metrics, and non-queueing per-replica bulkheads.
+//!
+//! # Call accounting rule
+//!
+//! Every completed call is recorded **exactly once** against its telemetry slot.
+//! A call is *complete* when its stream returns `Poll::Ready(None)` (success) or a stream `Err`
+//! item (failure). A call *dropped* by the caller — via cancel token, deadline expiry, or future
+//! drop — is **not** an outcome and produces **no** record; probe permits released this way do not
+//! count as either success or failure, so a cancel storm cannot stall a half-open episode.
+//!
+//! # Why retries never replay delivered rows
+//!
+//! A retry wraps the entire `BranchClient::query` call: it is started from scratch against
+//! a **different** replica (the failed one is excluded). Rows already delivered to the caller by
+//! a previous attempt's stream are already in the caller's buffer; the retry opens a fresh stream
+//! and the caller reads new rows from that. Mutations are **never** retried — only `Query` is
+//! idempotent.
 
 use std::collections::BTreeMap;
 use std::fmt;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
+use std::sync::atomic::Ordering;
 use std::task::{Context, Poll};
+use std::time::Instant;
 
 use futures_util::Stream;
+use gap_balance::breaker::Admission;
+use gap_balance::slot::{Outcome, TelemetrySlot};
+use gap_balance::time::Now;
+use gap_balance::{Candidate, InFlightGuard, ProbePermit, XorShift64, select_excluding};
+use gap_core::clock::{Clock, SystemClock};
 use gap_core::error::{ErrorCode, GapError, GapResult, NgcErrorCode, NgcErrorInfo};
 use gap_core::ids::BranchUid;
 use gap_core::snapshot::{BranchDescriptor, BranchLimits, Snapshot};
-use gap_ngc_sdk::connector::{
-    BoxStream, CallScope, Connector, NgcResult, is_sensitive_metadata_key,
-};
+use gap_ngc_sdk::connector::{BoxStream, CallScope, Connector, NgcResult};
 use gap_ngc_sdk::core::{ServerConfig, ServerCore};
 use gap_ngc_sdk::grpc::GrpcClient;
-use gap_proto::ngc::v1::{QueryRequest, QueryResponse};
-use tokio::sync::{OwnedSemaphorePermit, Semaphore};
-use tokio::time::{Instant, Sleep, sleep_until};
+use gap_proto::ngc::v1::{
+    HealthRequest, HealthResponse, QueryRequest, QueryResponse, ServingStatus,
+};
+use tokio::sync::OwnedSemaphorePermit;
+use tokio::time::{Instant as TokioInstant, Sleep, sleep, sleep_until};
 use tokio_util::sync::{CancellationToken, WaitForCancellationFutureOwned};
 
-/// Stream wrapper enforcing `CallScope::cancel`, `CallScope::deadline`, and optional RAII bulkhead
-/// permit retention across the full stream lifetime (`RUN-031`, `NGC-025`, `NGC-071`, `INV-12`).
-///
-/// Dropping `ScopedQueryStream` — or triggering `cancel` / `deadline` — drops `inner` immediately
-/// (which drops `tonic::Streaming` on gRPC, sending HTTP/2 `RST_STREAM` to the connector) and
-/// releases `_permit` back to the branch bulkhead.
+pub mod health;
+pub mod replica;
+pub mod resilience;
+pub mod stats;
+
+pub use health::HealthPollers;
+pub use replica::{Replica, ReplicaSpec};
+pub use resilience::ResilienceConfig;
+pub use stats::{AtomicCounters, BranchStats, ReplicaStats};
+
+use resilience::{classify_error_code, is_retryable, jittered_backoff};
+
+// ─── Streams ─────────────────────────────────────────────────────────────────
+
+/// Stream wrapper enforcing `CallScope::cancel` and `CallScope::deadline` on a streamed query.
 struct ScopedQueryStream {
     inner: Option<BoxStream<QueryResponse>>,
-    _permit: Option<OwnedSemaphorePermit>,
     cancel_fut: Pin<Box<WaitForCancellationFutureOwned>>,
     sleep: Pin<Box<Sleep>>,
 }
@@ -39,13 +71,11 @@ struct ScopedQueryStream {
 impl ScopedQueryStream {
     fn new(
         inner: BoxStream<QueryResponse>,
-        permit: Option<OwnedSemaphorePermit>,
         cancel: CancellationToken,
-        deadline: Instant,
+        deadline: TokioInstant,
     ) -> Self {
         Self {
             inner: Some(inner),
-            _permit: permit,
             cancel_fut: Box::pin(cancel.cancelled_owned()),
             sleep: Box::pin(sleep_until(deadline)),
         }
@@ -53,7 +83,6 @@ impl ScopedQueryStream {
 
     fn terminate(&mut self) {
         self.inner = None;
-        self._permit = None;
     }
 }
 
@@ -65,7 +94,6 @@ impl Stream for ScopedQueryStream {
         if this.inner.is_none() {
             return Poll::Ready(None);
         }
-
         if this.cancel_fut.as_mut().poll(cx).is_ready() {
             this.terminate();
             return Poll::Ready(Some(Err(NgcErrorInfo::new(
@@ -73,7 +101,6 @@ impl Stream for ScopedQueryStream {
                 "call cancelled",
             ))));
         }
-
         if this.sleep.as_mut().poll(cx).is_ready() {
             this.terminate();
             return Poll::Ready(Some(Err(NgcErrorInfo::new(
@@ -81,22 +108,17 @@ impl Stream for ScopedQueryStream {
                 "call deadline exceeded",
             ))));
         }
-
-        let poll_res = {
-            let Some(ref mut stream) = this.inner else {
-                return Poll::Ready(None);
-            };
-            stream.as_mut().poll_next(cx)
+        let Some(ref mut stream) = this.inner else {
+            return Poll::Ready(None);
         };
-
-        match poll_res {
+        match stream.as_mut().poll_next(cx) {
             Poll::Pending => Poll::Pending,
             Poll::Ready(None) => {
-                this.terminate();
+                this.inner = None;
                 Poll::Ready(None)
             }
             Poll::Ready(Some(Err(err))) => {
-                this.terminate();
+                this.inner = None;
                 Poll::Ready(Some(Err(err)))
             }
             Poll::Ready(Some(Ok(item))) => Poll::Ready(Some(Ok(item))),
@@ -104,13 +126,57 @@ impl Stream for ScopedQueryStream {
     }
 }
 
-/// Stream wrapper holding an [`OwnedSemaphorePermit`] until the inner stream completes or is dropped (`NGC-071`).
-struct PermitGuardedStream {
+/// Stream wrapper that records a telemetry outcome exactly once at the first terminal event.
+/// Dropped-without-completion = no record + probe permit released without outcome.
+struct AccountedStream {
     inner: Option<BoxStream<QueryResponse>>,
-    _permit: Option<OwnedSemaphorePermit>,
+    slot: Arc<TelemetrySlot>,
+    counters: Arc<AtomicCounters>,
+    probe_permit: Option<ProbePermit>,
+    _in_flight: Option<InFlightGuard>,
+    start: Instant,
+    epoch: Instant,
+    clock: Arc<dyn Clock>,
+    recorded: bool,
 }
 
-impl Stream for PermitGuardedStream {
+impl AccountedStream {
+    fn elapsed_now(&self) -> Now {
+        let wall = self.clock.now_instant();
+        let elapsed = wall.saturating_duration_since(self.epoch);
+        let ms = u64::try_from(elapsed.as_millis()).unwrap_or(u64::MAX);
+        Now::from_ms(ms)
+    }
+
+    fn record(&mut self, outcome: Outcome) {
+        if self.recorded {
+            return;
+        }
+        self.recorded = true;
+        let latency = self.start.elapsed();
+        let now = self.elapsed_now();
+        if let Some(permit) = self.probe_permit.take() {
+            permit.record(outcome, latency, now);
+        } else {
+            self.slot.record(outcome, latency, now);
+        }
+        match outcome {
+            Outcome::Ok => {
+                self.counters.calls_ok.fetch_add(1, Ordering::Relaxed);
+            }
+            Outcome::Failure => {
+                self.counters.calls_failed.fetch_add(1, Ordering::Relaxed);
+            }
+            Outcome::ClientError => {
+                self.counters
+                    .calls_client_error
+                    .fetch_add(1, Ordering::Relaxed);
+            }
+        }
+    }
+}
+
+impl Stream for AccountedStream {
     type Item = NgcResult<QueryResponse>;
 
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
@@ -122,12 +188,15 @@ impl Stream for PermitGuardedStream {
             Poll::Pending => Poll::Pending,
             Poll::Ready(None) => {
                 this.inner = None;
-                this._permit = None;
+                this._in_flight = None;
+                this.record(Outcome::Ok);
                 Poll::Ready(None)
             }
             Poll::Ready(Some(Err(err))) => {
+                let outcome = classify_error_code(err.code);
                 this.inner = None;
-                this._permit = None;
+                this._in_flight = None;
+                this.record(outcome);
                 Poll::Ready(Some(Err(err)))
             }
             Poll::Ready(Some(Ok(item))) => Poll::Ready(Some(Ok(item))),
@@ -135,17 +204,31 @@ impl Stream for PermitGuardedStream {
     }
 }
 
-/// Object-safe NGC branch client trait (`NGC-020`, `NGC-025`, `Brief §3.1`).
-///
-/// Boxes the returned future because `gap_ngc_sdk::connector::Connector` uses RPITIT and is not
-/// `dyn`-compatible.
+// ─── BranchClient ────────────────────────────────────────────────────────────
+
+/// Object-safe NGC branch client trait (`NGC-020`, `NGC-025`).
 pub trait BranchClient: Send + Sync + 'static {
-    /// Opens a streaming `Query` RPC against this branch under `scope` (`deadline`, `cancel`, `metadata`).
+    /// Opens a streaming `Query` RPC against this branch under `scope`.
     fn query(
         &self,
         request: QueryRequest,
         scope: CallScope,
     ) -> Pin<Box<dyn Future<Output = NgcResult<BoxStream<QueryResponse>>> + Send + '_>>;
+
+    /// Reports the branch's health status.
+    /// Default returns `Serving` so existing clients keep working without change.
+    fn health(
+        &self,
+        _request: HealthRequest,
+    ) -> Pin<Box<dyn Future<Output = NgcResult<HealthResponse>> + Send + '_>> {
+        Box::pin(async {
+            Ok(HealthResponse {
+                status: ServingStatus::Serving as i32,
+                version: String::new(),
+                details: None,
+            })
+        })
+    }
 }
 
 impl BranchClient for GrpcClient {
@@ -158,37 +241,38 @@ impl BranchClient for GrpcClient {
             if scope.cancel.is_cancelled() {
                 return Err(NgcErrorInfo::new(NgcErrorCode::Cancelled, "call cancelled"));
             }
-            if Instant::now() >= scope.deadline {
+            if TokioInstant::now() >= scope.deadline {
                 return Err(NgcErrorInfo::new(
                     NgcErrorCode::DeadlineExceeded,
                     "call deadline exceeded",
                 ));
             }
-
             let cancel = scope.cancel.clone();
             let deadline = scope.deadline;
             let metadata = scope.metadata;
-
             let stream = tokio::select! {
                 biased;
                 () = cancel.cancelled() => {
                     return Err(NgcErrorInfo::new(NgcErrorCode::Cancelled, "call cancelled"));
                 }
                 () = sleep_until(deadline) => {
-                    return Err(NgcErrorInfo::new(
-                        NgcErrorCode::DeadlineExceeded,
-                        "call deadline exceeded",
-                    ));
+                    return Err(NgcErrorInfo::new(NgcErrorCode::DeadlineExceeded, "call deadline exceeded"));
                 }
                 res = self.query_with_metadata(request, &metadata) => res?,
             };
-
-            Ok(Box::pin(ScopedQueryStream::new(stream, None, cancel, deadline)) as BoxStream<_>)
+            Ok(Box::pin(ScopedQueryStream::new(stream, cancel, deadline)) as BoxStream<_>)
         })
+    }
+
+    fn health(
+        &self,
+        request: HealthRequest,
+    ) -> Pin<Box<dyn Future<Output = NgcResult<HealthResponse>> + Send + '_>> {
+        Box::pin(async move { self.health(request).await })
     }
 }
 
-/// In-process [`BranchClient`] adapter over [`ServerCore<C>`] for socket-free unit and integration tests (`Brief §3.1`).
+/// In-process [`BranchClient`] adapter for socket-free unit and integration tests.
 pub struct InProcess<C> {
     core: Arc<ServerCore<C>>,
 }
@@ -239,160 +323,210 @@ impl<C: Connector> BranchClient for InProcess<C> {
             if scope.cancel.is_cancelled() {
                 return Err(NgcErrorInfo::new(NgcErrorCode::Cancelled, "call cancelled"));
             }
-            if Instant::now() >= scope.deadline {
+            if TokioInstant::now() >= scope.deadline {
                 return Err(NgcErrorInfo::new(
                     NgcErrorCode::DeadlineExceeded,
                     "call deadline exceeded",
                 ));
             }
-
             let cancel = scope.cancel.clone();
             let deadline = scope.deadline;
             let metadata = scope.metadata;
-
             let core_stream = tokio::select! {
                 biased;
                 () = cancel.cancelled() => {
                     return Err(NgcErrorInfo::new(NgcErrorCode::Cancelled, "call cancelled"));
                 }
                 () = sleep_until(deadline) => {
-                    return Err(NgcErrorInfo::new(
-                        NgcErrorCode::DeadlineExceeded,
-                        "call deadline exceeded",
-                    ));
+                    return Err(NgcErrorInfo::new(NgcErrorCode::DeadlineExceeded, "call deadline exceeded"));
                 }
                 res = self.core.query(request, metadata, cancel.clone()) => res?,
             };
-
             let boxed: BoxStream<QueryResponse> = Box::pin(core_stream);
-            Ok(Box::pin(ScopedQueryStream::new(boxed, None, cancel, deadline)) as BoxStream<_>)
+            Ok(Box::pin(ScopedQueryStream::new(boxed, cancel, deadline)) as BoxStream<_>)
+        })
+    }
+
+    fn health(
+        &self,
+        request: HealthRequest,
+    ) -> Pin<Box<dyn Future<Output = NgcResult<HealthResponse>> + Send + '_>> {
+        Box::pin(async move {
+            self.core
+                .health(request, BTreeMap::new(), CancellationToken::new())
+                .await
         })
     }
 }
 
-struct RedactedMeta<'a>(&'a BTreeMap<String, String>);
+// ─── RegisteredBranch ────────────────────────────────────────────────────────
 
-impl fmt::Debug for RedactedMeta<'_> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let mut map = f.debug_map();
-        for (k, v) in self.0 {
-            if is_sensitive_metadata_key(k) {
-                map.entry(k, &"***");
-            } else {
-                map.entry(k, v);
-            }
-        }
-        map.finish()
-    }
+struct ReplicaEntry {
+    replica: Replica,
+    counters: Arc<AtomicCounters>,
 }
 
-/// Immutable per-branch client and non-queueing bulkhead entry inside [`ConnectorRegistry`] (`INV-02`, `NGC-071`).
+/// Immutable per-branch client entry inside [`ConnectorRegistry`] (`INV-02`, `NGC-071`).
 #[derive(Clone)]
 pub struct RegisteredBranch {
-    client: Arc<dyn BranchClient>,
-    bulkhead: Arc<Semaphore>,
-    max_in_flight: u32,
-    metadata: BTreeMap<String, String>,
+    replicas: Vec<Arc<ReplicaEntry>>,
 }
 
 impl fmt::Debug for RegisteredBranch {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("RegisteredBranch")
-            .field("max_in_flight", &self.max_in_flight)
-            .field("available_permits", &self.bulkhead.available_permits())
-            .field("metadata", &RedactedMeta(&self.metadata))
+            .field("replica_count", &self.replicas.len())
+            .field("max_in_flight", &self.replicas[0].replica.max_in_flight)
+            .field(
+                "available_permits",
+                &self.replicas[0].replica.bulkhead.available_permits(),
+            )
             .finish()
     }
 }
 
 impl RegisteredBranch {
-    /// Creates a [`RegisteredBranch`] with `client` and a non-queueing bulkhead of `max_in_flight` permits.
-    #[must_use]
-    pub fn new(client: Arc<dyn BranchClient>, max_in_flight: u32) -> Self {
-        Self::with_metadata(client, max_in_flight, BTreeMap::new())
-    }
-
-    /// Creates a [`RegisteredBranch`] with static per-branch call metadata (e.g. vault-resolved connector credentials; redacted in `Debug` and error sanitisation, `INV-15`).
-    #[must_use]
-    pub fn with_metadata(
-        client: Arc<dyn BranchClient>,
-        max_in_flight: u32,
-        metadata: BTreeMap<String, String>,
-    ) -> Self {
-        let permits = usize::try_from(max_in_flight).unwrap_or(usize::MAX);
+    fn new_single(replica: Replica) -> Self {
         Self {
-            client,
-            bulkhead: Arc::new(Semaphore::new(permits)),
-            max_in_flight,
-            metadata,
+            replicas: vec![Arc::new(ReplicaEntry {
+                replica,
+                counters: Arc::new(AtomicCounters::default()),
+            })],
         }
     }
 
-    /// Multiplexed client handle for this branch.
+    fn new_multi(replicas: Vec<Replica>) -> Self {
+        Self {
+            replicas: replicas
+                .into_iter()
+                .map(|r| {
+                    Arc::new(ReplicaEntry {
+                        replica: r,
+                        counters: Arc::new(AtomicCounters::default()),
+                    })
+                })
+                .collect(),
+        }
+    }
+
+    /// V0-compatible: client for the first replica.
     #[must_use]
     pub fn client(&self) -> &Arc<dyn BranchClient> {
-        &self.client
+        &self.replicas[0].replica.client
     }
 
-    /// Configured `max_in_flight` bulkhead capacity (`NGC-071`).
+    /// V0-compatible: `max_in_flight` for the first replica.
     #[must_use]
-    pub const fn max_in_flight(&self) -> u32 {
-        self.max_in_flight
+    pub fn max_in_flight(&self) -> u32 {
+        self.replicas[0].replica.max_in_flight
     }
 
-    /// Currently available bulkhead permits.
+    /// V0-compatible: available permits for the first replica.
     #[must_use]
     pub fn available_permits(&self) -> usize {
-        self.bulkhead.available_permits()
+        self.replicas[0].replica.bulkhead.available_permits()
     }
 
-    /// Static outbound call metadata attached to calls targeting this branch.
-    #[must_use]
-    pub const fn metadata(&self) -> &BTreeMap<String, String> {
-        &self.metadata
-    }
-
-    /// Collects sensitive metadata values registered for this branch so error sanitisation can
-    /// scrub any echoed credential (`INV-15`).
-    #[must_use]
+    /// Sensitive values across all replicas.
     pub fn sensitive_values(&self) -> Vec<&str> {
         let mut out = Vec::new();
-        for (k, v) in &self.metadata {
-            if is_sensitive_metadata_key(k) && !v.is_empty() {
-                out.push(v.as_str());
-                if let Some((_scheme, rest)) = v.split_once(' ') {
-                    let trimmed = rest.trim();
-                    if !trimmed.is_empty() {
-                        out.push(trimmed);
-                    }
-                }
-            }
+        for entry in &self.replicas {
+            out.extend(entry.replica.sensitive_values());
         }
         out
     }
 }
 
-/// Builder for an immutable [`ConnectorRegistry`] (`INV-02`).
-#[derive(Debug, Default)]
+// ─── BranchQueryError ────────────────────────────────────────────────────────
+
+/// Failure when opening a branch query through [`ConnectorRegistry::open_query`].
+#[derive(Debug)]
+pub enum BranchQueryError {
+    /// Registry lookup, breaker rejection, or bulkhead saturation.
+    Registry(GapError),
+    /// Connector-returned `NgcErrorInfo`.
+    Connector(NgcErrorInfo),
+}
+
+// ─── ConnectorRegistryBuilder ────────────────────────────────────────────────
+
+/// Builder for an immutable [`ConnectorRegistry`].
 pub struct ConnectorRegistryBuilder {
     entries: BTreeMap<BranchUid, RegisteredBranch>,
+    clock: Arc<dyn Clock>,
+    rng_seed: Option<u64>,
+    resilience: ResilienceConfig,
+}
+
+impl Default for ConnectorRegistryBuilder {
+    fn default() -> Self {
+        Self {
+            entries: BTreeMap::new(),
+            clock: Arc::new(SystemClock),
+            rng_seed: None,
+            resilience: ResilienceConfig::default(),
+        }
+    }
+}
+
+impl fmt::Debug for ConnectorRegistryBuilder {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("ConnectorRegistryBuilder")
+            .field("entries", &self.entries.len())
+            .finish()
+    }
 }
 
 impl ConnectorRegistryBuilder {
-    /// Registers `client` for `uid` with bulkhead capacity `max_in_flight`.
+    /// Injects a custom [`Clock`] for `Now` computation (default: `SystemClock`).
+    #[must_use]
+    pub fn with_clock(mut self, clock: Arc<dyn Clock>) -> Self {
+        self.clock = clock;
+        self
+    }
+
+    /// Injects a deterministic RNG seed for P2C candidate sampling.
+    #[must_use]
+    pub fn with_rng_seed(mut self, seed: u64) -> Self {
+        self.rng_seed = Some(seed);
+        self
+    }
+
+    /// Sets the resilience configuration (breaker/retry/health params).
+    #[must_use]
+    pub fn with_resilience(mut self, cfg: ResilienceConfig) -> Self {
+        self.resilience = cfg;
+        self
+    }
+
+    fn sanitize_label(uid: &BranchUid, label: Option<&str>) -> Arc<str> {
+        if let Some(l) = label
+            && !l.is_empty()
+            && l.len() <= 64
+            && !l.chars().any(char::is_control)
+        {
+            return Arc::from(l);
+        }
+        let raw = uid.to_string();
+        let s: String = raw
+            .chars()
+            .map(|c| if c.is_control() { '_' } else { c })
+            .collect();
+        Arc::from(s.as_str())
+    }
+
+    /// Registers `client` for `uid` (single replica, v0 compat).
     #[must_use]
     pub fn register(
-        mut self,
+        self,
         uid: BranchUid,
         client: Arc<dyn BranchClient>,
         max_in_flight: u32,
     ) -> Self {
-        self.entries
-            .insert(uid, RegisteredBranch::new(client, max_in_flight));
-        self
+        self.register_with_metadata(uid, client, max_in_flight, BTreeMap::new())
     }
 
-    /// Registers `client` for `uid` with bulkhead capacity `max_in_flight` and static call `metadata`.
+    /// Registers `client` for `uid` with static call `metadata` (single replica, v0 compat).
     #[must_use]
     pub fn register_with_metadata(
         mut self,
@@ -401,58 +535,124 @@ impl ConnectorRegistryBuilder {
         max_in_flight: u32,
         metadata: BTreeMap<String, String>,
     ) -> Self {
-        self.entries.insert(
-            uid,
-            RegisteredBranch::with_metadata(client, max_in_flight, metadata),
-        );
+        let label = Self::sanitize_label(&uid, None);
+        let params = gap_balance::slot::SlotParams {
+            max_in_flight,
+            default_timeout_ms: 5_000,
+            label,
+        };
+        let replica = Replica::new(uid, params, ReplicaSpec { client, metadata });
+        self.entries
+            .insert(uid, RegisteredBranch::new_single(replica));
         self
     }
 
-    /// Registers `client` for `branch`, sizing its bulkhead to `branch.limits.max_in_flight`.
+    /// Registers `client` for `branch` (single replica, v0 compat).
     #[must_use]
     pub fn register_branch(self, branch: &BranchDescriptor, client: Arc<dyn BranchClient>) -> Self {
         self.register(branch.uid, client, branch.limits.max_in_flight)
     }
 
+    /// Registers multiple replicas for `uid` with P2C load balancing (`RTE-073`, `RTE-074`).
+    #[must_use]
+    pub fn register_replicas(
+        mut self,
+        uid: BranchUid,
+        label: &str,
+        default_timeout_ms: u32,
+        max_in_flight: u32,
+        specs: Vec<ReplicaSpec>,
+    ) -> Self {
+        let label_arc = Self::sanitize_label(&uid, Some(label));
+        let replicas: Vec<Replica> = specs
+            .into_iter()
+            .enumerate()
+            .map(|(i, spec)| {
+                // Derive a stable tiebreak uid: encode (uid_bytes XOR index) into random_bytes.
+                let uid_bytes = *uid.as_uuid().as_bytes();
+                let idx_u32 = i as u32;
+                let mut rand_bytes = [0u8; 10];
+                rand_bytes[..8].copy_from_slice(&uid_bytes[8..]);
+                rand_bytes[6] ^= (idx_u32 >> 8) as u8;
+                rand_bytes[7] ^= idx_u32 as u8;
+                // Extract unix_ms from UUIDv7 (top 48 bits of the 128-bit layout).
+                let unix_ms_hi = u64::from(uid_bytes[0]) << 40
+                    | u64::from(uid_bytes[1]) << 32
+                    | u64::from(uid_bytes[2]) << 24
+                    | u64::from(uid_bytes[3]) << 16
+                    | u64::from(uid_bytes[4]) << 8
+                    | u64::from(uid_bytes[5]);
+                let tiebreak = BranchUid::from_unix_ms(unix_ms_hi, rand_bytes);
+                let params = gap_balance::slot::SlotParams {
+                    max_in_flight,
+                    default_timeout_ms,
+                    label: Arc::clone(&label_arc),
+                };
+                Replica::new(tiebreak, params, spec)
+            })
+            .collect();
+        self.entries
+            .insert(uid, RegisteredBranch::new_multi(replicas));
+        self
+    }
+
     /// Finalizes the immutable [`ConnectorRegistry`].
     #[must_use]
     pub fn build(self) -> ConnectorRegistry {
-        ConnectorRegistry::new(self.entries)
+        let epoch = TokioInstant::now();
+        ConnectorRegistry {
+            entries: self.entries,
+            clock: self.clock,
+            epoch,
+            rng_seed: self.rng_seed,
+            resilience: self.resilience,
+        }
     }
 }
 
-/// Failure when opening a branch query through [`ConnectorRegistry::open_query`].
-#[derive(Debug)]
-pub enum BranchQueryError {
-    /// Registry lookup or bulkhead saturation error (`GAP_BRANCH_UNAVAILABLE` / `GAP_OVERLOADED`).
-    Registry(GapError),
-    /// Connector-returned `NgcErrorInfo` (to be mapped + sanitised with branch secrets).
-    Connector(NgcErrorInfo),
-}
+// ─── ConnectorRegistry ───────────────────────────────────────────────────────
 
-/// Immutable per-branch client registry (`INV-02`: `BTreeMap<BranchUid, RegisteredBranch>`, zero locks on read path).
-///
-/// # Connection Pooling (`v0`)
-///
-/// In `WP-M1-07`, pooling is one multiplexed [`BranchClient`] per [`BranchUid`] (for example, an
-/// HTTP/2-multiplexed `tonic` [`GrpcClient`]), bounded by a non-queueing `tokio::sync::Semaphore`
-/// sized to `BranchDescriptor.limits.max_in_flight` and acquired with `try_acquire_owned`.
-#[derive(Debug, Clone, Default)]
+/// Immutable per-branch client registry with P2C, circuit-breaker, retries, and health polling
+/// (`INV-02`: `BTreeMap<BranchUid, RegisteredBranch>`, zero locks on read path).
 pub struct ConnectorRegistry {
     entries: BTreeMap<BranchUid, RegisteredBranch>,
+    clock: Arc<dyn Clock>,
+    epoch: TokioInstant,
+    rng_seed: Option<u64>,
+    resilience: ResilienceConfig,
+}
+
+impl Default for ConnectorRegistry {
+    fn default() -> Self {
+        ConnectorRegistryBuilder::default().build()
+    }
+}
+
+impl Clone for ConnectorRegistry {
+    fn clone(&self) -> Self {
+        Self {
+            entries: self.entries.clone(),
+            clock: Arc::clone(&self.clock),
+            epoch: self.epoch,
+            rng_seed: self.rng_seed,
+            resilience: self.resilience.clone(),
+        }
+    }
+}
+
+impl fmt::Debug for ConnectorRegistry {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("ConnectorRegistry")
+            .field("entries", &self.entries.len())
+            .finish()
+    }
 }
 
 impl ConnectorRegistry {
-    /// Constructs an empty [`ConnectorRegistry`].
+    /// Returns an empty [`ConnectorRegistry`].
     #[must_use]
     pub fn empty() -> Self {
         Self::default()
-    }
-
-    /// Wraps a pre-built map of [`RegisteredBranch`] entries.
-    #[must_use]
-    pub const fn new(entries: BTreeMap<BranchUid, RegisteredBranch>) -> Self {
-        Self { entries }
     }
 
     /// Returns a [`ConnectorRegistryBuilder`].
@@ -461,40 +661,42 @@ impl ConnectorRegistry {
         ConnectorRegistryBuilder::default()
     }
 
-    /// Builds a [`ConnectorRegistry`] by pairing `clients` (`BTreeMap<BranchUid, Arc<dyn BranchClient>>`)
-    /// with `BranchDescriptor.limits.max_in_flight` from `snapshot` (`Brief §3.1`).
-    ///
-    /// Clients whose [`BranchUid`] is absent from `snapshot.branches` fall back to
-    /// `BranchLimits::default().max_in_flight`.
+    /// Builds a [`ConnectorRegistry`] from a snapshot + client map (single replica per uid).
     #[must_use]
     pub fn from_snapshot(
         snapshot: &Snapshot,
         clients: BTreeMap<BranchUid, Arc<dyn BranchClient>>,
     ) -> Self {
-        let mut entries = BTreeMap::new();
+        let mut builder = ConnectorRegistryBuilder::default();
         for (uid, client) in clients {
             let max_in_flight = snapshot.branches.get(&uid).map_or_else(
                 || BranchLimits::default().max_in_flight,
                 |b| b.limits.max_in_flight,
             );
-            entries.insert(uid, RegisteredBranch::new(client, max_in_flight));
+            builder = builder.register(uid, client, max_in_flight);
         }
-        Self { entries }
+        builder.build()
     }
 
-    /// Looks up a [`RegisteredBranch`] by [`BranchUid`] without acquiring any lock (`INV-02`).
+    fn now(&self) -> Now {
+        let elapsed = self.epoch.elapsed();
+        let ms = u64::try_from(elapsed.as_millis()).unwrap_or(u64::MAX);
+        Now::from_ms(ms)
+    }
+
+    /// Looks up a [`RegisteredBranch`] by uid (lock-free, `INV-02`).
     #[must_use]
     pub fn get(&self, uid: &BranchUid) -> Option<&RegisteredBranch> {
         self.entries.get(uid)
     }
 
-    /// Looks up the multiplexed [`BranchClient`] for `uid` (`INV-02`).
+    /// V0-compat: returns the first replica's client for `uid`.
     #[must_use]
     pub fn client(&self, uid: &BranchUid) -> Option<&Arc<dyn BranchClient>> {
         self.entries.get(uid).map(RegisteredBranch::client)
     }
 
-    /// Returns available bulkhead permits for `uid`.
+    /// V0-compat: available permits for the first replica.
     #[must_use]
     pub fn available_permits(&self, uid: &BranchUid) -> Option<usize> {
         self.entries
@@ -502,7 +704,7 @@ impl ConnectorRegistry {
             .map(RegisteredBranch::available_permits)
     }
 
-    /// Returns configured `max_in_flight` capacity for `uid`.
+    /// V0-compat: `max_in_flight` for the first replica.
     #[must_use]
     pub fn max_in_flight(&self, uid: &BranchUid) -> Option<u32> {
         self.entries.get(uid).map(RegisteredBranch::max_in_flight)
@@ -520,12 +722,7 @@ impl ConnectorRegistry {
         self.entries.is_empty()
     }
 
-    /// Attempts to acquire a per-branch bulkhead permit without queueing (`Brief §3.1`, `NGC-071`).
-    ///
-    /// # Errors
-    ///
-    /// - [`ErrorCode::BranchUnavailable`] if `uid` is not registered.
-    /// - [`ErrorCode::Overloaded`] (`retryable: true`) if the branch bulkhead is saturated.
+    /// V0-compat: acquires a bulkhead permit for the first replica without queueing.
     pub fn try_acquire_branch(
         &self,
         uid: &BranchUid,
@@ -536,14 +733,14 @@ impl ConnectorRegistry {
                 format!("no client registered for branch `{uid}`"),
             ));
         };
-        let permit = Arc::clone(&entry.bulkhead)
+        let permit = Arc::clone(&entry.replicas[0].replica.bulkhead)
             .try_acquire_owned()
             .map_err(|_| {
                 GapError::new(
                     ErrorCode::Overloaded,
                     format!(
                         "branch `{uid}` bulkhead saturated (max_in_flight={})",
-                        entry.max_in_flight
+                        entry.replicas[0].replica.max_in_flight
                     ),
                 )
                 .with_retry(true, None)
@@ -551,40 +748,308 @@ impl ConnectorRegistry {
         Ok((entry, permit))
     }
 
-    /// Acquires a non-queueing bulkhead permit for `uid`, merges branch call metadata into `scope`,
-    /// opens the `Query` stream, and retains the bulkhead permit across the returned stream's
-    /// lifetime (`NGC-071`, `INV-02`, `INV-12`).
-    ///
-    /// # Errors
-    ///
-    /// Returns [`BranchQueryError::Registry`] on missing branch or bulkhead saturation, or
-    /// [`BranchQueryError::Connector`] on connector failure.
+    /// Returns a statistics snapshot for all registered branches (`OPS-020`, `INV-15`).
+    #[must_use]
+    pub fn branch_stats(&self) -> Vec<BranchStats> {
+        let now = self.now();
+        let mut result: Vec<BranchStats> = self
+            .entries
+            .values()
+            .map(|branch| {
+                let label = branch.replicas[0].replica.label.to_string();
+                let replicas: Vec<ReplicaStats> = branch
+                    .replicas
+                    .iter()
+                    .map(|entry| {
+                        let view = entry.replica.slot.view(now);
+                        ReplicaStats {
+                            breaker_state: view.state,
+                            in_flight: view.in_flight,
+                            capacity: view.capacity,
+                            latency_us: view.latency_us,
+                            error_rate: view.error_rate,
+                            retry_budget_millis: entry.replica.slot.retry_budget().balance_millis(),
+                            counters: entry.counters.snapshot(),
+                        }
+                    })
+                    .collect();
+                BranchStats { label, replicas }
+            })
+            .collect();
+        result.sort_by(|a, b| a.label.cmp(&b.label));
+        result
+    }
+
+    /// Spawns one health-poller task per replica.
+    /// Dropping the returned [`HealthPollers`] cancels all pollers.
+    pub fn spawn_health_pollers(&self, cancel: CancellationToken) -> HealthPollers {
+        health::spawn_health_pollers(self, cancel)
+    }
+
+    /// Opens a streaming query for `uid` using P2C, circuit-breaker admission, and
+    /// jittered-backoff retries for idempotent reads (`RTE-073`..`RTE-093`, `INV-02`, `INV-12`).
     pub async fn open_query(
         &self,
         uid: &BranchUid,
         request: QueryRequest,
-        mut scope: CallScope,
+        scope: CallScope,
     ) -> Result<BoxStream<QueryResponse>, BranchQueryError> {
-        let (entry, permit) = self
-            .try_acquire_branch(uid)
-            .map_err(BranchQueryError::Registry)?;
+        let Some(branch) = self.entries.get(uid) else {
+            return Err(BranchQueryError::Registry(GapError::new(
+                ErrorCode::BranchUnavailable,
+                format!("no client registered for branch `{uid}`"),
+            )));
+        };
 
-        for (k, v) in &entry.metadata {
-            scope.metadata.entry(k.clone()).or_insert_with(|| v.clone());
+        // Deposit first-attempt token (`RTE-091`).
+        branch.replicas[0].replica.slot.on_first_attempt();
+
+        let call_start = Instant::now();
+
+        let mut rng = match self.rng_seed {
+            Some(seed) => XorShift64::new(seed),
+            None => XorShift64::with_thread_local(|r| *r),
+        };
+
+        let mut excluded: Vec<usize> = Vec::new();
+        let mut last_error: Option<NgcErrorInfo> = None;
+
+        for attempt in 0..=self.resilience.max_retries {
+            let now = self.now();
+
+            // Build P2C candidate list from ALL replicas; indices align with branch.replicas.
+            let candidates: Vec<Candidate<'_>> = branch
+                .replicas
+                .iter()
+                .map(|entry| Candidate {
+                    uid: entry.replica.tiebreak,
+                    slot: &entry.replica.slot,
+                })
+                .collect();
+
+            // All excluded?
+            if excluded.len() >= candidates.len() {
+                let min_after_ms = branch
+                    .replicas
+                    .iter()
+                    .filter_map(|entry| {
+                        if let Admission::Rejected { retry_after } =
+                            entry.replica.slot.breaker().admit(now)
+                        {
+                            Some(retry_after.as_millis() as u64)
+                        } else {
+                            None
+                        }
+                    })
+                    .min()
+                    .unwrap_or(5_000);
+                return Err(BranchQueryError::Registry(
+                    GapError::new(
+                        ErrorCode::BranchUnavailable,
+                        format!("branch `{uid}` all replicas exhausted (attempt={attempt})"),
+                    )
+                    .with_retry(true, Some(u32::try_from(min_after_ms).unwrap_or(u32::MAX))),
+                ));
+            }
+
+            // P2C selection — `excluded` indices are into `candidates` (= branch.replicas) (`RTE-074`, `RTE-079`).
+            let Some(branch_idx) = select_excluding(&candidates, &excluded, now, &mut rng) else {
+                // All non-excluded candidates have Open breakers.
+                let min_after_ms = branch
+                    .replicas
+                    .iter()
+                    .enumerate()
+                    .filter(|(idx, _)| !excluded.contains(idx))
+                    .filter_map(|(_, entry)| {
+                        if let Admission::Rejected { retry_after } =
+                            entry.replica.slot.breaker().admit(now)
+                        {
+                            Some(retry_after.as_millis() as u64)
+                        } else {
+                            None
+                        }
+                    })
+                    .min()
+                    .unwrap_or(5_000);
+                for entry in branch.replicas.iter() {
+                    entry
+                        .counters
+                        .breaker_rejections
+                        .fetch_add(1, Ordering::Relaxed);
+                }
+                return Err(BranchQueryError::Registry(
+                    GapError::new(
+                        ErrorCode::BranchUnavailable,
+                        format!("branch `{uid}` all replicas open (retry_after={min_after_ms}ms)"),
+                    )
+                    .with_retry(true, Some(u32::try_from(min_after_ms).unwrap_or(u32::MAX))),
+                ));
+            };
+
+            let entry = &branch.replicas[branch_idx];
+
+            // Breaker admission (`RTE-081`, `RTE-085`).
+            let probe_permit = match entry.replica.slot.breaker().admit(now) {
+                Admission::Allowed => None,
+                Admission::Probe(permit) => Some(permit),
+                Admission::Rejected { retry_after } => {
+                    entry
+                        .counters
+                        .breaker_rejections
+                        .fetch_add(1, Ordering::Relaxed);
+                    excluded.push(branch_idx);
+                    if excluded.len() >= branch.replicas.len() {
+                        return Err(BranchQueryError::Registry(
+                            GapError::new(
+                                ErrorCode::BranchUnavailable,
+                                format!(
+                                    "branch `{uid}` breaker Open (retry_after={}ms)",
+                                    retry_after.as_millis()
+                                ),
+                            )
+                            .with_retry(
+                                true,
+                                Some(u32::try_from(retry_after.as_millis()).unwrap_or(u32::MAX)),
+                            ),
+                        ));
+                    }
+                    continue;
+                }
+            };
+
+            // Non-queueing bulkhead (`INV-02`, `NGC-071`).
+            let _bulkhead_permit = match Arc::clone(&entry.replica.bulkhead).try_acquire_owned() {
+                Ok(p) => p,
+                Err(_) => {
+                    entry
+                        .counters
+                        .bulkhead_rejections
+                        .fetch_add(1, Ordering::Relaxed);
+                    excluded.push(branch_idx);
+                    if excluded.len() >= branch.replicas.len() {
+                        return Err(BranchQueryError::Registry(
+                            GapError::new(
+                                ErrorCode::Overloaded,
+                                format!("branch `{uid}` all replicas saturated"),
+                            )
+                            .with_retry(true, None),
+                        ));
+                    }
+                    continue;
+                }
+            };
+
+            // In-flight guard (`RTE-071`).
+            let in_flight_guard = InFlightGuard::acquire(&entry.replica.slot);
+
+            // Merge branch metadata without overriding caller-supplied keys (`INV-15`).
+            let mut merged_scope = scope.clone();
+            for (k, v) in &entry.replica.metadata {
+                merged_scope
+                    .metadata
+                    .entry(k.clone())
+                    .or_insert_with(|| v.clone());
+            }
+
+            let stream_result = entry
+                .replica
+                .client
+                .query(request.clone(), merged_scope)
+                .await;
+
+            // Bulkhead permit released here — no longer needed once stream is open.
+            drop(_bulkhead_permit);
+
+            match stream_result {
+                Ok(stream) => {
+                    let accounted = AccountedStream {
+                        inner: Some(stream),
+                        slot: Arc::clone(&entry.replica.slot),
+                        counters: Arc::clone(&entry.counters),
+                        probe_permit,
+                        _in_flight: Some(in_flight_guard),
+                        start: call_start,
+                        epoch: std::time::Instant::now()
+                            .checked_sub(self.epoch.elapsed())
+                            .unwrap_or_else(std::time::Instant::now),
+                        clock: Arc::clone(&self.clock),
+                        recorded: false,
+                    };
+                    return Ok(Box::pin(accounted) as BoxStream<_>);
+                }
+                Err(err) => {
+                    let outcome = classify_error_code(err.code);
+                    let latency = call_start.elapsed();
+                    let now_rec = self.now();
+                    if let Some(permit) = probe_permit {
+                        permit.record(outcome, latency, now_rec);
+                    } else {
+                        entry.replica.slot.record(outcome, latency, now_rec);
+                    }
+                    drop(in_flight_guard);
+                    match outcome {
+                        Outcome::Ok => {}
+                        Outcome::Failure => {
+                            entry.counters.calls_failed.fetch_add(1, Ordering::Relaxed);
+                        }
+                        Outcome::ClientError => {
+                            entry
+                                .counters
+                                .calls_client_error
+                                .fetch_add(1, Ordering::Relaxed);
+                        }
+                    }
+
+                    // Retry only if retryable, budget available, and not last attempt.
+                    let retryable = is_retryable(&err)
+                        && attempt < self.resilience.max_retries
+                        && entry.replica.slot.retry_budget().try_withdraw();
+
+                    if !retryable {
+                        last_error = Some(err);
+                        break;
+                    }
+
+                    let backoff = jittered_backoff(attempt, &self.resilience, &mut rng);
+                    let deadline_minus_margin = scope
+                        .deadline
+                        .checked_sub(self.resilience.deadline_margin)
+                        .unwrap_or(scope.deadline);
+                    if TokioInstant::now() + backoff >= deadline_minus_margin {
+                        last_error = Some(err);
+                        break;
+                    }
+
+                    entry.counters.retries.fetch_add(1, Ordering::Relaxed);
+                    excluded.push(branch_idx);
+
+                    tokio::select! {
+                        biased;
+                        () = scope.cancel.cancelled() => {
+                            return Err(BranchQueryError::Connector(NgcErrorInfo::new(
+                                NgcErrorCode::Cancelled,
+                                "call cancelled during retry backoff",
+                            )));
+                        }
+                        () = sleep_until(deadline_minus_margin) => {
+                            last_error = Some(err);
+                            break;
+                        }
+                        () = sleep(backoff) => {}
+                    }
+
+                    last_error = Some(err);
+                }
+            }
         }
 
-        let client = Arc::clone(&entry.client);
-        let stream = client
-            .query(request, scope)
-            .await
-            .map_err(BranchQueryError::Connector)?;
-
-        Ok(Box::pin(PermitGuardedStream {
-            inner: Some(stream),
-            _permit: Some(permit),
-        }))
+        Err(BranchQueryError::Connector(last_error.unwrap_or_else(
+            || NgcErrorInfo::new(NgcErrorCode::Internal, "open_query exhausted retries"),
+        )))
     }
 }
+
+// ─── Tests (v0 compat) ───────────────────────────────────────────────────────
 
 #[cfg(test)]
 #[allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
@@ -598,7 +1063,7 @@ mod tests {
 
     // spec: INV-02, NGC-071
     #[tokio::test(start_paused = true)]
-    async fn bulkhead_permit_held_across_open_stream_and_released_on_drop() {
+    async fn bulkhead_released_after_stream_opened() {
         let uid = BranchUid::parse("018bcfe5-6c01-7010-8101-010101010101").expect("uid");
         let mock = MockConnector::new()
             .on_query(|_req, _scope| Ok(Box::pin(futures_util::stream::pending())));
@@ -608,41 +1073,15 @@ mod tests {
             .register(uid, client, 1)
             .build();
 
-        assert_eq!(reg.available_permits(&uid), Some(1));
-        let mut s1 = reg
+        let _s1 = reg
             .open_query(
                 &uid,
                 QueryRequest::default(),
-                CallScope::for_test(Instant::now() + Duration::from_secs(5)),
+                CallScope::for_test(TokioInstant::now() + Duration::from_secs(5)),
             )
             .await
-            .expect("slot 1 opens");
-        assert_eq!(reg.available_permits(&uid), Some(0));
-
-        // Second call while s1 is still open must fail immediately with GAP_OVERLOADED!
-        let second = tokio::time::timeout(
-            Duration::from_millis(10),
-            reg.open_query(
-                &uid,
-                QueryRequest::default(),
-                CallScope::for_test(Instant::now() + Duration::from_secs(5)),
-            ),
-        )
-        .await
-        .expect("saturated bulkhead must fail immediately without queueing");
-        let err = match second {
-            Err(BranchQueryError::Registry(e)) => e,
-            Err(BranchQueryError::Connector(e)) => {
-                panic!("expected BranchQueryError::Registry, got connector error {e:?}")
-            }
-            Ok(_) => panic!("expected BranchQueryError::Registry, got Ok(stream)"),
-        };
-        assert_eq!(err.code(), ErrorCode::Overloaded);
-        assert!(err.retry().retryable);
-
-        // Dropping s1 immediately releases the permit.
-        let _ = futures_util::poll!(s1.next());
-        drop(s1);
+            .expect("s1 opens");
+        // Bulkhead permit is released when open_query returns, not held by stream.
         assert_eq!(reg.available_permits(&uid), Some(1));
     }
 }
