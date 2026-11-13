@@ -543,7 +543,7 @@ mod tests {
         }
     }
 
-    // spec: GQL-003, GQL-070, VER-011
+    // spec: GQL-003, GQL-070
     #[tokio::test]
     async fn offline_mode_runs_fixtures_against_the_in_process_server() {
         let tmp = TempDir::new().expect("tempdir");
