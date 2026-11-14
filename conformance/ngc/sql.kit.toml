@@ -1,0 +1,46 @@
+# NGC connector conformance profile for `gap-ngc-sql` (`WP-M3-05`, `NGC-096`, `CMP-050..052`).
+# Paired SQLite fixture: `tests/fixtures/sql/shop.sql`.
+# Format reference: `conformance/ngc/README.md`.
+
+name = "sql-shop"
+
+[timing]
+deadline_ms = 200
+grace_ms = 2000
+
+# Keyed read (`customer`) with batched `foreach` via `WHERE id IN (?, ...)` (`CMP-052`).
+[read]
+operation = "customer"
+key_var = "id"
+keys = [1, 2, 3, 4, 5, 6]
+absent_key = 999
+failing_key = "not-an-id"
+row_key = "id"
+upstream_batch = 50
+
+# Paginated, sortable list (`customers`). 12 rows, 3 per page -> 4 pages.
+[page]
+operation = "customers"
+limit = 3
+order_by = "credit_cents"
+other_arguments = { region = "eu" }
+
+# Latency-simulated read operation (`slow`) for deadline & cancellation verification (`NGC-025`).
+[slow]
+operation = "slow"
+calls = 8
+
+# Unadvertised mutation name used by `mutate.dry_run` to verify `Mutate(dry_run = true)` fails `UNIMPLEMENTED` (`NGC-031`).
+[mutate]
+operation = "create_order"
+
+# Size-truncation probe (`customers`): 12 rows exceeding the test connector's 768 B response cap (`NGC-027`).
+[size]
+operation = "customers"
+expected_total_rows = 12
+resumable = true
+
+# Invalid argument probe (`id` must be an integer, `NGC-060`).
+[errors.invalid_query]
+operation = "customer"
+arguments = { id = "not-an-integer" }

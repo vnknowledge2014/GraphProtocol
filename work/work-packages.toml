@@ -631,15 +631,26 @@ title = "gap-ngc-sql: PostgreSQL and SQLite read-only connector (templates, fore
 milestone = "M3"
 role = "coder"
 size = "L"
-depends_on = ["WP-M1-03"]
-owns = ["adapters/gap-ngc-sql/**", "tests/fixtures/sql/**"]
+depends_on = ["WP-M1-03", "WP-M1-02"]
+owns = [
+  "adapters/gap-ngc-sql/**",
+  "tests/fixtures/sql/**",
+  "conformance/ngc/sql.kit.toml",
+  "crates/gap-conformance/tests/ngc_kit_sql.rs",
+  "crates/gap-conformance/Cargo.toml",
+]
 spec_refs = ["CMP-050", "CMP-051", "CMP-052", "NGC-020", "NGC-026", "NGC-050"]
 deliverables = [
   "introspection -> operations (get_by_key, list with filter/order/page), parameterized statements only, identifier allow-list, statement timeout, row caps, foreach via ANY/IN batches",
   "Sketch RPC implementation (bottom-k blake3 with salt) for later join verification",
   "SQL-injection adversarial tests (hostile arguments never change statement structure)",
+  "NGC kit profile conformance/ngc/sql.kit.toml and in-process test crates/gap-conformance/tests/ngc_kit_sql.rs running gap_conformance::ngc_kit::run_kit against SqliteDriver",
 ]
-acceptance = ["cargo nextest run -p gap-ngc-sql", "cargo run -p gap-conformance -- --connector-kit --spawn fixtures sql"]
+acceptance = [
+  "cargo nextest run -p gap-ngc-sql",
+  "cargo nextest run -p gap-conformance -E 'test(ngc_kit_sql)'",
+  "cargo clippy -p gap-ngc-sql -p gap-conformance --all-targets -- -D warnings",
+]
 
 [[wp]]
 id = "WP-M3-06"

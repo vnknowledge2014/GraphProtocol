@@ -7,7 +7,23 @@ license.workspace = true
 description = "Parameterized read-only PostgreSQL/SQLite Native Graph Connector with blake3 Sketch support (L4)."
 
 [dependencies]
+blake3.workspace = true
+futures-util.workspace = true
 gap-core.workspace = true
 gap-ngc-sdk.workspace = true
 gap-proto.workspace = true
 gap-sec.workspace = true
+prost-types.workspace = true
+rusqlite = { workspace = true, features = ["bundled"] }
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
+thiserror.workspace = true
+tokio = { workspace = true, features = ["rt", "sync", "time"] }
+tracing.workspace = true
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "test-util"] }
+
+[[test]]
+name = "sql_connector"
+path = "tests/sql_connector.rs"

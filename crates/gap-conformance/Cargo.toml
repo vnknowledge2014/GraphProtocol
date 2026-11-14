@@ -42,8 +42,10 @@ tracing.workspace = true
 [dev-dependencies]
 axum.workspace = true
 gap-ngc-openapi.workspace = true
+gap-ngc-sql.workspace = true
 gap-mcp.workspace = true
 gap-testkit.workspace = true
 proptest.workspace = true
+rusqlite = { workspace = true, features = ["bundled"] }
 tempfile.workspace = true
 tokio = { workspace = true, features = ["test-util"] }

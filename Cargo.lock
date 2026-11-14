@@ -891,6 +891,7 @@ dependencies = [
  "gap-mcp",
  "gap-ngc-openapi",
  "gap-ngc-sdk",
+ "gap-ngc-sql",
  "gap-plan",
  "gap-proto",
  "gap-ql",
@@ -902,6 +903,7 @@ dependencies = [
  "prost",
  "prost-types",
  "reqwest",
+ "rusqlite",
  "serde",
  "serde_json",
  "tempfile",
@@ -1113,10 +1115,19 @@ dependencies = [
 name = "gap-ngc-sql"
 version = "0.1.0"
 dependencies = [
+ "blake3",
+ "futures-util",
  "gap-core",
  "gap-ngc-sdk",
  "gap-proto",
  "gap-sec",
+ "prost-types",
+ "rusqlite",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]
