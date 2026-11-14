@@ -1,0 +1,42 @@
+scalar DateTime
+
+enum FulfillmentState {
+  QUEUED
+  SHIPPED
+}
+
+type Shipment {
+  id: ID!
+  orderId: ID!
+  state: FulfillmentState!
+  shippedAt: DateTime
+}
+
+type Order {
+  id: ID!
+  reference: String!
+}
+
+type PageInfo {
+  hasNextPage: Boolean!
+  endCursor: String
+}
+
+type ShipmentEdge {
+  cursor: String!
+  node: Shipment!
+}
+
+type ShipmentConnection {
+  edges: [ShipmentEdge!]!
+  pageInfo: PageInfo!
+}
+
+type Query {
+  shipment(id: ID!): Shipment
+  shipments(first: Int, after: String): ShipmentConnection!
+}
+
+type Mutation {
+  dispatchShipment(id: ID!): Shipment!
+}

@@ -1,0 +1,39 @@
+syntax = "proto3";
+package orders.v1;
+
+enum OrderStatus {
+  ORDER_STATUS_UNSPECIFIED = 0;
+  ORDER_STATUS_PENDING = 1;
+  ORDER_STATUS_CONFIRMED = 2;
+}
+
+message Order {
+  string id = 1;
+  string customer_id = 2;
+  OrderStatus status = 3;
+  map<string, string> labels = 4;
+}
+
+message GetOrderRequest {
+  string id = 1;
+}
+
+message ListOrdersRequest {
+  int32 page_size = 1;
+  string page_token = 2;
+}
+
+message ListOrdersResponse {
+  repeated Order orders = 1;
+  string next_page_token = 2;
+}
+
+service OrderService {
+  rpc GetOrder(GetOrderRequest) returns (Order) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+  rpc ListOrders(ListOrdersRequest) returns (ListOrdersResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+  rpc StreamOrderEvents(GetOrderRequest) returns (stream Order);
+}

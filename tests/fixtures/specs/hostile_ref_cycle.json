@@ -1,0 +1,14 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Hostile Cycle Fixture",
+    "version": "1.0.0"
+  },
+  "components": {
+    "schemas": {
+      "Alpha": { "$ref": "#/components/schemas/Beta" },
+      "Beta": { "$ref": "#/components/schemas/Alpha" }
+    }
+  },
+  "paths": {}
+}

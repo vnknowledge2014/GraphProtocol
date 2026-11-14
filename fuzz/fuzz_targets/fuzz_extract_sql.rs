@@ -1,4 +1,4 @@
-//! Fuzz target stub for Deterministic SQL schema extractor (`WP-M4-02`).
+//! Fuzz target for Deterministic SQL DDL & snapshot extractor (`WP-M4-02`, `ING-012`).
 #![no_main]
 #![forbid(unsafe_code)]
 #![deny(
@@ -9,8 +9,28 @@
     clippy::unimplemented
 )]
 
+use std::time::Duration;
+
+use gap_core::snapshot::Protocol;
+use gap_ingest::extractors::sql::SqlExtractor;
+use gap_ingest::{ExtractLimits, Extractor, SourceHandle};
 use libfuzzer_sys::fuzz_target;
 
 fuzz_target!(|data: &[u8]| {
-    let _ = data;
+    let limits = ExtractLimits {
+        max_bytes: 64 * 1024,
+        max_depth: 16,
+        max_items: 512,
+        timeout: Duration::from_millis(50),
+    };
+
+    if let Ok(src) = SourceHandle::new(
+        Protocol::Sql,
+        "fuzz://sql/schema.sql",
+        data.to_vec(),
+        &limits,
+    ) && let Ok(cisg) = SqlExtractor::default().extract(&src, &limits)
+    {
+        let _ = cisg.to_canonical_json_bytes();
+    }
 });
