@@ -1,0 +1,58 @@
+{
+  "name": "same_type_different_entity",
+  "description": "Adversarial fixture: Order.order_id (integer) vs User.user_id (integer) have identical scalar types but represent distinct entities with near-zero containment.",
+  "expected_status": "REJECTED",
+  "tenant_id": "tenant-acme",
+  "cross_trust": false,
+  "human_approved": false,
+  "rhs_declared_unique": true,
+  "rhs_supports_batch": true,
+  "candidate": {
+    "from_type": "Order",
+    "from_field": "order_id",
+    "to_type": "User",
+    "to_field": "user_id",
+    "cardinality": "ONE_TO_ONE",
+    "evidence": "NAME_TYPE"
+  },
+  "lhs_sketch": {
+    "distinct_estimate": 2500,
+    "null_ratio": 0.0,
+    "uniqueness_ratio": 1.0,
+    "sample_count": 2500,
+    "value_kind": "integer",
+    "exact": false,
+    "bottom_k_hashes": [
+      100, 200, 300, 400, 500, 600, 700, 800, 900, 1000,
+      1100, 1200, 1300, 1400, 1500, 1600, 1700, 1800, 1900, 2000,
+      2100, 2200, 2300, 2400, 2500, 2600, 2700, 2800, 2900, 3000,
+      3100, 3200, 3300, 3400, 3500, 3600, 3700, 3800, 3900, 4000,
+      4100, 4200, 4300, 4400, 4500, 4600, 4700, 4800, 4900, 5000,
+      5100, 5200, 5300, 5400, 5500, 5600, 5700, 5800, 5900, 6000,
+      6100, 6200, 6300, 6400, 6500, 6600, 6700, 6800, 6900, 7000,
+      7100, 7200, 7300, 7400, 7500, 7600, 7700, 7800, 7900, 8000,
+      8100, 8200, 8300, 8400, 8500, 8600, 8700, 8800, 8900, 9000,
+      9100, 9200, 9300, 9400, 9500, 9600, 9700, 9800, 9900, 10000
+    ]
+  },
+  "rhs_sketch": {
+    "distinct_estimate": 2500,
+    "null_ratio": 0.0,
+    "uniqueness_ratio": 1.0,
+    "sample_count": 2500,
+    "value_kind": "integer",
+    "exact": false,
+    "bottom_k_hashes": [
+      100, 111, 200, 211, 311, 411, 511, 611, 711, 811,
+      911, 1011, 1111, 1211, 1311, 1411, 1511, 1611, 1711, 1811,
+      1911, 2011, 2111, 2211, 2311, 2411, 2511, 2611, 2711, 2811,
+      2911, 3011, 3111, 3211, 3311, 3411, 3511, 3611, 3711, 3811,
+      3911, 4011, 4111, 4211, 4311, 4411, 4511, 4611, 4711, 4811,
+      4911, 5011, 5111, 5211, 5311, 5411, 5511, 5611, 5711, 5811,
+      5911, 6011, 6111, 6211, 6311, 6411, 6511, 6611, 6711, 6811,
+      6911, 7011, 7111, 7211, 7311, 7411, 7511, 7611, 7711, 7811,
+      7911, 8011, 8111, 8211, 8311, 8411, 8511, 8611, 8711, 8811,
+      8911, 9011, 9111, 9211, 9311, 9411, 9511, 9611, 9711, 9811
+    ]
+  }
+}

@@ -1,0 +1,38 @@
+{
+  "name": "empty_domain",
+  "description": "Adversarial fixture: Draft.org_id has zero rows/samples; cannot verify containment so join stays PROPOSED (never VERIFIED or ACTIVE).",
+  "expected_status": "PROPOSED",
+  "tenant_id": "tenant-acme",
+  "cross_trust": false,
+  "human_approved": false,
+  "rhs_declared_unique": true,
+  "rhs_supports_batch": true,
+  "candidate": {
+    "from_type": "Draft",
+    "from_field": "org_id",
+    "to_type": "Org",
+    "to_field": "id",
+    "cardinality": "MANY_TO_ONE",
+    "evidence": "NAME_TYPE"
+  },
+  "lhs_sketch": {
+    "distinct_estimate": 0,
+    "null_ratio": 0.0,
+    "uniqueness_ratio": 0.0,
+    "sample_count": 0,
+    "value_kind": "string",
+    "exact": true,
+    "bottom_k_hashes": []
+  },
+  "rhs_sketch": {
+    "distinct_estimate": 1200,
+    "null_ratio": 0.0,
+    "uniqueness_ratio": 1.0,
+    "sample_count": 1200,
+    "value_kind": "string",
+    "exact": false,
+    "bottom_k_hashes": [
+      100, 200, 300, 400, 500, 600, 700, 800, 900, 1000
+    ]
+  }
+}
