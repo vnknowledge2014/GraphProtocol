@@ -8,3 +8,10 @@ description = "ML-free BM25, flat SIMD, HNSW vector search, and reciprocal rank 
 
 [dependencies]
 gap-core.workspace = true
+
+[lib]
+bench = false
+
+[[bench]]
+name = "index_bench"
+harness = false
