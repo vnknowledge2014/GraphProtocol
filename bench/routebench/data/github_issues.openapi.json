@@ -1,0 +1,91 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "GitHub Issues & Pull Requests REST API",
+    "version": "1.1.0",
+    "description": "Manage repository metadata, bug issues, review comments, and pull requests"
+  },
+  "x-gap-branch": "github_issues",
+  "paths": {
+    "/repos/{owner}/{repo}": {
+      "get": {
+        "operationId": "getRepository",
+        "summary": "Fetch GitHub repository metadata, default branch, and star count",
+        "parameters": [
+          { "name": "owner", "in": "path", "required": true, "schema": { "type": "string" } },
+          { "name": "repo", "in": "path", "required": true, "schema": { "type": "string" } }
+        ]
+      }
+    },
+    "/repos/{owner}/{repo}/issues": {
+      "get": {
+        "operationId": "listRepoIssues",
+        "summary": "List open or closed bug issues for a GitHub repository",
+        "parameters": [
+          { "name": "owner", "in": "path", "required": true, "schema": { "type": "string" } },
+          { "name": "repo", "in": "path", "required": true, "schema": { "type": "string" } },
+          { "name": "state", "in": "query", "required": false, "schema": { "type": "string" } }
+        ]
+      },
+      "post": {
+        "operationId": "createIssue",
+        "summary": "Open a new bug ticket or feature issue in a repository",
+        "parameters": [
+          { "name": "owner", "in": "path", "required": true, "schema": { "type": "string" } },
+          { "name": "repo", "in": "path", "required": true, "schema": { "type": "string" } },
+          { "name": "title", "in": "query", "required": true, "schema": { "type": "string" } }
+        ]
+      }
+    },
+    "/repos/{owner}/{repo}/issues/{issueNumber}": {
+      "get": {
+        "operationId": "getIssue",
+        "summary": "Fetch details, assignee, and labels for a specific repository issue",
+        "parameters": [
+          { "name": "owner", "in": "path", "required": true, "schema": { "type": "string" } },
+          { "name": "repo", "in": "path", "required": true, "schema": { "type": "string" } },
+          { "name": "issueNumber", "in": "path", "required": true, "schema": { "type": "integer" } }
+        ]
+      },
+      "patch": {
+        "operationId": "closeOrUpdateIssue",
+        "summary": "Close an existing issue or edit its title, labels, and state",
+        "parameters": [
+          { "name": "owner", "in": "path", "required": true, "schema": { "type": "string" } },
+          { "name": "repo", "in": "path", "required": true, "schema": { "type": "string" } },
+          { "name": "issueNumber", "in": "path", "required": true, "schema": { "type": "integer" } }
+        ]
+      }
+    },
+    "/repos/{owner}/{repo}/issues/{issueNumber}/comments": {
+      "post": {
+        "operationId": "addIssueComment",
+        "summary": "Post a triage reply comment onto an existing repository issue",
+        "parameters": [
+          { "name": "owner", "in": "path", "required": true, "schema": { "type": "string" } },
+          { "name": "repo", "in": "path", "required": true, "schema": { "type": "string" } },
+          { "name": "issueNumber", "in": "path", "required": true, "schema": { "type": "integer" } }
+        ]
+      }
+    },
+    "/repos/{owner}/{repo}/pulls": {
+      "get": {
+        "operationId": "listPullRequests",
+        "summary": "List open or merged pull requests queued for code review",
+        "parameters": [
+          { "name": "owner", "in": "path", "required": true, "schema": { "type": "string" } },
+          { "name": "repo", "in": "path", "required": true, "schema": { "type": "string" } }
+        ]
+      }
+    },
+    "/search/issues": {
+      "get": {
+        "operationId": "searchIssuesGlobal",
+        "summary": "Full-text search across issues and pull requests matching keywords",
+        "parameters": [
+          { "name": "q", "in": "query", "required": true, "schema": { "type": "string" } }
+        ]
+      }
+    }
+  }
+}

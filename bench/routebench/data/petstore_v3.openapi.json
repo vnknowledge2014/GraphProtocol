@@ -1,0 +1,86 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Swagger Petstore OpenAPI 3.0",
+    "version": "1.0.19",
+    "description": "Pet store inventory, adoption catalog, and customer store orders API"
+  },
+  "x-gap-branch": "petstore",
+  "paths": {
+    "/pets": {
+      "get": {
+        "operationId": "listPets",
+        "summary": "List available pets in the catalog with tag and limit filters",
+        "parameters": [
+          { "name": "limit", "in": "query", "required": false, "schema": { "type": "integer" } },
+          { "name": "tag", "in": "query", "required": false, "schema": { "type": "string" } }
+        ]
+      },
+      "post": {
+        "operationId": "createPet",
+        "summary": "Add a new pet entry to the pet store adoption catalog",
+        "parameters": [
+          { "name": "name", "in": "query", "required": true, "schema": { "type": "string" } },
+          { "name": "species", "in": "query", "required": true, "schema": { "type": "string" } }
+        ]
+      }
+    },
+    "/pets/findByStatus": {
+      "get": {
+        "operationId": "findPetsByStatus",
+        "summary": "Filter store pets by adoption availability status (available, pending, sold)",
+        "parameters": [
+          { "name": "status", "in": "query", "required": true, "schema": { "type": "string" } }
+        ]
+      }
+    },
+    "/pets/{petId}": {
+      "get": {
+        "operationId": "getPetById",
+        "summary": "Retrieve detailed pet record by unique pet identifier",
+        "parameters": [
+          { "name": "petId", "in": "path", "required": true, "schema": { "type": "string" } }
+        ]
+      },
+      "put": {
+        "operationId": "updatePetStatus",
+        "summary": "Update pet name or adoption status in store catalog",
+        "parameters": [
+          { "name": "petId", "in": "path", "required": true, "schema": { "type": "string" } },
+          { "name": "status", "in": "query", "required": true, "schema": { "type": "string" } }
+        ]
+      },
+      "delete": {
+        "operationId": "deletePet",
+        "summary": "Permanently remove a retired pet listing from the catalog",
+        "parameters": [
+          { "name": "petId", "in": "path", "required": true, "schema": { "type": "string" } }
+        ]
+      }
+    },
+    "/store/inventory": {
+      "get": {
+        "operationId": "getStoreInventory",
+        "summary": "Summarize pet inventory counts grouped by adoption status",
+        "parameters": []
+      }
+    },
+    "/store/orders": {
+      "get": {
+        "operationId": "listStoreOrders",
+        "summary": "List recent pet adoption orders placed in the store",
+        "parameters": [
+          { "name": "limit", "in": "query", "required": false, "schema": { "type": "integer" } }
+        ]
+      },
+      "post": {
+        "operationId": "placeStoreOrder",
+        "summary": "Place a new adoption order for an available pet",
+        "parameters": [
+          { "name": "petId", "in": "query", "required": true, "schema": { "type": "string" } },
+          { "name": "quantity", "in": "query", "required": false, "schema": { "type": "integer" } }
+        ]
+      }
+    }
+  }
+}

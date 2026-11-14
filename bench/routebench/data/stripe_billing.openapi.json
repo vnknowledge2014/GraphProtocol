@@ -1,0 +1,83 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Stripe Billing REST API Subset",
+    "version": "2025-10-01",
+    "description": "Billing customer ledger, invoices, and recurring subscription plans"
+  },
+  "x-gap-branch": "stripe_billing",
+  "paths": {
+    "/v1/customers": {
+      "get": {
+        "operationId": "listBillingCustomers",
+        "summary": "List Stripe billing customer accounts with optional email filter",
+        "parameters": [
+          { "name": "email", "in": "query", "required": false, "schema": { "type": "string" } },
+          { "name": "limit", "in": "query", "required": false, "schema": { "type": "integer" } }
+        ]
+      }
+    },
+    "/v1/customers/{customerId}": {
+      "get": {
+        "operationId": "retrieveBillingCustomer",
+        "summary": "Retrieve a Stripe billing customer balance and payment method details",
+        "parameters": [
+          { "name": "customerId", "in": "path", "required": true, "schema": { "type": "string" } }
+        ]
+      }
+    },
+    "/v1/invoices": {
+      "get": {
+        "operationId": "listInvoices",
+        "summary": "List customer invoices filtered by payment status or customer id",
+        "parameters": [
+          { "name": "customer", "in": "query", "required": false, "schema": { "type": "string" } },
+          { "name": "status", "in": "query", "required": false, "schema": { "type": "string" } }
+        ]
+      },
+      "post": {
+        "operationId": "createInvoice",
+        "summary": "Create a new draft billing invoice for a customer account",
+        "parameters": [
+          { "name": "customer", "in": "query", "required": true, "schema": { "type": "string" } }
+        ]
+      }
+    },
+    "/v1/invoices/{invoiceId}": {
+      "get": {
+        "operationId": "retrieveInvoice",
+        "summary": "Fetch line items, tax total, and payment status of an invoice",
+        "parameters": [
+          { "name": "invoiceId", "in": "path", "required": true, "schema": { "type": "string" } }
+        ]
+      }
+    },
+    "/v1/invoices/{invoiceId}/finalize": {
+      "post": {
+        "operationId": "finalizeInvoice",
+        "summary": "Finalize a draft billing invoice and freeze its total due",
+        "parameters": [
+          { "name": "invoiceId", "in": "path", "required": true, "schema": { "type": "string" } }
+        ]
+      }
+    },
+    "/v1/subscriptions": {
+      "get": {
+        "operationId": "listSubscriptions",
+        "summary": "List active and past-due recurring billing subscriptions",
+        "parameters": [
+          { "name": "customer", "in": "query", "required": false, "schema": { "type": "string" } }
+        ]
+      }
+    },
+    "/v1/subscriptions/{subscriptionId}": {
+      "delete": {
+        "operationId": "cancelSubscription",
+        "summary": "Cancel a customer's recurring billing subscription immediately",
+        "parameters": [
+          { "name": "subscriptionId", "in": "path", "required": true, "schema": { "type": "string" } }
+        ]
+      }
+    }
+  }
+}

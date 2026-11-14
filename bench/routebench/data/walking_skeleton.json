@@ -1,0 +1,98 @@
+{
+  "branches": [
+    {
+      "id": "shop",
+      "protocol": "rest",
+      "trust": "T1",
+      "synopsis": "Walking skeleton shop customers and orders REST API",
+      "operations": [
+        {
+          "name": "customers",
+          "kind": "QUERY",
+          "side_effect": "NONE",
+          "idempotent": true,
+          "sdl": "customers(limit: Int, offset: Int, ids: [ID!]): [ShopCustomer!]!",
+          "summary": "List shop customers with optional offset pagination and id batching",
+          "examples": [
+            { "intent": "list all shop customers", "positive": true },
+            { "intent": "show customer directory with limit and offset", "positive": true },
+            { "intent": "create a new shop order", "positive": false }
+          ]
+        },
+        {
+          "name": "customer",
+          "kind": "QUERY",
+          "side_effect": "NONE",
+          "idempotent": true,
+          "sdl": "customer(id: ID!): ShopCustomer",
+          "summary": "Fetch a single shop customer profile by numeric id",
+          "examples": [
+            { "intent": "get customer profile by id", "positive": true },
+            { "intent": "look up single customer account record", "positive": true },
+            { "intent": "fetch customer support notes", "positive": false }
+          ]
+        },
+        {
+          "name": "orders",
+          "kind": "QUERY",
+          "side_effect": "NONE",
+          "idempotent": true,
+          "sdl": "orders(customerId: ID, limit: Int, offset: Int): [ShopOrder!]!",
+          "summary": "List shop orders filtered optionally by customer id",
+          "examples": [
+            { "intent": "list orders for a shop customer", "positive": true },
+            { "intent": "search purchase orders with pagination", "positive": true },
+            { "intent": "list shop customers", "positive": false }
+          ]
+        },
+        {
+          "name": "order",
+          "kind": "QUERY",
+          "side_effect": "NONE",
+          "idempotent": true,
+          "sdl": "order(id: ID!): ShopOrder",
+          "summary": "Fetch a single shop purchase order by order id",
+          "examples": [
+            { "intent": "get shop order details by order id", "positive": true },
+            { "intent": "inspect status and total cents for order 101", "positive": true },
+            { "intent": "list all shop customers", "positive": false }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "notes",
+      "protocol": "mcp",
+      "trust": "T1",
+      "synopsis": "Account manager notes and onboarding handbook MCP server",
+      "operations": [
+        {
+          "name": "customer_notes",
+          "kind": "QUERY",
+          "side_effect": "NONE",
+          "idempotent": true,
+          "sdl": "customer_notes(customerId: ID!): CustomerNotesResult!",
+          "summary": "Fetch internal account notes and onboarding annotations for a customer",
+          "examples": [
+            { "intent": "get account notes for customer id", "positive": true },
+            { "intent": "read vip customer onboarding memos", "positive": true },
+            { "intent": "fetch customer profile by id", "positive": false }
+          ]
+        },
+        {
+          "name": "append_customer_note",
+          "kind": "MUTATION",
+          "side_effect": "REVERSIBLE",
+          "idempotent": false,
+          "sdl": "append_customer_note(customerId: ID!, body: String!): CustomerNoteResult!",
+          "summary": "Append a new account manager note to a customer timeline",
+          "examples": [
+            { "intent": "add a follow-up note to a customer account", "positive": true },
+            { "intent": "write an onboarding memo for customer 42", "positive": true },
+            { "intent": "get account notes for customer id", "positive": false }
+          ]
+        }
+      ]
+    }
+  ]
+}

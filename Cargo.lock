@@ -2669,10 +2669,18 @@ dependencies = [
 name = "routebench"
 version = "0.1.0"
 dependencies = [
+ "blake3",
  "gap-core",
  "gap-index",
+ "gap-ql",
  "gap-route",
  "gap-s1",
+ "gap-snapshot",
+ "proptest",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror 2.0.21",
 ]
 
 [[package]]
