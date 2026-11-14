@@ -7,8 +7,32 @@ license.workspace = true
 description = "Upstream GraphQL subgraph Native Graph Connector adapter (L4)."
 
 [dependencies]
+apollo-compiler.workspace = true
+apollo-parser.workspace = true
+axum.workspace = true
+blake3.workspace = true
+bytes.workspace = true
+futures-util.workspace = true
 gap-core.workspace = true
 gap-ngc-sdk.workspace = true
 gap-proto.workspace = true
 gap-ql.workspace = true
 gap-sec.workspace = true
+http.workspace = true
+prost-types.workspace = true
+reqwest.workspace = true
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
+thiserror.workspace = true
+tokio = { workspace = true, features = ["macros", "net", "rt", "sync", "time"] }
+tokio-util.workspace = true
+tracing.workspace = true
+url.workspace = true
+
+[dev-dependencies]
+proptest.workspace = true
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "test-util", "time"] }
+
+[[test]]
+name = "graphql_connector"
+path = "tests/graphql_connector.rs"

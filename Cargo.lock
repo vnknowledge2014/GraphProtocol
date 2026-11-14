@@ -1041,21 +1041,58 @@ dependencies = [
 name = "gap-ngc-graphql"
 version = "0.1.0"
 dependencies = [
+ "apollo-compiler",
+ "apollo-parser",
+ "axum",
+ "blake3",
+ "bytes",
+ "futures-util",
  "gap-core",
  "gap-ngc-sdk",
  "gap-proto",
  "gap-ql",
  "gap-sec",
+ "http",
+ "proptest",
+ "prost-types",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
+ "tokio",
+ "tokio-util",
+ "tracing",
+ "url",
 ]
 
 [[package]]
 name = "gap-ngc-grpc"
 version = "0.1.0"
 dependencies = [
+ "blake3",
+ "bytes",
+ "futures-util",
  "gap-core",
  "gap-ngc-sdk",
  "gap-proto",
  "gap-sec",
+ "http",
+ "proptest",
+ "prost",
+ "prost-reflect",
+ "prost-types",
+ "protox",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
+ "tokio",
+ "tokio-stream",
+ "tokio-util",
+ "tonic",
+ "tonic-prost",
+ "tower",
+ "tracing",
+ "url",
 ]
 
 [[package]]

@@ -1,0 +1,57 @@
+scalar _Any
+scalar JSON
+
+union _Entity = Product | Warehouse
+
+type PageInfo {
+  hasNextPage: Boolean!
+  hasPreviousPage: Boolean!
+  startCursor: String
+  endCursor: String
+}
+
+type Product {
+  id: ID!
+  sku: String!
+  name: String!
+  priceCents: Int!
+  warehouse: Warehouse
+}
+
+type ProductEdge {
+  node: Product!
+  cursor: String!
+}
+
+type ProductConnection {
+  edges: [ProductEdge!]!
+  pageInfo: PageInfo!
+  totalCount: Int
+}
+
+type Warehouse {
+  id: ID!
+  code: String!
+  region: String!
+}
+
+input ReserveStockInput {
+  sku: String!
+  quantity: Int!
+}
+
+type ReservationResult {
+  reservationId: ID!
+  remaining: Int!
+}
+
+type Query {
+  product(id: ID!): Product
+  products(first: Int, after: String, category: String): ProductConnection!
+  warehouse(id: ID!): Warehouse
+  _entities(representations: [_Any!]!): [_Entity]!
+}
+
+type Mutation {
+  reserveStock(input: ReserveStockInput!): ReservationResult!
+}
