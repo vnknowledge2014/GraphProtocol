@@ -1385,7 +1385,6 @@ mod hmac_sha256 {
 #[allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 mod tests {
     use super::*;
-    use std::sync::Mutex;
     use std::time::Duration;
 
     use proptest::prelude::*;
@@ -1393,7 +1392,6 @@ mod tests {
 
     struct CountingUsersFetcher {
         calls: AtomicUsize,
-        batches_seen: Mutex<Vec<Vec<Vec<Value>>>>,
         fail_batch_containing: Option<Value>,
         multi_row_for: Option<Value>,
     }
@@ -1402,7 +1400,6 @@ mod tests {
         fn new() -> Self {
             Self {
                 calls: AtomicUsize::new(0),
-                batches_seen: Mutex::new(Vec::new()),
                 fail_batch_containing: None,
                 multi_row_for: None,
             }
@@ -1416,9 +1413,6 @@ mod tests {
         ) -> Pin<Box<dyn Future<Output = GapResult<ForeachChunkOutput>> + Send + '_>> {
             Box::pin(async move {
                 self.calls.fetch_add(1, Ordering::AcqRel);
-                if let Ok(mut guard) = self.batches_seen.lock() {
-                    guard.push(keys.clone());
-                }
                 if let Some(ref target) = self.fail_batch_containing
                     && keys.iter().any(|k| &k[0] == target)
                 {

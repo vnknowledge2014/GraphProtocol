@@ -1056,7 +1056,6 @@ impl ConnectorRegistry {
 mod tests {
     use std::time::Duration;
 
-    use futures_util::StreamExt as _;
     use gap_ngc_sdk::mock::MockConnector;
 
     use super::*;
