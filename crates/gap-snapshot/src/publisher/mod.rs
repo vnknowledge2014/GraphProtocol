@@ -973,7 +973,7 @@ impl PublisherActor {
         Ok(record)
     }
 
-    /// Publishes `G+2` quarantining ONLY a faulty [`JoinEdge`] while leaving all branches intact
+    /// Publishes `G+2` quarantining ONLY a faulty `JoinEdge` while leaving all branches intact
     /// (`ADR-009` §5).
     pub fn quarantine_join_and_publish(
         &self,

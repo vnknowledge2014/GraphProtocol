@@ -235,8 +235,8 @@ impl AssembledGroups {
         docs
     }
 
-    /// Rewrites [`Snapshot.groups`], operation [`GroupId`]s inside `branches`, and rebuilds
-    /// [`Snapshot.index`] using group-level [`ElementDoc`] entries (`ADR-006`).
+    /// Rewrites `Snapshot.groups`, operation [`GroupId`]s inside `branches`, and rebuilds
+    /// `Snapshot.index` using group-level [`ElementDoc`] entries (`ADR-006`).
     ///
     /// # Errors
     ///

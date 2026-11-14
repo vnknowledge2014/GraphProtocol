@@ -116,7 +116,7 @@ pub struct CursorEnvelope<P> {
     pub as_of_us: Option<i64>,
     /// Microsecond timestamp at which this cursor was issued.
     pub issued_at_us: i64,
-    /// Domain payload (e.g. [`gap_store::TraverseResume`] or page offset state).
+    /// Domain payload (e.g. `gap_store::TraverseResume` or page offset state).
     pub payload: P,
 }
 
