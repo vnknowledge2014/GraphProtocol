@@ -12,5 +12,23 @@ name = "gapbench"
 path = "src/main.rs"
 
 [dependencies]
+blake3.workspace = true
+futures-util.workspace = true
 gap-core.workspace = true
+gap-exec.workspace = true
+gap-index.workspace = true
 gap-mcp.workspace = true
+gap-ngc-sdk.workspace = true
+gap-plan.workspace = true
+gap-proto.workspace = true
+gap-ql.workspace = true
+gap-route.workspace = true
+gap-snapshot.workspace = true
+gap-store.workspace = true
+gap-transport.workspace = true
+prost-types.workspace = true
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
+tempfile.workspace = true
+thiserror.workspace = true
+tokio = { workspace = true, features = ["macros", "rt", "rt-multi-thread", "sync", "time"] }

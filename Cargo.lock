@@ -1373,8 +1373,26 @@ dependencies = [
 name = "gapbench"
 version = "0.1.0"
 dependencies = [
+ "blake3",
+ "futures-util",
  "gap-core",
+ "gap-exec",
+ "gap-index",
  "gap-mcp",
+ "gap-ngc-sdk",
+ "gap-plan",
+ "gap-proto",
+ "gap-ql",
+ "gap-route",
+ "gap-snapshot",
+ "gap-store",
+ "gap-transport",
+ "prost-types",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror 2.0.21",
+ "tokio",
 ]
 
 [[package]]
