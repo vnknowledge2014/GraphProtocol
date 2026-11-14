@@ -1031,10 +1031,22 @@ dependencies = [
 name = "gap-ngc-code"
 version = "0.1.0"
 dependencies = [
+ "blake3",
+ "futures-util",
  "gap-core",
  "gap-ngc-sdk",
  "gap-proto",
  "gap-store",
+ "proptest",
+ "prost-types",
+ "regex",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror 2.0.21",
+ "tokio",
+ "tracing",
+ "uuid",
 ]
 
 [[package]]

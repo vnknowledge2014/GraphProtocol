@@ -4,10 +4,25 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
-description = "Tree-sitter code and documentation AST graph Native Graph Connector adapter (L4)."
+description = "Code and documentation AST graph Native Graph Connector adapter (L4)."
 
 [dependencies]
+blake3.workspace = true
+futures-util.workspace = true
 gap-core.workspace = true
 gap-ngc-sdk.workspace = true
 gap-proto.workspace = true
 gap-store.workspace = true
+prost-types.workspace = true
+regex.workspace = true
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
+thiserror.workspace = true
+tokio = { workspace = true, features = ["macros", "rt", "sync", "time"] }
+tracing.workspace = true
+uuid = { workspace = true, features = ["v4", "v7"] }
+
+[dev-dependencies]
+proptest.workspace = true
+tempfile.workspace = true
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "test-util", "time"] }

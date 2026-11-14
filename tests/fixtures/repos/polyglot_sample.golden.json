@@ -1,0 +1,1277 @@
+{
+  "nodes": [
+    {
+      "id": "ext::polyglot_sample::fmt",
+      "node_type": "Module",
+      "label": "fmt",
+      "summary": "External module fmt",
+      "props": {
+        "external": true,
+        "package": "fmt",
+        "repo": "polyglot_sample"
+      }
+    },
+    {
+      "id": "ext::polyglot_sample::java",
+      "node_type": "Module",
+      "label": "java",
+      "summary": "External module java",
+      "props": {
+        "external": true,
+        "package": "java",
+        "repo": "polyglot_sample"
+      }
+    },
+    {
+      "id": "ext::polyglot_sample::json",
+      "node_type": "Module",
+      "label": "json",
+      "summary": "External module json",
+      "props": {
+        "external": true,
+        "package": "json",
+        "repo": "polyglot_sample"
+      }
+    },
+    {
+      "id": "ext::polyglot_sample::serde",
+      "node_type": "Module",
+      "label": "serde",
+      "summary": "External module serde",
+      "props": {
+        "external": true,
+        "package": "serde",
+        "repo": "polyglot_sample"
+      }
+    },
+    {
+      "id": "file::polyglot_sample::README.md",
+      "node_type": "File",
+      "label": "README.md",
+      "summary": "README.md (markdown)",
+      "props": {
+        "blake3": "dea07fbbbe800f21fe4357017c2b8b77172829c9af8e003f4116af33332eda4e",
+        "file": "README.md",
+        "grammar_version": "0.3.2-pinned",
+        "language": "markdown",
+        "repo": "polyglot_sample"
+      }
+    },
+    {
+      "id": "file::polyglot_sample::docs/adr-001-caching.md",
+      "node_type": "File",
+      "label": "docs/adr-001-caching.md",
+      "summary": "docs/adr-001-caching.md (markdown)",
+      "props": {
+        "blake3": "3b03ac111538fcf18e6bb1ffc04339e79de904d5e99ab12d164b0cc77c7f70db",
+        "file": "docs/adr-001-caching.md",
+        "grammar_version": "0.3.2-pinned",
+        "language": "markdown",
+        "repo": "polyglot_sample"
+      }
+    },
+    {
+      "id": "file::polyglot_sample::src/Validator.java",
+      "node_type": "File",
+      "label": "src/Validator.java",
+      "summary": "src/Validator.java (java)",
+      "props": {
+        "blake3": "25228b3529340c2e4908b00a737c38a8ce2c85d3cd6ac258caba5a1c0c7b9809",
+        "file": "src/Validator.java",
+        "grammar_version": "0.23.5-pinned",
+        "language": "java",
+        "repo": "polyglot_sample"
+      }
+    },
+    {
+      "id": "file::polyglot_sample::src/client.ts",
+      "node_type": "File",
+      "label": "src/client.ts",
+      "summary": "src/client.ts (typescript)",
+      "props": {
+        "blake3": "f52116d99dcfa65e3f8b83b23b3480c126651aac9b339015261ef1ff85d22679",
+        "file": "src/client.ts",
+        "grammar_version": "0.23.2-pinned",
+        "language": "typescript",
+        "repo": "polyglot_sample"
+      }
+    },
+    {
+      "id": "file::polyglot_sample::src/lib.rs",
+      "node_type": "File",
+      "label": "src/lib.rs",
+      "summary": "src/lib.rs (rust)",
+      "props": {
+        "blake3": "40764d8e66f5b2e5bc6e92d92d4d1e095360b1dc796e4739588504c9f88b6748",
+        "file": "src/lib.rs",
+        "grammar_version": "0.24.2-pinned",
+        "language": "rust",
+        "repo": "polyglot_sample"
+      }
+    },
+    {
+      "id": "file::polyglot_sample::src/router.go",
+      "node_type": "File",
+      "label": "src/router.go",
+      "summary": "src/router.go (go)",
+      "props": {
+        "blake3": "426dc0003173ff88eddfd0bd67f03fddd783db9f65d27e15143e09504a9396a8",
+        "file": "src/router.go",
+        "grammar_version": "0.25.0-pinned",
+        "language": "go",
+        "repo": "polyglot_sample"
+      }
+    },
+    {
+      "id": "file::polyglot_sample::src/worker.py",
+      "node_type": "File",
+      "label": "src/worker.py",
+      "summary": "src/worker.py (python)",
+      "props": {
+        "blake3": "b72bd0d6887f21efbe27418bdeb6b2ba591a716632d8e5abbef1d10c6c58de74",
+        "file": "src/worker.py",
+        "grammar_version": "0.25.0-pinned",
+        "language": "python",
+        "repo": "polyglot_sample"
+      }
+    },
+    {
+      "id": "node::polyglot_sample::README.md::doc:root",
+      "node_type": "Doc",
+      "label": "Polyglot Authentication Sample Repository",
+      "summary": "Central overview of the polyglot token validation pipeline used to verify GAP code and document graph indexing.",
+      "props": {
+        "doc_kind": "readme",
+        "file": "README.md",
+        "grammar_version": "0.3.2-pinned",
+        "language": "markdown",
+        "repo": "polyglot_sample",
+        "signature": "Polyglot Authentication Sample Repository",
+        "start_line": 1
+      }
+    },
+    {
+      "id": "node::polyglot_sample::README.md::doc:sec:5:architecture_overview",
+      "node_type": "Doc",
+      "label": "Architecture Overview",
+      "summary": "Inbound traffic enters through `RequestRouter` in [src/router.go](src/router.go), which verifies requests via `validate_token` defined in...",
+      "props": {
+        "doc_kind": "markdown_section",
+        "file": "README.md",
+        "grammar_version": "0.3.2-pinned",
+        "language": "markdown",
+        "repo": "polyglot_sample",
+        "signature": "Architecture Overview",
+        "start_line": 5
+      }
+    },
+    {
+      "id": "node::polyglot_sample::docs/adr-001-caching.md::concept:adr_001_bounded_token_cache_validation",
+      "node_type": "Concept",
+      "label": "ADR-001: Bounded Token Cache Validation",
+      "summary": "Supersedes: [README.md](../README.md) [Concept: ADR-001: Bounded Token Cache Validation]",
+      "props": {
+        "file": "docs/adr-001-caching.md",
+        "grammar_version": "0.3.2-pinned",
+        "language": "markdown",
+        "repo": "polyglot_sample",
+        "signature": "Concept: ADR-001: Bounded Token Cache Validation",
+        "start_line": 1
+      }
+    },
+    {
+      "id": "node::polyglot_sample::docs/adr-001-caching.md::doc:root",
+      "node_type": "Doc",
+      "label": "ADR-001: Bounded Token Cache Validation",
+      "summary": "Supersedes: [README.md](../README.md) [ADR-001: Bounded Token Cache Validation]",
+      "props": {
+        "doc_kind": "adr",
+        "file": "docs/adr-001-caching.md",
+        "grammar_version": "0.3.2-pinned",
+        "language": "markdown",
+        "repo": "polyglot_sample",
+        "signature": "ADR-001: Bounded Token Cache Validation",
+        "start_line": 1
+      }
+    },
+    {
+      "id": "node::polyglot_sample::docs/adr-001-caching.md::doc:sec:11:consequences",
+      "node_type": "Doc",
+      "label": "Consequences",
+      "summary": "Every downstream dispatcher (`Dispatch` and `fetchProfile`) delegates validation to `validate_token` instead of duplicating cryptographic...",
+      "props": {
+        "doc_kind": "markdown_section",
+        "file": "docs/adr-001-caching.md",
+        "grammar_version": "0.3.2-pinned",
+        "language": "markdown",
+        "repo": "polyglot_sample",
+        "signature": "Consequences",
+        "start_line": 11
+      }
+    },
+    {
+      "id": "node::polyglot_sample::docs/adr-001-caching.md::doc:sec:7:decision",
+      "node_type": "Doc",
+      "label": "Decision",
+      "summary": "The primary store `TokenCache` implements `Validator` and exposes `validate_token` for low-latency signature and revocation checks. [Decision]",
+      "props": {
+        "doc_kind": "markdown_section",
+        "file": "docs/adr-001-caching.md",
+        "grammar_version": "0.3.2-pinned",
+        "language": "markdown",
+        "repo": "polyglot_sample",
+        "signature": "Decision",
+        "start_line": 7
+      }
+    },
+    {
+      "id": "node::polyglot_sample::src/Validator.java::mod:sample",
+      "node_type": "Module",
+      "label": "sample",
+      "summary": "package sample",
+      "props": {
+        "file": "src/Validator.java",
+        "grammar_version": "0.23.5-pinned",
+        "language": "java",
+        "repo": "polyglot_sample",
+        "signature": "package sample",
+        "start_line": 1
+      }
+    },
+    {
+      "id": "node::polyglot_sample::src/Validator.java::sym:Authenticatable",
+      "node_type": "Symbol",
+      "label": "Authenticatable",
+      "summary": "Contract for enterprise token verification services. [public interface Authenticatable]",
+      "props": {
+        "file": "src/Validator.java",
+        "grammar_version": "0.23.5-pinned",
+        "kind": "interface",
+        "language": "java",
+        "repo": "polyglot_sample",
+        "signature": "public interface Authenticatable",
+        "start_line": 8
+      }
+    },
+    {
+      "id": "node::polyglot_sample::src/Validator.java::sym:TokenService",
+      "node_type": "Symbol",
+      "label": "TokenService",
+      "summary": "Enterprise service validating caller permissions before serving audit trails. [public class TokenService implements Authenticatable]",
+      "props": {
+        "file": "src/Validator.java",
+        "grammar_version": "0.23.5-pinned",
+        "kind": "class",
+        "language": "java",
+        "repo": "polyglot_sample",
+        "signature": "public class TokenService implements Authenticatable",
+        "start_line": 15
+      }
+    },
+    {
+      "id": "node::polyglot_sample::src/Validator.java::sym:TokenService.checkAccess",
+      "node_type": "Symbol",
+      "label": "checkAccess",
+      "summary": "Evaluates raw credential tokens via shared validation entrypoints. [public boolean checkAccess(String token)]",
+      "props": {
+        "file": "src/Validator.java",
+        "grammar_version": "0.23.5-pinned",
+        "kind": "method",
+        "language": "java",
+        "repo": "polyglot_sample",
+        "signature": "public boolean checkAccess(String token)",
+        "start_line": 33
+      }
+    },
+    {
+      "id": "node::polyglot_sample::src/Validator.java::sym:TokenService.verifyAccess",
+      "node_type": "Symbol",
+      "label": "verifyAccess",
+      "summary": "Checks caller access against allowed token prefixes and shared validation rules. [public boolean verifyAccess(String token)]",
+      "props": {
+        "file": "src/Validator.java",
+        "grammar_version": "0.23.5-pinned",
+        "kind": "method",
+        "language": "java",
+        "repo": "polyglot_sample",
+        "signature": "public boolean verifyAccess(String token)",
+        "start_line": 26
+      }
+    },
+    {
+      "id": "node::polyglot_sample::src/client.ts::mod:client",
+      "node_type": "Module",
+      "label": "client",
+      "summary": "module client",
+      "props": {
+        "file": "src/client.ts",
+        "grammar_version": "0.23.2-pinned",
+        "language": "typescript",
+        "repo": "polyglot_sample",
+        "signature": "module client",
+        "start_line": 1
+      }
+    },
+    {
+      "id": "node::polyglot_sample::src/client.ts::sym:ApiClient",
+      "node_type": "Symbol",
+      "label": "ApiClient",
+      "summary": "Typed HTTP client delegating request validation before dispatching remote calls. [export class ApiClient implements ClientTransport]",
+      "props": {
+        "file": "src/client.ts",
+        "grammar_version": "0.23.2-pinned",
+        "kind": "class",
+        "language": "typescript",
+        "repo": "polyglot_sample",
+        "signature": "export class ApiClient implements ClientTransport",
+        "start_line": 13
+      }
+    },
+    {
+      "id": "node::polyglot_sample::src/client.ts::sym:ApiClient.constructor",
+      "node_type": "Symbol",
+      "label": "constructor",
+      "summary": "constructor(baseUrl: string)",
+      "props": {
+        "file": "src/client.ts",
+        "grammar_version": "0.23.2-pinned",
+        "kind": "method",
+        "language": "typescript",
+        "repo": "polyglot_sample",
+        "signature": "constructor(baseUrl: string)",
+        "start_line": 16
+      }
+    },
+    {
+      "id": "node::polyglot_sample::src/client.ts::sym:ApiClient.send",
+      "node_type": "Symbol",
+      "label": "send",
+      "summary": "Dispatches a signed API payload after checking the caller bearer credential.",
+      "props": {
+        "file": "src/client.ts",
+        "grammar_version": "0.23.2-pinned",
+        "kind": "method",
+        "language": "typescript",
+        "repo": "polyglot_sample",
+        "signature": "public async send(endpoint: string, token: string): Promise<boolean>",
+        "start_line": 23
+      }
+    },
+    {
+      "id": "node::polyglot_sample::src/client.ts::sym:ClientTransport",
+      "node_type": "Symbol",
+      "label": "ClientTransport",
+      "summary": "Abstract transport interface implemented by browser and edge API clients. [export interface ClientTransport]",
+      "props": {
+        "file": "src/client.ts",
+        "grammar_version": "0.23.2-pinned",
+        "kind": "interface",
+        "language": "typescript",
+        "repo": "polyglot_sample",
+        "signature": "export interface ClientTransport",
+        "start_line": 6
+      }
+    },
+    {
+      "id": "node::polyglot_sample::src/client.ts::sym:fetchProfile",
+      "node_type": "Symbol",
+      "label": "fetchProfile",
+      "summary": "Validates profile session tokens prior to requesting user claims. [export function fetchProfile(token: string): boolean]",
+      "props": {
+        "file": "src/client.ts",
+        "grammar_version": "0.23.2-pinned",
+        "kind": "function",
+        "language": "typescript",
+        "repo": "polyglot_sample",
+        "signature": "export function fetchProfile(token: string): boolean",
+        "start_line": 34
+      }
+    },
+    {
+      "id": "node::polyglot_sample::src/lib.rs::mod:lib",
+      "node_type": "Module",
+      "label": "lib",
+      "summary": "Core Rust token verification and bounded validation cache module. [mod lib]",
+      "props": {
+        "file": "src/lib.rs",
+        "grammar_version": "0.24.2-pinned",
+        "language": "rust",
+        "repo": "polyglot_sample",
+        "signature": "mod lib",
+        "start_line": 1
+      }
+    },
+    {
+      "id": "node::polyglot_sample::src/lib.rs::submod:tests",
+      "node_type": "Module",
+      "label": "tests",
+      "summary": "mod tests",
+      "props": {
+        "file": "src/lib.rs",
+        "grammar_version": "0.24.2-pinned",
+        "language": "rust",
+        "repo": "polyglot_sample",
+        "signature": "mod tests",
+        "start_line": 48
+      }
+    },
+    {
+      "id": "node::polyglot_sample::src/lib.rs::sym:TokenCache",
+      "node_type": "Symbol",
+      "label": "TokenCache",
+      "summary": "Bounded in-memory token cache backing fast repeated validation checks. [pub struct TokenCache]",
+      "props": {
+        "file": "src/lib.rs",
+        "grammar_version": "0.24.2-pinned",
+        "kind": "struct",
+        "language": "rust",
+        "repo": "polyglot_sample",
+        "signature": "pub struct TokenCache",
+        "start_line": 14
+      }
+    },
+    {
+      "id": "node::polyglot_sample::src/lib.rs::sym:TokenCache.verify",
+      "node_type": "Symbol",
+      "label": "verify",
+      "summary": "Validates the cached token metadata and delegates signature checking. [fn verify(&self, token: &str) -> bool]",
+      "props": {
+        "file": "src/lib.rs",
+        "grammar_version": "0.24.2-pinned",
+        "kind": "method",
+        "language": "rust",
+        "repo": "polyglot_sample",
+        "signature": "fn verify(&self, token: &str) -> bool",
+        "start_line": 21
+      }
+    },
+    {
+      "id": "node::polyglot_sample::src/lib.rs::sym:Validator",
+      "node_type": "Symbol",
+      "label": "Validator",
+      "summary": "Verifies bearer tokens against configured signing keys and revocation lists. [pub trait Validator]",
+      "props": {
+        "file": "src/lib.rs",
+        "grammar_version": "0.24.2-pinned",
+        "kind": "trait",
+        "language": "rust",
+        "repo": "polyglot_sample",
+        "signature": "pub trait Validator",
+        "start_line": 7
+      }
+    },
+    {
+      "id": "node::polyglot_sample::src/lib.rs::sym:default_cache",
+      "node_type": "Symbol",
+      "label": "default_cache",
+      "summary": "Constructs a default cache configured for production gateway request rates. [pub fn default_cache() -> TokenCache]",
+      "props": {
+        "file": "src/lib.rs",
+        "grammar_version": "0.24.2-pinned",
+        "kind": "function",
+        "language": "rust",
+        "repo": "polyglot_sample",
+        "signature": "pub fn default_cache() -> TokenCache",
+        "start_line": 40
+      }
+    },
+    {
+      "id": "node::polyglot_sample::src/lib.rs::sym:validate_token",
+      "node_type": "Symbol",
+      "label": "validate_token",
+      "summary": "Validates a raw token string against prefix, checksum, and expiration invariants. [pub fn validate_token(token: &str) -> bool]",
+      "props": {
+        "file": "src/lib.rs",
+        "grammar_version": "0.24.2-pinned",
+        "kind": "function",
+        "language": "rust",
+        "repo": "polyglot_sample",
+        "signature": "pub fn validate_token(token: &str) -> bool",
+        "start_line": 30
+      }
+    },
+    {
+      "id": "node::polyglot_sample::src/lib.rs::sym:verify",
+      "node_type": "Symbol",
+      "label": "verify",
+      "summary": "Checks whether a presented token string is structurally valid and unexpired. [fn verify(&self, token: &str) -> bool;]",
+      "props": {
+        "file": "src/lib.rs",
+        "grammar_version": "0.24.2-pinned",
+        "kind": "function",
+        "language": "rust",
+        "repo": "polyglot_sample",
+        "signature": "fn verify(&self, token: &str) -> bool;",
+        "start_line": 9
+      }
+    },
+    {
+      "id": "node::polyglot_sample::src/lib.rs::test:test_validate_token",
+      "node_type": "Test",
+      "label": "test_validate_token",
+      "summary": "Verifies that well-formed tokens succeed while blank strings fail cleanly. [fn test_validate_token()]",
+      "props": {
+        "file": "src/lib.rs",
+        "grammar_version": "0.24.2-pinned",
+        "language": "rust",
+        "repo": "polyglot_sample",
+        "signature": "fn test_validate_token()",
+        "start_line": 53
+      }
+    },
+    {
+      "id": "node::polyglot_sample::src/router.go::mod:router",
+      "node_type": "Module",
+      "label": "router",
+      "summary": "package router",
+      "props": {
+        "file": "src/router.go",
+        "grammar_version": "0.25.0-pinned",
+        "language": "go",
+        "repo": "polyglot_sample",
+        "signature": "package router",
+        "start_line": 1
+      }
+    },
+    {
+      "id": "node::polyglot_sample::src/router.go::sym:NewRouter",
+      "node_type": "Symbol",
+      "label": "NewRouter",
+      "summary": "NewRouter constructs a router configured for a named backend service. [func NewRouter(service string) RequestRouter]",
+      "props": {
+        "file": "src/router.go",
+        "grammar_version": "0.25.0-pinned",
+        "kind": "function",
+        "language": "go",
+        "repo": "polyglot_sample",
+        "signature": "func NewRouter(service string) RequestRouter",
+        "start_line": 11
+      }
+    },
+    {
+      "id": "node::polyglot_sample::src/router.go::sym:RequestRouter",
+      "node_type": "Symbol",
+      "label": "RequestRouter",
+      "summary": "RequestRouter routes incoming RPC frames after credential validation. [type RequestRouter struct]",
+      "props": {
+        "file": "src/router.go",
+        "grammar_version": "0.25.0-pinned",
+        "kind": "struct",
+        "language": "go",
+        "repo": "polyglot_sample",
+        "signature": "type RequestRouter struct",
+        "start_line": 6
+      }
+    },
+    {
+      "id": "node::polyglot_sample::src/router.go::sym:RequestRouter.Dispatch",
+      "node_type": "Symbol",
+      "label": "Dispatch",
+      "summary": "Dispatch authorizes the inbound credential and logs routing metadata. [func (r *RequestRouter) Dispatch(route string, token string) string]",
+      "props": {
+        "file": "src/router.go",
+        "grammar_version": "0.25.0-pinned",
+        "kind": "method",
+        "language": "go",
+        "repo": "polyglot_sample",
+        "signature": "func (r *RequestRouter) Dispatch(route string, token string) string",
+        "start_line": 16
+      }
+    },
+    {
+      "id": "node::polyglot_sample::src/worker.py::mod:worker",
+      "node_type": "Module",
+      "label": "worker",
+      "summary": "module worker",
+      "props": {
+        "file": "src/worker.py",
+        "grammar_version": "0.25.0-pinned",
+        "language": "python",
+        "repo": "polyglot_sample",
+        "signature": "module worker",
+        "start_line": 1
+      }
+    },
+    {
+      "id": "node::polyglot_sample::src/worker.py::sym:BaseWorker",
+      "node_type": "Symbol",
+      "label": "BaseWorker",
+      "summary": "Shared lifecycle base class for asynchronous background job workers. [class BaseWorker]",
+      "props": {
+        "file": "src/worker.py",
+        "grammar_version": "0.25.0-pinned",
+        "kind": "class",
+        "language": "python",
+        "repo": "polyglot_sample",
+        "signature": "class BaseWorker",
+        "start_line": 6
+      }
+    },
+    {
+      "id": "node::polyglot_sample::src/worker.py::sym:BaseWorker.start",
+      "node_type": "Symbol",
+      "label": "start",
+      "summary": "Marks the worker loop ready to accept queued payloads. [def start(self) -> bool]",
+      "props": {
+        "file": "src/worker.py",
+        "grammar_version": "0.25.0-pinned",
+        "kind": "method",
+        "language": "python",
+        "repo": "polyglot_sample",
+        "signature": "def start(self) -> bool",
+        "start_line": 9
+      }
+    },
+    {
+      "id": "node::polyglot_sample::src/worker.py::sym:SyncWorker",
+      "node_type": "Symbol",
+      "label": "SyncWorker",
+      "summary": "Synchronous worker executing queued verification workloads. [class SyncWorker(BaseWorker)]",
+      "props": {
+        "file": "src/worker.py",
+        "grammar_version": "0.25.0-pinned",
+        "kind": "class",
+        "language": "python",
+        "repo": "polyglot_sample",
+        "signature": "class SyncWorker(BaseWorker)",
+        "start_line": 14
+      }
+    },
+    {
+      "id": "node::polyglot_sample::src/worker.py::sym:SyncWorker.execute_batch",
+      "node_type": "Symbol",
+      "label": "execute_batch",
+      "summary": "Runs a single JSON-encoded batch validation pass. [def execute_batch(self, token: str) -> str]",
+      "props": {
+        "file": "src/worker.py",
+        "grammar_version": "0.25.0-pinned",
+        "kind": "method",
+        "language": "python",
+        "repo": "polyglot_sample",
+        "signature": "def execute_batch(self, token: str) -> str",
+        "start_line": 17
+      }
+    },
+    {
+      "id": "node::polyglot_sample::src/worker.py::sym:run_job",
+      "node_type": "Symbol",
+      "label": "run_job",
+      "summary": "Validates an offline job token before processing background tasks. [def run_job(token: str) -> bool]",
+      "props": {
+        "file": "src/worker.py",
+        "grammar_version": "0.25.0-pinned",
+        "kind": "function",
+        "language": "python",
+        "repo": "polyglot_sample",
+        "signature": "def run_job(token: str) -> bool",
+        "start_line": 23
+      }
+    },
+    {
+      "id": "node::polyglot_sample::src/worker.py::test:test_run_job",
+      "node_type": "Test",
+      "label": "test_run_job",
+      "summary": "Ensures background job execution delegates cleanly to run_job. [def test_run_job() -> None]",
+      "props": {
+        "file": "src/worker.py",
+        "grammar_version": "0.25.0-pinned",
+        "language": "python",
+        "repo": "polyglot_sample",
+        "signature": "def test_run_job() -> None",
+        "start_line": 30
+      }
+    },
+    {
+      "id": "repo::polyglot_sample",
+      "node_type": "Repo",
+      "label": "polyglot_sample",
+      "summary": "Repository polyglot_sample",
+      "props": {
+        "repo": "polyglot_sample"
+      }
+    }
+  ],
+  "edges": [
+    {
+      "edge_type": "CALLS",
+      "from": "node::polyglot_sample::src/Validator.java::sym:TokenService.checkAccess",
+      "to": "node::polyglot_sample::src/lib.rs::sym:validate_token",
+      "resolution": "HEURISTIC",
+      "confidence": 0.8
+    },
+    {
+      "edge_type": "CALLS",
+      "from": "node::polyglot_sample::src/Validator.java::sym:TokenService.verifyAccess",
+      "to": "node::polyglot_sample::src/Validator.java::sym:TokenService.checkAccess",
+      "resolution": "HEURISTIC",
+      "confidence": 0.8
+    },
+    {
+      "edge_type": "CALLS",
+      "from": "node::polyglot_sample::src/client.ts::sym:ApiClient.send",
+      "to": "node::polyglot_sample::src/client.ts::sym:fetchProfile",
+      "resolution": "HEURISTIC",
+      "confidence": 0.8
+    },
+    {
+      "edge_type": "CALLS",
+      "from": "node::polyglot_sample::src/client.ts::sym:fetchProfile",
+      "to": "node::polyglot_sample::src/lib.rs::sym:validate_token",
+      "resolution": "HEURISTIC",
+      "confidence": 0.8
+    },
+    {
+      "edge_type": "CALLS",
+      "from": "node::polyglot_sample::src/client.ts::sym:fetchProfile",
+      "to": "node::polyglot_sample::src/router.go::sym:RequestRouter.Dispatch",
+      "resolution": "HEURISTIC",
+      "confidence": 0.8
+    },
+    {
+      "edge_type": "CALLS",
+      "from": "node::polyglot_sample::src/lib.rs::sym:TokenCache.verify",
+      "to": "node::polyglot_sample::src/lib.rs::sym:validate_token",
+      "resolution": "EXACT",
+      "confidence": 1.0
+    },
+    {
+      "edge_type": "CALLS",
+      "from": "node::polyglot_sample::src/lib.rs::test:test_validate_token",
+      "to": "node::polyglot_sample::src/lib.rs::sym:validate_token",
+      "resolution": "HEURISTIC",
+      "confidence": 0.8
+    },
+    {
+      "edge_type": "CALLS",
+      "from": "node::polyglot_sample::src/router.go::sym:RequestRouter.Dispatch",
+      "to": "node::polyglot_sample::src/lib.rs::sym:validate_token",
+      "resolution": "EXACT",
+      "confidence": 1.0
+    },
+    {
+      "edge_type": "CALLS",
+      "from": "node::polyglot_sample::src/worker.py::sym:SyncWorker.execute_batch",
+      "to": "node::polyglot_sample::src/worker.py::sym:run_job",
+      "resolution": "HEURISTIC",
+      "confidence": 0.8
+    },
+    {
+      "edge_type": "CALLS",
+      "from": "node::polyglot_sample::src/worker.py::sym:run_job",
+      "to": "node::polyglot_sample::src/lib.rs::sym:validate_token",
+      "resolution": "HEURISTIC",
+      "confidence": 0.8
+    },
+    {
+      "edge_type": "CALLS",
+      "from": "node::polyglot_sample::src/worker.py::test:test_run_job",
+      "to": "node::polyglot_sample::src/worker.py::sym:run_job",
+      "resolution": "HEURISTIC",
+      "confidence": 0.8
+    },
+    {
+      "edge_type": "CONTAINS",
+      "from": "file::polyglot_sample::README.md",
+      "to": "node::polyglot_sample::README.md::doc:root",
+      "resolution": "EXACT",
+      "confidence": 1.0
+    },
+    {
+      "edge_type": "CONTAINS",
+      "from": "file::polyglot_sample::docs/adr-001-caching.md",
+      "to": "node::polyglot_sample::docs/adr-001-caching.md::doc:root",
+      "resolution": "EXACT",
+      "confidence": 1.0
+    },
+    {
+      "edge_type": "CONTAINS",
+      "from": "node::polyglot_sample::README.md::doc:root",
+      "to": "node::polyglot_sample::README.md::doc:sec:5:architecture_overview",
+      "resolution": "EXACT",
+      "confidence": 1.0
+    },
+    {
+      "edge_type": "CONTAINS",
+      "from": "node::polyglot_sample::docs/adr-001-caching.md::doc:root",
+      "to": "node::polyglot_sample::docs/adr-001-caching.md::concept:adr_001_bounded_token_cache_validation",
+      "resolution": "EXACT",
+      "confidence": 1.0
+    },
+    {
+      "edge_type": "CONTAINS",
+      "from": "node::polyglot_sample::docs/adr-001-caching.md::doc:root",
+      "to": "node::polyglot_sample::docs/adr-001-caching.md::doc:sec:11:consequences",
+      "resolution": "EXACT",
+      "confidence": 1.0
+    },
+    {
+      "edge_type": "CONTAINS",
+      "from": "node::polyglot_sample::docs/adr-001-caching.md::doc:root",
+      "to": "node::polyglot_sample::docs/adr-001-caching.md::doc:sec:7:decision",
+      "resolution": "EXACT",
+      "confidence": 1.0
+    },
+    {
+      "edge_type": "CONTAINS",
+      "from": "node::polyglot_sample::src/Validator.java::mod:sample",
+      "to": "node::polyglot_sample::src/Validator.java::sym:Authenticatable",
+      "resolution": "EXACT",
+      "confidence": 1.0
+    },
+    {
+      "edge_type": "CONTAINS",
+      "from": "node::polyglot_sample::src/Validator.java::mod:sample",
+      "to": "node::polyglot_sample::src/Validator.java::sym:TokenService",
+      "resolution": "EXACT",
+      "confidence": 1.0
+    },
+    {
+      "edge_type": "CONTAINS",
+      "from": "node::polyglot_sample::src/Validator.java::sym:TokenService",
+      "to": "node::polyglot_sample::src/Validator.java::sym:TokenService.checkAccess",
+      "resolution": "EXACT",
+      "confidence": 1.0
+    },
+    {
+      "edge_type": "CONTAINS",
+      "from": "node::polyglot_sample::src/Validator.java::sym:TokenService",
+      "to": "node::polyglot_sample::src/Validator.java::sym:TokenService.verifyAccess",
+      "resolution": "EXACT",
+      "confidence": 1.0
+    },
+    {
+      "edge_type": "CONTAINS",
+      "from": "node::polyglot_sample::src/client.ts::mod:client",
+      "to": "node::polyglot_sample::src/client.ts::sym:ApiClient",
+      "resolution": "EXACT",
+      "confidence": 1.0
+    },
+    {
+      "edge_type": "CONTAINS",
+      "from": "node::polyglot_sample::src/client.ts::mod:client",
+      "to": "node::polyglot_sample::src/client.ts::sym:ClientTransport",
+      "resolution": "EXACT",
+      "confidence": 1.0
+    },
+    {
+      "edge_type": "CONTAINS",
+      "from": "node::polyglot_sample::src/client.ts::mod:client",
+      "to": "node::polyglot_sample::src/client.ts::sym:fetchProfile",
+      "resolution": "EXACT",
+      "confidence": 1.0
+    },
+    {
+      "edge_type": "CONTAINS",
+      "from": "node::polyglot_sample::src/client.ts::sym:ApiClient",
+      "to": "node::polyglot_sample::src/client.ts::sym:ApiClient.constructor",
+      "resolution": "EXACT",
+      "confidence": 1.0
+    },
+    {
+      "edge_type": "CONTAINS",
+      "from": "node::polyglot_sample::src/client.ts::sym:ApiClient",
+      "to": "node::polyglot_sample::src/client.ts::sym:ApiClient.send",
+      "resolution": "EXACT",
+      "confidence": 1.0
+    },
+    {
+      "edge_type": "CONTAINS",
+      "from": "node::polyglot_sample::src/lib.rs::mod:lib",
+      "to": "node::polyglot_sample::src/lib.rs::submod:tests",
+      "resolution": "EXACT",
+      "confidence": 1.0
+    },
+    {
+      "edge_type": "CONTAINS",
+      "from": "node::polyglot_sample::src/lib.rs::mod:lib",
+      "to": "node::polyglot_sample::src/lib.rs::sym:TokenCache",
+      "resolution": "EXACT",
+      "confidence": 1.0
+    },
+    {
+      "edge_type": "CONTAINS",
+      "from": "node::polyglot_sample::src/lib.rs::mod:lib",
+      "to": "node::polyglot_sample::src/lib.rs::sym:Validator",
+      "resolution": "EXACT",
+      "confidence": 1.0
+    },
+    {
+      "edge_type": "CONTAINS",
+      "from": "node::polyglot_sample::src/lib.rs::mod:lib",
+      "to": "node::polyglot_sample::src/lib.rs::sym:default_cache",
+      "resolution": "EXACT",
+      "confidence": 1.0
+    },
+    {
+      "edge_type": "CONTAINS",
+      "from": "node::polyglot_sample::src/lib.rs::mod:lib",
+      "to": "node::polyglot_sample::src/lib.rs::sym:validate_token",
+      "resolution": "EXACT",
+      "confidence": 1.0
+    },
+    {
+      "edge_type": "CONTAINS",
+      "from": "node::polyglot_sample::src/lib.rs::mod:lib",
+      "to": "node::polyglot_sample::src/lib.rs::sym:verify",
+      "resolution": "EXACT",
+      "confidence": 1.0
+    },
+    {
+      "edge_type": "CONTAINS",
+      "from": "node::polyglot_sample::src/lib.rs::mod:lib",
+      "to": "node::polyglot_sample::src/lib.rs::test:test_validate_token",
+      "resolution": "EXACT",
+      "confidence": 1.0
+    },
+    {
+      "edge_type": "CONTAINS",
+      "from": "node::polyglot_sample::src/lib.rs::sym:TokenCache",
+      "to": "node::polyglot_sample::src/lib.rs::sym:TokenCache.verify",
+      "resolution": "EXACT",
+      "confidence": 1.0
+    },
+    {
+      "edge_type": "CONTAINS",
+      "from": "node::polyglot_sample::src/router.go::mod:router",
+      "to": "node::polyglot_sample::src/router.go::sym:NewRouter",
+      "resolution": "EXACT",
+      "confidence": 1.0
+    },
+    {
+      "edge_type": "CONTAINS",
+      "from": "node::polyglot_sample::src/router.go::mod:router",
+      "to": "node::polyglot_sample::src/router.go::sym:RequestRouter",
+      "resolution": "EXACT",
+      "confidence": 1.0
+    },
+    {
+      "edge_type": "CONTAINS",
+      "from": "node::polyglot_sample::src/router.go::sym:RequestRouter",
+      "to": "node::polyglot_sample::src/router.go::sym:RequestRouter.Dispatch",
+      "resolution": "EXACT",
+      "confidence": 1.0
+    },
+    {
+      "edge_type": "CONTAINS",
+      "from": "node::polyglot_sample::src/worker.py::mod:worker",
+      "to": "node::polyglot_sample::src/worker.py::sym:BaseWorker",
+      "resolution": "EXACT",
+      "confidence": 1.0
+    },
+    {
+      "edge_type": "CONTAINS",
+      "from": "node::polyglot_sample::src/worker.py::mod:worker",
+      "to": "node::polyglot_sample::src/worker.py::sym:SyncWorker",
+      "resolution": "EXACT",
+      "confidence": 1.0
+    },
+    {
+      "edge_type": "CONTAINS",
+      "from": "node::polyglot_sample::src/worker.py::mod:worker",
+      "to": "node::polyglot_sample::src/worker.py::sym:run_job",
+      "resolution": "EXACT",
+      "confidence": 1.0
+    },
+    {
+      "edge_type": "CONTAINS",
+      "from": "node::polyglot_sample::src/worker.py::mod:worker",
+      "to": "node::polyglot_sample::src/worker.py::test:test_run_job",
+      "resolution": "EXACT",
+      "confidence": 1.0
+    },
+    {
+      "edge_type": "CONTAINS",
+      "from": "node::polyglot_sample::src/worker.py::sym:BaseWorker",
+      "to": "node::polyglot_sample::src/worker.py::sym:BaseWorker.start",
+      "resolution": "EXACT",
+      "confidence": 1.0
+    },
+    {
+      "edge_type": "CONTAINS",
+      "from": "node::polyglot_sample::src/worker.py::sym:SyncWorker",
+      "to": "node::polyglot_sample::src/worker.py::sym:SyncWorker.execute_batch",
+      "resolution": "EXACT",
+      "confidence": 1.0
+    },
+    {
+      "edge_type": "CONTAINS",
+      "from": "repo::polyglot_sample",
+      "to": "file::polyglot_sample::README.md",
+      "resolution": "EXACT",
+      "confidence": 1.0
+    },
+    {
+      "edge_type": "CONTAINS",
+      "from": "repo::polyglot_sample",
+      "to": "file::polyglot_sample::docs/adr-001-caching.md",
+      "resolution": "EXACT",
+      "confidence": 1.0
+    },
+    {
+      "edge_type": "CONTAINS",
+      "from": "repo::polyglot_sample",
+      "to": "file::polyglot_sample::src/Validator.java",
+      "resolution": "EXACT",
+      "confidence": 1.0
+    },
+    {
+      "edge_type": "CONTAINS",
+      "from": "repo::polyglot_sample",
+      "to": "file::polyglot_sample::src/client.ts",
+      "resolution": "EXACT",
+      "confidence": 1.0
+    },
+    {
+      "edge_type": "CONTAINS",
+      "from": "repo::polyglot_sample",
+      "to": "file::polyglot_sample::src/lib.rs",
+      "resolution": "EXACT",
+      "confidence": 1.0
+    },
+    {
+      "edge_type": "CONTAINS",
+      "from": "repo::polyglot_sample",
+      "to": "file::polyglot_sample::src/router.go",
+      "resolution": "EXACT",
+      "confidence": 1.0
+    },
+    {
+      "edge_type": "CONTAINS",
+      "from": "repo::polyglot_sample",
+      "to": "file::polyglot_sample::src/worker.py",
+      "resolution": "EXACT",
+      "confidence": 1.0
+    },
+    {
+      "edge_type": "DEFINES",
+      "from": "file::polyglot_sample::src/Validator.java",
+      "to": "node::polyglot_sample::src/Validator.java::mod:sample",
+      "resolution": "EXACT",
+      "confidence": 1.0
+    },
+    {
+      "edge_type": "DEFINES",
+      "from": "file::polyglot_sample::src/client.ts",
+      "to": "node::polyglot_sample::src/client.ts::mod:client",
+      "resolution": "EXACT",
+      "confidence": 1.0
+    },
+    {
+      "edge_type": "DEFINES",
+      "from": "file::polyglot_sample::src/lib.rs",
+      "to": "node::polyglot_sample::src/lib.rs::mod:lib",
+      "resolution": "EXACT",
+      "confidence": 1.0
+    },
+    {
+      "edge_type": "DEFINES",
+      "from": "file::polyglot_sample::src/router.go",
+      "to": "node::polyglot_sample::src/router.go::mod:router",
+      "resolution": "EXACT",
+      "confidence": 1.0
+    },
+    {
+      "edge_type": "DEFINES",
+      "from": "file::polyglot_sample::src/worker.py",
+      "to": "node::polyglot_sample::src/worker.py::mod:worker",
+      "resolution": "EXACT",
+      "confidence": 1.0
+    },
+    {
+      "edge_type": "DEPENDS_ON",
+      "from": "node::polyglot_sample::src/Validator.java::mod:sample",
+      "to": "ext::polyglot_sample::java",
+      "resolution": "EXACT",
+      "confidence": 1.0
+    },
+    {
+      "edge_type": "DEPENDS_ON",
+      "from": "node::polyglot_sample::src/lib.rs::mod:lib",
+      "to": "ext::polyglot_sample::serde",
+      "resolution": "EXACT",
+      "confidence": 1.0
+    },
+    {
+      "edge_type": "DEPENDS_ON",
+      "from": "node::polyglot_sample::src/router.go::mod:router",
+      "to": "ext::polyglot_sample::fmt",
+      "resolution": "EXACT",
+      "confidence": 1.0
+    },
+    {
+      "edge_type": "DEPENDS_ON",
+      "from": "node::polyglot_sample::src/worker.py::mod:worker",
+      "to": "ext::polyglot_sample::json",
+      "resolution": "EXACT",
+      "confidence": 1.0
+    },
+    {
+      "edge_type": "DOCUMENTS",
+      "from": "node::polyglot_sample::README.md::doc:sec:5:architecture_overview",
+      "to": "node::polyglot_sample::src/lib.rs::sym:validate_token",
+      "resolution": "HEURISTIC",
+      "confidence": 0.8
+    },
+    {
+      "edge_type": "DOCUMENTS",
+      "from": "node::polyglot_sample::README.md::doc:sec:5:architecture_overview",
+      "to": "node::polyglot_sample::src/router.go::sym:RequestRouter",
+      "resolution": "HEURISTIC",
+      "confidence": 0.8
+    },
+    {
+      "edge_type": "DOCUMENTS",
+      "from": "node::polyglot_sample::docs/adr-001-caching.md::doc:root",
+      "to": "node::polyglot_sample::docs/adr-001-caching.md::concept:adr_001_bounded_token_cache_validation",
+      "resolution": "EXACT",
+      "confidence": 1.0
+    },
+    {
+      "edge_type": "DOCUMENTS",
+      "from": "node::polyglot_sample::docs/adr-001-caching.md::doc:sec:11:consequences",
+      "to": "node::polyglot_sample::src/client.ts::sym:fetchProfile",
+      "resolution": "HEURISTIC",
+      "confidence": 0.8
+    },
+    {
+      "edge_type": "DOCUMENTS",
+      "from": "node::polyglot_sample::docs/adr-001-caching.md::doc:sec:11:consequences",
+      "to": "node::polyglot_sample::src/lib.rs::sym:validate_token",
+      "resolution": "HEURISTIC",
+      "confidence": 0.8
+    },
+    {
+      "edge_type": "DOCUMENTS",
+      "from": "node::polyglot_sample::docs/adr-001-caching.md::doc:sec:11:consequences",
+      "to": "node::polyglot_sample::src/router.go::sym:RequestRouter.Dispatch",
+      "resolution": "HEURISTIC",
+      "confidence": 0.8
+    },
+    {
+      "edge_type": "DOCUMENTS",
+      "from": "node::polyglot_sample::docs/adr-001-caching.md::doc:sec:7:decision",
+      "to": "node::polyglot_sample::src/lib.rs::sym:TokenCache",
+      "resolution": "HEURISTIC",
+      "confidence": 0.8
+    },
+    {
+      "edge_type": "DOCUMENTS",
+      "from": "node::polyglot_sample::docs/adr-001-caching.md::doc:sec:7:decision",
+      "to": "node::polyglot_sample::src/lib.rs::sym:Validator",
+      "resolution": "HEURISTIC",
+      "confidence": 0.8
+    },
+    {
+      "edge_type": "DOCUMENTS",
+      "from": "node::polyglot_sample::docs/adr-001-caching.md::doc:sec:7:decision",
+      "to": "node::polyglot_sample::src/lib.rs::sym:validate_token",
+      "resolution": "HEURISTIC",
+      "confidence": 0.8
+    },
+    {
+      "edge_type": "EXTENDS",
+      "from": "node::polyglot_sample::src/worker.py::sym:SyncWorker",
+      "to": "node::polyglot_sample::src/worker.py::sym:BaseWorker",
+      "resolution": "EXACT",
+      "confidence": 1.0
+    },
+    {
+      "edge_type": "IMPLEMENTS",
+      "from": "node::polyglot_sample::src/Validator.java::sym:TokenService",
+      "to": "node::polyglot_sample::src/Validator.java::sym:Authenticatable",
+      "resolution": "EXACT",
+      "confidence": 1.0
+    },
+    {
+      "edge_type": "IMPLEMENTS",
+      "from": "node::polyglot_sample::src/client.ts::sym:ApiClient",
+      "to": "node::polyglot_sample::src/client.ts::sym:ClientTransport",
+      "resolution": "EXACT",
+      "confidence": 1.0
+    },
+    {
+      "edge_type": "IMPLEMENTS",
+      "from": "node::polyglot_sample::src/lib.rs::sym:TokenCache",
+      "to": "node::polyglot_sample::src/lib.rs::sym:Validator",
+      "resolution": "EXACT",
+      "confidence": 1.0
+    },
+    {
+      "edge_type": "IMPORTS",
+      "from": "node::polyglot_sample::src/client.ts::mod:client",
+      "to": "file::polyglot_sample::src/router.go",
+      "resolution": "EXACT",
+      "confidence": 1.0
+    },
+    {
+      "edge_type": "REFERENCES",
+      "from": "node::polyglot_sample::README.md::doc:sec:5:architecture_overview",
+      "to": "file::polyglot_sample::docs/adr-001-caching.md",
+      "resolution": "EXACT",
+      "confidence": 1.0
+    },
+    {
+      "edge_type": "REFERENCES",
+      "from": "node::polyglot_sample::README.md::doc:sec:5:architecture_overview",
+      "to": "file::polyglot_sample::src/Validator.java",
+      "resolution": "EXACT",
+      "confidence": 1.0
+    },
+    {
+      "edge_type": "REFERENCES",
+      "from": "node::polyglot_sample::README.md::doc:sec:5:architecture_overview",
+      "to": "file::polyglot_sample::src/client.ts",
+      "resolution": "EXACT",
+      "confidence": 1.0
+    },
+    {
+      "edge_type": "REFERENCES",
+      "from": "node::polyglot_sample::README.md::doc:sec:5:architecture_overview",
+      "to": "file::polyglot_sample::src/lib.rs",
+      "resolution": "EXACT",
+      "confidence": 1.0
+    },
+    {
+      "edge_type": "REFERENCES",
+      "from": "node::polyglot_sample::README.md::doc:sec:5:architecture_overview",
+      "to": "file::polyglot_sample::src/router.go",
+      "resolution": "EXACT",
+      "confidence": 1.0
+    },
+    {
+      "edge_type": "REFERENCES",
+      "from": "node::polyglot_sample::README.md::doc:sec:5:architecture_overview",
+      "to": "file::polyglot_sample::src/worker.py",
+      "resolution": "EXACT",
+      "confidence": 1.0
+    },
+    {
+      "edge_type": "REFERENCES",
+      "from": "node::polyglot_sample::docs/adr-001-caching.md::doc:root",
+      "to": "file::polyglot_sample::README.md",
+      "resolution": "EXACT",
+      "confidence": 1.0
+    },
+    {
+      "edge_type": "SUPERSEDES",
+      "from": "node::polyglot_sample::docs/adr-001-caching.md::doc:root",
+      "to": "file::polyglot_sample::README.md",
+      "resolution": "EXACT",
+      "confidence": 1.0
+    },
+    {
+      "edge_type": "TESTS",
+      "from": "node::polyglot_sample::src/lib.rs::test:test_validate_token",
+      "to": "node::polyglot_sample::src/lib.rs::sym:validate_token",
+      "resolution": "HEURISTIC",
+      "confidence": 0.8
+    },
+    {
+      "edge_type": "TESTS",
+      "from": "node::polyglot_sample::src/worker.py::test:test_run_job",
+      "to": "node::polyglot_sample::src/worker.py::sym:run_job",
+      "resolution": "HEURISTIC",
+      "confidence": 0.8
+    }
+  ]
+}
