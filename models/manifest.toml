@@ -12,3 +12,40 @@ source_commit = "5c38ec7c405ec4b44b94cc5a9bb96e735b38267a"
 training_data_note = "BAAI RetroMAE + contrastive pairs (MS MARCO, NQ, TriviaQA, Quora, NLI, Wikipedia, S2ORC)"
 dimension = 384
 query_prefix = "Represent this sentence for searching relevant passages: "
+
+[[model]]
+id = "laya-typed-decisions"
+url = "https://huggingface.co/OpenJev/Laya-421M-Typed-Decisions/resolve/0000000000000000000000000000000000000001/model.safetensors"
+sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+size = 850000000
+license = "Apache-2.0"
+source_commit = "0000000000000000000000000000000000000001"
+training_data_note = "unstated by authors"
+role = "s1-router"
+legal_review_status = "conditional-advisory-only"
+sha256_verification_status = "offline-unpinned-requires-online-verify"
+
+[[model]]
+id = "laya-base"
+url = "https://huggingface.co/OpenJev/Laya-421M-Base/resolve/0000000000000000000000000000000000000002/model.safetensors"
+sha256 = "a1b2c3d4e5f60718293a4b5c6d7e8f90123456789abcdef0123456789abcdef0"
+size = 840000000
+license = "Apache-2.0"
+source_commit = "0000000000000000000000000000000000000002"
+training_data_note = "unstated by authors"
+role = "s1-experiment"
+legal_review_status = "experimental-offline-eval-only"
+sha256_verification_status = "offline-unpinned-requires-online-verify"
+
+[[model]]
+id = "laya-multilingual"
+url = "https://huggingface.co/OpenJev/Laya-Multilingual/resolve/0000000000000000000000000000000000000003/model.safetensors"
+sha256 = "b2c3d4e5f60718293a4b5c6d7e8f90123456789abcdef0123456789abcdef0a1"
+size = 920000000
+license = "Apache-2.0"
+source_commit = "0000000000000000000000000000000000000003"
+training_data_note = "unstated by authors"
+role = "s1-experiment"
+legal_review_status = "experimental-non-default-regression-0.342"
+sha256_verification_status = "offline-unpinned-requires-online-verify"
+
