@@ -1,0 +1,76 @@
+entity Tenant;
+
+entity Group;
+
+entity Principal in [Group] {
+    id: String,
+    kind: String,
+    tenant: String,
+    scopes: Set<String>
+};
+
+entity Branch {
+    id: String,
+    tenant: String,
+    trust: String,
+    status: String
+};
+
+entity Element in [Branch] {
+    id: String,
+    tenant: String,
+    trust: String,
+    sideEffect: String,
+    group: String,
+    branch: String,
+    classification: String,
+    status: String
+};
+
+entity Operation in [Branch] {
+    id: String,
+    tenant: String,
+    trust: String,
+    sideEffect: String,
+    group: String,
+    branch: String,
+    classification: String,
+    status: String
+};
+
+entity Task {
+    id: String,
+    tenant: String,
+    trust: String,
+    sideEffect: String,
+    branch: String,
+    status: String
+};
+
+entity Approval {
+    id: String,
+    tenant: String,
+    requester: String
+};
+
+entity Proposal {
+    id: String,
+    tenant: String,
+    trust: String,
+    branch: String,
+    status: String
+};
+
+action Discover, Execute, Traverse, Mutate, SubmitTask, DecideApproval, CancelTask, ProposeSource, DecideProposal, AdminSchema, AdminIngest, AdminImpersonate, AdminPolicy appliesTo {
+    principal: [Principal],
+    resource: [Element, Operation, Branch, Tenant, Task, Approval, Proposal],
+    context: {
+        tenant: String,
+        time: Long,
+        hop: Long,
+        riskScore: Long,
+        approved: Bool,
+        approverIsDifferent: Bool,
+        scopes: Set<String>
+    }
+};
