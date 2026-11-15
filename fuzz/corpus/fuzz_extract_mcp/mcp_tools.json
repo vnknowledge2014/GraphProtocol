@@ -1,0 +1,1 @@
+{"tools": [{"name": "get_order", "description": "Fetch an order by id", "inputSchema": {"type": "object", "properties": {"id": {"type": "string"}}, "required": ["id"]}}]}

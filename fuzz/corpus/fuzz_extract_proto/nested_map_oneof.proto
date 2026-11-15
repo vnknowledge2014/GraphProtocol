@@ -1,0 +1,2 @@
+syntax = "proto3";
+message Event { oneof kind { string text = 1; bytes blob = 2; } map<string, string> meta = 3; }

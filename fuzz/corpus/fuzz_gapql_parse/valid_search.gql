@@ -1,0 +1,1 @@
+{ __search(query: "refund payment", topK: 5) { name score } }

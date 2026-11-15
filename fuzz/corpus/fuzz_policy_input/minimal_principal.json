@@ -1,0 +1,1 @@
+{"principal": "agent-readonly", "tenant": "t1", "action": "read", "resource": "billing:Order"}

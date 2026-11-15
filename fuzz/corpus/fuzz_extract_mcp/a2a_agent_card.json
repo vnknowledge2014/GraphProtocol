@@ -1,0 +1,1 @@
+{"name": "billing-agent", "url": "https://agent.example.internal", "version": "1.0.0", "skills": [{"id": "refund", "name": "Refund", "description": "Process invoice refund"}]}

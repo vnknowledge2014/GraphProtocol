@@ -1,0 +1,1 @@
+{ billing { invoice(id: "inv-1") { id total } } }
