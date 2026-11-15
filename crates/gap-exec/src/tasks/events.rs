@@ -1,8 +1,8 @@
 //! Per-task monotonic event hub supporting persisted replay, live broadcast, bounded backpressure,
 //! and SSE `Last-Event-ID` resumption (`RUN-051`, `RUN-080`, `INV-02`, `INV-13`).
 
-use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use gap_core::error::{ErrorCode, GapError, GapResult};
 use gap_core::ids::{TaskId, TenantScope};
@@ -63,12 +63,18 @@ impl TaskEventStream {
     }
 }
 
-type EventChannelMap = HashMap<(String, TaskId), broadcast::Sender<TaskEventView>>;
+#[derive(Debug)]
+struct EventChannelEntry {
+    tenant: String,
+    task_id: TaskId,
+    retired: AtomicBool,
+    sender: broadcast::Sender<TaskEventView>,
+}
 
 /// Partitioned pub/sub coordinator for [`TaskEventView`] replay + follow (`RUN-080`, `INV-09`, `INV-13`).
 #[derive(Debug, Default, Clone)]
 pub struct TaskEventHub {
-    channels: Arc<Mutex<EventChannelMap>>,
+    channels: Arc<crate::lockfree::LockFreeLog<EventChannelEntry>>,
 }
 
 impl TaskEventHub {
@@ -83,40 +89,56 @@ impl TaskEventHub {
         tenant: &TenantScope,
         task_id: TaskId,
     ) -> broadcast::Sender<TaskEventView> {
-        let key = (tenant.tenant().as_str().to_owned(), task_id);
-        let mut guard = match self.channels.lock() {
-            Ok(g) => g,
-            Err(poisoned) => poisoned.into_inner(),
-        };
-        if let Some(tx) = guard.get(&key) {
-            return tx.clone();
-        }
-        let (tx, _) = broadcast::channel(BROADCAST_CAPACITY);
-        guard.insert(key, tx.clone());
-        tx
+        let tenant_str = tenant.tenant().as_str();
+        self.channels
+            .get_or_insert_with(
+                |entry| {
+                    !entry.retired.load(Ordering::Acquire)
+                        && entry.tenant == tenant_str
+                        && entry.task_id == task_id
+                },
+                || {
+                    let (tx, _) = broadcast::channel(BROADCAST_CAPACITY);
+                    EventChannelEntry {
+                        tenant: tenant_str.to_owned(),
+                        task_id,
+                        retired: AtomicBool::new(false),
+                        sender: tx,
+                    }
+                },
+            )
+            .sender
+            .clone()
     }
 
     fn remove_if_terminal(&self, tenant: &TenantScope, task_id: TaskId, event: &TaskEventView) {
         if !event.state.is_terminal() {
             return;
         }
-        if let Ok(mut guard) = self.channels.lock() {
-            guard.remove(&(tenant.tenant().as_str().to_owned(), task_id));
+        let tenant_str = tenant.tenant().as_str();
+        for entry in self.channels.iter() {
+            if !entry.retired.load(Ordering::Acquire)
+                && entry.tenant == tenant_str
+                && entry.task_id == task_id
+            {
+                entry.retired.store(true, Ordering::Release);
+            }
         }
     }
 
     /// Publishes an already-persisted [`TaskEventView`] to active subscribers (`RUN-080`).
     pub fn publish(&self, tenant: &TenantScope, event: TaskEventView) {
         let task_id = event.task_id;
-        let tx_opt = {
-            let guard = match self.channels.lock() {
-                Ok(g) => g,
-                Err(poisoned) => poisoned.into_inner(),
-            };
-            guard
-                .get(&(tenant.tenant().as_str().to_owned(), task_id))
-                .cloned()
-        };
+        let tenant_str = tenant.tenant().as_str();
+        let tx_opt = self
+            .channels
+            .iter()
+            .find(|entry| {
+                !entry.retired.load(Ordering::Acquire)
+                    && entry.tenant == tenant_str
+                    && entry.task_id == task_id
+            })
+            .map(|entry| entry.sender.clone());
         if let Some(tx) = tx_opt {
             let _ = tx.send(event.clone());
         }

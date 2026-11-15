@@ -448,7 +448,7 @@ impl SagaRunner {
 mod tests {
     use std::future::Future;
     use std::pin::Pin;
-    use std::sync::{Arc, Mutex};
+    use std::sync::Arc;
 
     use gap_core::clock::{Clock, ManualClock};
     use gap_core::context::{AttrValue, Principal, PrincipalKind};
@@ -504,21 +504,18 @@ mod tests {
     }
 
     #[derive(Default)]
-    struct RecordingAlerts(Mutex<Vec<(String, String, String)>>);
+    struct RecordingAlerts(crate::lockfree::LockFreeLog<(String, String, String)>);
     impl SagaAlertSink for RecordingAlerts {
         fn alert_manual_intervention(&self, tenant: &str, saga_id: &str, step_id: &str, _r: &str) {
-            self.0.lock().expect("lock").push((
-                tenant.to_owned(),
-                saga_id.to_owned(),
-                step_id.to_owned(),
-            ));
+            self.0
+                .push((tenant.to_owned(), saga_id.to_owned(), step_id.to_owned()));
         }
     }
 
     #[derive(Default)]
     struct SagaTestTarget {
         fail_op: Option<String>,
-        call_log: Mutex<Vec<(String, Option<String>)>>,
+        call_log: crate::lockfree::LockFreeLog<(String, Option<String>)>,
     }
 
     impl MutationTarget for SagaTestTarget {
@@ -537,8 +534,6 @@ mod tests {
                     .and_then(|v| v.as_str())
                     .map(ToOwned::to_owned);
                 self.call_log
-                    .lock()
-                    .expect("lock")
                     .push((request.operation.clone(), comp_tok_arg));
 
                 if self.fail_op.as_deref() == Some(request.operation.as_str()) {
@@ -672,7 +667,7 @@ mod tests {
             Some(CompensationOutcome::Compensated)
         );
 
-        let calls = target_ok_rollback.call_log.lock().expect("lock").clone();
+        let calls = target_ok_rollback.call_log.to_vec();
         assert_eq!(
             calls,
             vec![
@@ -720,6 +715,6 @@ mod tests {
             ledger2[0].compensation,
             Some(CompensationOutcome::Compensated)
         );
-        assert_eq!(alerts.0.lock().expect("lock").len(), 1);
+        assert_eq!(alerts.0.len(), 1);
     }
 }

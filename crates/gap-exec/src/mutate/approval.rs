@@ -1,8 +1,7 @@
 //! Mutation approval summaries, `TaskStore` `INPUT_REQUIRED` gate (`RUN-071`, `RUN-085`),
 //! and Ed25519 `ApprovalProof` signing/verification (`NGC-032`).
 
-use std::collections::BTreeSet;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 use gap_core::clock::{Clock, Timestamp};
 use gap_core::error::{ErrorCode, GapError, GapResult};
@@ -259,7 +258,7 @@ pub fn verify_approval_proof(
 /// idempotent response replay does not need connector re-verification.
 #[derive(Debug, Default)]
 pub struct ApprovalReplayGuard {
-    consumed: Mutex<BTreeSet<String>>,
+    consumed: crate::lockfree::LockFreeLog<String>,
 }
 
 impl ApprovalReplayGuard {
@@ -273,19 +272,13 @@ impl ApprovalReplayGuard {
     #[must_use]
     pub fn consume_once(&self, approval_id: &str, idempotency_key: &str) -> bool {
         let token = format!("{approval_id}|{idempotency_key}");
-        match self.consumed.lock() {
-            Ok(mut set) => set.insert(token),
-            Err(mut poisoned) => poisoned.get_mut().insert(token),
-        }
+        self.consumed.insert_unique(token)
     }
 
     /// Records `approval_id` unconditionally (single-use regardless of key).
     #[must_use]
     pub fn record_approval_used(&self, approval_id: &str) -> bool {
-        match self.consumed.lock() {
-            Ok(mut set) => set.insert(approval_id.to_owned()),
-            Err(mut poisoned) => poisoned.get_mut().insert(approval_id.to_owned()),
-        }
+        self.consumed.insert_unique(approval_id.to_owned())
     }
 }
 

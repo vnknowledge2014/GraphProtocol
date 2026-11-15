@@ -58,6 +58,7 @@ pub mod columnar;
 pub mod connector_layer;
 pub mod exec;
 pub mod join;
+pub(crate) mod lockfree;
 pub mod mutate;
 pub mod saga;
 pub mod shadow;

@@ -3,7 +3,7 @@
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, OnceLock};
 use std::time::Duration;
 
 use gap_core::clock::{Clock, ManualClock};
@@ -31,12 +31,12 @@ use super::{
 
 #[derive(Default)]
 struct InMemoryAuditRecorder {
-    records: Mutex<Vec<(String, AuditRecord)>>,
+    records: crate::lockfree::LockFreeLog<(String, AuditRecord)>,
 }
 
 impl InMemoryAuditRecorder {
     fn snapshot(&self) -> Vec<(String, AuditRecord)> {
-        self.records.lock().expect("lock").clone()
+        self.records.to_vec()
     }
 }
 
@@ -50,10 +50,10 @@ impl AuditLog for InMemoryAuditRecorder {
             AuditChain::Tenant(t) => t.tenant().as_str().to_owned(),
             AuditChain::System => "__system__".to_owned(),
         };
-        let mut guard = self.records.lock().expect("lock");
-        let seq = u64::try_from(guard.iter().filter(|(c, _)| c == &chain_name).count() + 1)
+        let existing = self.records.to_vec();
+        let seq = u64::try_from(existing.iter().filter(|(c, _)| c == &chain_name).count() + 1)
             .unwrap_or(u64::MAX);
-        let prev_hash = guard
+        let prev_hash = existing
             .iter()
             .rev()
             .find(|(c, _)| c == &chain_name)
@@ -65,7 +65,7 @@ impl AuditLog for InMemoryAuditRecorder {
             prev_hash,
             hash,
         };
-        guard.push((chain_name, rec.clone()));
+        self.records.push((chain_name, rec.clone()));
         Ok(rec)
     }
 
@@ -88,17 +88,17 @@ impl AuditLog for InMemoryAuditRecorder {
 #[derive(Default)]
 struct ScriptedMutateTarget {
     calls: AtomicUsize,
-    last_requests: Mutex<Vec<MutateRequest>>,
+    last_requests: crate::lockfree::LockFreeLog<MutateRequest>,
     unimplemented_dry_run: bool,
     reject_outcome: bool,
     delay_ms: u64,
     compensation_token: String,
-    required_vk: Mutex<Option<gap_sec::crypto::Ed25519VerifyingKey>>,
+    required_vk: OnceLock<gap_sec::crypto::Ed25519VerifyingKey>,
 }
 
 impl ScriptedMutateTarget {
     fn seen_requests(&self) -> Vec<MutateRequest> {
-        self.last_requests.lock().expect("lock").clone()
+        self.last_requests.to_vec()
     }
 }
 
@@ -110,10 +110,7 @@ impl MutationTarget for ScriptedMutateTarget {
     ) -> Pin<Box<dyn Future<Output = NgcResult<MutateResponse>> + Send + '_>> {
         Box::pin(async move {
             self.calls.fetch_add(1, Ordering::SeqCst);
-            self.last_requests
-                .lock()
-                .expect("lock")
-                .push(request.clone());
+            self.last_requests.push(request.clone());
             if self.delay_ms > 0 {
                 tokio::time::sleep(Duration::from_millis(self.delay_ms)).await;
             }
@@ -123,7 +120,7 @@ impl MutationTarget for ScriptedMutateTarget {
                     "dryRun unsupported by connector",
                 ));
             }
-            if let Some(ref vk) = *self.required_vk.lock().expect("lock") {
+            if let Some(vk) = self.required_vk.get() {
                 let Some(ref proof) = request.approval else {
                     return Err(NgcErrorInfo::new(
                         NgcErrorCode::PermissionDenied,
@@ -356,7 +353,10 @@ async fn mutate_approval_gate_four_eyes_expiry_and_signed_proof_verification() {
         compensation_token: "comp-tok-77".to_owned(),
         ..Default::default()
     };
-    *target.required_vk.lock().expect("lock") = Some(gate.verifying_key().expect("vk"));
+    target
+        .required_vk
+        .set(gate.verifying_key().expect("vk"))
+        .expect("set vk");
 
     // 1. IRREVERSIBLE mutation without proof stops at INPUT_REQUIRED with deterministic redacted summary.
     let mut req = base_req(

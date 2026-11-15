@@ -1,10 +1,10 @@
 //! Durable task execution engine, lease/heartbeat manager, strategy coordinator, cancellation
 //! propagator, and startup crash recovery (`RUN-080`..`RUN-086`, `RUN-091`, `INV-02`, `INV-13`).
 
-use std::collections::HashMap;
 use std::future::Future;
 use std::pin::Pin;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 use gap_core::clock::{Clock, SystemClock, Timestamp};
@@ -207,10 +207,13 @@ impl Default for TaskEngineConfig {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 struct ActiveTaskControl {
+    tenant: String,
+    task_id: TaskId,
+    retired: AtomicBool,
     cancel: CancellationToken,
-    delegated: Vec<(String, String)>,
+    delegated: crate::lockfree::LockFreeLog<(String, String)>,
 }
 
 /// Filter options for [`TaskEngine::gap_tasks`].
@@ -237,7 +240,7 @@ pub struct TaskEngine {
     delegated_client: Arc<dyn DelegatedStepClient>,
     hub: TaskEventHub,
     config: TaskEngineConfig,
-    controls: Arc<Mutex<HashMap<(String, TaskId), ActiveTaskControl>>>,
+    controls: Arc<crate::lockfree::LockFreeLog<ActiveTaskControl>>,
 }
 
 impl std::fmt::Debug for TaskEngine {
@@ -261,7 +264,7 @@ impl TaskEngine {
             delegated_client: Arc::new(NoopDelegatedStepClient),
             hub: TaskEventHub::new(),
             config,
-            controls: Arc::new(Mutex::new(HashMap::new())),
+            controls: Arc::new(crate::lockfree::LockFreeLog::new()),
         }
     }
 
@@ -299,25 +302,24 @@ impl TaskEngine {
         self.store.as_ref()
     }
 
-    fn lock_controls(
-        &self,
-    ) -> std::sync::MutexGuard<'_, HashMap<(String, TaskId), ActiveTaskControl>> {
-        match self.controls.lock() {
-            Ok(g) => g,
-            Err(poisoned) => poisoned.into_inner(),
-        }
-    }
-
     fn register_control(&self, tenant: &TenantScope, task_id: TaskId) -> CancellationToken {
+        let tenant_str = tenant.tenant().as_str();
+        for ctrl in self.controls.iter() {
+            if !ctrl.retired.load(Ordering::Acquire)
+                && ctrl.tenant == tenant_str
+                && ctrl.task_id == task_id
+            {
+                ctrl.retired.store(true, Ordering::Release);
+            }
+        }
         let token = CancellationToken::new();
-        let mut guard = self.lock_controls();
-        guard.insert(
-            (tenant.tenant().as_str().to_owned(), task_id),
-            ActiveTaskControl {
-                cancel: token.clone(),
-                delegated: Vec::new(),
-            },
-        );
+        self.controls.push(ActiveTaskControl {
+            tenant: tenant_str.to_owned(),
+            task_id,
+            retired: AtomicBool::new(false),
+            cancel: token.clone(),
+            delegated: crate::lockfree::LockFreeLog::new(),
+        });
         token
     }
 
@@ -328,20 +330,28 @@ impl TaskEngine {
         branch: String,
         remote_task_id: String,
     ) {
-        let mut guard = self.lock_controls();
-        if let Some(ctrl) = guard.get_mut(&(tenant.tenant().as_str().to_owned(), task_id))
-            && !ctrl
-                .delegated
-                .iter()
-                .any(|(b, r)| b == &branch && r == &remote_task_id)
-        {
-            ctrl.delegated.push((branch, remote_task_id));
+        let tenant_str = tenant.tenant().as_str();
+        for ctrl in self.controls.iter() {
+            if !ctrl.retired.load(Ordering::Acquire)
+                && ctrl.tenant == tenant_str
+                && ctrl.task_id == task_id
+            {
+                let _ = ctrl.delegated.insert_unique((branch, remote_task_id));
+                break;
+            }
         }
     }
 
     fn clear_control(&self, tenant: &TenantScope, task_id: TaskId) {
-        let mut guard = self.lock_controls();
-        guard.remove(&(tenant.tenant().as_str().to_owned(), task_id));
+        let tenant_str = tenant.tenant().as_str();
+        for ctrl in self.controls.iter() {
+            if !ctrl.retired.load(Ordering::Acquire)
+                && ctrl.tenant == tenant_str
+                && ctrl.task_id == task_id
+            {
+                ctrl.retired.store(true, Ordering::Release);
+            }
+        }
     }
 
     fn lease_expires_at(&self, now: Timestamp) -> Timestamp {
@@ -1145,11 +1155,16 @@ impl TaskEngine {
             .map_err(|e| GapError::new(ErrorCode::Internal, format!("corrupt payload: {e}")))?;
 
         let mut remote_targets = Vec::new();
-        {
-            let guard = self.lock_controls();
-            if let Some(ctrl) = guard.get(&(tenant.tenant().as_str().to_owned(), task_id)) {
+        let tenant_str = tenant.tenant().as_str();
+        for ctrl in self.controls.iter() {
+            if !ctrl.retired.load(Ordering::Acquire)
+                && ctrl.tenant == tenant_str
+                && ctrl.task_id == task_id
+            {
                 ctrl.cancel.cancel();
-                remote_targets.extend(ctrl.delegated.clone());
+                for item in ctrl.delegated.iter() {
+                    remote_targets.push(item.clone());
+                }
             }
         }
         for (idx, step_snap) in payload.steps.iter().enumerate() {

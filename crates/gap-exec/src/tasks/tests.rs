@@ -1,8 +1,8 @@
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
-use std::collections::VecDeque;
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::{Duration, Instant};
 
 use gap_core::clock::{Clock, ManualClock};
@@ -54,16 +54,16 @@ fn make_ctx(tenant_slug: &str, principal_id: &str, clock: &dyn Clock) -> Request
 }
 
 struct RecordingGapqlRunner {
-    calls: Arc<Mutex<Vec<(String, String)>>>,
+    calls: Arc<crate::lockfree::LockFreeLog<(String, String)>>,
     gate: Option<Arc<Notify>>,
-    barrier_count: Option<(Arc<std::sync::atomic::AtomicUsize>, usize, Arc<Notify>)>,
+    barrier_count: Option<(Arc<AtomicUsize>, usize, Arc<Notify>)>,
     large_output_bytes: Option<usize>,
 }
 
 impl RecordingGapqlRunner {
     fn simple() -> Self {
         Self {
-            calls: Arc::new(Mutex::new(Vec::new())),
+            calls: Arc::new(crate::lockfree::LockFreeLog::new()),
             gate: None,
             barrier_count: None,
             large_output_bytes: None,
@@ -83,7 +83,7 @@ impl GapqlStepRunner for RecordingGapqlRunner {
         let principal = ctx.principal.id.clone();
         Box::pin(async move {
             if let Some((ref count, target, ref barrier)) = self.barrier_count {
-                let prev = count.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                let prev = count.fetch_add(1, Ordering::SeqCst);
                 if prev + 1 >= target {
                     barrier.notify_waiters();
                 } else {
@@ -103,10 +103,7 @@ impl GapqlStepRunner for RecordingGapqlRunner {
                     }
                 }
             }
-            self.calls
-                .lock()
-                .unwrap()
-                .push((principal.clone(), doc.clone()));
+            self.calls.push((principal.clone(), doc.clone()));
             if let Some(bytes) = self.large_output_bytes {
                 let payload = "x".repeat(bytes);
                 return Ok(serde_json::json!({ "blob": payload }));
@@ -120,9 +117,10 @@ type StartedRecord = (String, u8, Vec<String>, Option<String>);
 type CanceledRecord = (String, String, Option<String>);
 
 struct MockDelegatedClient {
-    started: Arc<Mutex<Vec<StartedRecord>>>,
-    polls: Arc<Mutex<VecDeque<DelegateStartResult>>>,
-    canceled: Arc<Mutex<Vec<CanceledRecord>>>,
+    started: Arc<crate::lockfree::LockFreeLog<StartedRecord>>,
+    polls: Arc<crate::lockfree::LockFreeLog<DelegateStartResult>>,
+    poll_idx: AtomicUsize,
+    canceled: Arc<crate::lockfree::LockFreeLog<CanceledRecord>>,
     remote_id: String,
     initial_status: TaskStatus,
 }
@@ -130,9 +128,10 @@ struct MockDelegatedClient {
 impl Default for MockDelegatedClient {
     fn default() -> Self {
         Self {
-            started: Arc::new(Mutex::new(Vec::new())),
-            polls: Arc::new(Mutex::new(VecDeque::new())),
-            canceled: Arc::new(Mutex::new(Vec::new())),
+            started: Arc::new(crate::lockfree::LockFreeLog::new()),
+            polls: Arc::new(crate::lockfree::LockFreeLog::new()),
+            poll_idx: AtomicUsize::new(0),
+            canceled: Arc::new(crate::lockfree::LockFreeLog::new()),
             remote_id: String::new(),
             initial_status: TaskStatus::Submitted,
         }
@@ -156,12 +155,8 @@ impl DelegatedStepClient for MockDelegatedClient {
         let op_s = operation.to_owned();
         let ctx_id = context_id.map(str::to_owned);
         Box::pin(async move {
-            self.started.lock().unwrap().push((
-                format!("{branch_s}/{op_s}"),
-                hop,
-                trace_path,
-                ctx_id,
-            ));
+            self.started
+                .push((format!("{branch_s}/{op_s}"), hop, trace_path, ctx_id));
             Ok(DelegateStartResult {
                 remote_task_id: self.remote_id.clone(),
                 status: self.initial_status,
@@ -183,18 +178,14 @@ impl DelegatedStepClient for MockDelegatedClient {
         _remote_task_id: &'a str,
     ) -> TaskFuture<'a, DelegateStartResult> {
         Box::pin(async move {
-            let next = self
-                .polls
-                .lock()
-                .unwrap()
-                .pop_front()
-                .unwrap_or(DelegateStartResult {
-                    remote_task_id: self.remote_id.clone(),
-                    status: TaskStatus::Working,
-                    result: None,
-                    error: None,
-                    artifacts: Vec::new(),
-                });
+            let idx = self.poll_idx.fetch_add(1, Ordering::SeqCst);
+            let next = self.polls.nth(idx).cloned().unwrap_or(DelegateStartResult {
+                remote_task_id: self.remote_id.clone(),
+                status: TaskStatus::Working,
+                result: None,
+                error: None,
+                artifacts: Vec::new(),
+            });
             Ok(next)
         })
     }
@@ -210,10 +201,7 @@ impl DelegatedStepClient for MockDelegatedClient {
         let remote_s = remote_task_id.to_owned();
         let reason_s = reason.map(str::to_owned);
         Box::pin(async move {
-            self.canceled
-                .lock()
-                .unwrap()
-                .push((branch_s, remote_s, reason_s));
+            self.canceled.push((branch_s, remote_s, reason_s));
             Ok(TaskStatus::Canceled)
         })
     }
@@ -228,9 +216,9 @@ async fn task_strategies_parallel_sequential_dag_and_cycle_rejection() {
 
     // 1. PARALLEL runs concurrently (enforced by 2-party barrier) and merges array result.
     let barrier = Arc::new(Notify::new());
-    let counter = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let counter = Arc::new(AtomicUsize::new(0));
     let par_runner = Arc::new(RecordingGapqlRunner {
-        calls: Arc::new(Mutex::new(Vec::new())),
+        calls: Arc::new(crate::lockfree::LockFreeLog::new()),
         gate: None,
         barrier_count: Some((counter, 2, barrier)),
         large_output_bytes: None,
@@ -286,13 +274,7 @@ async fn task_strategies_parallel_sequential_dag_and_cycle_rejection() {
         .await
         .unwrap();
     assert_eq!(seq_view.state, TaskStatus::Completed);
-    let recorded_docs: Vec<String> = seq_runner
-        .calls
-        .lock()
-        .unwrap()
-        .iter()
-        .map(|(_, d)| d.clone())
-        .collect();
+    let recorded_docs: Vec<String> = seq_runner.calls.iter().map(|(_, d)| d.clone()).collect();
     assert_eq!(recorded_docs, vec!["q1", "q2", "q3"]);
 
     // 3. Cyclic DAG is rejected at submit time with CycleUnbounded.
@@ -342,13 +324,7 @@ async fn task_strategies_parallel_sequential_dag_and_cycle_rejection() {
         .await
         .unwrap();
     assert_eq!(dag_view.state, TaskStatus::Completed);
-    let dag_order: Vec<String> = dag_runner
-        .calls
-        .lock()
-        .unwrap()
-        .iter()
-        .map(|(_, d)| d.clone())
-        .collect();
+    let dag_order: Vec<String> = dag_runner.calls.iter().map(|(_, d)| d.clone()).collect();
     assert_eq!(dag_order[0], "r");
     assert_eq!(dag_order[3], "j");
 }
@@ -360,7 +336,7 @@ async fn task_events_replay_follow_and_sse_last_event_id() {
     let store = Arc::new(InMemoryTaskStore::new());
     let gate = Arc::new(Notify::new());
     let runner = Arc::new(RecordingGapqlRunner {
-        calls: Arc::new(Mutex::new(Vec::new())),
+        calls: Arc::new(crate::lockfree::LockFreeLog::new()),
         gate: Some(gate.clone()),
         barrier_count: None,
         large_output_bytes: None,
@@ -464,7 +440,7 @@ async fn task_deadline_hop_limit_and_trace_loop_detection() {
         .unwrap();
     assert_eq!(view.state, TaskStatus::Completed);
     {
-        let recorded = delegated.started.lock().unwrap();
+        let recorded = delegated.started.to_vec();
         assert_eq!(recorded.len(), 1);
         assert_eq!(recorded[0].1, 1);
         assert_eq!(recorded[0].2, vec!["peer-b".to_owned()]);
@@ -592,7 +568,7 @@ async fn task_cancel_propagates_to_delegated_branch_and_is_idempotent() {
 
     // Wait until start_task registered the remote task id.
     for _ in 0..50 {
-        if !delegated.started.lock().unwrap().is_empty() {
+        if !delegated.started.is_empty() {
             break;
         }
         tokio::time::sleep(Duration::from_millis(5)).await;
@@ -604,7 +580,7 @@ async fn task_cancel_propagates_to_delegated_branch_and_is_idempotent() {
         .unwrap();
     assert_eq!(canceled1.state, TaskStatus::Canceled);
 
-    let canceled_targets = delegated.canceled.lock().unwrap().clone();
+    let canceled_targets = delegated.canceled.to_vec();
     assert!(
         canceled_targets
             .iter()
@@ -629,7 +605,7 @@ async fn task_approval_expiry_retention_and_large_artifact_blob_spill() {
 
     // 1. Artifact > 1 MiB spills to FsArtifactBlobStore with uri + sha256.
     let large_runner = Arc::new(RecordingGapqlRunner {
-        calls: Arc::new(Mutex::new(Vec::new())),
+        calls: Arc::new(crate::lockfree::LockFreeLog::new()),
         gate: None,
         barrier_count: None,
         large_output_bytes: Some(gap_store::tasks::INLINE_ARTIFACT_MAX_BYTES + 256),
@@ -683,7 +659,7 @@ async fn task_approval_expiry_retention_and_large_artifact_blob_spill() {
     )
     .with_clock(clock.clone())
     .with_gapql_runner(Arc::new(RecordingGapqlRunner {
-        calls: Arc::new(Mutex::new(Vec::new())),
+        calls: Arc::new(crate::lockfree::LockFreeLog::new()),
         gate: Some(gate),
         barrier_count: None,
         large_output_bytes: None,
