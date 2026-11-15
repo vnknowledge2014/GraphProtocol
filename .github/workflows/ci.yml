@@ -1,0 +1,103 @@
+# Primary CI pipeline (WP-M0-04; ADR-022, OPS-040, SEC-100)
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    # Weekly supply-chain and verification run (SEC-100)
+    - cron: '0 4 * * 1'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  tools-test:
+    name: Python Plan & Architecture Tools
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Run Python tools unit tests (zero-skip enforced)
+        run: |
+          python3 -c "import sys, unittest; s = unittest.defaultTestLoader.discover('tools', pattern='test_*.py'); r = unittest.TextTestRunner(verbosity=2).run(s); print(f'ran={r.testsRun} skipped={len(r.skipped)}'); sys.exit(0 if (r.wasSuccessful() and len(r.skipped) == 0 and r.testsRun > 0) else 1)"
+      - name: Validate work packages
+        run: python3 tools/wp.py validate
+      - name: Check crate layering and ARC-002
+        run: python3 tools/check_layers.py
+      - name: Check spec and ADR references
+        run: python3 tools/check_refs.py
+      - name: Check requirement-to-test traceability
+        run: python3 tools/spec_trace.py --warn
+
+  fmt-and-docs:
+    name: Format & Docs
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@master
+        with:
+          components: rustfmt
+      - uses: Swatinem/rust-cache@v2
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+      - name: Build documentation with warnings denied
+        env:
+          RUSTDOCFLAGS: '-D warnings'
+        run: cargo doc --workspace --no-deps
+
+  supply-chain:
+    name: Supply Chain Audit (SEC-100)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@master
+      - name: Run cargo-deny
+        uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          command: check advisories bans licenses sources
+      - name: Run cargo-audit
+        uses: rustsec/audit-check@v2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+  build-and-test:
+    name: Build, Lint & Test (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@master
+        with:
+          components: clippy
+      - name: Install cargo-nextest
+        uses: taiki-e/install-action@nextest
+      - uses: Swatinem/rust-cache@v2
+      - name: Run clippy across workspace targets
+        run: cargo clippy --workspace --all-targets -- -D warnings
+      - name: Build workspace targets
+        run: cargo build --workspace --all-targets
+      - name: Run workspace test suite (excluding gap-snapshot debug stress)
+        run: cargo nextest run --workspace --exclude gap-snapshot
+      - name: Run gap-snapshot composition and handle tests
+        run: cargo nextest run -p gap-snapshot --lib --test compose --test handle
+      - name: Run gap-snapshot swap stress in release mode
+        run: cargo test --release -p gap-snapshot --test swap_stress
+      - name: Run offline protocol conformance fixtures
+        run: cargo run -p gap-conformance -- --class Core --offline conformance/gql

@@ -1,0 +1,83 @@
+# Nightly verification stubs: fuzz, bench, routebench-smoke, and soak (WP-M0-04; VER-050, VER-053, OPS-030)
+name: Nightly
+
+on:
+  schedule:
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  fuzz:
+    name: Fuzz (${{ matrix.target }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - fuzz_cursor_decode
+          - fuzz_extract_graphql
+          - fuzz_extract_mcp
+          - fuzz_extract_openapi
+          - fuzz_extract_proto
+          - fuzz_extract_sql
+          - fuzz_gapql_parse
+          - fuzz_ngc_decode
+          - fuzz_policy_input
+          - fuzz_sanitize
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install nightly Rust toolchain
+        uses: dtolnay/rust-toolchain@nightly
+      - name: Install cargo-fuzz
+        uses: taiki-e/install-action@cargo-fuzz
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: fuzz -> fuzz/target
+      - name: Run bounded nightly fuzz stub
+        working-directory: fuzz
+        run: cargo +nightly fuzz run ${{ matrix.target }} -- -max_total_time=60
+
+  bench:
+    name: Benchmark Build & GAP-Bench Stub
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@master
+      - uses: Swatinem/rust-cache@v2
+      - name: Compile workspace criterion benchmarks
+        run: cargo bench --workspace --no-run
+      - name: Run GAP-Bench nightly smoke
+        run: cargo run --release -p gapbench -- --out target/gapbench-nightly
+
+  routebench-smoke:
+    name: RouteBench Smoke & Release Swap Stress (VER-050)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@master
+      - uses: Swatinem/rust-cache@v2
+      - name: Run RouteBench smoke
+        run: cargo run --release -p routebench -- --smoke --out target/routebench-smoke
+      - name: Run release snapshot swap stress
+        run: cargo test --release -p gap-snapshot --test swap_stress
+
+  soak:
+    name: Nightly Chaos & Soak Stub (OPS-030, VER-053)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@master
+      - uses: Swatinem/rust-cache@v2
+      - name: Run chaos harness baseline
+        run: cargo test -p gap-testkit --test chaos
+      - name: Soak duration placeholder
+        run: echo "Nightly soak stub ready (full 72h soak executed via release cluster harness, VER-053)"
