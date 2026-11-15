@@ -10,7 +10,7 @@
 //!    `gap-store`'s default feature set and default binaries.
 //! 2. **Zero BSL crate contamination:** Enabling `--features store-surreal` compiles this module's
 //!    `ContextStore`, `ContextMaintenance`, and `TaskStore` backend using GAP's SurrealQL 3.x
-//!    schema model and a thin wire [`SurrealTransport`] (`HttpSurrealTransport` over `/sql` plus a
+//!    schema model and a thin wire `SurrealTransport` (`HttpSurrealTransport` over `/sql` plus a
 //!    deterministic `InMemorySurrealEngine` for offline verification), keeping `Cargo.lock` and
 //!    default builds 100% Apache-2.0 / MIT / BSD / Unicode-3.0 / Zlib clean under `cargo deny`.
 
