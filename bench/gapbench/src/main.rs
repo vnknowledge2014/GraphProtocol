@@ -28,6 +28,7 @@ struct CliArgs {
     llm_endpoint: Option<String>,
     llm_model: Option<String>,
     out_dir: PathBuf,
+    verify_results: Option<PathBuf>,
     help: bool,
 }
 
@@ -40,6 +41,7 @@ impl Default for CliArgs {
             llm_endpoint: None,
             llm_model: None,
             out_dir: PathBuf::from("target/gapbench-out"),
+            verify_results: None,
             help: false,
         }
     }
@@ -103,6 +105,12 @@ fn parse_cli(args: impl Iterator<Item = String>) -> Result<CliArgs, BenchError> 
                     .ok_or_else(|| BenchError::Cli("missing directory after `--out`".to_owned()))?;
                 cfg.out_dir = PathBuf::from(val);
             }
+            "--verify-results" => {
+                let val = it.next().ok_or_else(|| {
+                    BenchError::Cli("missing directory after `--verify-results`".to_owned())
+                })?;
+                cfg.verify_results = Some(PathBuf::from(val));
+            }
             other => {
                 return Err(BenchError::Cli(format!(
                     "unrecognized argument `{other}` (pass `--help` for usage)"
@@ -150,13 +158,73 @@ fn print_usage() {
          \t--llm-endpoint <url>                                     Optional OpenAI-compatible HTTP endpoint\n\
          \t--llm-model <name>                                       Model id forwarded to `--llm-endpoint`\n\
          \t--out <dir>                                              Output directory for baseline.json + README.md\n\
+         \t--verify-results <dir>                                   Validate existing baseline.json + README.md bundle\n\
          \t-h, --help                                               Print help\n"
     );
+}
+
+fn verify_results_bundle(
+    dir: &std::path::Path,
+) -> Result<crate::metrics::GapBenchReport, BenchError> {
+    let json_path = dir.join("baseline.json");
+    let readme_path = dir.join("README.md");
+    let raw_json = std::fs::read_to_string(&json_path)
+        .map_err(|e| BenchError::Cli(format!("failed to read `{}`: {e}", json_path.display())))?;
+    let report: crate::metrics::GapBenchReport = serde_json::from_str(&raw_json)
+        .map_err(|e| BenchError::Cli(format!("failed to parse `{}`: {e}", json_path.display())))?;
+    let readme = std::fs::read_to_string(&readme_path)
+        .map_err(|e| BenchError::Cli(format!("failed to read `{}`: {e}", readme_path.display())))?;
+    if report.discovery_scaling.len() < 4 {
+        return Err(BenchError::Cli(format!(
+            "expected >= 4 discovery N-sweep rows in `{}` (found {})",
+            json_path.display(),
+            report.discovery_scaling.len()
+        )));
+    }
+    for required_suite in ["api_lookup", "cross_branch_join", "code_graph"] {
+        if !report
+            .suite_comparisons
+            .iter()
+            .any(|r| r.suite == required_suite)
+        {
+            return Err(BenchError::Cli(format!(
+                "missing `{required_suite}` comparison rows in `{}`",
+                json_path.display()
+            )));
+        }
+    }
+    if !report.gates.all_evaluated_gates_pass {
+        return Err(BenchError::Cli(format!(
+            "benchmark gates did not pass in `{}`",
+            json_path.display()
+        )));
+    }
+    if !readme.contains("G-F1") || !readme.contains("G-C1") {
+        return Err(BenchError::Cli(format!(
+            "`{}` missing G-F1 / G-C1 gate summary",
+            readme_path.display()
+        )));
+    }
+    Ok(report)
 }
 
 async fn async_main(cfg: CliArgs) -> Result<(), BenchError> {
     if cfg.help {
         print_usage();
+        return Ok(());
+    }
+
+    if let Some(dir) = &cfg.verify_results {
+        let report = verify_results_bundle(dir)?;
+        println!(
+            "GAP-Bench results verified: dir={}, scaling_rows={}, suite_rows={}, g_f1={}, g_c1={}, all_gates={}",
+            dir.display(),
+            report.discovery_scaling.len(),
+            report.suite_comparisons.len(),
+            report.gates.g_f1_pass,
+            report.gates.g_c1_pass,
+            report.gates.all_evaluated_gates_pass,
+        );
         return Ok(());
     }
 
@@ -328,5 +396,27 @@ mod tests {
         let md_raw = std::fs::read_to_string(dir.path().join("README.md")).unwrap();
         assert!(md_raw.contains("G-F1"));
         assert!(md_raw.contains("G-C1"));
+    }
+
+    // spec: CMP-008
+    #[tokio::test]
+    async fn cmp_008_verify_results_validates_complete_bundle_and_rejects_partial() {
+        let dir = TempDir::new().unwrap();
+        let full = run_benchmark(
+            &BenchAgent::Scripted,
+            SuiteFilter::All,
+            &[10, 50, 200, 1000],
+        )
+        .await
+        .unwrap();
+        write_report_bundle(dir.path(), &full).unwrap();
+        let verified = super::verify_results_bundle(dir.path()).unwrap();
+        assert_eq!(verified.discovery_scaling.len(), 4);
+
+        let partial = run_benchmark(&BenchAgent::Scripted, SuiteFilter::ApiLookup, &[10])
+            .await
+            .unwrap();
+        write_report_bundle(dir.path(), &partial).unwrap();
+        assert!(super::verify_results_bundle(dir.path()).is_err());
     }
 }
