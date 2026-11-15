@@ -1,0 +1,20 @@
+{
+  "name": "facade-a2a coerced query variables and deterministic response",
+  "class": [
+    "Facade-A2A"
+  ],
+  "spec": [
+    "CMP-021",
+    "GQL-002"
+  ],
+  "request": {
+    "query": "query ResolveOrder($id: ID! = \"7\") { order(id: $id) { id } }"
+  },
+  "expect": {
+    "status": 200,
+    "data": {
+      "order": null
+    },
+    "errors": []
+  }
+}

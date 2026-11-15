@@ -1,0 +1,27 @@
+{
+  "name": "facade-a2a trace context aliased execution preserves snapshot extensions",
+  "class": [
+    "Facade-A2A"
+  ],
+  "spec": [
+    "CMP-023",
+    "GQL-050"
+  ],
+  "request": {
+    "query": "{ first: order(id: \"1\") { id } second: order(id: \"2\") { id } }"
+  },
+  "expect": {
+    "status": 200,
+    "data": {
+      "first": null,
+      "second": null
+    },
+    "extensions": {
+      "gap": {
+        "generation": 1,
+        "partial": false
+      }
+    },
+    "errors": []
+  }
+}

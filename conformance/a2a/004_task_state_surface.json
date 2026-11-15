@@ -1,0 +1,23 @@
+{
+  "name": "facade-a2a structured gapql data part with variables executes via offline driver",
+  "class": [
+    "Facade-A2A"
+  ],
+  "spec": [
+    "CMP-022",
+    "GQL-002"
+  ],
+  "request": {
+    "query": "query FetchOrders($first: Int = 1) { orders(first: $first) { id } }",
+    "variables": {
+      "first": 3
+    }
+  },
+  "expect": {
+    "status": 200,
+    "data": {
+      "orders": []
+    },
+    "errors": []
+  }
+}

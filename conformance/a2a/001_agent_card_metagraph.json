@@ -1,0 +1,22 @@
+{
+  "name": "facade-a2a pinned snapshot generation matches AgentCard snapshot",
+  "class": [
+    "Facade-A2A"
+  ],
+  "spec": [
+    "CMP-020",
+    "GQL-050"
+  ],
+  "request": {
+    "query": "{ shopVersion }"
+  },
+  "expect": {
+    "status": 200,
+    "extensions": {
+      "gap": {
+        "generation": 1,
+        "partial": false
+      }
+    }
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "name": "facade-a2a structured gapql task query executes via offline driver",
+  "class": [
+    "Facade-A2A"
+  ],
+  "spec": [
+    "CMP-021",
+    "GQL-001"
+  ],
+  "request": {
+    "query": "{ orders(first: 2) { id sku } }"
+  },
+  "expect": {
+    "status": 200,
+    "headers": {
+      "content-type": "application/graphql-response+json; charset=utf-8"
+    },
+    "data": {
+      "orders": []
+    },
+    "dataNull": false,
+    "errors": []
+  }
+}
