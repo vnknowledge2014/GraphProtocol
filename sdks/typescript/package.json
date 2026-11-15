@@ -1,0 +1,24 @@
+{
+  "name": "@gap-protocol/sdk",
+  "version": "0.1.0",
+  "description": "Thin TypeScript SDK for Graph Agent Protocol (GAP) with SDL type codegen and agent tool adapters",
+  "license": "Apache-2.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./types": "./src/types.ts",
+    "./codegen": "./src/codegen.ts",
+    "./generated": "./src/generated.ts",
+    "./client": "./src/client.ts",
+    "./adapters": "./src/adapters.ts"
+  },
+  "scripts": {
+    "test": "node --test test/sdk.test.ts",
+    "codegen": "node src/codegen.ts"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "dependencies": {},
+  "devDependencies": {}
+}
