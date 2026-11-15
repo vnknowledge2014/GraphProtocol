@@ -20,7 +20,7 @@ Source of truth order when documents disagree: **ADR (latest) > spec/ > work/wor
 7. **Challenge assumptions** (user rule): before implementing, write down what you assume, where it could break, and the simpler alternative you rejected — put it at the top of your step file (§4).
 
 ## 3. The work cycle
-```
+```text
 python3 tools/wp.py ready                      # pick a ready WP (dependencies done)
 python3 tools/wp.py set WP-Mx-yy doing         # claim it (commit this line first)
 but branch new wp/WP-Mx-yy                     # GitButler virtual branch per user rules (or git worktree)
@@ -90,7 +90,7 @@ You may *not* silently deviate. If implementation reveals a spec error or a bett
 1. Stop coding that part. 2. Write `docs/decisions/<date>-<slug>.md` (context, options, decision, impact on spec/ADR/tests). 3. If the change touches an Accepted ADR or any `MUST`, propose a new ADR superseding it (`docs/01-DECISIONS.md`) and the spec diff and test diff **in one change set**; mark the WP `blocked` until a human or the `reviewer` agent accepts it. 4. Editorial fixes (typos, clarifications that do not change behavior) may go in directly with a `docs:` commit.
 
 ## 10. Handoff format (end of every WP; paste in the PR/commit body and `work/handoffs/<WP-ID>.md`)
-```
+```text
 WP: WP-M1-01   Branch: wp/WP-M1-01   Commits: <n>
 Modified crates / public signatures: gap-ql: parse_validate(&Schema,&str)->Result<Doc,GapError> …
 Tests: <added> added, <passed>/<total> passing; spec ids covered: GQL-001, GQL-002 …

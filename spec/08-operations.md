@@ -10,7 +10,7 @@ Normative IDs `OPS-*`. Targets are SLOs only after the owning milestone complete
 
 ## 2. Tracing (OpenTelemetry)
 Span hierarchy (names are normative):
-```
+```text
 gap.request                      attrs: gap.generation, gap.operation_name, gap.tenant, gap.principal_kind, gap.cost.planned
 ├─ gap.gateway.authn
 ├─ gap.operation.validate        attrs: gap.persisted, gap.depth, gap.cost.estimate

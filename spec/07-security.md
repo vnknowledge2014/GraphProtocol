@@ -40,7 +40,7 @@ Every row has an owner requirement and ≥ 1 automated test (§15).
 - **SEC-004** MCP facade authorization follows the MCP authorization spec (OAuth 2.1 + 9728 discovery); the stdio MCP facade inherits the OS user as a `Service` principal with scopes from config.
 
 ## 4. Principals, tenants, delegation
-```rust
+```rust,ignore
 pub struct Principal { pub id: PrincipalId, pub kind: Human|Agent|Service, pub tenant: TenantId,
                        pub scopes: BTreeSet<Scope>, pub attrs: BTreeMap<String, AttrValue>,
                        pub delegation: Vec<ActorRef> /* outermost first: agent acting for user */ }

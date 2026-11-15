@@ -33,7 +33,7 @@ System-1 (Laya) là **thành phần tùy chọn có cổng đo** (G-S1): sản p
 Tổng: **85 WP, 281 agent-day, đường găng toàn dự án 65,5 agent-day (17 WP)**, song song hóa tối đa lý thuyết ≈ 4,3×.
 
 ## 4. Làn song song và điểm đồng bộ
-```
+```text
 Lane A  Exec core       M0-08 → M1-01 → M1-05 → M1-06 → M1-07 → M1-08 ─┬→ M3-02/03/04/07 → M4-08 → M6-02/04
 Lane B  Connectors      M0-06 → M1-03 → M1-04, M1-09/10/11 → M3-05/06 → M2-02 (code graph)
 Lane C  Discovery/ML    M2-04 → M2-05 → M2-06/07/08 → M5-01…09           (độc lập với Lane A sau M1-05)

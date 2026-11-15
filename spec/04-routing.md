@@ -3,7 +3,7 @@
 Normative IDs `RTE-*`. Rationale: ADR-003, 005, 006, 007, 008, 010, 011. Scope: the **discovery plane** (`__search`, `gap.resolve`, `__metaGraph`) and the **replica balancer / circuit breaker** used by the execution plane. Typed GAP-QL execution never calls a model (ARC-002).
 
 ## 1. Component map
-```
+```text
 query ─► sanitize ─► [cache] ─► embed ─► retrieve(dense ⊕ BM25, visibility-filtered)
       ─► group (≤15 capability groups + sink) ─► RoutingModel (baseline | S1)
       ─► calibrate (temperature) ─► conformal decision ─► candidates / abstention
@@ -47,7 +47,7 @@ Two trait levels: `RoutingModel` (high level, `gap-route`; implemented by `Basel
 - **RTE-034** `__search` uses steps 1, 3–4 only (no grouping, no model) and returns per-element hits.
 
 ## 6. RoutingModel contract and S1 input format
-```rust
+```rust,ignore
 #[async_trait] pub trait RoutingModel: Send + Sync {
     fn id(&self) -> &ModelId;                          // includes weights sha256
     async fn rank(&self, q: &SanitizedQuery, opts: &[GroupOption], ctx: &RankCtx) -> Result<RankOutput, RouteError>;
@@ -84,7 +84,7 @@ pub struct RankOutput { pub logits: Vec<f32>, pub latency: Duration }   // calib
 
 ## 8. Telemetry, replica selection, circuit breaker (execution plane; no ML)
 ### 8.1 Slot
-```rust
+```rust,ignore
 pub struct TelemetrySlot {                       // one per BranchUid; lives in TelemetryRegistry, NOT in Snapshot
     pub latency_us: CachePadded<DecayedEwma>,     // half-life 10 s
     pub error_rate: CachePadded<DecayedEwma>,     // half-life 30 s, samples 0.0 / 1.0
@@ -125,7 +125,7 @@ impl DecayedEwma {
 - **RTE-079** *Selection details.* (a) `cap` in the cost is `max(1, capacity)`. (b) The group median is the lower median `sorted[(n−1)/2]` of the *known* `lat` values of the candidates; if no candidate has a known `lat`, every candidate uses `lat = 1.0` (cost then ranks by load and error). (c) `cost` is an `f64` computed identically for both candidates and compared exactly; tie-break order is lower `in_flight`, then lower `BranchUid` (byte order). (d) The two distinct members are drawn without modulo bias from an explicitly seeded `XorShift64` (tests, simulations) or, in production, a thread-local one whose seed differs per thread (a process-wide counter passed through SplitMix64, never a constant: identical per-thread streams would make every worker draw the same pair sequence and herd); the same `(seed, candidate list, slot states)` always yields the same choice. When more than 64 members are eligible the pair is still drawn from one consistent view: a member whose eligibility changes between two scans of the group MUST NOT turn into an index outside the eligible, non-excluded set (the call returns another eligible member, or `None`). (e) Selecting MUST NOT consume a probe token: a `HalfOpen` member whose probe slots are not exhausted is a candidate, and the caller takes the token with `Breaker::admit` afterwards; if `admit` refuses, the caller selects again with that member excluded. (f) Selection allocates nothing.
 
 ### 8.3 Circuit breaker
-```
+```text
 Closed ── window has ≥20 calls AND (fail_rate ≥ 0.5 OR slow_rate ≥ 0.8) ──► Open(k)
 Open(k) ── after min(5 s · 2^k, 60 s) ──► HalfOpen
 HalfOpen ── at most 3 probes per episode, at most 3 concurrently; 2 probe successes ──► Closed

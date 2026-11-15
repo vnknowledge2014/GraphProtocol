@@ -56,7 +56,7 @@ Crates are introduced by the milestone that needs them (see `docs/02-PLAN.md`). 
 - **ARC-004** Public items have rustdoc; `cargo doc -D warnings` passes; public API of L0–L1 crates is guarded by `cargo-semver-checks` from 0.2.0.
 
 ## 4. Core data model (Rust sketch — normative shapes, not exact code)
-```rust
+```rust,ignore
 pub struct Snapshot {
     pub generation: u64,                       // monotonic
     pub format_version: u32,                   // ADR-024
@@ -145,7 +145,7 @@ pub struct RequestContext {
 | Cold start (no S1) to ready | Target → Gate at M3 | ≤ 2 s | OPS |
 
 ## 9. Repository layout (normative for agents)
-```
+```text
 Cargo.toml  rust-toolchain.toml  deny.toml  clippy.toml  rustfmt.toml  Cargo.lock
 crates/<gap-*>/   adapters/<gap-*>/   sdks/{typescript,python}/
 proto/gap/{ngc,gateway}/v1/*.proto   conformance/<class>/*.json

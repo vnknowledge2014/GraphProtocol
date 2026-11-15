@@ -44,7 +44,7 @@ All extractors implement `trait Extractor { fn kind() -> Protocol; fn extract(&s
 - **ING-012** A malformed or hostile input MUST yield `ExtractError` within `timeout`, never a panic, hang or unbounded allocation (fuzzed for ≥ 1 h per target in CI nightly; 24 h before each release).
 
 ## 3. CISG (canonical intermediate schema graph)
-```rust
+```rust,ignore
 pub struct Cisg {
     pub source: SourceRef,                 // kind, canonical location, source_hash
     pub extractor: ExtractorInfo,          // id, version

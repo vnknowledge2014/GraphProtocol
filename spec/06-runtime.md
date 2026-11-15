@@ -18,7 +18,7 @@ Order (outermost → innermost): `TransportMux` → `GatewayLayer` → `Operatio
 - **RUN-002** One OpenTelemetry span per layer with names in spec/08 §2; the request span carries `gap.generation`, `gap.tenant` (hashed if configured), `gap.operation_name`.
 
 ## 2. Snapshots and publication (ADR-009)
-```rust
+```rust,ignore
 pub struct SnapshotHandle { cell: ArcSwap<Snapshot>, ring: Mutex<VecDeque<Arc<Snapshot>>> /* control plane only */, reclaimer: ReclaimTx }
 impl SnapshotHandle {
     #[inline] pub fn pin(&self) -> Arc<Snapshot> { self.cell.load_full() }                // request path (INV-01)
@@ -75,7 +75,7 @@ Pipeline for each mutation field: `authz(action=Mutate)` → `side-effect policy
 
 ## 8. Tasks (ADR-016)
 **FSM** (⊥ = terminal):
-```
+```text
 SUBMITTED → WORKING | REJECTED⊥ | CANCELED⊥
 WORKING → INPUT_REQUIRED | AUTH_REQUIRED | COMPLETED⊥ | FAILED⊥ | CANCELED⊥
 INPUT_REQUIRED → WORKING | CANCELED⊥ | REJECTED⊥ (denied / expired) | FAILED⊥
