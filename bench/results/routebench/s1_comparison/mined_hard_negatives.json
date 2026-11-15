@@ -1,0 +1,2713 @@
+{
+  "schema_version": 2,
+  "router_id": "baseline",
+  "mined_count": 270,
+  "split_counts": {
+    "calibration": 39,
+    "fit": 113,
+    "held_out_branch": 72,
+    "test": 46
+  },
+  "records": [
+    {
+      "example_id": "ex-00001",
+      "split": "fit",
+      "query": "Fetch GitHub repository metadata, default branch, and star count",
+      "gold_group_id": "3be8b0e9f714e9482b3eb60bc493b926",
+      "confusing_group_id": "e69d985ccfb026405cce689c79bff948",
+      "margin": 0.06451607,
+      "source_op": "github_issues.getRepository",
+      "source_branch": "github_issues"
+    },
+    {
+      "example_id": "ex-00002",
+      "split": "fit",
+      "query": "get repository (/repos/{owner}/{repo})",
+      "gold_group_id": "3be8b0e9f714e9482b3eb60bc493b926",
+      "confusing_group_id": "f1abb2599e08a6b48291d4e1cfdc5a79",
+      "margin": 0.06451607,
+      "source_op": "github_issues.getRepository",
+      "source_branch": "github_issues"
+    },
+    {
+      "example_id": "ex-00003",
+      "split": "fit",
+      "query": "get repository for github issues",
+      "gold_group_id": "3be8b0e9f714e9482b3eb60bc493b926",
+      "confusing_group_id": "f1abb2599e08a6b48291d4e1cfdc5a79",
+      "margin": -0.06451607,
+      "source_op": "github_issues.getRepository",
+      "source_branch": "github_issues"
+    },
+    {
+      "example_id": "ex-00004",
+      "split": "fit",
+      "query": "need to get repository in github issues: Fetch GitHub repository metadata, default branch, and star count",
+      "gold_group_id": "3be8b0e9f714e9482b3eb60bc493b926",
+      "confusing_group_id": "e69d985ccfb026405cce689c79bff948",
+      "margin": 0.06451607,
+      "source_op": "github_issues.getRepository",
+      "source_branch": "github_issues"
+    },
+    {
+      "example_id": "ex-00005",
+      "split": "fit",
+      "query": "Fetch GitHub repository metadata, default branch, and star count",
+      "gold_group_id": "3be8b0e9f714e9482b3eb60bc493b926",
+      "confusing_group_id": "e69d985ccfb026405cce689c79bff948",
+      "margin": 0.06451607,
+      "source_op": "github_issues.getRepository",
+      "source_branch": "github_issues"
+    },
+    {
+      "example_id": "ex-00006",
+      "split": "fit",
+      "query": "get repository using owner and repo",
+      "gold_group_id": "3be8b0e9f714e9482b3eb60bc493b926",
+      "confusing_group_id": "f1abb2599e08a6b48291d4e1cfdc5a79",
+      "margin": 0.06451607,
+      "source_op": "github_issues.getRepository",
+      "source_branch": "github_issues"
+    },
+    {
+      "example_id": "ex-00007",
+      "split": "fit",
+      "query": "append customer note (add a follow-up note to a customer account; not get repository in notes)",
+      "gold_group_id": "3f137fd60f3f6590f12aa54400ee6abf",
+      "confusing_group_id": "7a30e7674f6103b3fef3fe24c7f71070",
+      "margin": 0.06451607,
+      "source_op": "notes.append_customer_note",
+      "source_branch": "github_issues"
+    },
+    {
+      "example_id": "ex-00008",
+      "split": "fit",
+      "query": "add issue comment (Post a triage reply comment onto an existing repository issue; not get repository in github issues)",
+      "gold_group_id": "baacd4ddfbffc00380ca0f9a2097b37a",
+      "confusing_group_id": "0c7e1e230aa4b75e33b5e20f2e1a111f",
+      "margin": 0.06451607,
+      "source_op": "github_issues.addIssueComment",
+      "source_branch": "github_issues"
+    },
+    {
+      "example_id": "ex-00009",
+      "split": "fit",
+      "query": "List open or closed bug issues for a GitHub repository",
+      "gold_group_id": "e69d985ccfb026405cce689c79bff948",
+      "confusing_group_id": "99ad326812ce836836edf84d4c335777",
+      "margin": 0.06451607,
+      "source_op": "github_issues.listRepoIssues",
+      "source_branch": "github_issues"
+    },
+    {
+      "example_id": "ex-00010",
+      "split": "fit",
+      "query": "list repo issues (/repos/{owner}/{repo}/issues)",
+      "gold_group_id": "e69d985ccfb026405cce689c79bff948",
+      "confusing_group_id": "99ad326812ce836836edf84d4c335777",
+      "margin": 0.06451607,
+      "source_op": "github_issues.listRepoIssues",
+      "source_branch": "github_issues"
+    },
+    {
+      "example_id": "ex-00011",
+      "split": "fit",
+      "query": "list repo issues for github issues",
+      "gold_group_id": "e69d985ccfb026405cce689c79bff948",
+      "confusing_group_id": "99ad326812ce836836edf84d4c335777",
+      "margin": 0.06451607,
+      "source_op": "github_issues.listRepoIssues",
+      "source_branch": "github_issues"
+    },
+    {
+      "example_id": "ex-00012",
+      "split": "fit",
+      "query": "need to list repo issues in github issues: List open or closed bug issues for a GitHub repository",
+      "gold_group_id": "e69d985ccfb026405cce689c79bff948",
+      "confusing_group_id": "0c7e1e230aa4b75e33b5e20f2e1a111f",
+      "margin": 0.06451607,
+      "source_op": "github_issues.listRepoIssues",
+      "source_branch": "github_issues"
+    },
+    {
+      "example_id": "ex-00013",
+      "split": "fit",
+      "query": "List open or closed bug issues for a GitHub repository",
+      "gold_group_id": "e69d985ccfb026405cce689c79bff948",
+      "confusing_group_id": "99ad326812ce836836edf84d4c335777",
+      "margin": 0.06451607,
+      "source_op": "github_issues.listRepoIssues",
+      "source_branch": "github_issues"
+    },
+    {
+      "example_id": "ex-00014",
+      "split": "fit",
+      "query": "list repo issues using owner and repo and state",
+      "gold_group_id": "e69d985ccfb026405cce689c79bff948",
+      "confusing_group_id": "1c90c209c7f1a9b627ea1c4f6ad56ac9",
+      "margin": 0.06451607,
+      "source_op": "github_issues.listRepoIssues",
+      "source_branch": "github_issues"
+    },
+    {
+      "example_id": "ex-00015",
+      "split": "fit",
+      "query": "list pull requests (List open or merged pull requests queued for code review; not list repo issues in github issues)",
+      "gold_group_id": "99ad326812ce836836edf84d4c335777",
+      "confusing_group_id": "e69d985ccfb026405cce689c79bff948",
+      "margin": 0.06451607,
+      "source_op": "github_issues.listPullRequests",
+      "source_branch": "github_issues"
+    },
+    {
+      "example_id": "ex-00016",
+      "split": "fit",
+      "query": "search issues global (Full-text search across issues and pull requests matching keywords; not list repo issues in github issues)",
+      "gold_group_id": "059394b48407287fa9eb501b8f98a342",
+      "confusing_group_id": "e69d985ccfb026405cce689c79bff948",
+      "margin": 0.06451607,
+      "source_op": "github_issues.searchIssuesGlobal",
+      "source_branch": "github_issues"
+    },
+    {
+      "example_id": "ex-00017",
+      "split": "fit",
+      "query": "Open a new bug ticket or feature issue in a repository",
+      "gold_group_id": "0c7e1e230aa4b75e33b5e20f2e1a111f",
+      "confusing_group_id": "e69d985ccfb026405cce689c79bff948",
+      "margin": 0.06451607,
+      "source_op": "github_issues.createIssue",
+      "source_branch": "github_issues"
+    },
+    {
+      "example_id": "ex-00018",
+      "split": "fit",
+      "query": "create issue (/repos/{owner}/{repo}/issues)",
+      "gold_group_id": "0c7e1e230aa4b75e33b5e20f2e1a111f",
+      "confusing_group_id": "f1abb2599e08a6b48291d4e1cfdc5a79",
+      "margin": 0.06451607,
+      "source_op": "github_issues.createIssue",
+      "source_branch": "github_issues"
+    },
+    {
+      "example_id": "ex-00019",
+      "split": "fit",
+      "query": "create issue for github issues",
+      "gold_group_id": "0c7e1e230aa4b75e33b5e20f2e1a111f",
+      "confusing_group_id": "f1abb2599e08a6b48291d4e1cfdc5a79",
+      "margin": 0.06451607,
+      "source_op": "github_issues.createIssue",
+      "source_branch": "github_issues"
+    },
+    {
+      "example_id": "ex-00020",
+      "split": "fit",
+      "query": "need to create issue in github issues: Open a new bug ticket or feature issue in a repository",
+      "gold_group_id": "0c7e1e230aa4b75e33b5e20f2e1a111f",
+      "confusing_group_id": "1c90c209c7f1a9b627ea1c4f6ad56ac9",
+      "margin": 0.06451607,
+      "source_op": "github_issues.createIssue",
+      "source_branch": "github_issues"
+    },
+    {
+      "example_id": "ex-00021",
+      "split": "fit",
+      "query": "Open a new bug ticket or feature issue in a repository",
+      "gold_group_id": "0c7e1e230aa4b75e33b5e20f2e1a111f",
+      "confusing_group_id": "e69d985ccfb026405cce689c79bff948",
+      "margin": 0.06451607,
+      "source_op": "github_issues.createIssue",
+      "source_branch": "github_issues"
+    },
+    {
+      "example_id": "ex-00022",
+      "split": "fit",
+      "query": "create issue using owner and repo and title",
+      "gold_group_id": "0c7e1e230aa4b75e33b5e20f2e1a111f",
+      "confusing_group_id": "1c90c209c7f1a9b627ea1c4f6ad56ac9",
+      "margin": 0.06451607,
+      "source_op": "github_issues.createIssue",
+      "source_branch": "github_issues"
+    },
+    {
+      "example_id": "ex-00023",
+      "split": "fit",
+      "query": "add issue comment (Post a triage reply comment onto an existing repository issue; not create issue in github issues)",
+      "gold_group_id": "baacd4ddfbffc00380ca0f9a2097b37a",
+      "confusing_group_id": "0c7e1e230aa4b75e33b5e20f2e1a111f",
+      "margin": 0.06451607,
+      "source_op": "github_issues.addIssueComment",
+      "source_branch": "github_issues"
+    },
+    {
+      "example_id": "ex-00024",
+      "split": "fit",
+      "query": "retrieve invoice (Fetch line items, tax total, and payment status of an invoice; not create issue in stripe billing)",
+      "gold_group_id": "a6918fb40f7b166e121e3df9d2426cab",
+      "confusing_group_id": "2730202236e822f4ce41c9d3b28c3623",
+      "margin": 0.06451607,
+      "source_op": "stripe_billing.retrieveInvoice",
+      "source_branch": "github_issues"
+    },
+    {
+      "example_id": "ex-00025",
+      "split": "fit",
+      "query": "Fetch details, assignee, and labels for a specific repository issue",
+      "gold_group_id": "f1abb2599e08a6b48291d4e1cfdc5a79",
+      "confusing_group_id": "1c90c209c7f1a9b627ea1c4f6ad56ac9",
+      "margin": 0.06451607,
+      "source_op": "github_issues.getIssue",
+      "source_branch": "github_issues"
+    },
+    {
+      "example_id": "ex-00026",
+      "split": "fit",
+      "query": "get issue (/repos/{owner}/{repo}/issues/{issueNumber})",
+      "gold_group_id": "f1abb2599e08a6b48291d4e1cfdc5a79",
+      "confusing_group_id": "baacd4ddfbffc00380ca0f9a2097b37a",
+      "margin": 0.06451607,
+      "source_op": "github_issues.getIssue",
+      "source_branch": "github_issues"
+    },
+    {
+      "example_id": "ex-00027",
+      "split": "fit",
+      "query": "get issue for github issues",
+      "gold_group_id": "f1abb2599e08a6b48291d4e1cfdc5a79",
+      "confusing_group_id": "0c7e1e230aa4b75e33b5e20f2e1a111f",
+      "margin": 0.06451607,
+      "source_op": "github_issues.getIssue",
+      "source_branch": "github_issues"
+    },
+    {
+      "example_id": "ex-00028",
+      "split": "fit",
+      "query": "need to get issue in github issues: Fetch details, assignee, and labels for a specific repository issue",
+      "gold_group_id": "f1abb2599e08a6b48291d4e1cfdc5a79",
+      "confusing_group_id": "0c7e1e230aa4b75e33b5e20f2e1a111f",
+      "margin": 0.06451607,
+      "source_op": "github_issues.getIssue",
+      "source_branch": "github_issues"
+    },
+    {
+      "example_id": "ex-00029",
+      "split": "fit",
+      "query": "Fetch details, assignee, and labels for a specific repository issue",
+      "gold_group_id": "f1abb2599e08a6b48291d4e1cfdc5a79",
+      "confusing_group_id": "1c90c209c7f1a9b627ea1c4f6ad56ac9",
+      "margin": 0.06451607,
+      "source_op": "github_issues.getIssue",
+      "source_branch": "github_issues"
+    },
+    {
+      "example_id": "ex-00030",
+      "split": "fit",
+      "query": "get issue using owner and repo and issueNumber",
+      "gold_group_id": "f1abb2599e08a6b48291d4e1cfdc5a79",
+      "confusing_group_id": "baacd4ddfbffc00380ca0f9a2097b37a",
+      "margin": 0.06451607,
+      "source_op": "github_issues.getIssue",
+      "source_branch": "github_issues"
+    },
+    {
+      "example_id": "ex-00031",
+      "split": "fit",
+      "query": "customer notes (get account notes for customer id; not get issue in notes)",
+      "gold_group_id": "7a30e7674f6103b3fef3fe24c7f71070",
+      "confusing_group_id": "3f137fd60f3f6590f12aa54400ee6abf",
+      "margin": 0.06451607,
+      "source_op": "notes.customer_notes",
+      "source_branch": "github_issues"
+    },
+    {
+      "example_id": "ex-00032",
+      "split": "fit",
+      "query": "cancel subscription (Cancel a customer's recurring billing subscription immediately; not get issue in stripe billing)",
+      "gold_group_id": "2c8720ca29286244a157279b765eaa5b",
+      "confusing_group_id": "d68c80a3ff6ad08fc809fe4798387ffb",
+      "margin": 0.06451607,
+      "source_op": "stripe_billing.cancelSubscription",
+      "source_branch": "github_issues"
+    },
+    {
+      "example_id": "ex-00033",
+      "split": "test",
+      "query": "Close an existing issue or edit its title, labels, and state",
+      "gold_group_id": "1c90c209c7f1a9b627ea1c4f6ad56ac9",
+      "confusing_group_id": "baacd4ddfbffc00380ca0f9a2097b37a",
+      "margin": 0.06451607,
+      "source_op": "github_issues.closeOrUpdateIssue",
+      "source_branch": "github_issues"
+    },
+    {
+      "example_id": "ex-00034",
+      "split": "test",
+      "query": "close or update issue (/repos/{owner}/{repo}/issues/{issueNumber})",
+      "gold_group_id": "1c90c209c7f1a9b627ea1c4f6ad56ac9",
+      "confusing_group_id": "f1abb2599e08a6b48291d4e1cfdc5a79",
+      "margin": 0.06451607,
+      "source_op": "github_issues.closeOrUpdateIssue",
+      "source_branch": "github_issues"
+    },
+    {
+      "example_id": "ex-00035",
+      "split": "test",
+      "query": "close or update issue for github issues",
+      "gold_group_id": "1c90c209c7f1a9b627ea1c4f6ad56ac9",
+      "confusing_group_id": "0c7e1e230aa4b75e33b5e20f2e1a111f",
+      "margin": 0.06451607,
+      "source_op": "github_issues.closeOrUpdateIssue",
+      "source_branch": "github_issues"
+    },
+    {
+      "example_id": "ex-00036",
+      "split": "test",
+      "query": "need to close or update issue in github issues: Close an existing issue or edit its title, labels, and state",
+      "gold_group_id": "1c90c209c7f1a9b627ea1c4f6ad56ac9",
+      "confusing_group_id": "0c7e1e230aa4b75e33b5e20f2e1a111f",
+      "margin": 0.06451607,
+      "source_op": "github_issues.closeOrUpdateIssue",
+      "source_branch": "github_issues"
+    },
+    {
+      "example_id": "ex-00037",
+      "split": "test",
+      "query": "Close an existing issue or edit its title, labels, and state",
+      "gold_group_id": "1c90c209c7f1a9b627ea1c4f6ad56ac9",
+      "confusing_group_id": "baacd4ddfbffc00380ca0f9a2097b37a",
+      "margin": 0.06451607,
+      "source_op": "github_issues.closeOrUpdateIssue",
+      "source_branch": "github_issues"
+    },
+    {
+      "example_id": "ex-00038",
+      "split": "test",
+      "query": "close or update issue using owner and repo and issueNumber",
+      "gold_group_id": "1c90c209c7f1a9b627ea1c4f6ad56ac9",
+      "confusing_group_id": "f1abb2599e08a6b48291d4e1cfdc5a79",
+      "margin": 0.06451607,
+      "source_op": "github_issues.closeOrUpdateIssue",
+      "source_branch": "github_issues"
+    },
+    {
+      "example_id": "ex-00039",
+      "split": "test",
+      "query": "customer (get customer profile by id; not close or update issue in shop)",
+      "gold_group_id": "2bfdf890bedbfcefd846c21d7c9cd066",
+      "confusing_group_id": "1c90c209c7f1a9b627ea1c4f6ad56ac9",
+      "margin": -0.06451607,
+      "source_op": "shop.customer",
+      "source_branch": "github_issues"
+    },
+    {
+      "example_id": "ex-00040",
+      "split": "test",
+      "query": "retrieve billing customer (Retrieve a Stripe billing customer balance and payment method details; not close or update issue in stripe billing)",
+      "gold_group_id": "d68c80a3ff6ad08fc809fe4798387ffb",
+      "confusing_group_id": "1c90c209c7f1a9b627ea1c4f6ad56ac9",
+      "margin": 0.06451607,
+      "source_op": "stripe_billing.retrieveBillingCustomer",
+      "source_branch": "github_issues"
+    },
+    {
+      "example_id": "ex-00041",
+      "split": "fit",
+      "query": "Post a triage reply comment onto an existing repository issue",
+      "gold_group_id": "baacd4ddfbffc00380ca0f9a2097b37a",
+      "confusing_group_id": "1c90c209c7f1a9b627ea1c4f6ad56ac9",
+      "margin": 0.06451607,
+      "source_op": "github_issues.addIssueComment",
+      "source_branch": "github_issues"
+    },
+    {
+      "example_id": "ex-00042",
+      "split": "fit",
+      "query": "add issue comment (/repos/{owner}/{repo}/issues/{issueNumber}/comments)",
+      "gold_group_id": "baacd4ddfbffc00380ca0f9a2097b37a",
+      "confusing_group_id": "f1abb2599e08a6b48291d4e1cfdc5a79",
+      "margin": 0.06451607,
+      "source_op": "github_issues.addIssueComment",
+      "source_branch": "github_issues"
+    },
+    {
+      "example_id": "ex-00043",
+      "split": "fit",
+      "query": "add issue comment for github issues",
+      "gold_group_id": "baacd4ddfbffc00380ca0f9a2097b37a",
+      "confusing_group_id": "f1abb2599e08a6b48291d4e1cfdc5a79",
+      "margin": 0.06451607,
+      "source_op": "github_issues.addIssueComment",
+      "source_branch": "github_issues"
+    },
+    {
+      "example_id": "ex-00044",
+      "split": "fit",
+      "query": "need to add issue comment in github issues: Post a triage reply comment onto an existing repository issue",
+      "gold_group_id": "baacd4ddfbffc00380ca0f9a2097b37a",
+      "confusing_group_id": "0c7e1e230aa4b75e33b5e20f2e1a111f",
+      "margin": 0.06451607,
+      "source_op": "github_issues.addIssueComment",
+      "source_branch": "github_issues"
+    },
+    {
+      "example_id": "ex-00045",
+      "split": "fit",
+      "query": "Post a triage reply comment onto an existing repository issue",
+      "gold_group_id": "baacd4ddfbffc00380ca0f9a2097b37a",
+      "confusing_group_id": "1c90c209c7f1a9b627ea1c4f6ad56ac9",
+      "margin": 0.06451607,
+      "source_op": "github_issues.addIssueComment",
+      "source_branch": "github_issues"
+    },
+    {
+      "example_id": "ex-00046",
+      "split": "fit",
+      "query": "add issue comment using owner and repo and issueNumber",
+      "gold_group_id": "baacd4ddfbffc00380ca0f9a2097b37a",
+      "confusing_group_id": "f1abb2599e08a6b48291d4e1cfdc5a79",
+      "margin": 0.06451607,
+      "source_op": "github_issues.addIssueComment",
+      "source_branch": "github_issues"
+    },
+    {
+      "example_id": "ex-00047",
+      "split": "fit",
+      "query": "list subscriptions (List active and past-due recurring billing subscriptions; not add issue comment in stripe billing)",
+      "gold_group_id": "a39642d2c179d6de7598522edc3208da",
+      "confusing_group_id": "608cb561fd202557a32790528c255d68",
+      "margin": 0.06451607,
+      "source_op": "stripe_billing.listSubscriptions",
+      "source_branch": "github_issues"
+    },
+    {
+      "example_id": "ex-00048",
+      "split": "fit",
+      "query": "customer notes (get account notes for customer id; not add issue comment in notes)",
+      "gold_group_id": "7a30e7674f6103b3fef3fe24c7f71070",
+      "confusing_group_id": "3f137fd60f3f6590f12aa54400ee6abf",
+      "margin": 0.06451607,
+      "source_op": "notes.customer_notes",
+      "source_branch": "github_issues"
+    },
+    {
+      "example_id": "ex-00049",
+      "split": "fit",
+      "query": "List open or merged pull requests queued for code review",
+      "gold_group_id": "99ad326812ce836836edf84d4c335777",
+      "confusing_group_id": "e69d985ccfb026405cce689c79bff948",
+      "margin": 0.06451607,
+      "source_op": "github_issues.listPullRequests",
+      "source_branch": "github_issues"
+    },
+    {
+      "example_id": "ex-00050",
+      "split": "fit",
+      "query": "list pull requests (/repos/{owner}/{repo}/pulls)",
+      "gold_group_id": "99ad326812ce836836edf84d4c335777",
+      "confusing_group_id": "e69d985ccfb026405cce689c79bff948",
+      "margin": 0.06451607,
+      "source_op": "github_issues.listPullRequests",
+      "source_branch": "github_issues"
+    },
+    {
+      "example_id": "ex-00051",
+      "split": "fit",
+      "query": "list pull requests for github issues",
+      "gold_group_id": "99ad326812ce836836edf84d4c335777",
+      "confusing_group_id": "e69d985ccfb026405cce689c79bff948",
+      "margin": 0.06451607,
+      "source_op": "github_issues.listPullRequests",
+      "source_branch": "github_issues"
+    },
+    {
+      "example_id": "ex-00052",
+      "split": "fit",
+      "query": "need to list pull requests in github issues: List open or merged pull requests queued for code review",
+      "gold_group_id": "99ad326812ce836836edf84d4c335777",
+      "confusing_group_id": "e69d985ccfb026405cce689c79bff948",
+      "margin": 0.06451607,
+      "source_op": "github_issues.listPullRequests",
+      "source_branch": "github_issues"
+    },
+    {
+      "example_id": "ex-00053",
+      "split": "fit",
+      "query": "List open or merged pull requests queued for code review",
+      "gold_group_id": "99ad326812ce836836edf84d4c335777",
+      "confusing_group_id": "e69d985ccfb026405cce689c79bff948",
+      "margin": 0.06451607,
+      "source_op": "github_issues.listPullRequests",
+      "source_branch": "github_issues"
+    },
+    {
+      "example_id": "ex-00054",
+      "split": "fit",
+      "query": "list pull requests using owner and repo",
+      "gold_group_id": "99ad326812ce836836edf84d4c335777",
+      "confusing_group_id": "e69d985ccfb026405cce689c79bff948",
+      "margin": 0.06451607,
+      "source_op": "github_issues.listPullRequests",
+      "source_branch": "github_issues"
+    },
+    {
+      "example_id": "ex-00055",
+      "split": "fit",
+      "query": "append customer note (add a follow-up note to a customer account; not list pull requests in notes)",
+      "gold_group_id": "3f137fd60f3f6590f12aa54400ee6abf",
+      "confusing_group_id": "7a30e7674f6103b3fef3fe24c7f71070",
+      "margin": 0.06451607,
+      "source_op": "notes.append_customer_note",
+      "source_branch": "github_issues"
+    },
+    {
+      "example_id": "ex-00056",
+      "split": "fit",
+      "query": "add issue comment (Post a triage reply comment onto an existing repository issue; not list pull requests in github issues)",
+      "gold_group_id": "baacd4ddfbffc00380ca0f9a2097b37a",
+      "confusing_group_id": "0c7e1e230aa4b75e33b5e20f2e1a111f",
+      "margin": 0.06451607,
+      "source_op": "github_issues.addIssueComment",
+      "source_branch": "github_issues"
+    },
+    {
+      "example_id": "ex-00057",
+      "split": "fit",
+      "query": "Full-text search across issues and pull requests matching keywords",
+      "gold_group_id": "059394b48407287fa9eb501b8f98a342",
+      "confusing_group_id": "99ad326812ce836836edf84d4c335777",
+      "margin": 0.06451607,
+      "source_op": "github_issues.searchIssuesGlobal",
+      "source_branch": "github_issues"
+    },
+    {
+      "example_id": "ex-00058",
+      "split": "fit",
+      "query": "search issues global (/search/issues)",
+      "gold_group_id": "059394b48407287fa9eb501b8f98a342",
+      "confusing_group_id": "a84576908a584bf7646ff7c8782981e3",
+      "margin": 0.06451607,
+      "source_op": "github_issues.searchIssuesGlobal",
+      "source_branch": "github_issues"
+    },
+    {
+      "example_id": "ex-00059",
+      "split": "fit",
+      "query": "search issues global for github issues",
+      "gold_group_id": "059394b48407287fa9eb501b8f98a342",
+      "confusing_group_id": "e69d985ccfb026405cce689c79bff948",
+      "margin": 0.06451607,
+      "source_op": "github_issues.searchIssuesGlobal",
+      "source_branch": "github_issues"
+    },
+    {
+      "example_id": "ex-00060",
+      "split": "fit",
+      "query": "need to search issues global in github issues: Full-text search across issues and pull requests matching keywords",
+      "gold_group_id": "059394b48407287fa9eb501b8f98a342",
+      "confusing_group_id": "0c7e1e230aa4b75e33b5e20f2e1a111f",
+      "margin": 0.06451607,
+      "source_op": "github_issues.searchIssuesGlobal",
+      "source_branch": "github_issues"
+    },
+    {
+      "example_id": "ex-00061",
+      "split": "fit",
+      "query": "Full-text search across issues and pull requests matching keywords",
+      "gold_group_id": "059394b48407287fa9eb501b8f98a342",
+      "confusing_group_id": "99ad326812ce836836edf84d4c335777",
+      "margin": 0.06451607,
+      "source_op": "github_issues.searchIssuesGlobal",
+      "source_branch": "github_issues"
+    },
+    {
+      "example_id": "ex-00062",
+      "split": "fit",
+      "query": "search issues global using q",
+      "gold_group_id": "059394b48407287fa9eb501b8f98a342",
+      "confusing_group_id": "a84576908a584bf7646ff7c8782981e3",
+      "margin": 0.06451607,
+      "source_op": "github_issues.searchIssuesGlobal",
+      "source_branch": "github_issues"
+    },
+    {
+      "example_id": "ex-00063",
+      "split": "fit",
+      "query": "add issue comment (Post a triage reply comment onto an existing repository issue; not search issues global in github issues)",
+      "gold_group_id": "baacd4ddfbffc00380ca0f9a2097b37a",
+      "confusing_group_id": "0c7e1e230aa4b75e33b5e20f2e1a111f",
+      "margin": 0.06451607,
+      "source_op": "github_issues.addIssueComment",
+      "source_branch": "github_issues"
+    },
+    {
+      "example_id": "ex-00064",
+      "split": "fit",
+      "query": "add issue comment (Post a triage reply comment onto an existing repository issue; not search issues global in github issues)",
+      "gold_group_id": "baacd4ddfbffc00380ca0f9a2097b37a",
+      "confusing_group_id": "0c7e1e230aa4b75e33b5e20f2e1a111f",
+      "margin": 0.06451607,
+      "source_op": "github_issues.addIssueComment",
+      "source_branch": "github_issues"
+    },
+    {
+      "example_id": "ex-00065",
+      "split": "fit",
+      "query": "get account notes for customer id",
+      "gold_group_id": "7a30e7674f6103b3fef3fe24c7f71070",
+      "confusing_group_id": "3f137fd60f3f6590f12aa54400ee6abf",
+      "margin": 0.06451607,
+      "source_op": "notes.customer_notes",
+      "source_branch": "notes"
+    },
+    {
+      "example_id": "ex-00066",
+      "split": "fit",
+      "query": "read vip customer onboarding memos",
+      "gold_group_id": "7a30e7674f6103b3fef3fe24c7f71070",
+      "confusing_group_id": "3f137fd60f3f6590f12aa54400ee6abf",
+      "margin": 0.06451607,
+      "source_op": "notes.customer_notes",
+      "source_branch": "notes"
+    },
+    {
+      "example_id": "ex-00067",
+      "split": "fit",
+      "query": "Fetch internal account notes and onboarding annotations for a customer",
+      "gold_group_id": "7a30e7674f6103b3fef3fe24c7f71070",
+      "confusing_group_id": "3f137fd60f3f6590f12aa54400ee6abf",
+      "margin": 0.06451607,
+      "source_op": "notes.customer_notes",
+      "source_branch": "notes"
+    },
+    {
+      "example_id": "ex-00068",
+      "split": "fit",
+      "query": "customer notes for notes",
+      "gold_group_id": "7a30e7674f6103b3fef3fe24c7f71070",
+      "confusing_group_id": "3f137fd60f3f6590f12aa54400ee6abf",
+      "margin": 0.06451607,
+      "source_op": "notes.customer_notes",
+      "source_branch": "notes"
+    },
+    {
+      "example_id": "ex-00069",
+      "split": "fit",
+      "query": "need to customer notes in notes: get account notes for customer id",
+      "gold_group_id": "7a30e7674f6103b3fef3fe24c7f71070",
+      "confusing_group_id": "3f137fd60f3f6590f12aa54400ee6abf",
+      "margin": 0.06451607,
+      "source_op": "notes.customer_notes",
+      "source_branch": "notes"
+    },
+    {
+      "example_id": "ex-00070",
+      "split": "fit",
+      "query": "get account notes for customer id",
+      "gold_group_id": "7a30e7674f6103b3fef3fe24c7f71070",
+      "confusing_group_id": "3f137fd60f3f6590f12aa54400ee6abf",
+      "margin": 0.06451607,
+      "source_op": "notes.customer_notes",
+      "source_branch": "notes"
+    },
+    {
+      "example_id": "ex-00071",
+      "split": "fit",
+      "query": "customer notes using customerId",
+      "gold_group_id": "7a30e7674f6103b3fef3fe24c7f71070",
+      "confusing_group_id": "3f137fd60f3f6590f12aa54400ee6abf",
+      "margin": 0.06451607,
+      "source_op": "notes.customer_notes",
+      "source_branch": "notes"
+    },
+    {
+      "example_id": "ex-00072",
+      "split": "fit",
+      "query": "cancel subscription (Cancel a customer's recurring billing subscription immediately; not customer notes in stripe billing)",
+      "gold_group_id": "2c8720ca29286244a157279b765eaa5b",
+      "confusing_group_id": "d68c80a3ff6ad08fc809fe4798387ffb",
+      "margin": 0.06451607,
+      "source_op": "stripe_billing.cancelSubscription",
+      "source_branch": "notes"
+    },
+    {
+      "example_id": "ex-00073",
+      "split": "fit",
+      "query": "search issues global (Full-text search across issues and pull requests matching keywords; not customer notes in github issues)",
+      "gold_group_id": "059394b48407287fa9eb501b8f98a342",
+      "confusing_group_id": "0c7e1e230aa4b75e33b5e20f2e1a111f",
+      "margin": 0.06451607,
+      "source_op": "github_issues.searchIssuesGlobal",
+      "source_branch": "notes"
+    },
+    {
+      "example_id": "ex-00074",
+      "split": "fit",
+      "query": "add a follow-up note to a customer account",
+      "gold_group_id": "3f137fd60f3f6590f12aa54400ee6abf",
+      "confusing_group_id": "2bfdf890bedbfcefd846c21d7c9cd066",
+      "margin": 0.06451607,
+      "source_op": "notes.append_customer_note",
+      "source_branch": "notes"
+    },
+    {
+      "example_id": "ex-00075",
+      "split": "fit",
+      "query": "write an onboarding memo for customer 42",
+      "gold_group_id": "3f137fd60f3f6590f12aa54400ee6abf",
+      "confusing_group_id": "7a30e7674f6103b3fef3fe24c7f71070",
+      "margin": 0.06451607,
+      "source_op": "notes.append_customer_note",
+      "source_branch": "notes"
+    },
+    {
+      "example_id": "ex-00076",
+      "split": "fit",
+      "query": "Append a new account manager note to a customer timeline",
+      "gold_group_id": "3f137fd60f3f6590f12aa54400ee6abf",
+      "confusing_group_id": "2730202236e822f4ce41c9d3b28c3623",
+      "margin": 0.06451607,
+      "source_op": "notes.append_customer_note",
+      "source_branch": "notes"
+    },
+    {
+      "example_id": "ex-00077",
+      "split": "fit",
+      "query": "append customer note for notes",
+      "gold_group_id": "3f137fd60f3f6590f12aa54400ee6abf",
+      "confusing_group_id": "7a30e7674f6103b3fef3fe24c7f71070",
+      "margin": 0.06451607,
+      "source_op": "notes.append_customer_note",
+      "source_branch": "notes"
+    },
+    {
+      "example_id": "ex-00078",
+      "split": "fit",
+      "query": "need to append customer note in notes: add a follow-up note to a customer account",
+      "gold_group_id": "3f137fd60f3f6590f12aa54400ee6abf",
+      "confusing_group_id": "7a30e7674f6103b3fef3fe24c7f71070",
+      "margin": 0.06451607,
+      "source_op": "notes.append_customer_note",
+      "source_branch": "notes"
+    },
+    {
+      "example_id": "ex-00079",
+      "split": "fit",
+      "query": "add a follow-up note to a customer account",
+      "gold_group_id": "3f137fd60f3f6590f12aa54400ee6abf",
+      "confusing_group_id": "2bfdf890bedbfcefd846c21d7c9cd066",
+      "margin": 0.06451607,
+      "source_op": "notes.append_customer_note",
+      "source_branch": "notes"
+    },
+    {
+      "example_id": "ex-00080",
+      "split": "fit",
+      "query": "append customer note using customerId and body",
+      "gold_group_id": "3f137fd60f3f6590f12aa54400ee6abf",
+      "confusing_group_id": "2bfdf890bedbfcefd846c21d7c9cd066",
+      "margin": 0.06451607,
+      "source_op": "notes.append_customer_note",
+      "source_branch": "notes"
+    },
+    {
+      "example_id": "ex-00081",
+      "split": "fit",
+      "query": "get issue (Fetch details, assignee, and labels for a specific repository issue; not append customer note in github issues)",
+      "gold_group_id": "f1abb2599e08a6b48291d4e1cfdc5a79",
+      "confusing_group_id": "0c7e1e230aa4b75e33b5e20f2e1a111f",
+      "margin": 0.06451607,
+      "source_op": "github_issues.getIssue",
+      "source_branch": "notes"
+    },
+    {
+      "example_id": "ex-00082",
+      "split": "fit",
+      "query": "add issue comment (Post a triage reply comment onto an existing repository issue; not append customer note in github issues)",
+      "gold_group_id": "baacd4ddfbffc00380ca0f9a2097b37a",
+      "confusing_group_id": "3f137fd60f3f6590f12aa54400ee6abf",
+      "margin": 0.06451607,
+      "source_op": "github_issues.addIssueComment",
+      "source_branch": "notes"
+    },
+    {
+      "example_id": "ex-00083",
+      "split": "held_out_branch",
+      "query": "List available pets in the catalog with tag and limit filters",
+      "gold_group_id": "62bf35d86736cecf9e24a419b9249d75",
+      "confusing_group_id": "67bc6306689eaebb32ef15a344296a03",
+      "margin": 0.06451607,
+      "source_op": "petstore.listPets",
+      "source_branch": "petstore"
+    },
+    {
+      "example_id": "ex-00084",
+      "split": "held_out_branch",
+      "query": "list pets (/pets)",
+      "gold_group_id": "62bf35d86736cecf9e24a419b9249d75",
+      "confusing_group_id": "5d774d252355b9910b6a38c038fc13c1",
+      "margin": 0.06451607,
+      "source_op": "petstore.listPets",
+      "source_branch": "petstore"
+    },
+    {
+      "example_id": "ex-00085",
+      "split": "held_out_branch",
+      "query": "list pets for petstore",
+      "gold_group_id": "62bf35d86736cecf9e24a419b9249d75",
+      "confusing_group_id": "99ad326812ce836836edf84d4c335777",
+      "margin": 0.06451607,
+      "source_op": "petstore.listPets",
+      "source_branch": "petstore"
+    },
+    {
+      "example_id": "ex-00086",
+      "split": "held_out_branch",
+      "query": "need to list pets in petstore: List available pets in the catalog with tag and limit filters",
+      "gold_group_id": "62bf35d86736cecf9e24a419b9249d75",
+      "confusing_group_id": "67bc6306689eaebb32ef15a344296a03",
+      "margin": 0.06451607,
+      "source_op": "petstore.listPets",
+      "source_branch": "petstore"
+    },
+    {
+      "example_id": "ex-00087",
+      "split": "held_out_branch",
+      "query": "List available pets in the catalog with tag and limit filters",
+      "gold_group_id": "62bf35d86736cecf9e24a419b9249d75",
+      "confusing_group_id": "67bc6306689eaebb32ef15a344296a03",
+      "margin": 0.06451607,
+      "source_op": "petstore.listPets",
+      "source_branch": "petstore"
+    },
+    {
+      "example_id": "ex-00088",
+      "split": "held_out_branch",
+      "query": "list pets using limit and tag",
+      "gold_group_id": "62bf35d86736cecf9e24a419b9249d75",
+      "confusing_group_id": "fd01939aa39148f5e38b227f32f3c953",
+      "margin": 0.06451607,
+      "source_op": "petstore.listPets",
+      "source_branch": "petstore"
+    },
+    {
+      "example_id": "ex-00089",
+      "split": "held_out_branch",
+      "query": "get store inventory (Summarize pet inventory counts grouped by adoption status; not list pets in petstore)",
+      "gold_group_id": "fc9cfc136ec30ed22146346031e5a808",
+      "confusing_group_id": "ab4d0bfdad49aae89b49f94f0bea0693",
+      "margin": 0.06451607,
+      "source_op": "petstore.getStoreInventory",
+      "source_branch": "petstore"
+    },
+    {
+      "example_id": "ex-00090",
+      "split": "held_out_branch",
+      "query": "place store order (Place a new adoption order for an available pet; not list pets in petstore)",
+      "gold_group_id": "fb5ea69cf525fd25f6069740b32e7d16",
+      "confusing_group_id": "62bf35d86736cecf9e24a419b9249d75",
+      "margin": 0.06451607,
+      "source_op": "petstore.placeStoreOrder",
+      "source_branch": "petstore"
+    },
+    {
+      "example_id": "ex-00091",
+      "split": "held_out_branch",
+      "query": "Add a new pet entry to the pet store adoption catalog",
+      "gold_group_id": "82e4d7cb92ddb700a1173ea33d6bff7f",
+      "confusing_group_id": "cf38b1e1ba16863ef4d3e8d8e7710bed",
+      "margin": 0.06451607,
+      "source_op": "petstore.createPet",
+      "source_branch": "petstore"
+    },
+    {
+      "example_id": "ex-00092",
+      "split": "held_out_branch",
+      "query": "create pet (/pets)",
+      "gold_group_id": "82e4d7cb92ddb700a1173ea33d6bff7f",
+      "confusing_group_id": "cf38b1e1ba16863ef4d3e8d8e7710bed",
+      "margin": 0.06451607,
+      "source_op": "petstore.createPet",
+      "source_branch": "petstore"
+    },
+    {
+      "example_id": "ex-00093",
+      "split": "held_out_branch",
+      "query": "create pet for petstore",
+      "gold_group_id": "82e4d7cb92ddb700a1173ea33d6bff7f",
+      "confusing_group_id": "2730202236e822f4ce41c9d3b28c3623",
+      "margin": 0.06451607,
+      "source_op": "petstore.createPet",
+      "source_branch": "petstore"
+    },
+    {
+      "example_id": "ex-00094",
+      "split": "held_out_branch",
+      "query": "need to create pet in petstore: Add a new pet entry to the pet store adoption catalog",
+      "gold_group_id": "82e4d7cb92ddb700a1173ea33d6bff7f",
+      "confusing_group_id": "67bc6306689eaebb32ef15a344296a03",
+      "margin": 0.06451607,
+      "source_op": "petstore.createPet",
+      "source_branch": "petstore"
+    },
+    {
+      "example_id": "ex-00095",
+      "split": "held_out_branch",
+      "query": "Add a new pet entry to the pet store adoption catalog",
+      "gold_group_id": "82e4d7cb92ddb700a1173ea33d6bff7f",
+      "confusing_group_id": "cf38b1e1ba16863ef4d3e8d8e7710bed",
+      "margin": 0.06451607,
+      "source_op": "petstore.createPet",
+      "source_branch": "petstore"
+    },
+    {
+      "example_id": "ex-00096",
+      "split": "held_out_branch",
+      "query": "create pet using name and species",
+      "gold_group_id": "82e4d7cb92ddb700a1173ea33d6bff7f",
+      "confusing_group_id": "ab4d0bfdad49aae89b49f94f0bea0693",
+      "margin": -0.06451607,
+      "source_op": "petstore.createPet",
+      "source_branch": "petstore"
+    },
+    {
+      "example_id": "ex-00097",
+      "split": "held_out_branch",
+      "query": "list store orders (List recent pet adoption orders placed in the store; not create pet in petstore)",
+      "gold_group_id": "67bc6306689eaebb32ef15a344296a03",
+      "confusing_group_id": "62bf35d86736cecf9e24a419b9249d75",
+      "margin": 0.06451607,
+      "source_op": "petstore.listStoreOrders",
+      "source_branch": "petstore"
+    },
+    {
+      "example_id": "ex-00098",
+      "split": "held_out_branch",
+      "query": "place store order (Place a new adoption order for an available pet; not create pet in petstore)",
+      "gold_group_id": "fb5ea69cf525fd25f6069740b32e7d16",
+      "confusing_group_id": "82e4d7cb92ddb700a1173ea33d6bff7f",
+      "margin": 0.06451607,
+      "source_op": "petstore.placeStoreOrder",
+      "source_branch": "petstore"
+    },
+    {
+      "example_id": "ex-00099",
+      "split": "held_out_branch",
+      "query": "Filter store pets by adoption availability status (available, pending, sold)",
+      "gold_group_id": "5d774d252355b9910b6a38c038fc13c1",
+      "confusing_group_id": "62bf35d86736cecf9e24a419b9249d75",
+      "margin": 0.06451607,
+      "source_op": "petstore.findPetsByStatus",
+      "source_branch": "petstore"
+    },
+    {
+      "example_id": "ex-00100",
+      "split": "held_out_branch",
+      "query": "find pets by status (/pets/findByStatus)",
+      "gold_group_id": "5d774d252355b9910b6a38c038fc13c1",
+      "confusing_group_id": "ab4d0bfdad49aae89b49f94f0bea0693",
+      "margin": 0.06451607,
+      "source_op": "petstore.findPetsByStatus",
+      "source_branch": "petstore"
+    },
+    {
+      "example_id": "ex-00101",
+      "split": "held_out_branch",
+      "query": "find pets by status for petstore",
+      "gold_group_id": "5d774d252355b9910b6a38c038fc13c1",
+      "confusing_group_id": "d58caa431bd2ec638b44dc9193dd6dab",
+      "margin": 0.06451607,
+      "source_op": "petstore.findPetsByStatus",
+      "source_branch": "petstore"
+    },
+    {
+      "example_id": "ex-00102",
+      "split": "held_out_branch",
+      "query": "need to find pets by status in petstore: Filter store pets by adoption availability status (available, pending, sold)",
+      "gold_group_id": "5d774d252355b9910b6a38c038fc13c1",
+      "confusing_group_id": "ab4d0bfdad49aae89b49f94f0bea0693",
+      "margin": 0.06451607,
+      "source_op": "petstore.findPetsByStatus",
+      "source_branch": "petstore"
+    },
+    {
+      "example_id": "ex-00103",
+      "split": "held_out_branch",
+      "query": "Filter store pets by adoption availability status (available, pending, sold)",
+      "gold_group_id": "5d774d252355b9910b6a38c038fc13c1",
+      "confusing_group_id": "62bf35d86736cecf9e24a419b9249d75",
+      "margin": 0.06451607,
+      "source_op": "petstore.findPetsByStatus",
+      "source_branch": "petstore"
+    },
+    {
+      "example_id": "ex-00104",
+      "split": "held_out_branch",
+      "query": "find pets by status using status",
+      "gold_group_id": "5d774d252355b9910b6a38c038fc13c1",
+      "confusing_group_id": "ab4d0bfdad49aae89b49f94f0bea0693",
+      "margin": 0.06451607,
+      "source_op": "petstore.findPetsByStatus",
+      "source_branch": "petstore"
+    },
+    {
+      "example_id": "ex-00105",
+      "split": "held_out_branch",
+      "query": "get store inventory (Summarize pet inventory counts grouped by adoption status; not find pets by status in petstore)",
+      "gold_group_id": "fc9cfc136ec30ed22146346031e5a808",
+      "confusing_group_id": "5d774d252355b9910b6a38c038fc13c1",
+      "margin": 0.06451607,
+      "source_op": "petstore.getStoreInventory",
+      "source_branch": "petstore"
+    },
+    {
+      "example_id": "ex-00106",
+      "split": "held_out_branch",
+      "query": "list store orders (List recent pet adoption orders placed in the store; not find pets by status in petstore)",
+      "gold_group_id": "67bc6306689eaebb32ef15a344296a03",
+      "confusing_group_id": "62bf35d86736cecf9e24a419b9249d75",
+      "margin": 0.06451607,
+      "source_op": "petstore.listStoreOrders",
+      "source_branch": "petstore"
+    },
+    {
+      "example_id": "ex-00107",
+      "split": "held_out_branch",
+      "query": "Permanently remove a retired pet listing from the catalog",
+      "gold_group_id": "cf38b1e1ba16863ef4d3e8d8e7710bed",
+      "confusing_group_id": "82e4d7cb92ddb700a1173ea33d6bff7f",
+      "margin": 0.06451607,
+      "source_op": "petstore.deletePet",
+      "source_branch": "petstore"
+    },
+    {
+      "example_id": "ex-00108",
+      "split": "held_out_branch",
+      "query": "delete pet (/pets/{petId})",
+      "gold_group_id": "cf38b1e1ba16863ef4d3e8d8e7710bed",
+      "confusing_group_id": "2c84d905e7a0526708d151a86de8e1ed",
+      "margin": 0.06451607,
+      "source_op": "petstore.deletePet",
+      "source_branch": "petstore"
+    },
+    {
+      "example_id": "ex-00109",
+      "split": "held_out_branch",
+      "query": "delete pet for petstore",
+      "gold_group_id": "cf38b1e1ba16863ef4d3e8d8e7710bed",
+      "confusing_group_id": "fb5ea69cf525fd25f6069740b32e7d16",
+      "margin": 0.06451607,
+      "source_op": "petstore.deletePet",
+      "source_branch": "petstore"
+    },
+    {
+      "example_id": "ex-00110",
+      "split": "held_out_branch",
+      "query": "need to delete pet in petstore: Permanently remove a retired pet listing from the catalog",
+      "gold_group_id": "cf38b1e1ba16863ef4d3e8d8e7710bed",
+      "confusing_group_id": "82e4d7cb92ddb700a1173ea33d6bff7f",
+      "margin": 0.06451607,
+      "source_op": "petstore.deletePet",
+      "source_branch": "petstore"
+    },
+    {
+      "example_id": "ex-00111",
+      "split": "held_out_branch",
+      "query": "Permanently remove a retired pet listing from the catalog",
+      "gold_group_id": "cf38b1e1ba16863ef4d3e8d8e7710bed",
+      "confusing_group_id": "82e4d7cb92ddb700a1173ea33d6bff7f",
+      "margin": 0.06451607,
+      "source_op": "petstore.deletePet",
+      "source_branch": "petstore"
+    },
+    {
+      "example_id": "ex-00112",
+      "split": "held_out_branch",
+      "query": "delete pet using petId",
+      "gold_group_id": "cf38b1e1ba16863ef4d3e8d8e7710bed",
+      "confusing_group_id": "2c84d905e7a0526708d151a86de8e1ed",
+      "margin": 0.06451607,
+      "source_op": "petstore.deletePet",
+      "source_branch": "petstore"
+    },
+    {
+      "example_id": "ex-00113",
+      "split": "held_out_branch",
+      "query": "list store orders (List recent pet adoption orders placed in the store; not delete pet in petstore)",
+      "gold_group_id": "67bc6306689eaebb32ef15a344296a03",
+      "confusing_group_id": "62bf35d86736cecf9e24a419b9249d75",
+      "margin": 0.06451607,
+      "source_op": "petstore.listStoreOrders",
+      "source_branch": "petstore"
+    },
+    {
+      "example_id": "ex-00114",
+      "split": "held_out_branch",
+      "query": "list pets (List available pets in the catalog with tag and limit filters; not delete pet in petstore)",
+      "gold_group_id": "62bf35d86736cecf9e24a419b9249d75",
+      "confusing_group_id": "cf38b1e1ba16863ef4d3e8d8e7710bed",
+      "margin": 0.06451607,
+      "source_op": "petstore.listPets",
+      "source_branch": "petstore"
+    },
+    {
+      "example_id": "ex-00115",
+      "split": "held_out_branch",
+      "query": "Retrieve detailed pet record by unique pet identifier",
+      "gold_group_id": "2c84d905e7a0526708d151a86de8e1ed",
+      "confusing_group_id": "2bfdf890bedbfcefd846c21d7c9cd066",
+      "margin": 0.06451607,
+      "source_op": "petstore.getPetById",
+      "source_branch": "petstore"
+    },
+    {
+      "example_id": "ex-00116",
+      "split": "held_out_branch",
+      "query": "get pet by id (/pets/{petId})",
+      "gold_group_id": "2c84d905e7a0526708d151a86de8e1ed",
+      "confusing_group_id": "cf38b1e1ba16863ef4d3e8d8e7710bed",
+      "margin": 0.06451607,
+      "source_op": "petstore.getPetById",
+      "source_branch": "petstore"
+    },
+    {
+      "example_id": "ex-00117",
+      "split": "held_out_branch",
+      "query": "get pet by id for petstore",
+      "gold_group_id": "2c84d905e7a0526708d151a86de8e1ed",
+      "confusing_group_id": "d58caa431bd2ec638b44dc9193dd6dab",
+      "margin": 0.06451607,
+      "source_op": "petstore.getPetById",
+      "source_branch": "petstore"
+    },
+    {
+      "example_id": "ex-00118",
+      "split": "held_out_branch",
+      "query": "need to get pet by id in petstore: Retrieve detailed pet record by unique pet identifier",
+      "gold_group_id": "2c84d905e7a0526708d151a86de8e1ed",
+      "confusing_group_id": "fc9cfc136ec30ed22146346031e5a808",
+      "margin": 0.06451607,
+      "source_op": "petstore.getPetById",
+      "source_branch": "petstore"
+    },
+    {
+      "example_id": "ex-00119",
+      "split": "held_out_branch",
+      "query": "Retrieve detailed pet record by unique pet identifier",
+      "gold_group_id": "2c84d905e7a0526708d151a86de8e1ed",
+      "confusing_group_id": "2bfdf890bedbfcefd846c21d7c9cd066",
+      "margin": 0.06451607,
+      "source_op": "petstore.getPetById",
+      "source_branch": "petstore"
+    },
+    {
+      "example_id": "ex-00120",
+      "split": "held_out_branch",
+      "query": "get pet by id using petId",
+      "gold_group_id": "2c84d905e7a0526708d151a86de8e1ed",
+      "confusing_group_id": "fc9cfc136ec30ed22146346031e5a808",
+      "margin": 0.06451607,
+      "source_op": "petstore.getPetById",
+      "source_branch": "petstore"
+    },
+    {
+      "example_id": "ex-00121",
+      "split": "held_out_branch",
+      "query": "list store orders (List recent pet adoption orders placed in the store; not get pet by id in petstore)",
+      "gold_group_id": "67bc6306689eaebb32ef15a344296a03",
+      "confusing_group_id": "62bf35d86736cecf9e24a419b9249d75",
+      "margin": 0.06451607,
+      "source_op": "petstore.listStoreOrders",
+      "source_branch": "petstore"
+    },
+    {
+      "example_id": "ex-00122",
+      "split": "held_out_branch",
+      "query": "update pet status (Update pet name or adoption status in store catalog; not get pet by id in petstore)",
+      "gold_group_id": "ab4d0bfdad49aae89b49f94f0bea0693",
+      "confusing_group_id": "fc9cfc136ec30ed22146346031e5a808",
+      "margin": 0.06451607,
+      "source_op": "petstore.updatePetStatus",
+      "source_branch": "petstore"
+    },
+    {
+      "example_id": "ex-00123",
+      "split": "held_out_branch",
+      "query": "Update pet name or adoption status in store catalog",
+      "gold_group_id": "ab4d0bfdad49aae89b49f94f0bea0693",
+      "confusing_group_id": "67bc6306689eaebb32ef15a344296a03",
+      "margin": 0.06451607,
+      "source_op": "petstore.updatePetStatus",
+      "source_branch": "petstore"
+    },
+    {
+      "example_id": "ex-00124",
+      "split": "held_out_branch",
+      "query": "update pet status (/pets/{petId})",
+      "gold_group_id": "ab4d0bfdad49aae89b49f94f0bea0693",
+      "confusing_group_id": "2c84d905e7a0526708d151a86de8e1ed",
+      "margin": 0.06451607,
+      "source_op": "petstore.updatePetStatus",
+      "source_branch": "petstore"
+    },
+    {
+      "example_id": "ex-00125",
+      "split": "held_out_branch",
+      "query": "update pet status for petstore",
+      "gold_group_id": "ab4d0bfdad49aae89b49f94f0bea0693",
+      "confusing_group_id": "1c90c209c7f1a9b627ea1c4f6ad56ac9",
+      "margin": 0.06451607,
+      "source_op": "petstore.updatePetStatus",
+      "source_branch": "petstore"
+    },
+    {
+      "example_id": "ex-00126",
+      "split": "held_out_branch",
+      "query": "need to update pet status in petstore: Update pet name or adoption status in store catalog",
+      "gold_group_id": "ab4d0bfdad49aae89b49f94f0bea0693",
+      "confusing_group_id": "67bc6306689eaebb32ef15a344296a03",
+      "margin": 0.06451607,
+      "source_op": "petstore.updatePetStatus",
+      "source_branch": "petstore"
+    },
+    {
+      "example_id": "ex-00127",
+      "split": "held_out_branch",
+      "query": "Update pet name or adoption status in store catalog",
+      "gold_group_id": "ab4d0bfdad49aae89b49f94f0bea0693",
+      "confusing_group_id": "67bc6306689eaebb32ef15a344296a03",
+      "margin": 0.06451607,
+      "source_op": "petstore.updatePetStatus",
+      "source_branch": "petstore"
+    },
+    {
+      "example_id": "ex-00128",
+      "split": "held_out_branch",
+      "query": "update pet status using petId and status",
+      "gold_group_id": "ab4d0bfdad49aae89b49f94f0bea0693",
+      "confusing_group_id": "fc9cfc136ec30ed22146346031e5a808",
+      "margin": 0.06451607,
+      "source_op": "petstore.updatePetStatus",
+      "source_branch": "petstore"
+    },
+    {
+      "example_id": "ex-00129",
+      "split": "held_out_branch",
+      "query": "get pet by id (Retrieve detailed pet record by unique pet identifier; not update pet status in petstore)",
+      "gold_group_id": "2c84d905e7a0526708d151a86de8e1ed",
+      "confusing_group_id": "ab4d0bfdad49aae89b49f94f0bea0693",
+      "margin": 0.06451607,
+      "source_op": "petstore.getPetById",
+      "source_branch": "petstore"
+    },
+    {
+      "example_id": "ex-00130",
+      "split": "held_out_branch",
+      "query": "find pets by status (Filter store pets by adoption availability status (available, pending, sold); not update pet status in petstore)",
+      "gold_group_id": "5d774d252355b9910b6a38c038fc13c1",
+      "confusing_group_id": "ab4d0bfdad49aae89b49f94f0bea0693",
+      "margin": 0.06451607,
+      "source_op": "petstore.findPetsByStatus",
+      "source_branch": "petstore"
+    },
+    {
+      "example_id": "ex-00131",
+      "split": "held_out_branch",
+      "query": "Summarize pet inventory counts grouped by adoption status",
+      "gold_group_id": "fc9cfc136ec30ed22146346031e5a808",
+      "confusing_group_id": "5d774d252355b9910b6a38c038fc13c1",
+      "margin": 0.06451607,
+      "source_op": "petstore.getStoreInventory",
+      "source_branch": "petstore"
+    },
+    {
+      "example_id": "ex-00132",
+      "split": "held_out_branch",
+      "query": "get store inventory (/store/inventory)",
+      "gold_group_id": "fc9cfc136ec30ed22146346031e5a808",
+      "confusing_group_id": "2c84d905e7a0526708d151a86de8e1ed",
+      "margin": 0.06451607,
+      "source_op": "petstore.getStoreInventory",
+      "source_branch": "petstore"
+    },
+    {
+      "example_id": "ex-00133",
+      "split": "held_out_branch",
+      "query": "get store inventory for petstore",
+      "gold_group_id": "fc9cfc136ec30ed22146346031e5a808",
+      "confusing_group_id": "2c84d905e7a0526708d151a86de8e1ed",
+      "margin": 0.06451607,
+      "source_op": "petstore.getStoreInventory",
+      "source_branch": "petstore"
+    },
+    {
+      "example_id": "ex-00134",
+      "split": "held_out_branch",
+      "query": "need to get store inventory in petstore: Summarize pet inventory counts grouped by adoption status",
+      "gold_group_id": "fc9cfc136ec30ed22146346031e5a808",
+      "confusing_group_id": "ab4d0bfdad49aae89b49f94f0bea0693",
+      "margin": 0.06451607,
+      "source_op": "petstore.getStoreInventory",
+      "source_branch": "petstore"
+    },
+    {
+      "example_id": "ex-00135",
+      "split": "held_out_branch",
+      "query": "Summarize pet inventory counts grouped by adoption status",
+      "gold_group_id": "fc9cfc136ec30ed22146346031e5a808",
+      "confusing_group_id": "5d774d252355b9910b6a38c038fc13c1",
+      "margin": 0.06451607,
+      "source_op": "petstore.getStoreInventory",
+      "source_branch": "petstore"
+    },
+    {
+      "example_id": "ex-00136",
+      "split": "held_out_branch",
+      "query": "please Summarize pet inventory counts grouped by adoption status (get store inventory)",
+      "gold_group_id": "fc9cfc136ec30ed22146346031e5a808",
+      "confusing_group_id": "5d774d252355b9910b6a38c038fc13c1",
+      "margin": 0.06451607,
+      "source_op": "petstore.getStoreInventory",
+      "source_branch": "petstore"
+    },
+    {
+      "example_id": "ex-00137",
+      "split": "held_out_branch",
+      "query": "list store orders (List recent pet adoption orders placed in the store; not get store inventory in petstore)",
+      "gold_group_id": "67bc6306689eaebb32ef15a344296a03",
+      "confusing_group_id": "62bf35d86736cecf9e24a419b9249d75",
+      "margin": 0.06451607,
+      "source_op": "petstore.listStoreOrders",
+      "source_branch": "petstore"
+    },
+    {
+      "example_id": "ex-00138",
+      "split": "held_out_branch",
+      "query": "update pet status (Update pet name or adoption status in store catalog; not get store inventory in petstore)",
+      "gold_group_id": "ab4d0bfdad49aae89b49f94f0bea0693",
+      "confusing_group_id": "fc9cfc136ec30ed22146346031e5a808",
+      "margin": 0.06451607,
+      "source_op": "petstore.updatePetStatus",
+      "source_branch": "petstore"
+    },
+    {
+      "example_id": "ex-00139",
+      "split": "held_out_branch",
+      "query": "List recent pet adoption orders placed in the store",
+      "gold_group_id": "67bc6306689eaebb32ef15a344296a03",
+      "confusing_group_id": "62bf35d86736cecf9e24a419b9249d75",
+      "margin": 0.06451607,
+      "source_op": "petstore.listStoreOrders",
+      "source_branch": "petstore"
+    },
+    {
+      "example_id": "ex-00140",
+      "split": "held_out_branch",
+      "query": "list store orders (/store/orders)",
+      "gold_group_id": "67bc6306689eaebb32ef15a344296a03",
+      "confusing_group_id": "fb5ea69cf525fd25f6069740b32e7d16",
+      "margin": 0.06451607,
+      "source_op": "petstore.listStoreOrders",
+      "source_branch": "petstore"
+    },
+    {
+      "example_id": "ex-00141",
+      "split": "held_out_branch",
+      "query": "list store orders for petstore",
+      "gold_group_id": "67bc6306689eaebb32ef15a344296a03",
+      "confusing_group_id": "a84576908a584bf7646ff7c8782981e3",
+      "margin": 0.06451607,
+      "source_op": "petstore.listStoreOrders",
+      "source_branch": "petstore"
+    },
+    {
+      "example_id": "ex-00142",
+      "split": "held_out_branch",
+      "query": "need to list store orders in petstore: List recent pet adoption orders placed in the store",
+      "gold_group_id": "67bc6306689eaebb32ef15a344296a03",
+      "confusing_group_id": "62bf35d86736cecf9e24a419b9249d75",
+      "margin": 0.06451607,
+      "source_op": "petstore.listStoreOrders",
+      "source_branch": "petstore"
+    },
+    {
+      "example_id": "ex-00143",
+      "split": "held_out_branch",
+      "query": "List recent pet adoption orders placed in the store",
+      "gold_group_id": "67bc6306689eaebb32ef15a344296a03",
+      "confusing_group_id": "62bf35d86736cecf9e24a419b9249d75",
+      "margin": 0.06451607,
+      "source_op": "petstore.listStoreOrders",
+      "source_branch": "petstore"
+    },
+    {
+      "example_id": "ex-00144",
+      "split": "held_out_branch",
+      "query": "list store orders using limit",
+      "gold_group_id": "67bc6306689eaebb32ef15a344296a03",
+      "confusing_group_id": "62bf35d86736cecf9e24a419b9249d75",
+      "margin": -0.12698364,
+      "source_op": "petstore.listStoreOrders",
+      "source_branch": "petstore"
+    },
+    {
+      "example_id": "ex-00145",
+      "split": "held_out_branch",
+      "query": "create pet (Add a new pet entry to the pet store adoption catalog; not list store orders in petstore)",
+      "gold_group_id": "82e4d7cb92ddb700a1173ea33d6bff7f",
+      "confusing_group_id": "67bc6306689eaebb32ef15a344296a03",
+      "margin": 0.06451607,
+      "source_op": "petstore.createPet",
+      "source_branch": "petstore"
+    },
+    {
+      "example_id": "ex-00146",
+      "split": "held_out_branch",
+      "query": "create pet (Add a new pet entry to the pet store adoption catalog; not list store orders in petstore)",
+      "gold_group_id": "82e4d7cb92ddb700a1173ea33d6bff7f",
+      "confusing_group_id": "67bc6306689eaebb32ef15a344296a03",
+      "margin": 0.06451607,
+      "source_op": "petstore.createPet",
+      "source_branch": "petstore"
+    },
+    {
+      "example_id": "ex-00147",
+      "split": "held_out_branch",
+      "query": "Place a new adoption order for an available pet",
+      "gold_group_id": "fb5ea69cf525fd25f6069740b32e7d16",
+      "confusing_group_id": "82e4d7cb92ddb700a1173ea33d6bff7f",
+      "margin": 0.06451607,
+      "source_op": "petstore.placeStoreOrder",
+      "source_branch": "petstore"
+    },
+    {
+      "example_id": "ex-00148",
+      "split": "held_out_branch",
+      "query": "place store order (/store/orders)",
+      "gold_group_id": "fb5ea69cf525fd25f6069740b32e7d16",
+      "confusing_group_id": "67bc6306689eaebb32ef15a344296a03",
+      "margin": 0.06451607,
+      "source_op": "petstore.placeStoreOrder",
+      "source_branch": "petstore"
+    },
+    {
+      "example_id": "ex-00149",
+      "split": "held_out_branch",
+      "query": "place store order for petstore",
+      "gold_group_id": "fb5ea69cf525fd25f6069740b32e7d16",
+      "confusing_group_id": "d58caa431bd2ec638b44dc9193dd6dab",
+      "margin": 0.06451607,
+      "source_op": "petstore.placeStoreOrder",
+      "source_branch": "petstore"
+    },
+    {
+      "example_id": "ex-00150",
+      "split": "held_out_branch",
+      "query": "need to place store order in petstore: Place a new adoption order for an available pet",
+      "gold_group_id": "fb5ea69cf525fd25f6069740b32e7d16",
+      "confusing_group_id": "82e4d7cb92ddb700a1173ea33d6bff7f",
+      "margin": 0.06451607,
+      "source_op": "petstore.placeStoreOrder",
+      "source_branch": "petstore"
+    },
+    {
+      "example_id": "ex-00151",
+      "split": "held_out_branch",
+      "query": "Place a new adoption order for an available pet",
+      "gold_group_id": "fb5ea69cf525fd25f6069740b32e7d16",
+      "confusing_group_id": "82e4d7cb92ddb700a1173ea33d6bff7f",
+      "margin": 0.06451607,
+      "source_op": "petstore.placeStoreOrder",
+      "source_branch": "petstore"
+    },
+    {
+      "example_id": "ex-00152",
+      "split": "held_out_branch",
+      "query": "place store order using petId and quantity",
+      "gold_group_id": "fb5ea69cf525fd25f6069740b32e7d16",
+      "confusing_group_id": "d58caa431bd2ec638b44dc9193dd6dab",
+      "margin": 0.06451607,
+      "source_op": "petstore.placeStoreOrder",
+      "source_branch": "petstore"
+    },
+    {
+      "example_id": "ex-00153",
+      "split": "held_out_branch",
+      "query": "get store inventory (Summarize pet inventory counts grouped by adoption status; not place store order in petstore)",
+      "gold_group_id": "fc9cfc136ec30ed22146346031e5a808",
+      "confusing_group_id": "fb5ea69cf525fd25f6069740b32e7d16",
+      "margin": 0.06451607,
+      "source_op": "petstore.getStoreInventory",
+      "source_branch": "petstore"
+    },
+    {
+      "example_id": "ex-00154",
+      "split": "held_out_branch",
+      "query": "list pets (List available pets in the catalog with tag and limit filters; not place store order in petstore)",
+      "gold_group_id": "62bf35d86736cecf9e24a419b9249d75",
+      "confusing_group_id": "fb5ea69cf525fd25f6069740b32e7d16",
+      "margin": 0.06451607,
+      "source_op": "petstore.listPets",
+      "source_branch": "petstore"
+    },
+    {
+      "example_id": "ex-00155",
+      "split": "calibration",
+      "query": "list all shop customers",
+      "gold_group_id": "fd01939aa39148f5e38b227f32f3c953",
+      "confusing_group_id": "a84576908a584bf7646ff7c8782981e3",
+      "margin": 0.06451607,
+      "source_op": "shop.customers",
+      "source_branch": "shop"
+    },
+    {
+      "example_id": "ex-00156",
+      "split": "calibration",
+      "query": "show customer directory with limit and offset",
+      "gold_group_id": "fd01939aa39148f5e38b227f32f3c953",
+      "confusing_group_id": "a84576908a584bf7646ff7c8782981e3",
+      "margin": 0.06451607,
+      "source_op": "shop.customers",
+      "source_branch": "shop"
+    },
+    {
+      "example_id": "ex-00157",
+      "split": "calibration",
+      "query": "List shop customers with optional offset pagination and id batching",
+      "gold_group_id": "fd01939aa39148f5e38b227f32f3c953",
+      "confusing_group_id": "a84576908a584bf7646ff7c8782981e3",
+      "margin": 0.06451607,
+      "source_op": "shop.customers",
+      "source_branch": "shop"
+    },
+    {
+      "example_id": "ex-00158",
+      "split": "calibration",
+      "query": "customers for shop",
+      "gold_group_id": "fd01939aa39148f5e38b227f32f3c953",
+      "confusing_group_id": "a84576908a584bf7646ff7c8782981e3",
+      "margin": -0.12698364,
+      "source_op": "shop.customers",
+      "source_branch": "shop"
+    },
+    {
+      "example_id": "ex-00159",
+      "split": "calibration",
+      "query": "need to customers in shop: list all shop customers",
+      "gold_group_id": "fd01939aa39148f5e38b227f32f3c953",
+      "confusing_group_id": "a84576908a584bf7646ff7c8782981e3",
+      "margin": 0.06451607,
+      "source_op": "shop.customers",
+      "source_branch": "shop"
+    },
+    {
+      "example_id": "ex-00160",
+      "split": "calibration",
+      "query": "list all shop customers",
+      "gold_group_id": "fd01939aa39148f5e38b227f32f3c953",
+      "confusing_group_id": "a84576908a584bf7646ff7c8782981e3",
+      "margin": 0.06451607,
+      "source_op": "shop.customers",
+      "source_branch": "shop"
+    },
+    {
+      "example_id": "ex-00161",
+      "split": "calibration",
+      "query": "customers using limit and offset and ids",
+      "gold_group_id": "fd01939aa39148f5e38b227f32f3c953",
+      "confusing_group_id": "608cb561fd202557a32790528c255d68",
+      "margin": 0.06451607,
+      "source_op": "shop.customers",
+      "source_branch": "shop"
+    },
+    {
+      "example_id": "ex-00162",
+      "split": "calibration",
+      "query": "list billing customers (List Stripe billing customer accounts with optional email filter; not customers in stripe billing)",
+      "gold_group_id": "608cb561fd202557a32790528c255d68",
+      "confusing_group_id": "d68c80a3ff6ad08fc809fe4798387ffb",
+      "margin": 0.06451607,
+      "source_op": "stripe_billing.listBillingCustomers",
+      "source_branch": "shop"
+    },
+    {
+      "example_id": "ex-00163",
+      "split": "calibration",
+      "query": "orders (list orders for a shop customer; not customers in shop)",
+      "gold_group_id": "a84576908a584bf7646ff7c8782981e3",
+      "confusing_group_id": "fd01939aa39148f5e38b227f32f3c953",
+      "margin": 0.06451607,
+      "source_op": "shop.orders",
+      "source_branch": "shop"
+    },
+    {
+      "example_id": "ex-00164",
+      "split": "test",
+      "query": "get customer profile by id",
+      "gold_group_id": "2bfdf890bedbfcefd846c21d7c9cd066",
+      "confusing_group_id": "d58caa431bd2ec638b44dc9193dd6dab",
+      "margin": 0.06451607,
+      "source_op": "shop.customer",
+      "source_branch": "shop"
+    },
+    {
+      "example_id": "ex-00165",
+      "split": "test",
+      "query": "look up single customer account record",
+      "gold_group_id": "2bfdf890bedbfcefd846c21d7c9cd066",
+      "confusing_group_id": "3f137fd60f3f6590f12aa54400ee6abf",
+      "margin": 0.06451607,
+      "source_op": "shop.customer",
+      "source_branch": "shop"
+    },
+    {
+      "example_id": "ex-00166",
+      "split": "test",
+      "query": "Fetch a single shop customer profile by numeric id",
+      "gold_group_id": "2bfdf890bedbfcefd846c21d7c9cd066",
+      "confusing_group_id": "d58caa431bd2ec638b44dc9193dd6dab",
+      "margin": 0.06451607,
+      "source_op": "shop.customer",
+      "source_branch": "shop"
+    },
+    {
+      "example_id": "ex-00167",
+      "split": "test",
+      "query": "customer for shop",
+      "gold_group_id": "2bfdf890bedbfcefd846c21d7c9cd066",
+      "confusing_group_id": "a84576908a584bf7646ff7c8782981e3",
+      "margin": -0.18749976,
+      "source_op": "shop.customer",
+      "source_branch": "shop"
+    },
+    {
+      "example_id": "ex-00168",
+      "split": "test",
+      "query": "need to customer in shop: get customer profile by id",
+      "gold_group_id": "2bfdf890bedbfcefd846c21d7c9cd066",
+      "confusing_group_id": "d58caa431bd2ec638b44dc9193dd6dab",
+      "margin": 0.06451607,
+      "source_op": "shop.customer",
+      "source_branch": "shop"
+    },
+    {
+      "example_id": "ex-00169",
+      "split": "test",
+      "query": "get customer profile by id",
+      "gold_group_id": "2bfdf890bedbfcefd846c21d7c9cd066",
+      "confusing_group_id": "d58caa431bd2ec638b44dc9193dd6dab",
+      "margin": 0.06451607,
+      "source_op": "shop.customer",
+      "source_branch": "shop"
+    },
+    {
+      "example_id": "ex-00170",
+      "split": "test",
+      "query": "customer using id",
+      "gold_group_id": "2bfdf890bedbfcefd846c21d7c9cd066",
+      "confusing_group_id": "d68c80a3ff6ad08fc809fe4798387ffb",
+      "margin": 0.06451607,
+      "source_op": "shop.customer",
+      "source_branch": "shop"
+    },
+    {
+      "example_id": "ex-00171",
+      "split": "test",
+      "query": "create invoice (Create a new draft billing invoice for a customer account; not customer in stripe billing)",
+      "gold_group_id": "2730202236e822f4ce41c9d3b28c3623",
+      "confusing_group_id": "0c7e1e230aa4b75e33b5e20f2e1a111f",
+      "margin": 0.06451607,
+      "source_op": "stripe_billing.createInvoice",
+      "source_branch": "shop"
+    },
+    {
+      "example_id": "ex-00172",
+      "split": "test",
+      "query": "retrieve billing customer (Retrieve a Stripe billing customer balance and payment method details; not customer in stripe billing)",
+      "gold_group_id": "d68c80a3ff6ad08fc809fe4798387ffb",
+      "confusing_group_id": "a6918fb40f7b166e121e3df9d2426cab",
+      "margin": 0.06451607,
+      "source_op": "stripe_billing.retrieveBillingCustomer",
+      "source_branch": "shop"
+    },
+    {
+      "example_id": "ex-00173",
+      "split": "calibration",
+      "query": "list orders for a shop customer",
+      "gold_group_id": "a84576908a584bf7646ff7c8782981e3",
+      "confusing_group_id": "fd01939aa39148f5e38b227f32f3c953",
+      "margin": 0.06451607,
+      "source_op": "shop.orders",
+      "source_branch": "shop"
+    },
+    {
+      "example_id": "ex-00174",
+      "split": "calibration",
+      "query": "search purchase orders with pagination",
+      "gold_group_id": "a84576908a584bf7646ff7c8782981e3",
+      "confusing_group_id": "fd01939aa39148f5e38b227f32f3c953",
+      "margin": 0.06451607,
+      "source_op": "shop.orders",
+      "source_branch": "shop"
+    },
+    {
+      "example_id": "ex-00175",
+      "split": "calibration",
+      "query": "List shop orders filtered optionally by customer id",
+      "gold_group_id": "a84576908a584bf7646ff7c8782981e3",
+      "confusing_group_id": "46dd543638eed4dc9ac3d97b38e9ab7e",
+      "margin": 0.06451607,
+      "source_op": "shop.orders",
+      "source_branch": "shop"
+    },
+    {
+      "example_id": "ex-00176",
+      "split": "calibration",
+      "query": "orders for shop",
+      "gold_group_id": "a84576908a584bf7646ff7c8782981e3",
+      "confusing_group_id": "d58caa431bd2ec638b44dc9193dd6dab",
+      "margin": 0.06451607,
+      "source_op": "shop.orders",
+      "source_branch": "shop"
+    },
+    {
+      "example_id": "ex-00177",
+      "split": "calibration",
+      "query": "need to orders in shop: list orders for a shop customer",
+      "gold_group_id": "a84576908a584bf7646ff7c8782981e3",
+      "confusing_group_id": "fd01939aa39148f5e38b227f32f3c953",
+      "margin": 0.06451607,
+      "source_op": "shop.orders",
+      "source_branch": "shop"
+    },
+    {
+      "example_id": "ex-00178",
+      "split": "calibration",
+      "query": "list orders for a shop customer",
+      "gold_group_id": "a84576908a584bf7646ff7c8782981e3",
+      "confusing_group_id": "fd01939aa39148f5e38b227f32f3c953",
+      "margin": 0.06451607,
+      "source_op": "shop.orders",
+      "source_branch": "shop"
+    },
+    {
+      "example_id": "ex-00179",
+      "split": "calibration",
+      "query": "orders using customerId and limit and offset",
+      "gold_group_id": "a84576908a584bf7646ff7c8782981e3",
+      "confusing_group_id": "fd01939aa39148f5e38b227f32f3c953",
+      "margin": -0.06451607,
+      "source_op": "shop.orders",
+      "source_branch": "shop"
+    },
+    {
+      "example_id": "ex-00180",
+      "split": "calibration",
+      "query": "list billing customers (List Stripe billing customer accounts with optional email filter; not orders in stripe billing)",
+      "gold_group_id": "608cb561fd202557a32790528c255d68",
+      "confusing_group_id": "fd01939aa39148f5e38b227f32f3c953",
+      "margin": 0.06451607,
+      "source_op": "stripe_billing.listBillingCustomers",
+      "source_branch": "shop"
+    },
+    {
+      "example_id": "ex-00181",
+      "split": "calibration",
+      "query": "list billing customers (List Stripe billing customer accounts with optional email filter; not orders in stripe billing)",
+      "gold_group_id": "608cb561fd202557a32790528c255d68",
+      "confusing_group_id": "fd01939aa39148f5e38b227f32f3c953",
+      "margin": 0.06451607,
+      "source_op": "stripe_billing.listBillingCustomers",
+      "source_branch": "shop"
+    },
+    {
+      "example_id": "ex-00182",
+      "split": "test",
+      "query": "get shop order details by order id",
+      "gold_group_id": "d58caa431bd2ec638b44dc9193dd6dab",
+      "confusing_group_id": "2bfdf890bedbfcefd846c21d7c9cd066",
+      "margin": 0.06451607,
+      "source_op": "shop.order",
+      "source_branch": "shop"
+    },
+    {
+      "example_id": "ex-00183",
+      "split": "test",
+      "query": "inspect status and total cents for order 101",
+      "gold_group_id": "d58caa431bd2ec638b44dc9193dd6dab",
+      "confusing_group_id": "a6918fb40f7b166e121e3df9d2426cab",
+      "margin": 0.06451607,
+      "source_op": "shop.order",
+      "source_branch": "shop"
+    },
+    {
+      "example_id": "ex-00184",
+      "split": "test",
+      "query": "Fetch a single shop purchase order by order id",
+      "gold_group_id": "d58caa431bd2ec638b44dc9193dd6dab",
+      "confusing_group_id": "2bfdf890bedbfcefd846c21d7c9cd066",
+      "margin": 0.06451607,
+      "source_op": "shop.order",
+      "source_branch": "shop"
+    },
+    {
+      "example_id": "ex-00185",
+      "split": "test",
+      "query": "order for shop",
+      "gold_group_id": "d58caa431bd2ec638b44dc9193dd6dab",
+      "confusing_group_id": "a84576908a584bf7646ff7c8782981e3",
+      "margin": 0.06451607,
+      "source_op": "shop.order",
+      "source_branch": "shop"
+    },
+    {
+      "example_id": "ex-00186",
+      "split": "test",
+      "query": "need to order in shop: get shop order details by order id",
+      "gold_group_id": "d58caa431bd2ec638b44dc9193dd6dab",
+      "confusing_group_id": "2bfdf890bedbfcefd846c21d7c9cd066",
+      "margin": 0.06451607,
+      "source_op": "shop.order",
+      "source_branch": "shop"
+    },
+    {
+      "example_id": "ex-00187",
+      "split": "test",
+      "query": "get shop order details by order id",
+      "gold_group_id": "d58caa431bd2ec638b44dc9193dd6dab",
+      "confusing_group_id": "2bfdf890bedbfcefd846c21d7c9cd066",
+      "margin": 0.06451607,
+      "source_op": "shop.order",
+      "source_branch": "shop"
+    },
+    {
+      "example_id": "ex-00188",
+      "split": "test",
+      "query": "order using id",
+      "gold_group_id": "d58caa431bd2ec638b44dc9193dd6dab",
+      "confusing_group_id": "2bfdf890bedbfcefd846c21d7c9cd066",
+      "margin": 0.06451607,
+      "source_op": "shop.order",
+      "source_branch": "shop"
+    },
+    {
+      "example_id": "ex-00189",
+      "split": "test",
+      "query": "customer (get customer profile by id; not order in shop)",
+      "gold_group_id": "2bfdf890bedbfcefd846c21d7c9cd066",
+      "confusing_group_id": "d58caa431bd2ec638b44dc9193dd6dab",
+      "margin": 0.06451607,
+      "source_op": "shop.customer",
+      "source_branch": "shop"
+    },
+    {
+      "example_id": "ex-00190",
+      "split": "test",
+      "query": "retrieve billing customer (Retrieve a Stripe billing customer balance and payment method details; not order in stripe billing)",
+      "gold_group_id": "d68c80a3ff6ad08fc809fe4798387ffb",
+      "confusing_group_id": "a6918fb40f7b166e121e3df9d2426cab",
+      "margin": 0.06451607,
+      "source_op": "stripe_billing.retrieveBillingCustomer",
+      "source_branch": "shop"
+    },
+    {
+      "example_id": "ex-00191",
+      "split": "calibration",
+      "query": "List Stripe billing customer accounts with optional email filter",
+      "gold_group_id": "608cb561fd202557a32790528c255d68",
+      "confusing_group_id": "fd01939aa39148f5e38b227f32f3c953",
+      "margin": 0.06451607,
+      "source_op": "stripe_billing.listBillingCustomers",
+      "source_branch": "stripe_billing"
+    },
+    {
+      "example_id": "ex-00192",
+      "split": "calibration",
+      "query": "list billing customers (/v1/customers)",
+      "gold_group_id": "608cb561fd202557a32790528c255d68",
+      "confusing_group_id": "d68c80a3ff6ad08fc809fe4798387ffb",
+      "margin": 0.06451607,
+      "source_op": "stripe_billing.listBillingCustomers",
+      "source_branch": "stripe_billing"
+    },
+    {
+      "example_id": "ex-00193",
+      "split": "calibration",
+      "query": "list billing customers for stripe billing",
+      "gold_group_id": "608cb561fd202557a32790528c255d68",
+      "confusing_group_id": "d68c80a3ff6ad08fc809fe4798387ffb",
+      "margin": 0.06451607,
+      "source_op": "stripe_billing.listBillingCustomers",
+      "source_branch": "stripe_billing"
+    },
+    {
+      "example_id": "ex-00194",
+      "split": "calibration",
+      "query": "need to list billing customers in stripe billing: List Stripe billing customer accounts with optional email filter",
+      "gold_group_id": "608cb561fd202557a32790528c255d68",
+      "confusing_group_id": "d68c80a3ff6ad08fc809fe4798387ffb",
+      "margin": 0.06451607,
+      "source_op": "stripe_billing.listBillingCustomers",
+      "source_branch": "stripe_billing"
+    },
+    {
+      "example_id": "ex-00195",
+      "split": "calibration",
+      "query": "List Stripe billing customer accounts with optional email filter",
+      "gold_group_id": "608cb561fd202557a32790528c255d68",
+      "confusing_group_id": "fd01939aa39148f5e38b227f32f3c953",
+      "margin": 0.06451607,
+      "source_op": "stripe_billing.listBillingCustomers",
+      "source_branch": "stripe_billing"
+    },
+    {
+      "example_id": "ex-00196",
+      "split": "calibration",
+      "query": "list billing customers using email and limit",
+      "gold_group_id": "608cb561fd202557a32790528c255d68",
+      "confusing_group_id": "fd01939aa39148f5e38b227f32f3c953",
+      "margin": 0.06451607,
+      "source_op": "stripe_billing.listBillingCustomers",
+      "source_branch": "stripe_billing"
+    },
+    {
+      "example_id": "ex-00197",
+      "split": "calibration",
+      "query": "customers (list all shop customers; not list billing customers in shop)",
+      "gold_group_id": "fd01939aa39148f5e38b227f32f3c953",
+      "confusing_group_id": "608cb561fd202557a32790528c255d68",
+      "margin": 0.06451607,
+      "source_op": "shop.customers",
+      "source_branch": "stripe_billing"
+    },
+    {
+      "example_id": "ex-00198",
+      "split": "calibration",
+      "query": "orders (list orders for a shop customer; not list billing customers in shop)",
+      "gold_group_id": "a84576908a584bf7646ff7c8782981e3",
+      "confusing_group_id": "fd01939aa39148f5e38b227f32f3c953",
+      "margin": 0.06451607,
+      "source_op": "shop.orders",
+      "source_branch": "stripe_billing"
+    },
+    {
+      "example_id": "ex-00199",
+      "split": "test",
+      "query": "Retrieve a Stripe billing customer balance and payment method details",
+      "gold_group_id": "d68c80a3ff6ad08fc809fe4798387ffb",
+      "confusing_group_id": "a6918fb40f7b166e121e3df9d2426cab",
+      "margin": 0.06451607,
+      "source_op": "stripe_billing.retrieveBillingCustomer",
+      "source_branch": "stripe_billing"
+    },
+    {
+      "example_id": "ex-00200",
+      "split": "test",
+      "query": "retrieve billing customer (/v1/customers/{customerId})",
+      "gold_group_id": "d68c80a3ff6ad08fc809fe4798387ffb",
+      "confusing_group_id": "a6918fb40f7b166e121e3df9d2426cab",
+      "margin": 0.06451607,
+      "source_op": "stripe_billing.retrieveBillingCustomer",
+      "source_branch": "stripe_billing"
+    },
+    {
+      "example_id": "ex-00201",
+      "split": "test",
+      "query": "retrieve billing customer for stripe billing",
+      "gold_group_id": "d68c80a3ff6ad08fc809fe4798387ffb",
+      "confusing_group_id": "608cb561fd202557a32790528c255d68",
+      "margin": 0.06451607,
+      "source_op": "stripe_billing.retrieveBillingCustomer",
+      "source_branch": "stripe_billing"
+    },
+    {
+      "example_id": "ex-00202",
+      "split": "test",
+      "query": "need to retrieve billing customer in stripe billing: Retrieve a Stripe billing customer balance and payment method details",
+      "gold_group_id": "d68c80a3ff6ad08fc809fe4798387ffb",
+      "confusing_group_id": "a6918fb40f7b166e121e3df9d2426cab",
+      "margin": 0.06451607,
+      "source_op": "stripe_billing.retrieveBillingCustomer",
+      "source_branch": "stripe_billing"
+    },
+    {
+      "example_id": "ex-00203",
+      "split": "test",
+      "query": "Retrieve a Stripe billing customer balance and payment method details",
+      "gold_group_id": "d68c80a3ff6ad08fc809fe4798387ffb",
+      "confusing_group_id": "a6918fb40f7b166e121e3df9d2426cab",
+      "margin": 0.06451607,
+      "source_op": "stripe_billing.retrieveBillingCustomer",
+      "source_branch": "stripe_billing"
+    },
+    {
+      "example_id": "ex-00204",
+      "split": "test",
+      "query": "retrieve billing customer using customerId",
+      "gold_group_id": "d68c80a3ff6ad08fc809fe4798387ffb",
+      "confusing_group_id": "a6918fb40f7b166e121e3df9d2426cab",
+      "margin": 0.06451607,
+      "source_op": "stripe_billing.retrieveBillingCustomer",
+      "source_branch": "stripe_billing"
+    },
+    {
+      "example_id": "ex-00205",
+      "split": "test",
+      "query": "create invoice (Create a new draft billing invoice for a customer account; not retrieve billing customer in stripe billing)",
+      "gold_group_id": "2730202236e822f4ce41c9d3b28c3623",
+      "confusing_group_id": "a33eb59523e3d6243417610f34e02eac",
+      "margin": 0.06451607,
+      "source_op": "stripe_billing.createInvoice",
+      "source_branch": "stripe_billing"
+    },
+    {
+      "example_id": "ex-00206",
+      "split": "test",
+      "query": "order (get shop order details by order id; not retrieve billing customer in shop)",
+      "gold_group_id": "d58caa431bd2ec638b44dc9193dd6dab",
+      "confusing_group_id": "2bfdf890bedbfcefd846c21d7c9cd066",
+      "margin": 0.06451607,
+      "source_op": "shop.order",
+      "source_branch": "stripe_billing"
+    },
+    {
+      "example_id": "ex-00207",
+      "split": "fit",
+      "query": "List customer invoices filtered by payment status or customer id",
+      "gold_group_id": "46dd543638eed4dc9ac3d97b38e9ab7e",
+      "confusing_group_id": "a84576908a584bf7646ff7c8782981e3",
+      "margin": 0.06451607,
+      "source_op": "stripe_billing.listInvoices",
+      "source_branch": "stripe_billing"
+    },
+    {
+      "example_id": "ex-00208",
+      "split": "fit",
+      "query": "list invoices (/v1/invoices)",
+      "gold_group_id": "46dd543638eed4dc9ac3d97b38e9ab7e",
+      "confusing_group_id": "a39642d2c179d6de7598522edc3208da",
+      "margin": 0.06451607,
+      "source_op": "stripe_billing.listInvoices",
+      "source_branch": "stripe_billing"
+    },
+    {
+      "example_id": "ex-00209",
+      "split": "fit",
+      "query": "list invoices for stripe billing",
+      "gold_group_id": "46dd543638eed4dc9ac3d97b38e9ab7e",
+      "confusing_group_id": "608cb561fd202557a32790528c255d68",
+      "margin": -0.12698364,
+      "source_op": "stripe_billing.listInvoices",
+      "source_branch": "stripe_billing"
+    },
+    {
+      "example_id": "ex-00210",
+      "split": "fit",
+      "query": "need to list invoices in stripe billing: List customer invoices filtered by payment status or customer id",
+      "gold_group_id": "46dd543638eed4dc9ac3d97b38e9ab7e",
+      "confusing_group_id": "608cb561fd202557a32790528c255d68",
+      "margin": 0.06451607,
+      "source_op": "stripe_billing.listInvoices",
+      "source_branch": "stripe_billing"
+    },
+    {
+      "example_id": "ex-00211",
+      "split": "fit",
+      "query": "List customer invoices filtered by payment status or customer id",
+      "gold_group_id": "46dd543638eed4dc9ac3d97b38e9ab7e",
+      "confusing_group_id": "a84576908a584bf7646ff7c8782981e3",
+      "margin": 0.06451607,
+      "source_op": "stripe_billing.listInvoices",
+      "source_branch": "stripe_billing"
+    },
+    {
+      "example_id": "ex-00212",
+      "split": "fit",
+      "query": "list invoices using customer and status",
+      "gold_group_id": "46dd543638eed4dc9ac3d97b38e9ab7e",
+      "confusing_group_id": "a6918fb40f7b166e121e3df9d2426cab",
+      "margin": 0.06451607,
+      "source_op": "stripe_billing.listInvoices",
+      "source_branch": "stripe_billing"
+    },
+    {
+      "example_id": "ex-00213",
+      "split": "fit",
+      "query": "search issues global (Full-text search across issues and pull requests matching keywords; not list invoices in github issues)",
+      "gold_group_id": "059394b48407287fa9eb501b8f98a342",
+      "confusing_group_id": "0c7e1e230aa4b75e33b5e20f2e1a111f",
+      "margin": 0.06451607,
+      "source_op": "github_issues.searchIssuesGlobal",
+      "source_branch": "stripe_billing"
+    },
+    {
+      "example_id": "ex-00214",
+      "split": "fit",
+      "query": "add issue comment (Post a triage reply comment onto an existing repository issue; not list invoices in github issues)",
+      "gold_group_id": "baacd4ddfbffc00380ca0f9a2097b37a",
+      "confusing_group_id": "0c7e1e230aa4b75e33b5e20f2e1a111f",
+      "margin": 0.06451607,
+      "source_op": "github_issues.addIssueComment",
+      "source_branch": "stripe_billing"
+    },
+    {
+      "example_id": "ex-00215",
+      "split": "test",
+      "query": "Create a new draft billing invoice for a customer account",
+      "gold_group_id": "2730202236e822f4ce41c9d3b28c3623",
+      "confusing_group_id": "a33eb59523e3d6243417610f34e02eac",
+      "margin": 0.06451607,
+      "source_op": "stripe_billing.createInvoice",
+      "source_branch": "stripe_billing"
+    },
+    {
+      "example_id": "ex-00216",
+      "split": "test",
+      "query": "create invoice (/v1/invoices)",
+      "gold_group_id": "2730202236e822f4ce41c9d3b28c3623",
+      "confusing_group_id": "a33eb59523e3d6243417610f34e02eac",
+      "margin": 0.06451607,
+      "source_op": "stripe_billing.createInvoice",
+      "source_branch": "stripe_billing"
+    },
+    {
+      "example_id": "ex-00217",
+      "split": "test",
+      "query": "create invoice for stripe billing",
+      "gold_group_id": "2730202236e822f4ce41c9d3b28c3623",
+      "confusing_group_id": "a33eb59523e3d6243417610f34e02eac",
+      "margin": 0.06451607,
+      "source_op": "stripe_billing.createInvoice",
+      "source_branch": "stripe_billing"
+    },
+    {
+      "example_id": "ex-00218",
+      "split": "test",
+      "query": "need to create invoice in stripe billing: Create a new draft billing invoice for a customer account",
+      "gold_group_id": "2730202236e822f4ce41c9d3b28c3623",
+      "confusing_group_id": "0c7e1e230aa4b75e33b5e20f2e1a111f",
+      "margin": 0.06451607,
+      "source_op": "stripe_billing.createInvoice",
+      "source_branch": "stripe_billing"
+    },
+    {
+      "example_id": "ex-00219",
+      "split": "test",
+      "query": "Create a new draft billing invoice for a customer account",
+      "gold_group_id": "2730202236e822f4ce41c9d3b28c3623",
+      "confusing_group_id": "a33eb59523e3d6243417610f34e02eac",
+      "margin": 0.06451607,
+      "source_op": "stripe_billing.createInvoice",
+      "source_branch": "stripe_billing"
+    },
+    {
+      "example_id": "ex-00220",
+      "split": "test",
+      "query": "create invoice using customer",
+      "gold_group_id": "2730202236e822f4ce41c9d3b28c3623",
+      "confusing_group_id": "a33eb59523e3d6243417610f34e02eac",
+      "margin": 0.06451607,
+      "source_op": "stripe_billing.createInvoice",
+      "source_branch": "stripe_billing"
+    },
+    {
+      "example_id": "ex-00221",
+      "split": "test",
+      "query": "order (get shop order details by order id; not create invoice in shop)",
+      "gold_group_id": "d58caa431bd2ec638b44dc9193dd6dab",
+      "confusing_group_id": "2bfdf890bedbfcefd846c21d7c9cd066",
+      "margin": 0.06451607,
+      "source_op": "shop.order",
+      "source_branch": "stripe_billing"
+    },
+    {
+      "example_id": "ex-00222",
+      "split": "test",
+      "query": "close or update issue (Close an existing issue or edit its title, labels, and state; not create invoice in github issues)",
+      "gold_group_id": "1c90c209c7f1a9b627ea1c4f6ad56ac9",
+      "confusing_group_id": "0c7e1e230aa4b75e33b5e20f2e1a111f",
+      "margin": 0.06451607,
+      "source_op": "github_issues.closeOrUpdateIssue",
+      "source_branch": "stripe_billing"
+    },
+    {
+      "example_id": "ex-00223",
+      "split": "fit",
+      "query": "Fetch line items, tax total, and payment status of an invoice",
+      "gold_group_id": "a6918fb40f7b166e121e3df9d2426cab",
+      "confusing_group_id": "d58caa431bd2ec638b44dc9193dd6dab",
+      "margin": 0.06451607,
+      "source_op": "stripe_billing.retrieveInvoice",
+      "source_branch": "stripe_billing"
+    },
+    {
+      "example_id": "ex-00224",
+      "split": "fit",
+      "query": "retrieve invoice (/v1/invoices/{invoiceId})",
+      "gold_group_id": "a6918fb40f7b166e121e3df9d2426cab",
+      "confusing_group_id": "a33eb59523e3d6243417610f34e02eac",
+      "margin": 0.06451607,
+      "source_op": "stripe_billing.retrieveInvoice",
+      "source_branch": "stripe_billing"
+    },
+    {
+      "example_id": "ex-00225",
+      "split": "fit",
+      "query": "retrieve invoice for stripe billing",
+      "gold_group_id": "a6918fb40f7b166e121e3df9d2426cab",
+      "confusing_group_id": "d68c80a3ff6ad08fc809fe4798387ffb",
+      "margin": -0.06451607,
+      "source_op": "stripe_billing.retrieveInvoice",
+      "source_branch": "stripe_billing"
+    },
+    {
+      "example_id": "ex-00226",
+      "split": "fit",
+      "query": "need to retrieve invoice in stripe billing: Fetch line items, tax total, and payment status of an invoice",
+      "gold_group_id": "a6918fb40f7b166e121e3df9d2426cab",
+      "confusing_group_id": "d68c80a3ff6ad08fc809fe4798387ffb",
+      "margin": 0.06451607,
+      "source_op": "stripe_billing.retrieveInvoice",
+      "source_branch": "stripe_billing"
+    },
+    {
+      "example_id": "ex-00227",
+      "split": "fit",
+      "query": "Fetch line items, tax total, and payment status of an invoice",
+      "gold_group_id": "a6918fb40f7b166e121e3df9d2426cab",
+      "confusing_group_id": "d58caa431bd2ec638b44dc9193dd6dab",
+      "margin": 0.06451607,
+      "source_op": "stripe_billing.retrieveInvoice",
+      "source_branch": "stripe_billing"
+    },
+    {
+      "example_id": "ex-00228",
+      "split": "fit",
+      "query": "retrieve invoice using invoiceId",
+      "gold_group_id": "a6918fb40f7b166e121e3df9d2426cab",
+      "confusing_group_id": "a33eb59523e3d6243417610f34e02eac",
+      "margin": 0.06451607,
+      "source_op": "stripe_billing.retrieveInvoice",
+      "source_branch": "stripe_billing"
+    },
+    {
+      "example_id": "ex-00229",
+      "split": "fit",
+      "query": "list pull requests (List open or merged pull requests queued for code review; not retrieve invoice in github issues)",
+      "gold_group_id": "99ad326812ce836836edf84d4c335777",
+      "confusing_group_id": "e69d985ccfb026405cce689c79bff948",
+      "margin": 0.06451607,
+      "source_op": "github_issues.listPullRequests",
+      "source_branch": "stripe_billing"
+    },
+    {
+      "example_id": "ex-00230",
+      "split": "fit",
+      "query": "append customer note (add a follow-up note to a customer account; not retrieve invoice in notes)",
+      "gold_group_id": "3f137fd60f3f6590f12aa54400ee6abf",
+      "confusing_group_id": "7a30e7674f6103b3fef3fe24c7f71070",
+      "margin": 0.06451607,
+      "source_op": "notes.append_customer_note",
+      "source_branch": "stripe_billing"
+    },
+    {
+      "example_id": "ex-00231",
+      "split": "calibration",
+      "query": "Finalize a draft billing invoice and freeze its total due",
+      "gold_group_id": "a33eb59523e3d6243417610f34e02eac",
+      "confusing_group_id": "2730202236e822f4ce41c9d3b28c3623",
+      "margin": 0.06451607,
+      "source_op": "stripe_billing.finalizeInvoice",
+      "source_branch": "stripe_billing"
+    },
+    {
+      "example_id": "ex-00232",
+      "split": "calibration",
+      "query": "finalize invoice (/v1/invoices/{invoiceId}/finalize)",
+      "gold_group_id": "a33eb59523e3d6243417610f34e02eac",
+      "confusing_group_id": "a6918fb40f7b166e121e3df9d2426cab",
+      "margin": 0.06451607,
+      "source_op": "stripe_billing.finalizeInvoice",
+      "source_branch": "stripe_billing"
+    },
+    {
+      "example_id": "ex-00233",
+      "split": "calibration",
+      "query": "finalize invoice for stripe billing",
+      "gold_group_id": "a33eb59523e3d6243417610f34e02eac",
+      "confusing_group_id": "2730202236e822f4ce41c9d3b28c3623",
+      "margin": 0.06451607,
+      "source_op": "stripe_billing.finalizeInvoice",
+      "source_branch": "stripe_billing"
+    },
+    {
+      "example_id": "ex-00234",
+      "split": "calibration",
+      "query": "need to finalize invoice in stripe billing: Finalize a draft billing invoice and freeze its total due",
+      "gold_group_id": "a33eb59523e3d6243417610f34e02eac",
+      "confusing_group_id": "2730202236e822f4ce41c9d3b28c3623",
+      "margin": 0.06451607,
+      "source_op": "stripe_billing.finalizeInvoice",
+      "source_branch": "stripe_billing"
+    },
+    {
+      "example_id": "ex-00235",
+      "split": "calibration",
+      "query": "Finalize a draft billing invoice and freeze its total due",
+      "gold_group_id": "a33eb59523e3d6243417610f34e02eac",
+      "confusing_group_id": "2730202236e822f4ce41c9d3b28c3623",
+      "margin": 0.06451607,
+      "source_op": "stripe_billing.finalizeInvoice",
+      "source_branch": "stripe_billing"
+    },
+    {
+      "example_id": "ex-00236",
+      "split": "calibration",
+      "query": "finalize invoice using invoiceId",
+      "gold_group_id": "a33eb59523e3d6243417610f34e02eac",
+      "confusing_group_id": "a6918fb40f7b166e121e3df9d2426cab",
+      "margin": 0.06451607,
+      "source_op": "stripe_billing.finalizeInvoice",
+      "source_branch": "stripe_billing"
+    },
+    {
+      "example_id": "ex-00237",
+      "split": "calibration",
+      "query": "list billing customers (List Stripe billing customer accounts with optional email filter; not finalize invoice in stripe billing)",
+      "gold_group_id": "608cb561fd202557a32790528c255d68",
+      "confusing_group_id": "d68c80a3ff6ad08fc809fe4798387ffb",
+      "margin": 0.06451607,
+      "source_op": "stripe_billing.listBillingCustomers",
+      "source_branch": "stripe_billing"
+    },
+    {
+      "example_id": "ex-00238",
+      "split": "calibration",
+      "query": "orders (list orders for a shop customer; not finalize invoice in shop)",
+      "gold_group_id": "a84576908a584bf7646ff7c8782981e3",
+      "confusing_group_id": "fd01939aa39148f5e38b227f32f3c953",
+      "margin": 0.06451607,
+      "source_op": "shop.orders",
+      "source_branch": "stripe_billing"
+    },
+    {
+      "example_id": "ex-00239",
+      "split": "fit",
+      "query": "List active and past-due recurring billing subscriptions",
+      "gold_group_id": "a39642d2c179d6de7598522edc3208da",
+      "confusing_group_id": "2c8720ca29286244a157279b765eaa5b",
+      "margin": 0.06451607,
+      "source_op": "stripe_billing.listSubscriptions",
+      "source_branch": "stripe_billing"
+    },
+    {
+      "example_id": "ex-00240",
+      "split": "fit",
+      "query": "list subscriptions (/v1/subscriptions)",
+      "gold_group_id": "a39642d2c179d6de7598522edc3208da",
+      "confusing_group_id": "2c8720ca29286244a157279b765eaa5b",
+      "margin": 0.06451607,
+      "source_op": "stripe_billing.listSubscriptions",
+      "source_branch": "stripe_billing"
+    },
+    {
+      "example_id": "ex-00241",
+      "split": "fit",
+      "query": "list subscriptions for stripe billing",
+      "gold_group_id": "a39642d2c179d6de7598522edc3208da",
+      "confusing_group_id": "608cb561fd202557a32790528c255d68",
+      "margin": 0.06451607,
+      "source_op": "stripe_billing.listSubscriptions",
+      "source_branch": "stripe_billing"
+    },
+    {
+      "example_id": "ex-00242",
+      "split": "fit",
+      "query": "need to list subscriptions in stripe billing: List active and past-due recurring billing subscriptions",
+      "gold_group_id": "a39642d2c179d6de7598522edc3208da",
+      "confusing_group_id": "608cb561fd202557a32790528c255d68",
+      "margin": 0.06451607,
+      "source_op": "stripe_billing.listSubscriptions",
+      "source_branch": "stripe_billing"
+    },
+    {
+      "example_id": "ex-00243",
+      "split": "fit",
+      "query": "List active and past-due recurring billing subscriptions",
+      "gold_group_id": "a39642d2c179d6de7598522edc3208da",
+      "confusing_group_id": "2c8720ca29286244a157279b765eaa5b",
+      "margin": 0.06451607,
+      "source_op": "stripe_billing.listSubscriptions",
+      "source_branch": "stripe_billing"
+    },
+    {
+      "example_id": "ex-00244",
+      "split": "fit",
+      "query": "list subscriptions using customer",
+      "gold_group_id": "a39642d2c179d6de7598522edc3208da",
+      "confusing_group_id": "2c8720ca29286244a157279b765eaa5b",
+      "margin": 0.06451607,
+      "source_op": "stripe_billing.listSubscriptions",
+      "source_branch": "stripe_billing"
+    },
+    {
+      "example_id": "ex-00245",
+      "split": "fit",
+      "query": "search issues global (Full-text search across issues and pull requests matching keywords; not list subscriptions in github issues)",
+      "gold_group_id": "059394b48407287fa9eb501b8f98a342",
+      "confusing_group_id": "0c7e1e230aa4b75e33b5e20f2e1a111f",
+      "margin": 0.06451607,
+      "source_op": "github_issues.searchIssuesGlobal",
+      "source_branch": "stripe_billing"
+    },
+    {
+      "example_id": "ex-00246",
+      "split": "fit",
+      "query": "cancel subscription (Cancel a customer's recurring billing subscription immediately; not list subscriptions in stripe billing)",
+      "gold_group_id": "2c8720ca29286244a157279b765eaa5b",
+      "confusing_group_id": "a39642d2c179d6de7598522edc3208da",
+      "margin": 0.06451607,
+      "source_op": "stripe_billing.cancelSubscription",
+      "source_branch": "stripe_billing"
+    },
+    {
+      "example_id": "ex-00247",
+      "split": "fit",
+      "query": "Cancel a customer's recurring billing subscription immediately",
+      "gold_group_id": "2c8720ca29286244a157279b765eaa5b",
+      "confusing_group_id": "d68c80a3ff6ad08fc809fe4798387ffb",
+      "margin": 0.06451607,
+      "source_op": "stripe_billing.cancelSubscription",
+      "source_branch": "stripe_billing"
+    },
+    {
+      "example_id": "ex-00248",
+      "split": "fit",
+      "query": "cancel subscription (/v1/subscriptions/{subscriptionId})",
+      "gold_group_id": "2c8720ca29286244a157279b765eaa5b",
+      "confusing_group_id": "a39642d2c179d6de7598522edc3208da",
+      "margin": 0.06451607,
+      "source_op": "stripe_billing.cancelSubscription",
+      "source_branch": "stripe_billing"
+    },
+    {
+      "example_id": "ex-00249",
+      "split": "fit",
+      "query": "cancel subscription for stripe billing",
+      "gold_group_id": "2c8720ca29286244a157279b765eaa5b",
+      "confusing_group_id": "608cb561fd202557a32790528c255d68",
+      "margin": 0.06451607,
+      "source_op": "stripe_billing.cancelSubscription",
+      "source_branch": "stripe_billing"
+    },
+    {
+      "example_id": "ex-00250",
+      "split": "fit",
+      "query": "need to cancel subscription in stripe billing: Cancel a customer's recurring billing subscription immediately",
+      "gold_group_id": "2c8720ca29286244a157279b765eaa5b",
+      "confusing_group_id": "d68c80a3ff6ad08fc809fe4798387ffb",
+      "margin": 0.06451607,
+      "source_op": "stripe_billing.cancelSubscription",
+      "source_branch": "stripe_billing"
+    },
+    {
+      "example_id": "ex-00251",
+      "split": "fit",
+      "query": "Cancel a customer's recurring billing subscription immediately",
+      "gold_group_id": "2c8720ca29286244a157279b765eaa5b",
+      "confusing_group_id": "d68c80a3ff6ad08fc809fe4798387ffb",
+      "margin": 0.06451607,
+      "source_op": "stripe_billing.cancelSubscription",
+      "source_branch": "stripe_billing"
+    },
+    {
+      "example_id": "ex-00252",
+      "split": "fit",
+      "query": "cancel subscription using subscriptionId",
+      "gold_group_id": "2c8720ca29286244a157279b765eaa5b",
+      "confusing_group_id": "46dd543638eed4dc9ac3d97b38e9ab7e",
+      "margin": 0.06451607,
+      "source_op": "stripe_billing.cancelSubscription",
+      "source_branch": "stripe_billing"
+    },
+    {
+      "example_id": "ex-00253",
+      "split": "fit",
+      "query": "customer notes (get account notes for customer id; not cancel subscription in notes)",
+      "gold_group_id": "7a30e7674f6103b3fef3fe24c7f71070",
+      "confusing_group_id": "3f137fd60f3f6590f12aa54400ee6abf",
+      "margin": 0.06451607,
+      "source_op": "notes.customer_notes",
+      "source_branch": "stripe_billing"
+    },
+    {
+      "example_id": "ex-00254",
+      "split": "fit",
+      "query": "list repo issues (List open or closed bug issues for a GitHub repository; not cancel subscription in github issues)",
+      "gold_group_id": "e69d985ccfb026405cce689c79bff948",
+      "confusing_group_id": "0c7e1e230aa4b75e33b5e20f2e1a111f",
+      "margin": 0.06451607,
+      "source_op": "github_issues.listRepoIssues",
+      "source_branch": "stripe_billing"
+    },
+    {
+      "example_id": "ood-00255",
+      "split": "fit",
+      "query": "book round trip flight tickets to osaka next friday",
+      "gold_group_id": "insufficient_evidence",
+      "confusing_group_id": "3f137fd60f3f6590f12aa54400ee6abf",
+      "margin": -3.4,
+      "source_op": null,
+      "source_branch": null
+    },
+    {
+      "example_id": "ood-00256",
+      "split": "fit",
+      "query": "check local cpu thermals and fan rpm telemetry",
+      "gold_group_id": "insufficient_evidence",
+      "confusing_group_id": "fd01939aa39148f5e38b227f32f3c953",
+      "margin": -3.4,
+      "source_op": null,
+      "source_branch": null
+    },
+    {
+      "example_id": "ood-00258",
+      "split": "calibration",
+      "query": "reserve veterinarian dental cleaning slot for poodle",
+      "gold_group_id": "insufficient_evidence",
+      "confusing_group_id": "7a30e7674f6103b3fef3fe24c7f71070",
+      "margin": -3.4,
+      "source_op": null,
+      "source_branch": null
+    },
+    {
+      "example_id": "ood-00259",
+      "split": "test",
+      "query": "rotate webhook hmac signing secret in aws secrets manager",
+      "gold_group_id": "insufficient_evidence",
+      "confusing_group_id": "0c7e1e230aa4b75e33b5e20f2e1a111f",
+      "margin": -3.4,
+      "source_op": null,
+      "source_branch": null
+    },
+    {
+      "example_id": "ood-00262",
+      "split": "fit",
+      "query": "rebase git feature branch onto upstream main",
+      "gold_group_id": "insufficient_evidence",
+      "confusing_group_id": "3be8b0e9f714e9482b3eb60bc493b926",
+      "margin": -3.4,
+      "source_op": null,
+      "source_branch": null
+    },
+    {
+      "example_id": "ood-00263",
+      "split": "calibration",
+      "query": "query postgres vacuum freeze transaction id wraparound",
+      "gold_group_id": "insufficient_evidence",
+      "confusing_group_id": "a33eb59523e3d6243417610f34e02eac",
+      "margin": -3.4,
+      "source_op": null,
+      "source_branch": null
+    },
+    {
+      "example_id": "ood-00269",
+      "split": "test",
+      "query": "generate qr code voucher for restaurant discount",
+      "gold_group_id": "insufficient_evidence",
+      "confusing_group_id": "99ad326812ce836836edf84d4c335777",
+      "margin": -3.4,
+      "source_op": null,
+      "source_branch": null
+    },
+    {
+      "example_id": "ood-00270",
+      "split": "fit",
+      "query": "calibrate thermistor adc lookup table for oven controller",
+      "gold_group_id": "insufficient_evidence",
+      "confusing_group_id": "7a30e7674f6103b3fef3fe24c7f71070",
+      "margin": -3.4,
+      "source_op": null,
+      "source_branch": null
+    },
+    {
+      "example_id": "ood-00271",
+      "split": "fit",
+      "query": "inspect linux kernel dmesg nvme timeout messages",
+      "gold_group_id": "insufficient_evidence",
+      "confusing_group_id": "d58caa431bd2ec638b44dc9193dd6dab",
+      "margin": -3.4,
+      "source_op": null,
+      "source_branch": null
+    },
+    {
+      "example_id": "ood-00273",
+      "split": "calibration",
+      "query": "verify stripe webhook tax withholding certificate pdf",
+      "gold_group_id": "insufficient_evidence",
+      "confusing_group_id": "a6918fb40f7b166e121e3df9d2426cab",
+      "margin": -3.4,
+      "source_op": null,
+      "source_branch": null
+    },
+    {
+      "example_id": "ood-00274",
+      "split": "test",
+      "query": "invite github organization sponsors billing auditor",
+      "gold_group_id": "insufficient_evidence",
+      "confusing_group_id": "608cb561fd202557a32790528c255d68",
+      "margin": -3.4,
+      "source_op": null,
+      "source_branch": null
+    },
+    {
+      "example_id": "ood-00276",
+      "split": "fit",
+      "query": "export shop point of sale hardware receipt printer logs",
+      "gold_group_id": "insufficient_evidence",
+      "confusing_group_id": "a6918fb40f7b166e121e3df9d2426cab",
+      "margin": -3.4,
+      "source_op": null,
+      "source_branch": null
+    },
+    {
+      "example_id": "ood-00277",
+      "split": "fit",
+      "query": "reset customer biometric passkey hardware token",
+      "gold_group_id": "insufficient_evidence",
+      "confusing_group_id": "d68c80a3ff6ad08fc809fe4798387ffb",
+      "margin": -3.4,
+      "source_op": null,
+      "source_branch": null
+    },
+    {
+      "example_id": "ood-00278",
+      "split": "calibration",
+      "query": "reindex lucene stemmer synonyms for catalan dictionary",
+      "gold_group_id": "insufficient_evidence",
+      "confusing_group_id": "7a30e7674f6103b3fef3fe24c7f71070",
+      "margin": -3.4,
+      "source_op": null,
+      "source_branch": null
+    },
+    {
+      "example_id": "ood-00283",
+      "split": "calibration",
+      "query": "sign notarized power of attorney document pdf",
+      "gold_group_id": "insufficient_evidence",
+      "confusing_group_id": "a6918fb40f7b166e121e3df9d2426cab",
+      "margin": -3.4,
+      "source_op": null,
+      "source_branch": null
+    },
+    {
+      "example_id": "ood-00284",
+      "split": "test",
+      "query": "inspect solar inverter grid frequency droop curve",
+      "gold_group_id": "insufficient_evidence",
+      "confusing_group_id": "d58caa431bd2ec638b44dc9193dd6dab",
+      "margin": -3.4,
+      "source_op": null,
+      "source_branch": null
+    }
+  ]
+}
