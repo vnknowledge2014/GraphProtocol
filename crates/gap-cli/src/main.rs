@@ -10,7 +10,7 @@
 
 #[tokio::main]
 async fn main() {
-    let code = gap_cli::cli::run_from_env().await;
+    let code = gap_cli::commands::run_from_env().await;
     if code != 0 {
         std::process::exit(code);
     }
