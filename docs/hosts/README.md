@@ -1,13 +1,10 @@
-# MCP Host Integration Guides (Skeleton)
+# MCP Host Integration Guides
 
 Normative specification: `CMP-001`–`CMP-009` ([09-compat.md](../../spec/09-compat.md)), `ADR-017` ([01-DECISIONS.md](../01-DECISIONS.md)), `OPS-002` ([08-operations.md](../../spec/08-operations.md)).
 
-> [!NOTE]
-> **Status:** `WP-M0-10` documentation placeholders. Full copy-paste quickstarts, verified host screenshots/config snippets, and automated doc-tests are finalized in `WP-M7-03` once the inbound MCP facade (`WP-M1-10`) ships.
-
 ## Inbound MCP Facade Overview
 
-Any MCP-speaking agent host connects to `gap-server` over stateless Streamable HTTP (`/mcp`, `CMP-001`, `OPS-002`) or `stdio` (`CMP-001`) and receives the five static GAP meta-tools (`CMP-002`, `CMP-003`, `CMP-008` Gate `G-F1` `≤ 1,200` tokens):
+Any MCP-speaking agent host connects to `gap-server` over stateless Streamable HTTP (`/mcp`, `CMP-001`, `OPS-002`) or newline-delimited `stdio` (`gap serve --stdio`, `CMP-001`, `SEC-004`) and receives five static GAP meta-tools (`CMP-002`, `CMP-003`, `CMP-008` Gate `G-F1` `<= 1,200` tokens):
 
 | Tool | Hint Posture | Recommended Host Permission (`CMP-009`) | Purpose |
 |---|---|---|---|
@@ -18,6 +15,14 @@ Any MCP-speaking agent host connects to `gap-server` over stateless Streamable H
 | `gap_task` | `destructiveHint: false` | Policy-scoped (`decide` requires human-approval scope) | Inspect, list, cancel, submit, or decide durable tasks (`ADR-016`) |
 
 Untrusted payloads from `T2` (and configured `T1`) branches are wrapped in `<gap:untrusted source="branch/op">…</gap:untrusted>` (`CMP-007`) and MUST be treated strictly as data (`CMP-003`, `ADR-014`).
+
+## Verification Status Across Hosts (`CMP-009`)
+
+| Host | Primary Setup | Verification Status |
+|---|---|---|
+| Claude Code | `claude mcp add --transport http gap http://127.0.0.1:8080/mcp` | Specified in `CMP-009` |
+| Antigravity IDE | `agy mcp add gap http://127.0.0.1:8080/mcp` | CLI form checked against `agy mcp add --help` on 2026-10-26; JSON `serverUrl` snippet is **UNVERIFIED** |
+| Cursor | `.cursor/mcp.json` (`mcpServers.gap.url`) | JSON schema snippet is **UNVERIFIED** until tested against a live Cursor client |
 
 ## Supported Host Guides (`CMP-009`)
 

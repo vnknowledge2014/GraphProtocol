@@ -2,6 +2,32 @@
 
 [Introduction](introduction.md)
 
+# User & Operator Guides
+
+- [Concepts and Architecture](../../docs/guides/concepts.md)
+- [5-Minute Quickstart](../../docs/guides/quickstart.md)
+- [Connector Authoring (NGC)](../../docs/guides/connector-authoring.md)
+- [Security Hardening](../../docs/guides/security-hardening.md)
+- [Operations and Monitoring](../../docs/guides/operations.md)
+- [Migration Guide](../../docs/guides/migration.md)
+
+# Host Integration and Operations
+
+- [MCP Host Integration Guides](../../docs/hosts/README.md)
+  - [Claude Code](../../docs/hosts/claude-code.md)
+  - [Antigravity IDE](../../docs/hosts/antigravity.md)
+  - [Cursor](../../docs/hosts/cursor.md)
+- [Operational Runbooks Index](../../docs/runbooks/README.md)
+  - [SwapStuck](../../docs/runbooks/swap-stuck.md)
+  - [AutoRollback](../../docs/runbooks/auto-rollback.md)
+  - [BreakerFlapping](../../docs/runbooks/breaker-flapping.md)
+  - [BranchDrift](../../docs/runbooks/branch-drift.md)
+  - [S1Drift](../../docs/runbooks/s1-drift.md)
+  - [IngestBacklog](../../docs/runbooks/ingest-backlog.md)
+  - [AuditVerifyFail](../../docs/runbooks/audit-verify-fail.md)
+  - [TaskLeaseExpiry](../../docs/runbooks/task-lease-expiry.md)
+  - [OverloadShedding](../../docs/runbooks/overload-shedding.md)
+
 # Normative Specification
 
 - [00 — Conventions](../../spec/00-conventions.md)
@@ -24,11 +50,3 @@
 - [Agent Guide](../../docs/AGENT-GUIDE.md)
 - [Release Engineering and Error-Budget Policy](../../docs/RELEASE.md)
 - [Unsafe Code Ledger](../../docs/UNSAFE.md)
-
-# Host Integration and Operations
-
-- [MCP Host Integration Guides](../../docs/hosts/README.md)
-  - [Claude Code](../../docs/hosts/claude-code.md)
-  - [Antigravity IDE](../../docs/hosts/antigravity.md)
-  - [Cursor](../../docs/hosts/cursor.md)
-- [Operational Runbooks Index](../../docs/runbooks/README.md)

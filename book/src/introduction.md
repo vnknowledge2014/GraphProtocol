@@ -1,22 +1,34 @@
 # GAP — Graph Agent Protocol
 
-GAP (`gap/0.1`, `ADR-024`) is a typed, GraphQL-profile protocol (`ADR-001`, `GQL-001`) that unifies tools, heterogeneous data sources, code/document context graphs, and agent-to-agent tasks behind progressive-disclosure discovery (`ADR-010`), batched federation (`INV-18`), deterministic policy authorization (`INV-04`), and hot-swappable immutable snapshots (`ADR-009`, `INV-01`).
+**GAP (Graph Agent Protocol)** is a typed, GraphQL-profile gateway written in Rust that unifies heterogeneous tools, REST/OpenAPI APIs, GraphQL subgraphs, gRPC/Protobuf services, SQL stores, code/document context graphs, and agent-to-agent tasks behind progressive-disclosure discovery, batched federation, deterministic Cedar authorization, and lock-free hot-swappable snapshots.
 
-## Document Set Structure
+## Key Architectural Properties
 
-1. **Normative Specification (`spec/`):**
-   - [00 — Conventions](../../spec/00-conventions.md) through [09 — Compatibility Facades and Reference Connectors](../../spec/09-compat.md).
-2. **Architecture, Verification, and Governance (`docs/`):**
-   - [00 — Design Review](../../docs/00-REVIEW.md)
-   - [01 — Architecture Decision Records](../../docs/01-DECISIONS.md) (`ADR-001`–`ADR-025`)
-   - [02 — Implementation Plan](../../docs/02-PLAN.md)
-   - [03 — Verification Strategy and Release Gates](../../docs/03-VERIFICATION.md)
-   - [Agent Guide](../../docs/AGENT-GUIDE.md)
-   - [Release Engineering and Error-Budget Policy](../../docs/RELEASE.md) (`OPS-040`, `OPS-041`)
-   - [Unsafe Code Ledger](../../docs/UNSAFE.md) (`ADR-002`, `ARC-003`)
-3. **Host Integration & Operations (`docs/hosts/`, `docs/runbooks/`):**
-   - [MCP Host Integration Guides](../../docs/hosts/README.md) (`CMP-009`, `ADR-017`)
-   - [Operational Runbooks Index](../../docs/runbooks/README.md) ([08-operations.md](../../spec/08-operations.md) §6)
+- **Static Five-Tool MCP Surface (`CMP-002`, `CMP-008`):** Agents see `gap_search`, `gap_describe`, `gap_query`, `gap_mutate`, and `gap_task` in `<= 1,200` tokens across `5..1,000` downstream branches (`G-F1`).
+- **Wait-Free RCU Snapshots (`INV-01`, `INV-02`):** Every request pins an immutable `Arc<Snapshot>` with zero locks on the hot execution path.
+- **Deterministic Execution & Authorization (`ARC-002`, `INV-04`):** ML models never sit on the execution, authz, planning, or query-execution path. Optional System-1 routing (`gap-s1`) operates solely behind calibrated conformal discovery (`INV-17`).
+- **Batched Cross-Branch Federation (`INV-18`):** Native batching (`BatchQuery` / `x-gap-in-param`) prevents `O(N)` upstream waterfalls (`VER-040`).
+- **Defense in Depth (`SEC-001`..`SEC-103`):** API key BLAKE3 digests, Cedar policy enforcement, SSRF egress pins, `<gap:untrusted>` envelopes (`CMP-007`), and BLAKE3 hash-chained audit trails (`SEC-092`).
 
-> [!NOTE]
-> Narrative guides (5-minute MCP quickstart, concepts, connector authoring, security hardening, operations, and migration guides) and automated `mdbook test` verification are completed in `WP-M7-03` ([08-operations.md](../../spec/08-operations.md) §9).
+## Getting Started
+
+1. Read [Concepts & Architecture](../../docs/guides/concepts.md).
+2. Run the live two-branch demo in [5-Minute Quickstart](../../docs/guides/quickstart.md).
+3. Connect an IDE or CLI agent using [MCP Host Integration Guides](../../docs/hosts/README.md).
+
+## Minimal Doc-Test Check (`INV-09`, `GQL-022`)
+
+```rust
+fn format_tenant_scoped_key(tenant_id: &str, key_id: &str) -> String {
+    assert!(!tenant_id.is_empty());
+    assert!(!key_id.is_empty());
+    format!("tenant:{tenant_id}:plan:{key_id}")
+}
+
+fn main() {
+    let k1 = format_tenant_scoped_key("acme", "op_42");
+    let k2 = format_tenant_scoped_key("beta", "op_42");
+    assert_ne!(k1, k2);
+    assert!(k1.starts_with("tenant:acme:"));
+}
+```
