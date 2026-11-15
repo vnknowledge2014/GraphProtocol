@@ -1,6 +1,16 @@
 //! Discovery outcome feedback recording and unmapped-domain event tracking
 //! (`spec/04-routing.md` §§10–11; `RTE-040`, `RTE-100`, `RTE-101`, `RTE-110`, `RTE-111`, `WP-M5-05`).
 
+pub mod metrics;
+#[cfg(test)]
+mod tests;
+
+pub use metrics::{
+    DecisionOutcomeLabel, FIVE_MINUTE_WINDOW_MS, FallbackReasonLabel, RouterModelLabel,
+    RoutingMetrics, SET_SIZE_HISTOGRAM_BUCKETS, apply_audited_admin_label,
+    attribute_row_from_server_execution,
+};
+
 use std::collections::{HashMap, VecDeque};
 
 use gap_core::ids::{GroupId, TenantId};
