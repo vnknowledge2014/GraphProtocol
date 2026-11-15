@@ -1,4 +1,5 @@
-//! Security primitives: authentication, deterministic Cedar authorization, trust tiers, egress guard, sandboxing, vault, and audit (`L1`).
+//! Authentication, Cedar authorization, vaulting, egress guard, sandboxing, and audit (`L1`).
+
 #![forbid(unsafe_code)]
 #![deny(
     clippy::unwrap_used,
@@ -17,3 +18,5 @@ pub mod quota;
 pub mod sandbox;
 pub mod session_risk;
 pub mod vault;
+
+pub use authn::{crypto, json};
