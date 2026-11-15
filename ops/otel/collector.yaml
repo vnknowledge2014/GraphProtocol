@@ -1,0 +1,104 @@
+# GAP OpenTelemetry Collector Configuration
+# Reference: spec/08-operations.md §§2–4 (OPS-010, OPS-011, OPS-020, RUN-090, INV-15)
+# Enforces tail-based sampling on slow/errored/denied spans while keeping
+# attribute cardinality strictly bounded (`tenant_bucket` in 0..15).
+
+extensions:
+  health_check:
+    endpoint: 127.0.0.1:13133
+  zpages:
+    endpoint: 127.0.0.1:55679
+
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 127.0.0.1:4317
+      http:
+        endpoint: 127.0.0.1:4318
+
+processors:
+  memory_limiter:
+    check_interval: 1s
+    limit_mib: 512
+    spike_limit_mib: 128
+
+  # OPS-020 + INV-15: Ensure raw tenant identifiers, bearer headers, and query payloads
+  # never leak into trace attributes at collector egress.
+  attributes/scrub_pii:
+    actions:
+      - key: http.request.header.authorization
+        action: delete
+      - key: authorization
+        action: delete
+      - key: bearer_token
+        action: delete
+      - key: tenant
+        action: delete
+      - key: tenant_id
+        action: delete
+      - key: graphql.document
+        action: delete
+
+  tail_sampling:
+    decision_wait: 10s
+    num_traces: 50000
+    expected_new_traces_per_sec: 2000
+    policies:
+      - name: errors-always
+        type: status_code
+        status_code:
+          status_codes: [ERROR]
+      - name: slow-requests
+        type: latency
+        latency:
+          threshold_ms: 500
+      - name: policy-denies
+        type: string_attribute
+        string_attribute:
+          key: gap.policy.effect
+          values: [deny, redact]
+      - name: discovery-abstentions
+        type: string_attribute
+        string_attribute:
+          key: gap.discovery.outcome
+          values: [abstain, fallback]
+      - name: snapshot-publish-events
+        type: string_attribute
+        string_attribute:
+          key: span.name
+          values: [gap.snapshot.publish]
+      - name: baseline-probabilistic
+        type: probabilistic
+        probabilistic:
+          sampling_percentage: 10.0
+
+  batch:
+    send_batch_size: 1024
+    send_batch_max_size: 2048
+    timeout: 5s
+
+exporters:
+  otlp:
+    endpoint: ${OTLP_BACKEND_ENDPOINT:-127.0.0.1:14317}
+    tls:
+      insecure: true
+  debug:
+    verbosity: basic
+    sampling_initial: 5
+    sampling_thereafter: 200
+
+service:
+  extensions: [health_check, zpages]
+  telemetry:
+    metrics:
+      address: 127.0.0.1:8888
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [memory_limiter, attributes/scrub_pii, tail_sampling, batch]
+      exporters: [otlp]
+    logs:
+      receivers: [otlp]
+      processors: [memory_limiter, attributes/scrub_pii, batch]
+      exporters: [otlp]

@@ -1,0 +1,203 @@
+# GAP Prometheus Alerting and Recording Rules
+# Reference: spec/08-operations.md §§3–6 (OPS-010, OPS-020, INV-01, INV-17, SEC-092)
+# Label hygiene (OPS-020): All rules strictly aggregate over bounded labels
+# (`route`, `status`, `branch`, `model`, `outcome`, `reason`, `gate`, `chain`,
+# `state`, `pool`, `tenant_bucket` in 0..15). Raw `tenant` identifiers MUST NOT appear.
+
+groups:
+  - name: gap-recording-rules
+    interval: 30s
+    rules:
+      - record: gap:http_request_rate5m
+        expr: sum by (route, status) (rate(gap_http_requests_total[5m]))
+
+      - record: gap:http_error_ratio5m
+        expr: |
+          sum(rate(gap_http_requests_total{status=~"5.."}[5m]))
+          /
+          clamp_min(sum(rate(gap_http_requests_total[5m])), 1e-9)
+
+      - record: gap:http_latency_p95_seconds5m
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum by (le, route) (rate(gap_http_request_duration_seconds_bucket[5m]))
+          )
+
+      - record: gap:http_latency_p99_seconds5m
+        expr: |
+          histogram_quantile(
+            0.99,
+            sum by (le, route) (rate(gap_http_request_duration_seconds_bucket[5m]))
+          )
+
+      - record: gap:plan_cache_hit_ratio5m
+        expr: |
+          sum(rate(gap_plan_cache_total{result="hit"}[5m]))
+          /
+          clamp_min(sum(rate(gap_plan_cache_total[5m])), 1e-9)
+
+      - record: gap:discovery_fallback_ratio10m
+        expr: |
+          sum(rate(gap_router_fallback_total[10m]))
+          /
+          clamp_min(sum(rate(gap_discovery_decisions_total[10m])), 1e-9)
+
+      - record: gap:requests_by_tenant_bucket5m
+        expr: sum by (tenant_bucket, op_kind, outcome) (rate(gap_requests_total[5m]))
+
+  - name: gap-slo-and-safety-alerts
+    interval: 30s
+    rules:
+      - alert: SwapStuck
+        expr: |
+          (
+            histogram_quantile(
+              0.99,
+              sum by (le) (rate(gap_snapshot_swap_duration_seconds_bucket[5m]))
+            ) > 1.0
+          )
+          or
+          (
+            gap_ingest_backlog > 0
+            and
+            changes(gap_snapshot_generation[15m]) == 0
+          )
+        for: 5m
+        labels:
+          severity: page
+          component: snapshot
+          spec_ref: OPS-030
+        annotations:
+          summary: "GAP snapshot swap stalled or exceeding drain budget"
+          description: "Snapshot generation {{ $value }} has stalled or RCU swap duration p99 exceeded 1.0s for 5m."
+          runbook_url: "docs/runbooks/swap-stuck.md"
+
+      - alert: AutoRollback
+        expr: increase(gap_snapshot_rollbacks_total[10m]) > 0
+        for: 1m
+        labels:
+          severity: page
+          component: snapshot
+          spec_ref: INV-01
+        annotations:
+          summary: "GAP snapshot auto-rollback triggered"
+          description: "{{ $value }} supergraph snapshot rollback(s) occurred in the last 10m."
+          runbook_url: "docs/runbooks/auto-rollback.md"
+
+      - alert: BreakerFlapping
+        expr: changes(gap_breaker_state[15m]) >= 4
+        for: 2m
+        labels:
+          severity: ticket
+          component: balance
+          spec_ref: ARC-011
+        annotations:
+          summary: "Circuit breaker flapping on branch {{ $labels.branch }}"
+          description: "Branch {{ $labels.branch }} transitioned circuit-breaker states {{ $value }} times in 15m."
+          runbook_url: "docs/runbooks/breaker-flapping.md"
+
+      - alert: BranchDrift
+        expr: |
+          (gap_branch_error_ewma > 0.15)
+          or
+          (
+            sum by (branch) (rate(gap_branch_requests_total{outcome="error"}[10m]))
+            /
+            clamp_min(sum by (branch) (rate(gap_branch_requests_total[10m])), 1e-9)
+          ) > 0.10
+          or
+          rate(gap_retry_budget_exhausted_total[10m]) > 0.1
+        for: 5m
+        labels:
+          severity: ticket
+          component: exec
+          spec_ref: ING-070
+        annotations:
+          summary: "Downstream branch {{ $labels.branch }} error rate or retry budget drifting"
+          description: "Branch {{ $labels.branch }} exceeds EWMA/error threshold ({{ $value }})."
+          runbook_url: "docs/runbooks/branch-drift.md"
+
+      - alert: S1Drift
+        expr: |
+          (gap_s1_online_ece > 0.05)
+          or
+          (gap:discovery_fallback_ratio10m > 0.10)
+        for: 10m
+        labels:
+          severity: ticket
+          component: route
+          spec_ref: RTE-111
+        annotations:
+          summary: "System-1 discovery calibration drift or elevated fallback"
+          description: "S1 online ECE exceeded 0.05 or fallback ratio exceeded 10% for 10m (value={{ $value }})."
+          runbook_url: "docs/runbooks/s1-drift.md"
+
+      - alert: IngestBacklog
+        expr: |
+          (gap_ingest_backlog > 100)
+          or
+          (increase(gap_ingest_gate_failures_total[15m]) > 0)
+          or
+          (rate(gap_unmapped_events_dropped_total[10m]) > 0.5)
+        for: 10m
+        labels:
+          severity: ticket
+          component: ingest
+          spec_ref: ING-060
+        annotations:
+          summary: "Ingestion queue backlog, validation gate failure, or dropped unmapped events"
+          description: "Ingestion pipeline reported sustained backlog, gate failure, or dropped telemetry events (value={{ $value }})."
+          runbook_url: "docs/runbooks/ingest-backlog.md"
+
+      - alert: AuditVerifyFail
+        expr: increase(gap_audit_verify_failures_total[5m]) > 0
+        for: 0m
+        labels:
+          severity: page
+          component: security
+          spec_ref: SEC-092
+        annotations:
+          summary: "Audit BLAKE3 hash-chain verification failure on chain {{ $labels.chain }}"
+          description: "Integrity check detected {{ $value }} verification failure(s) on audit chain {{ $labels.chain }}."
+          runbook_url: "docs/runbooks/audit-verify-fail.md"
+
+      - alert: TaskLeaseExpiry
+        expr: |
+          (increase(gap_task_state_total{state=~"failed|timed_out|expired"}[10m]) > 3)
+          or
+          (gap_tasks_active > 500)
+        for: 5m
+        labels:
+          severity: ticket
+          component: tasks
+          spec_ref: RUN-082
+        annotations:
+          summary: "Durable task lease expiries or saturation detected"
+          description: "Task subsystem observed lease expiries/timeouts or excessive active task backlog (value={{ $value }})."
+          runbook_url: "docs/runbooks/task-lease-expiry.md"
+
+      - alert: OverloadShedding
+        expr: |
+          (
+            sum(rate(gap_http_requests_total{status=~"429|503"}[5m]))
+            /
+            clamp_min(sum(rate(gap_http_requests_total[5m])), 1e-9)
+          ) > 0.02
+          or
+          (
+            sum(rate(gap_requests_total{outcome=~"rate_limited|rejected"}[5m]))
+            /
+            clamp_min(sum(rate(gap_requests_total[5m])), 1e-9)
+          ) > 0.02
+          or
+          (gap_blocking_queue_depth > 256)
+        for: 3m
+        labels:
+          severity: page
+          component: transport
+          spec_ref: OPS-030
+        annotations:
+          summary: "GAP gateway actively shedding load (429/503 or blocking pool queue saturation)"
+          description: "Shedding rate > 2% or blocking thread-pool queue depth > 256 for 3m (value={{ $value }})."
+          runbook_url: "docs/runbooks/overload-shedding.md"

@@ -1,0 +1,205 @@
+{
+  "__inputs": [
+    {
+      "name": "DS_PROMETHEUS",
+      "label": "Prometheus",
+      "description": "Prometheus datasource scraping GAP /metrics",
+      "type": "datasource",
+      "pluginId": "prometheus",
+      "pluginName": "Prometheus"
+    }
+  ],
+  "annotations": {
+    "list": []
+  },
+  "description": "GAP Gateway Overview — request throughput, latency quantiles, plan cache hit ratio, snapshot generations, and bounded tenant buckets (spec/08-operations.md).",
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "liveNow": false,
+  "panels": [
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": { "defaults": { "unit": "reqps" }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "id": 1,
+      "title": "HTTP Request Rate by Route and Status",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "sum by (route, status) (rate(gap_http_requests_total{route=~\"$route\"}[5m]))",
+          "legendFormat": "{{route}} [{{status}}]",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "id": 2,
+      "title": "Request Latency Quantiles (p50 / p95 / p99)",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, sum by (le) (rate(gap_http_request_duration_seconds_bucket{route=~\"$route\"}[5m])))",
+          "legendFormat": "p50",
+          "refId": "A"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(gap_http_request_duration_seconds_bucket{route=~\"$route\"}[5m])))",
+          "legendFormat": "p95",
+          "refId": "B"
+        },
+        {
+          "expr": "histogram_quantile(0.99, sum by (le) (rate(gap_http_request_duration_seconds_bucket{route=~\"$route\"}[5m])))",
+          "legendFormat": "p99",
+          "refId": "C"
+        }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": { "defaults": { "unit": "percentunit", "min": 0, "max": 1 }, "overrides": [] },
+      "gridPos": { "h": 6, "w": 6, "x": 0, "y": 8 },
+      "id": 3,
+      "title": "PlanCache Hit Ratio",
+      "type": "stat",
+      "targets": [
+        {
+          "expr": "sum(rate(gap_plan_cache_total{result=\"hit\"}[5m])) / clamp_min(sum(rate(gap_plan_cache_total[5m])), 1e-9)",
+          "legendFormat": "Hit Ratio",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": { "defaults": { "unit": "none" }, "overrides": [] },
+      "gridPos": { "h": 6, "w": 6, "x": 6, "y": 8 },
+      "id": 4,
+      "title": "Active Snapshot Generation",
+      "type": "stat",
+      "targets": [
+        {
+          "expr": "gap_snapshot_generation",
+          "legendFormat": "Generation",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] },
+      "gridPos": { "h": 6, "w": 6, "x": 12, "y": 8 },
+      "id": 5,
+      "title": "HTTP In-Flight Requests",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "gap_http_in_flight",
+          "legendFormat": "in_flight",
+          "refId": "A"
+        },
+        {
+          "expr": "gap_blocking_queue_depth",
+          "legendFormat": "blocking_queue ({{pool}})",
+          "refId": "B"
+        }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] },
+      "gridPos": { "h": 6, "w": 6, "x": 18, "y": 8 },
+      "id": 6,
+      "title": "Snapshot Swaps & Rollbacks",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.99, sum by (le) (rate(gap_snapshot_swap_duration_seconds_bucket[5m])))",
+          "legendFormat": "swap p99 (s)",
+          "refId": "A"
+        },
+        {
+          "expr": "increase(gap_snapshot_rollbacks_total[15m])",
+          "legendFormat": "rollbacks (15m)",
+          "refId": "B"
+        }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": { "defaults": { "unit": "reqps" }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 14 },
+      "id": 7,
+      "title": "Traffic by Bounded Tenant Bucket (OPS-020)",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "sum by (tenant_bucket, op_kind) (rate(gap_requests_total{tenant_bucket=~\"$tenant_bucket\"}[5m]))",
+          "legendFormat": "bucket={{tenant_bucket}} ({{op_kind}})",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 14 },
+      "id": 8,
+      "title": "Overload & Error Responses (429 / 5xx)",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "sum by (status) (rate(gap_http_requests_total{status=~\"429|5..\"}[5m]))",
+          "legendFormat": "HTTP {{status}}",
+          "refId": "A"
+        },
+        {
+          "expr": "sum by (outcome) (rate(gap_requests_total{outcome=~\"rate_limited|rejected|error\"}[5m]))",
+          "legendFormat": "GAP {{outcome}}",
+          "refId": "B"
+        }
+      ]
+    }
+  ],
+  "refresh": "30s",
+  "schemaVersion": 39,
+  "tags": ["gap", "overview", "slo"],
+  "templating": {
+    "list": [
+      {
+        "name": "DS_PROMETHEUS",
+        "type": "datasource",
+        "query": "prometheus"
+      },
+      {
+        "allValue": ".*",
+        "current": { "text": "All", "value": "$__all" },
+        "includeAll": true,
+        "multi": true,
+        "name": "route",
+        "options": [],
+        "query": "label_values(gap_http_requests_total, route)",
+        "type": "query"
+      },
+      {
+        "allValue": ".*",
+        "current": { "text": "All", "value": "$__all" },
+        "includeAll": true,
+        "multi": true,
+        "name": "tenant_bucket",
+        "query": "0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15",
+        "type": "custom"
+      }
+    ]
+  },
+  "time": { "from": "now-1h", "to": "now" },
+  "timezone": "utc",
+  "title": "GAP — Gateway Overview",
+  "uid": "gap-overview",
+  "version": 1
+}
