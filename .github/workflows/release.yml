@@ -1,0 +1,171 @@
+# Signed reproducible release pipeline (`WP-M7-08`, `SEC-101`, `SEC-102`, `OPS-041`)
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Git ref or tag to package'
+        required: false
+        default: 'main'
+
+permissions:
+  contents: write
+  id-token: write
+  attestations: write
+  packages: write
+
+env:
+  CARGO_TERM_COLOR: always
+  SOURCE_DATE_EPOCH: '1700000000'
+  TZ: UTC
+  LC_ALL: C
+
+jobs:
+  verify:
+    name: Pre-Release Verification Gate
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@master
+      - name: Install cargo-deny and cargo-nextest
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-deny,cargo-nextest
+      - uses: Swatinem/rust-cache@v2
+      - name: Check formatting, clippy, and dependency licences (SEC-101)
+        run: |
+          cargo fmt --all -- --check
+          cargo clippy --workspace --all-targets -- -D warnings
+          cargo deny check licenses bans sources
+      - name: Verify architecture layers, spec trace, and work plan
+        run: |
+          python3 tools/check_layers.py
+          python3 tools/spec_trace.py --strict
+          python3 tools/check_refs.py
+          python3 tools/wp.py validate
+      - name: Run conformance suite
+        run: CI=1 cargo nextest run --no-pager -j 1 -p gap-conformance
+
+  build-reproducible:
+    name: Build (${{ matrix.target }})
+    needs: verify
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            target: x86_64-unknown-linux-gnu
+            verify_repro: true
+          - os: macos-14
+            target: aarch64-apple-darwin
+            verify_repro: false
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@master
+        with:
+          targets: ${{ matrix.target }}
+      - name: Build reproducible release archive (build #1)
+        env:
+          OUT_DIR: target/dist-1
+        run: ./dist/build-reproducible.sh
+      - name: Verify double-build bit-reproducibility (OPS-041)
+        if: ${{ matrix.verify_repro }}
+        env:
+          OUT_DIR: target/dist-2
+        run: |
+          cargo clean -p gap-cli
+          ./dist/build-reproducible.sh
+          cmp target/dist-1/gap target/dist-2/gap
+          diff -u target/dist-1/gap.sha256 target/dist-2/gap.sha256
+      - name: Package tarball and checksum
+        run: |
+          tar -C target/dist-1 -czf "gap-${{ matrix.target }}.tar.gz" gap
+          if command -v sha256sum >/dev/null 2>&1; then
+            sha256sum "gap-${{ matrix.target }}.tar.gz" > "gap-${{ matrix.target }}.tar.gz.sha256"
+          else
+            shasum -a 256 "gap-${{ matrix.target }}.tar.gz" > "gap-${{ matrix.target }}.tar.gz.sha256"
+          fi
+      - name: Upload target artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ matrix.target }}
+          path: |
+            gap-${{ matrix.target }}.tar.gz
+            gap-${{ matrix.target }}.tar.gz.sha256
+
+  sbom:
+    name: Generate CycloneDX SBOM (SEC-101)
+    needs: verify
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Generate CycloneDX 1.5 JSON & assert zero BSL crates
+        run: |
+          python3 dist/generate-sbom.py \
+            --out target/sbom.cdx.json \
+            --timestamp "2026-11-16T00:00:00Z"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-sbom
+          path: target/sbom.cdx.json
+
+  container:
+    name: Build Distroless Container (OPS-041, SEC-101)
+    needs: verify
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Build container image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          load: true
+          tags: gap:ci
+          build-args: |
+            SOURCE_DATE_EPOCH=${{ env.SOURCE_DATE_EPOCH }}
+      - name: Verify container runs non-root smoke check
+        run: docker run --rm gap:ci --help
+
+  sign-and-provenance:
+    name: Sign Artifacts (Cosign) & SLSA Provenance (SEC-101)
+    needs: [build-reproducible, sbom, container]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+      - name: Install Sigstore cosign
+        uses: sigstore/cosign-installer@v3
+      - name: Sign release archives and SBOM with keyless cosign
+        env:
+          COSIGN_YES: 'true'
+        run: |
+          for file in artifacts/gap-*.tar.gz artifacts/sbom.cdx.json; do
+            cosign sign-blob \
+              --output-signature "${file}.sig" \
+              --output-certificate "${file}.crt" \
+              "${file}"
+          done
+      - name: Attest SLSA v1.0 build provenance
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: |
+            artifacts/gap-*.tar.gz
+            artifacts/sbom.cdx.json
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/*
+          generate_release_notes: true
