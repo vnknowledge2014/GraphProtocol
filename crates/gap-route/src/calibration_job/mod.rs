@@ -1,5 +1,21 @@
 //! Temperature scaling (`RTE-062`), split-conformal LAC calibration and decision rules
-//! (`RTE-064`, `RTE-065`, `RTE-066`), and snapshot calibration versioning/invalidation (`RTE-067`).
+//! (`RTE-064`, `RTE-065`, `RTE-066`), and snapshot calibration versioning/invalidation (`RTE-067`),
+//! plus offline dataset pipeline & online ECE job (`RTE-068`, `RTE-111`, `WP-M5-04`).
+
+pub mod online;
+pub mod pipeline;
+#[cfg(test)]
+mod tests;
+
+pub use online::{
+    DEFAULT_ABSTENTION_SHIFT_MULTIPLIER, DEFAULT_ONLINE_ECE_ALERT_THRESHOLD,
+    DEFAULT_ONLINE_WINDOW_SIZE, OnlineCalibrationMonitor, OnlineCalibrationSample, OnlineEceAlert,
+    OnlineMonitorConfig, OnlineWindowEvaluation, ScheduledRecalibrationJob,
+};
+pub use pipeline::{
+    BucketCalibrationSummary, CalibrationExample, CalibrationPipelineReport, CalibrationSplit,
+    ReliabilityBin, WinsorizedConfig, compute_reliability_diagram, run_calibration_pipeline,
+};
 
 use std::collections::BTreeMap;
 
