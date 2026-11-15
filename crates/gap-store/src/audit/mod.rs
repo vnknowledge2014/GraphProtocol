@@ -1,9 +1,23 @@
-//! Append-only BLAKE3 hash-chained audit persistence (`SEC-090`..`SEC-092`, `INV-09`, `INV-14`).
+//! Append-only BLAKE3 hash-chained audit persistence (`SEC-090`, `SEC-092`, `INV-09`, `INV-14`, `TM-17`).
 //!
-//! **Provisional declaration (`m2-01-design.md` §9):** [`AuditChain`] and [`AuditLog`] establish
-//! the object-safe `L1` trait boundary for per-tenant and system audit chains (`SEC-090`).
-//! `WP-M6-11` implements the hash-chained store, Ed25519 anchoring (`SEC-091`), and verification
-//! (`SEC-092`), and may extend these provisional types.
+//! Provides independent per-tenant and gateway-system BLAKE3 hash chains (`AuditChain::Tenant`,
+//! `AuditChain::System`), canonical JSON hashing (`blake3(prev_hash || canonical_json(record_without_hash))`),
+//! synchronous durability for privileged events vs `<= 100 ms` batching for standard events,
+//! startup/nightly verification (`SEC-092`), and both in-memory and durable SQLite WAL backends.
+
+pub mod canonical;
+pub mod memory;
+pub mod sqlite;
+#[cfg(test)]
+mod tests;
+
+pub use canonical::{
+    AuditEventClass, DEFAULT_BATCH_WINDOW_MS, GENESIS_HASH, STARTUP_VERIFY_LAST_N,
+    canonical_record_without_hash_bytes, chain_storage_key, classify_audit_action,
+    compute_record_hash, hex_encode_32, validate_entry, verify_ordered_records,
+};
+pub use memory::InMemoryAuditLog;
+pub use sqlite::{SqliteAuditConfig, SqliteAuditLog};
 
 use gap_core::clock::Timestamp;
 use gap_core::ids::TenantScope;
@@ -11,7 +25,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::error::StoreError;
 
-/// Identifies which independent hash chain an audit operation targets (`SEC-090`, `m2-01-design.md` §9).
+/// Identifies which independent hash chain an audit operation targets (`SEC-090`).
 ///
 /// `SEC-090` mandates one hash chain per tenant plus one gateway system chain.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -22,12 +36,12 @@ pub enum AuditChain {
     System,
 }
 
-/// Provisional unhashed audit event fields prior to chain sequencing (`SEC-090`, `WP-M6-11`).
+/// Unhashed audit event fields prior to chain sequencing (`SEC-090`).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AuditEntry {
     /// Event timestamp (`UTC`).
     pub ts: Timestamp,
-    /// Principal / delegation chain (`actor_chain` in `SEC-090`).
+    /// Principal / delegation chain (`actor_chain` in `SEC-090`, outermost actor first).
     pub actor_chain: Vec<String>,
     /// Action identifier (operation or control-plane verb).
     pub action: String,
@@ -39,7 +53,7 @@ pub struct AuditEntry {
     pub details_json: String,
 }
 
-/// Provisional sequenced and BLAKE3-chained audit record (`SEC-090`, `WP-M6-11`).
+/// Sequenced and BLAKE3-chained audit record (`SEC-090`).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AuditRecord {
     /// Strictly monotonic per-chain sequence number (`SEC-090`).
@@ -52,7 +66,7 @@ pub struct AuditRecord {
     pub hash: [u8; 32],
 }
 
-/// Provisional result of recomputing a hash chain (`SEC-092`, `WP-M6-11`).
+/// Result of recomputing a hash chain (`SEC-092`, `TM-17`).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum AuditVerifyReport {
     /// Chain verified cleanly through `head_seq`.
@@ -62,7 +76,7 @@ pub enum AuditVerifyReport {
         /// Head digest (`[0u8; 32]` when empty).
         head_hash: [u8; 32],
     },
-    /// First detected sequence gap or digest mismatch (`SEC-092`).
+    /// First detected sequence gap, reordering, `prev_hash` break, or digest mismatch (`SEC-092`, `TM-17`).
     Inconsistent {
         /// Sequence number of the first inconsistent record.
         seq: u64,
@@ -71,11 +85,10 @@ pub enum AuditVerifyReport {
     },
 }
 
-/// Provisional object-safe append-only hash-chained audit log (`SEC-090`..`SEC-092`, `INV-09`).
+/// Object-safe append-only hash-chained audit log (`SEC-090`..`SEC-092`, `INV-09`).
 ///
 /// Tenant-scoped helpers take [`TenantScope`] first; [`AuditChain`] methods additionally allow
-/// addressing the single gateway [`AuditChain::System`] chain (`SEC-090`). Implemented and
-/// extended in `WP-M6-11`.
+/// addressing the single gateway [`AuditChain::System`] chain (`SEC-090`).
 pub trait AuditLog: Send + Sync {
     /// Appends `entry` to the chain selected by `chain` (`SEC-090`).
     fn append_chain(
@@ -112,22 +125,5 @@ pub trait AuditLog: Send + Sync {
         last_n: Option<u64>,
     ) -> Result<AuditVerifyReport, StoreError> {
         self.verify_chain(&AuditChain::Tenant(tenant.clone()), last_n)
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::{AuditChain, AuditLog};
-    use gap_core::ids::TenantId;
-
-    // spec: SEC-090, SEC-091, SEC-092, INV-09
-    #[test]
-    fn audit_log_trait_is_object_safe_and_audit_chain_carries_tenant_scope() {
-        fn _assert_dyn(_log: &dyn AuditLog) {}
-
-        let scope = TenantId::new("acme").expect("tenant").scope();
-        let tenant_chain = AuditChain::Tenant(scope);
-        let sys_chain = AuditChain::System;
-        assert_ne!(tenant_chain, sys_chain);
     }
 }
