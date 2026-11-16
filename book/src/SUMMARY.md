@@ -50,3 +50,12 @@
 - [Agent Guide](../../docs/AGENT-GUIDE.md)
 - [Release Engineering and Error-Budget Policy](../../docs/RELEASE.md)
 - [Unsafe Code Ledger](../../docs/UNSAFE.md)
+
+# ASD-STE100 Aircraft Manual
+
+- [Overview and Linter](../../docs/ste100/README.md)
+  - [00 — Controlled Vocabulary](../../docs/ste100/00-DICTIONARY.md)
+  - [01 — System Architecture and Operating Limits](../../docs/ste100/01-SYSTEM-OVERVIEW.md)
+  - [02 — Standard Operating Procedures](../../docs/ste100/02-OPERATING-PROCEDURES.md)
+  - [03 — Connectors, Proposals, and Snapshots](../../docs/ste100/03-CONNECTORS-AND-INGESTION.md)
+  - [04 — Security and Fault Recovery Procedures](../../docs/ste100/04-SECURITY-AND-FAULT-PROCEDURES.md)
