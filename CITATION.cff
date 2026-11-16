@@ -1,0 +1,34 @@
+cff-version: 1.2.0
+message: "If you use Graph Agent Protocol (GAP) software, specifications, or benchmarks, please cite both the software and the reference paper below."
+title: "Graph Agent Protocol (GAP): Unified Typed GraphQL-Profile Gateway, Progressive Disclosure, and Zero-Trust Governance for AI Agents"
+type: software
+version: "0.1.0-rc.1"
+date-released: "2026-11-16"
+license: "Apache-2.0"
+repository-code: "https://github.com/mike/GraphProtocol"
+url: "https://github.com/mike/GraphProtocol"
+abstract: "GAP is a typed GraphQL-profile protocol and Rust reference gateway unifying heterogeneous APIs, relational/graph stores, code indices, MCP servers, and durable A2A tasks behind three-level progressive disclosure, batched DataLoader federation, wait-free immutable snapshots, deterministic Cedar authorization, and fail-closed schema-drift/rug-pull protection."
+keywords:
+  - "agent protocol"
+  - "GraphQL"
+  - "Model Context Protocol"
+  - "Agent2Agent"
+  - "progressive disclosure"
+  - "zero-trust authorization"
+  - "Rust"
+  - "Cedar"
+authors:
+  - given-names: "Mike"
+    family-names: "GAP Project Lead"
+    affiliation: "Graph Agent Protocol Contributors"
+    email: "contributors@gap-protocol.local"
+preferred-citation:
+  type: article
+  title: "Graph Agent Protocol (GAP): Unifying Typed Discovery, Batched Federation, and Zero-Trust Runtime Governance for AI Agents"
+  year: 2026
+  authors:
+    - given-names: "Mike"
+      family-names: "GAP Project Lead"
+      affiliation: "Graph Agent Protocol Contributors"
+      email: "contributors@gap-protocol.local"
+  notes: "Preprint manuscript and GAP-Bench/RouteBench reproducible artifacts in paper/ and bench/results/."

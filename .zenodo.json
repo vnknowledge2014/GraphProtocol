@@ -1,0 +1,33 @@
+{
+  "title": "Graph Agent Protocol (GAP) v0.1.0-rc.1: Unified Typed Protocol, Conformance Suite, and GAP-Bench Artifacts",
+  "upload_type": "software",
+  "description": "Reference Rust implementation, RFC-2119 specification (spec/00-09), protobuf contracts, six Native Graph Connectors, 135-test conformance suite, reproducible GAP-Bench/RouteBench evaluation artifacts, and academic preprint for Graph Agent Protocol (GAP).",
+  "license": "Apache-2.0",
+  "version": "0.1.0-rc.1",
+  "publication_date": "2026-11-16",
+  "access_right": "open",
+  "creators": [
+    {
+      "name": "GAP Project Lead, Mike",
+      "affiliation": "Graph Agent Protocol Contributors"
+    }
+  ],
+  "keywords": [
+    "Graph Agent Protocol",
+    "GAP-QL",
+    "Model Context Protocol",
+    "Agent2Agent",
+    "GraphQL Federation",
+    "Progressive Disclosure",
+    "Zero-Trust AI Agents",
+    "Cedar Policy",
+    "Wait-Free Snapshots"
+  ],
+  "related_identifiers": [
+    {
+      "identifier": "https://github.com/mike/GraphProtocol",
+      "relation": "isSupplementTo",
+      "scheme": "url"
+    }
+  ]
+}

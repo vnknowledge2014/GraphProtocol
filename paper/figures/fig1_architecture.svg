@@ -1,0 +1,64 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 470" width="920" height="470" font-family="Helvetica, Arial, sans-serif">
+  <rect x="0" y="0" width="920" height="470" fill="#FFFFFF"/>
+  <text x="460" y="28" text-anchor="middle" font-size="16" font-weight="700" fill="#1B365D">Figure 1: Three-Plane Zero-Trust Architecture of Graph Agent Protocol (GAP)</text>
+
+  <!-- Agent Hosts -->
+  <rect x="30" y="48" width="860" height="58" rx="8" fill="#F8FAFC" stroke="#1B365D" stroke-width="1.5"/>
+  <text x="50" y="72" font-size="13" font-weight="700" fill="#1B365D">AI Agent Hosts &amp; Clients</text>
+  <text x="50" y="92" font-size="11.5" fill="#4A5568">MCP 2026-07-28 Facade (5 static tools, 651 tokens)  |  Native GAP-QL (/graphql)  |  A2A v1.0 Tasks  |  Rust CLI</text>
+
+  <!-- Plane 1: Deterministic Execution -->
+  <rect x="30" y="132" width="540" height="190" rx="8" fill="#EFF6FF" stroke="#0072B2" stroke-width="1.8"/>
+  <text x="48" y="156" font-size="13" font-weight="700" fill="#0072B2">Plane 1: Deterministic Hot Execution Plane (Zero ML, INV-01 / INV-02 / INV-04)</text>
+
+  <rect x="48" y="170" width="115" height="62" rx="6" fill="#FFFFFF" stroke="#0072B2" stroke-width="1.2"/>
+  <text x="105" y="193" text-anchor="middle" font-size="11" font-weight="700" fill="#1B365D">AuthN + Cedar</text>
+  <text x="105" y="210" text-anchor="middle" font-size="10" fill="#4A5568">Default-Deny</text>
+  <text x="105" y="223" text-anchor="middle" font-size="10" fill="#4A5568">Scopes &amp; Cost</text>
+
+  <rect x="178" y="170" width="118" height="62" rx="6" fill="#FFFFFF" stroke="#0072B2" stroke-width="1.2"/>
+  <text x="237" y="193" text-anchor="middle" font-size="11" font-weight="700" fill="#1B365D">GAP-QL Planner</text>
+  <text x="237" y="210" text-anchor="middle" font-size="10" fill="#4A5568">ArcSwap Pinning</text>
+  <text x="237" y="223" text-anchor="middle" font-size="10" fill="#4A5568">Tenant PlanCache</text>
+
+  <rect x="311" y="170" width="118" height="62" rx="6" fill="#FFFFFF" stroke="#0072B2" stroke-width="1.2"/>
+  <text x="370" y="193" text-anchor="middle" font-size="11" font-weight="700" fill="#1B365D">Batch Executor</text>
+  <text x="370" y="210" text-anchor="middle" font-size="10" fill="#4A5568">DataLoader O(1)</text>
+  <text x="370" y="223" text-anchor="middle" font-size="10" fill="#4A5568">P2C + Breaker</text>
+
+  <rect x="444" y="170" width="110" height="62" rx="6" fill="#FFFFFF" stroke="#0072B2" stroke-width="1.2"/>
+  <text x="499" y="193" text-anchor="middle" font-size="11" font-weight="700" fill="#1B365D">Security Guard</text>
+  <text x="499" y="210" text-anchor="middle" font-size="10" fill="#4A5568">EgressGuard SSRF</text>
+  <text x="499" y="223" text-anchor="middle" font-size="10" fill="#4A5568">Sandbox &amp; T2 Tag</text>
+
+  <!-- Sub-box inside Plane 1 -->
+  <rect x="48" y="248" width="506" height="58" rx="6" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="1.2"/>
+  <text x="301" y="270" text-anchor="middle" font-size="11.5" font-weight="700" fill="#1B365D">Native Graph Connector (NGC) Adapters + Durable State</text>
+  <text x="301" y="290" text-anchor="middle" font-size="10.5" fill="#4A5568">OpenAPI  |  GraphQL  |  gRPC  |  SQL  |  CLI  |  Code Graph (tree-sitter)  |  SQLite Context/Tasks/BLAKE3 Audit</text>
+
+  <!-- Plane 2: Discovery -->
+  <rect x="590" y="132" width="300" height="90" rx="8" fill="#ECFDF5" stroke="#009E73" stroke-width="1.8"/>
+  <text x="606" y="156" font-size="13" font-weight="700" fill="#009E73">Plane 2: Calibrated Discovery</text>
+  <text x="606" y="176" font-size="10.5" fill="#1B365D">__metaGraph (L0) -&gt; __search (L1) -&gt; __type (L2)</text>
+  <text x="606" y="194" font-size="10.5" fill="#4A5568">BM25 + HNSW Hybrid + Visibility Bitset (INV-05)</text>
+  <text x="606" y="210" font-size="10.5" fill="#4A5568">Optional S1 Candle / Conformal (INV-17 Fallback)</text>
+
+  <!-- Plane 3: Ingestion & Snapshot Control -->
+  <rect x="590" y="232" width="300" height="90" rx="8" fill="#FFF7ED" stroke="#D55E00" stroke-width="1.8"/>
+  <text x="606" y="256" font-size="13" font-weight="700" fill="#D55E00">Plane 3: Zero-Trust Control Plane</text>
+  <text x="606" y="276" font-size="10.5" fill="#1B365D">Propose-Not-Activate + T0/T1/T2 Trust Tiers</text>
+  <text x="606" y="294" font-size="10.5" fill="#4A5568">Desc-Hash Pinning -&gt; Drift Freeze (SEC-082)</text>
+  <text x="606" y="310" font-size="10.5" fill="#4A5568">Wait-Free Snapshot Publish + Auto-Rollback</text>
+
+  <!-- Bottom Cross-cutting Invariant strip -->
+  <rect x="30" y="344" width="860" height="96" rx="8" fill="#F8FAFC" stroke="#CBD5E1" stroke-width="1.4"/>
+  <text x="48" y="368" font-size="12" font-weight="700" fill="#1B365D">Downstream Backends &amp; Runtime Invariants</text>
+  <text x="48" y="388" font-size="11" fill="#4A5568">1. Snapshot Atomicity (INV-01): One Arc&lt;Snapshot&gt; per request; zero partial state across swaps.</text>
+  <text x="48" y="406" font-size="11" fill="#4A5568">2. Tenant Isolation (INV-09): TenantId embedded in PlanCache, TaskStore, ContextStore, Quotas, and Audit chains.</text>
+  <text x="48" y="424" font-size="11" fill="#4A5568">3. Rug-Pull &amp; Exfil Defense (INV-08, INV-15): Description mutations freeze branch; untrusted outputs escaped in &lt;gap:untrusted&gt;.</text>
+
+  <!-- Connectors -->
+  <line x1="280" y1="106" x2="280" y2="132" stroke="#1B365D" stroke-width="1.8"/>
+  <line x1="740" y1="106" x2="740" y2="132" stroke="#009E73" stroke-width="1.8"/>
+  <line x1="590" y1="277" x2="570" y2="277" stroke="#D55E00" stroke-width="1.8" stroke-dasharray="4 3"/>
+</svg>

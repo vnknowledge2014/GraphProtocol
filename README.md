@@ -1,29 +1,64 @@
 # GAP — Graph Agent Protocol
 
-**English summary.** GAP is a proposed protocol layer between AI agents and everything they need (APIs, databases, MCP servers, other agents, code and documentation graphs). A client writes ordinary GraphQL (a strict *profile*, ADR-001); discovery is progressive (`__metaGraph` → `__search` → `__type` → execute) so context cost does not grow with the number of tools; cross-backend joins are batched (no N+1); authorization is deterministic (Cedar); long-running work uses A2A-compatible Tasks; new sources are *proposed, verified and hot-swapped* into an immutable snapshot with rollback. A small calibrated decision model (System-1) is an **optional, gate-measured** discovery component — the system is fully functional without it. Existing MCP hosts use GAP today through a five-tool MCP facade.
+**Graph Agent Protocol (GAP)** is an Apache-2.0, strongly typed GraphQL-profile gateway and governance layer unifying heterogeneous AI agent backends (OpenAPI REST, GraphQL subgraphs, gRPC, SQL, CLI tools, AST code/doc graphs, external MCP servers, and A2A peer tasks) behind **progressive disclosure**, **batched federation**, **deterministic Cedar authorization**, and **wait-free immutable snapshots**.
 
-Status: **specification + execution plan complete; implementation starts at `WP-M0-01`.** Nothing here claims measured performance yet — numbers are targets/gates until `bench/results/` exists (ADR-021).
+**Status (`0.1.0-rc.1` · `2026-11-16`):** **85 / 85 work packages complete (`main`)**, verified end-to-end offline (`354` spec requirements / `82` MUST / `2,481` test markers, `135/136` conformance tests, `31` Rust workspace crates). Citation metadata, CERN Zenodo config, arXiv LaTeX paper (`paper/main.tex`), vector figures, and Linux GA release automation (`dist/run-linux-ga-gates.sh`) are included.
 
 ---
 
-## Tài liệu (tiếng Việt cho người đọc; tiếng Anh cho phần chuẩn tắc)
-| Cần gì | Mở file |
-|---|---|
-| Kết luận review session Antigravity, lỗi đã sửa, bằng chứng | [`docs/00-REVIEW.md`](docs/00-REVIEW.md) |
-| 24 quyết định kiến trúc (ADR) | [`docs/01-DECISIONS.md`](docs/01-DECISIONS.md) |
-| Kế hoạch: milestone, làn song song, lịch, rủi ro, cổng | [`docs/02-PLAN.md`](docs/02-PLAN.md) |
-| Chiến lược kiểm chứng + checklist phát hành 1.0-RC | [`docs/03-VERIFICATION.md`](docs/03-VERIFICATION.md) |
-| Cách AI agent làm việc trong repo này | [`docs/AGENT-GUIDE.md`](docs/AGENT-GUIDE.md), [`AGENTS.md`](AGENTS.md) |
-| Đặc tả chuẩn tắc | [`spec/`](spec/) — 00 quy ước · 01 kiến trúc · 02 GAP-QL · 03 NGC · 04 routing/calibration/balancing · 05 ingestion · 06 runtime · 07 security · 08 operations · 09 compat (MCP/A2A/connectors) |
-| Hợp đồng nhị phân | [`proto/gap/ngc/v1/ngc.proto`](proto/gap/ngc/v1/ngc.proto), [`proto/gap/gateway/v1/gateway.proto`](proto/gap/gateway/v1/gateway.proto) |
-| 85 work package + DAG cho omni | [`work/work-packages.toml`](work/work-packages.toml), [`work/dag/`](work/dag/) |
-| Số liệu thật đã đo / phiên bản đã kiểm chứng | [`docs/evidence/`](docs/evidence/) |
+## Measured Highlights (`0.1.0-rc.1`, `ADR-021`)
 
-## Bắt đầu
+| Dimension | Measured Value | Evidence Artifact |
+|---|---|---|
+| Static MCP `2026-07-28` schema cost | **`651` tokens** constant for `N in {10..1,000}` (vs `203,421` Direct-MCP at `N=1,000`) | [`docs/benchmarks/REPORT.md`](docs/benchmarks/REPORT.md) |
+| Cross-branch join token reduction (`N=1,000`) | **`99.0%`** uncached (`95.34x`) · **`93.5%`** cached (`15.42x`) · turns `4 -> 2` | [`bench/results/gapbench/baseline.json`](bench/results/gapbench/baseline.json) |
+| Code-graph traversal (`24` symbols) | **`119.32x`** uncached · **`208.68x`** cached · turns `11 -> 1` | [`bench/results/gapbench/baseline.json`](bench/results/gapbench/baseline.json) |
+| Honest negative crossover (`ADR-017`) | Direct-MCP wins flat `N=10` cached (`547` vs `4,692` tokens) and `N=50` cached (`2,385` vs `4,728`) | [`docs/benchmarks/REPORT.md`](docs/benchmarks/REPORT.md) |
+| Deterministic router vs System-1 (`G-S1`) | Baseline **`95.24%`** test / **`97.22%`** held-out top-1 at **`0.887 ms`** p95 (`INV-17` fallback) | [`docs/decisions/G-S1.md`](docs/decisions/G-S1.md) |
+| Bit-reproducible `--locked` release binary | **`23.8 MB`** (`23,811,288` B), identical double-build SHA-256 | [`bench/results/ga_local/report.json`](bench/results/ga_local/report.json) |
+| Live cold start / RSS / mixed HTTP / `SIGKILL` | **`1,197 ms`** boot · **`9.16 MiB`** idle · **`1,889 req/s`** (`0` errs, `6.36 ms` p95) · **`19.24 ms`** `kill -9` recover | [`bench/results/ga_local/report.json`](bench/results/ga_local/report.json) |
+
+---
+
+## Quickstart & Local Verification
+
 ```bash
-python3 tools/wp.py validate && python3 tools/wp.py ready   # 85 WP, 281 agent-day, đường găng 65,5
-omni run --estimate-dag work/dag/m0.json                    # xem trước chi phí M0
-```
-Quyết định cần bạn xác nhận (đều có mặc định, không chặn agent): tên giao thức, checkpoint System-1, kho context, phạm vi lần chạy đầu, cài skill global, cho phép LLM cloud — xem `docs/00-REVIEW.md` §5.
+# 1. Run 5-minute walking skeleton (REST shop + MCP notes + GraphQL/MCP gateway)
+./target/dist/gap config check examples/walking-skeleton/gap.toml
+python3 examples/walking-skeleton/fixtures/rest_fixture.py --port 9101 &
+python3 examples/walking-skeleton/fixtures/mcp_fixture.py --port 9102 &
+./target/dist/gap serve --config examples/walking-skeleton/gap.toml
 
-License: Apache-2.0 (planned; see WP-M0-01).
+# 2. Reproduce GAP-Bench & live GA local runtime/SIGKILL/reproducibility drills
+./bench/results/gapbench/reproduce.sh
+python3 dist/verify-ga-local.py
+
+# 3. Validate specs, workspace layering, traceability matrix, and paper bundle
+python3 tools/wp.py validate && python3 tools/check_layers.py && python3 tools/spec_trace.py --strict
+./paper/build-arxiv-bundle.sh
+```
+
+---
+
+## Tài liệu, Đặc tả & Bài báo Khoa học
+
+| Mục | Đường dẫn |
+|---|---|
+| **Academic Paper (LaTeX / HTML / PDF / Markdown)** | [`paper/main.tex`](paper/main.tex) · [`paper/gap-paper.pdf`](paper/gap-paper.pdf) · [`docs/paper/GAP-PAPER.md`](docs/paper/GAP-PAPER.md) |
+| **Hướng dẫn Xuất bản arXiv/Zenodo DOI & Chạy GA Linux** | [`docs/paper/PUBLICATION-AND-GA-PLAYBOOK.md`](docs/paper/PUBLICATION-AND-GA-PLAYBOOK.md) · [`dist/set-author.py`](dist/set-author.py) |
+| **Cổng kiểm định 1.0-RC & Traceability Matrix** | [`docs/gates/RC.md`](docs/gates/RC.md) · [`docs/traceability.md`](docs/traceability.md) |
+| **Quickstart, Concepts, Connector & Security Guides** | [`docs/guides/quickstart.md`](docs/guides/quickstart.md) · [`docs/guides/concepts.md`](docs/guides/concepts.md) · [`docs/guides/connector-authoring.md`](docs/guides/connector-authoring.md) · [`docs/guides/security-hardening.md`](docs/guides/security-hardening.md) |
+| **Normative Spec (`00`–`09`), ADRs & Review** | [`spec/`](spec/) · [`docs/01-DECISIONS.md`](docs/01-DECISIONS.md) · [`docs/00-REVIEW.md`](docs/00-REVIEW.md) |
+| **Wire Contracts & Work Packages (`85/85 done`)** | [`proto/`](proto/) · [`work/work-packages.toml`](work/work-packages.toml) · [`work/status.toml`](work/status.toml) |
+
+---
+
+## How to Cite GAP
+
+Standard software and paper citation metadata lives in [`CITATION.cff`](CITATION.cff) and [`.zenodo.json`](.zenodo.json). Before tagging your public release, stamp your legal name, email, and ORCID across all citation/LaTeX/legal files with:
+
+```bash
+python3 dist/set-author.py --given-names "..." --family-names "..." --orcid "0000-000X-XXXX-XXXX"
+```
+
+License: [Apache-2.0](LICENSE) · Provenance & Third-Party Notices: [`NOTICE`](NOTICE)
