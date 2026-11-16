@@ -44,6 +44,7 @@ python3 tools/wp.py validate && python3 tools/check_layers.py && python3 tools/s
 
 | Mục | Đường dẫn |
 |---|---|
+| **Website Học Tập Tương Tác (Tiếng Việt)** | [`web/README.md`](web/README.md) · [`web/index.html`](web/index.html) · `python3 web/serve.py --port 8787` |
 | **Academic Paper (LaTeX / HTML / PDF / Markdown)** | [`paper/main.tex`](paper/main.tex) · [`paper/gap-paper.pdf`](paper/gap-paper.pdf) · [`docs/paper/GAP-PAPER.md`](docs/paper/GAP-PAPER.md) |
 | **ASD-STE100 Aircraft Manual (Karpathy Style + Linter)** | [`docs/ste100/README.md`](docs/ste100/README.md) · `python3 dist/check-ste100.py` |
 | **Hướng dẫn Xuất bản arXiv/Zenodo DOI & Chạy GA Linux** | [`docs/paper/PUBLICATION-AND-GA-PLAYBOOK.md`](docs/paper/PUBLICATION-AND-GA-PLAYBOOK.md) · [`dist/set-author.py`](dist/set-author.py) |
