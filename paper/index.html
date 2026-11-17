@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Graph Agent Protocol (GAP): Unifying Typed Discovery, Batched Federation, and Zero-Trust Governance for AI Agents</title>
+<meta name="citation_title" content="Graph Agent Protocol (GAP): Unifying Typed Discovery, Batched Federation, and Zero-Trust Governance for AI Agents"/>
+<meta name="citation_author" content="Mike (vnknowledge2014)"/>
+<meta name="citation_publication_date" content="2026/11/16"/>
+<meta name="citation_technical_report_institution" content="Graph Agent Protocol Project"/>
+<meta name="citation_pdf_url" content="https://vnknowledge2014.github.io/GraphProtocol/paper/gap-paper.pdf"/>
+<meta name="citation_abstract_html_url" content="https://vnknowledge2014.github.io/GraphProtocol/paper/"/>
+<meta name="description" content="Graph Agent Protocol (GAP) academic preprint, three-plane zero-trust architecture, dual-stack HTTP/2 + HTTP/3 QUIC transport, and reproducible GAP-Bench/RouteBench evaluation."/>
+<style>
+  @page {
+    size: letter;
+    margin: 0.50in 0.52in;
+  }
+  * {
+    box-sizing: border-box;
+  }
+  body {
+    font-family: "Times New Roman", "Liberation Serif", Georgia, serif;
+    color: #0F172A;
+    max-width: 960px;
+    margin: 24px auto;
+    padding: 0 18px;
+    line-height: 1.36;
+    font-size: 9.8pt;
+    hyphens: auto;
+  }
+  header {
+    text-align: center;
+    margin-bottom: 11px;
+    border-bottom: 1.5px solid #1B365D;
+    padding-bottom: 8px;
+  }
+  h1 {
+    font-size: 16.2pt;
+    color: #1B365D;
+    margin: 0 0 6px 0;
+    line-height: 1.16;
+    letter-spacing: -0.01em;
+  }
+  .author {
+    font-size: 9.8pt;
+    color: #1E293B;
+    margin: 2px 0;
+  }
+  .meta-line {
+    font-size: 8.8pt;
+    color: #475569;
+    margin-top: 2px;
+  }
+  .meta-line a {
+    color: #0072B2;
+    text-decoration: none;
+  }
+  .abstract {
+    background: #F8FAFC;
+    border-left: 3px solid #1B365D;
+    border-top: 1px solid #E2E8F0;
+    border-right: 1px solid #E2E8F0;
+    border-bottom: 1px solid #E2E8F0;
+    padding: 8px 12px;
+    margin: 8px 0 11px 0;
+    font-size: 9.1pt;
+    line-height: 1.33;
+  }
+  .twocol {
+    column-count: 2;
+    column-gap: 18px;
+    text-align: justify;
+    margin-bottom: 8px;
+  }
+  .twocol p {
+    margin: 0 0 5.5px 0;
+    orphans: 3;
+    widows: 3;
+  }
+  .twocol ul, .twocol ol {
+    margin: 3.5px 0 6px 0;
+    padding-left: 16px;
+  }
+  .twocol li {
+    margin-bottom: 3px;
+  }
+  h2 {
+    font-size: 11pt;
+    color: #1B365D;
+    border-bottom: 1px solid #CBD5E1;
+    padding-bottom: 2px;
+    margin: 8px 0 4px 0;
+    break-after: avoid;
+    text-align: left;
+  }
+  h3 {
+    font-size: 9.7pt;
+    color: #0F172A;
+    margin: 6px 0 2.5px 0;
+    break-after: avoid;
+    text-align: left;
+  }
+  figure {
+    margin: 7px 0 9px 0;
+    text-align: center;
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+  figure svg {
+    width: 100%;
+    max-width: 100%;
+    height: auto;
+    border: 1px solid #E2E8F0;
+    border-radius: 4px;
+    display: block;
+    margin: 0 auto;
+  }
+  figcaption {
+    font-size: 8.4pt;
+    color: #334155;
+    margin-top: 4px;
+    text-align: left;
+    line-height: 1.28;
+    padding: 0 4px;
+  }
+  .table-wrap {
+    margin: 7px 0 9px 0;
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+  .table-caption {
+    font-size: 8.5pt;
+    color: #1E293B;
+    margin-bottom: 3.5px;
+    text-align: left;
+    line-height: 1.28;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 8.0pt;
+    border-top: 1.6px solid #0F172A;
+    border-bottom: 1.6px solid #0F172A;
+    hyphens: none;
+  }
+  thead th {
+    border-bottom: 1px solid #334155;
+    background: #F8FAFC;
+    color: #1B365D;
+    font-weight: 700;
+    padding: 4px 5px;
+    text-align: right;
+    white-space: nowrap;
+  }
+  tbody td {
+    border-bottom: 1px solid #F1F5F9;
+    padding: 3.4px 5px;
+    text-align: right;
+  }
+  tbody tr:last-child td {
+    border-bottom: none;
+  }
+  th:first-child, td:first-child {
+    text-align: left;
+  }
+  td.mono {
+    font-family: "SFMono-Regular", Menlo, Consolas, monospace;
+    font-size: 7.7pt;
+    white-space: nowrap;
+  }
+  code {
+    font-family: "SFMono-Regular", Menlo, Consolas, monospace;
+    font-size: 8.2pt;
+    color: #0F172A;
+    background: #F1F5F9;
+    padding: 0 2px;
+    border-radius: 2px;
+    hyphens: none;
+  }
+  ol.refs {
+    font-size: 8.0pt;
+    line-height: 1.26;
+    padding-left: 17px;
+    margin: 3px 0 0 0;
+    text-align: left;
+  }
+  ol.refs li {
+    margin-bottom: 2.2px;
+  }
+  @media print {
+    body {
+      max-width: none;
+      margin: 0;
+      padding: 0;
+      font-size: 9.0pt;
+      line-height: 1.32;
+    }
+    .twocol {
+      column-count: 2;
+      column-gap: 16px;
+    }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>Graph Agent Protocol (GAP): Unifying Typed Discovery, Batched Federation, and Zero-Trust Governance for AI Agents</h1>
+  <div class="author"><strong>Mike (vnknowledge2014)</strong> &middot; Graph Agent Protocol Project &middot; <code>vnknowledge2014@users.noreply.github.com</code></div>
+  <div class="meta-line">
+    Reference Release <code>v0.1.0-rc.1</code> &middot; November 16, 2026 &middot; Apache-2.0 &middot;
+    Code &amp; Artifacts: <a href="https://github.com/vnknowledge2014/GraphProtocol">https://github.com/vnknowledge2014/GraphProtocol</a>
+  </div>
+</header>
+
+<div class="abstract">
+  <strong>Abstract.</strong> AI agents increasingly invoke REST/OpenAPI APIs, SQL stores, GraphQL subgraphs, gRPC endpoints, CLI utilities, codebases, Model Context Protocol (MCP) tool servers, peer Agent2Agent (A2A) workers, and interactive AG-UI interfaces. Current deployments fragment this plane across flat JSON-RPC catalogs (MCP), opaque peer task endpoints (A2A), and ad-hoc frontend streams, causing <em>O</em>(<em>N</em>) prompt schema inflation (<strong>203,421 tokens</strong> at <em>N</em>=1,000), client-orchestrated <em>N</em>+1 join round-trips, unpinned descriptions vulnerable to rug pulls, and hot-path latency from neural routing. We introduce <strong>Graph Agent Protocol (GAP)</strong>, a strongly typed GraphQL-profile gateway built across three separated planes: (1) a <em>Zero-ML deterministic execution plane</em> with Cedar policy checks, tenant-keyed planning, batched DataLoader joins, and wait-free immutable snapshots backed by a pure-Rust persistent AVL <code>OrdMap</code>; (2) a <em>three-level progressive discovery plane</em> unifying MCP <code>2026-07-28</code> (<strong>651 tokens</strong> constant), A2A v1.0, and AG-UI v1.0 (<code>/ag-ui</code> SSE + interrupts) alongside multi-provider System-1 routers (<code>@receptron/laya</code>, <code>Jev</code>, <code>gemini-decision-1</code>) and automatic deterministic fallback (<code>INV-17</code>); and (3) a <em>zero-trust control plane</em> enforcing propose-not-activate ingestion, SHA-256 description-hash drift freezes, DNS-pinned SSRF egress guards, OS sandboxing, and BLAKE3 hash chains over dual-stack <code>HTTP/2</code> + <code>HTTP/3</code> (<code>QUIC RFC 9114</code>, 0-RTT disabled). Implemented across 32 layered Rust crates with zero <code>RUSTSEC</code> advisories, GAP cuts cross-branch token usage at <em>N</em>=1,000 by <strong>99.0%</strong> uncached (<strong>93.5%</strong> cached) and code-graph context by <strong>119.3x–208.7x</strong>, boots its 26.9&nbsp;MB bit-identical binary in <strong>314.0&nbsp;ms</strong> at <strong>9.24&nbsp;MiB</strong> idle RSS, sustains <strong>2,227.6&nbsp;req/s</strong> over TCP (<strong>5.11&nbsp;ms</strong> p95) and <strong>7,869.5&nbsp;req/s</strong> over persistent multiplexed QUIC (<strong>1.45&nbsp;ms</strong> p95) with zero errors, and recovers from OS <code>SIGKILL</code> in <strong>12.96&nbsp;ms</strong>.
+</div>
+
+<figure>
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 940 500" width="940" height="500" font-family="Helvetica, Arial, sans-serif">
+  <defs>
+    <marker id="arr-navy" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#1B365D"/>
+    </marker>
+    <marker id="arr-teal" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#009E73"/>
+    </marker>
+    <marker id="arr-orange" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#D55E00"/>
+    </marker>
+  </defs>
+  <rect x="0" y="0" width="940" height="500" fill="#FFFFFF"/>
+
+  <!-- Agent Hosts & Dual-Stack Edge -->
+  <rect x="24" y="18" width="892" height="72" rx="8" fill="#F8FAFC" stroke="#1B365D" stroke-width="1.5"/>
+  <text x="42" y="42" font-size="13" font-weight="700" fill="#1B365D">AI Agent Hosts &amp; Dual-Stack Transport Ingress (L4)</text>
+  <text x="42" y="61" font-size="10.5" fill="#475569">MCP 2026-07-28 (651 tok)  |  GAP-QL (/graphql + SSE)  |  A2A v1.0 Tasks  |  AG-UI v1.0 (/ag-ui SSE &amp; Interrupts)  |  CLI</text>
+  <text x="42" y="79" font-size="10.5" font-weight="600" fill="#0072B2">Wire Edge: HTTP/1.1 + HTTP/2 TCP (Alt-Svc)  ·  HTTP/3 QUIC UDP (RFC 9114, TLS 1.3 ALPN h3, 0-RTT disabled)  ·  gRPC  ·  stdio</text>
+
+  <!-- Plane 1: Deterministic Execution -->
+  <rect x="24" y="122" width="556" height="222" rx="8" fill="#EFF6FF" stroke="#0072B2" stroke-width="1.8"/>
+  <text x="42" y="145" font-size="12.5" font-weight="700" fill="#0072B2">Plane 1: Deterministic Hot Execution Plane (Zero ML · INV-01 / INV-02 / INV-04)</text>
+
+  <rect x="40" y="160" width="122" height="68" rx="6" fill="#FFFFFF" stroke="#0072B2" stroke-width="1.2"/>
+  <text x="101" y="182" text-anchor="middle" font-size="11" font-weight="700" fill="#1B365D">AuthN + Cedar</text>
+  <text x="101" y="199" text-anchor="middle" font-size="9.8" fill="#475569">Default-Deny Policy</text>
+  <text x="101" y="214" text-anchor="middle" font-size="9.8" fill="#475569">Scopes &amp; Cost Caps</text>
+
+  <rect x="174" y="160" width="124" height="68" rx="6" fill="#FFFFFF" stroke="#0072B2" stroke-width="1.2"/>
+  <text x="236" y="182" text-anchor="middle" font-size="11" font-weight="700" fill="#1B365D">GAP-QL Planner</text>
+  <text x="236" y="199" text-anchor="middle" font-size="9.8" fill="#475569">ArcSwap + AVL OrdMap</text>
+  <text x="236" y="214" text-anchor="middle" font-size="9.8" fill="#475569">Tenant PlanCache</text>
+
+  <rect x="310" y="160" width="124" height="68" rx="6" fill="#FFFFFF" stroke="#0072B2" stroke-width="1.2"/>
+  <text x="372" y="182" text-anchor="middle" font-size="11" font-weight="700" fill="#1B365D">Batch Executor</text>
+  <text x="372" y="199" text-anchor="middle" font-size="9.8" fill="#475569">DataLoader Join O(1)</text>
+  <text x="372" y="214" text-anchor="middle" font-size="9.8" fill="#475569">P2C LB + Breaker</text>
+
+  <rect x="446" y="160" width="118" height="68" rx="6" fill="#FFFFFF" stroke="#0072B2" stroke-width="1.2"/>
+  <text x="505" y="182" text-anchor="middle" font-size="11" font-weight="700" fill="#1B365D">Security Guard</text>
+  <text x="505" y="199" text-anchor="middle" font-size="9.8" fill="#475569">EgressGuard SSRF</text>
+  <text x="505" y="214" text-anchor="middle" font-size="9.8" fill="#475569">OS Sandbox &amp; T2 Tag</text>
+
+  <!-- Sub-box inside Plane 1 -->
+  <rect x="40" y="244" width="524" height="84" rx="6" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="1.2"/>
+  <text x="302" y="267" text-anchor="middle" font-size="11.5" font-weight="700" fill="#1B365D">Native Graph Connector (NGC) Adapters + Durable Multi-Tenant State</text>
+  <text x="302" y="287" text-anchor="middle" font-size="10.2" fill="#475569">OpenAPI  |  GraphQL  |  gRPC  |  SQL (SQLite/PostgreSQL)  |  Sandboxed CLI  |  Code Graph (tree-sitter)</text>
+  <text x="302" y="306" text-anchor="middle" font-size="10.2" fill="#009E73">ContextStore (SQLite WAL/FTS5 + opt. SurrealDB)  ·  TaskStore Leases  ·  BLAKE3 Audit Chain</text>
+
+  <!-- Plane 2: Discovery -->
+  <rect x="604" y="122" width="312" height="104" rx="8" fill="#ECFDF5" stroke="#009E73" stroke-width="1.8"/>
+  <text x="620" y="145" font-size="12.5" font-weight="700" fill="#009E73">Plane 2: Calibrated Discovery</text>
+  <text x="620" y="166" font-size="10.5" font-weight="600" fill="#1B365D">__metaGraph (L0) -&gt; __search (L1) -&gt; __type (L2)</text>
+  <text x="620" y="185" font-size="10" fill="#475569">BM25 + HNSW Hybrid + Visibility Bitset (INV-05)</text>
+  <text x="620" y="203" font-size="10" fill="#475569">Opt. S1 (Laya, Jev, Gemini Dec. 1) + Fallback (INV-17)</text>
+
+  <!-- Plane 3: Ingestion & Snapshot Control -->
+  <rect x="604" y="240" width="312" height="104" rx="8" fill="#FFF7ED" stroke="#D55E00" stroke-width="1.8"/>
+  <text x="620" y="263" font-size="12.5" font-weight="700" fill="#D55E00">Plane 3: Zero-Trust Control Plane</text>
+  <text x="620" y="284" font-size="10.5" font-weight="600" fill="#1B365D">Propose-Not-Activate + T0 / T1 / T2 Trust Tiers</text>
+  <text x="620" y="303" font-size="10" fill="#475569">SHA-256 Desc-Hash Pin -&gt; Drift Freeze (SEC-082)</text>
+  <text x="620" y="321" font-size="10" fill="#475569">Wait-Free ArcSwap Publish + Auto-Rollback</text>
+
+  <!-- Bottom Cross-cutting Invariant strip -->
+  <rect x="24" y="366" width="892" height="114" rx="8" fill="#F8FAFC" stroke="#CBD5E1" stroke-width="1.4"/>
+  <text x="42" y="390" font-size="12" font-weight="700" fill="#1B365D">Core Architectural Guarantees &amp; Verified Runtime Invariants</text>
+  <text x="42" y="411" font-size="10.5" fill="#475569">1. Wait-Free Snapshot Atomicity (INV-01, INV-02): Each request pins one Arc&lt;Snapshot&gt; backed by pure-Rust persistent AVL OrdMap.</text>
+  <text x="42" y="430" font-size="10.5" fill="#475569">2. Multi-Tenant &amp; Supply-Chain Hygiene (INV-09, ADR-002): TenantId in all keys; zero unsafe outside S1; zero RUSTSEC advisories.</text>
+  <text x="42" y="449" font-size="10.5" fill="#475569">3. Rug-Pull &amp; Replay Defense (INV-08, OPS-005): Drift freezes mutations; T2 output in &lt;gap:untrusted&gt;; HTTP/3 0-RTT disabled.</text>
+  <text x="42" y="468" font-size="10.5" fill="#475569">4. Strict Layering (ARC-002): L0..L6 acyclic crate DAG ensures zero ML runtime crates reach execution, transport, or authz.</text>
+
+  <!-- Directional Connectors -->
+  <line x1="290" y1="90" x2="290" y2="119" stroke="#1B365D" stroke-width="1.8" marker-end="url(#arr-navy)"/>
+  <line x1="760" y1="90" x2="760" y2="119" stroke="#009E73" stroke-width="1.8" marker-end="url(#arr-teal)"/>
+  <line x1="604" y1="292" x2="583" y2="292" stroke="#D55E00" stroke-width="1.8" stroke-dasharray="5 3" marker-end="url(#arr-orange)"/>
+</svg>
+  <figcaption><strong>Figure 1:</strong> Three-plane zero-trust architecture of Graph Agent Protocol (GAP). Plane 1 runs typed GraphQL planning, Cedar authorization, and batched joins with zero ML models (<code>ARC-002</code>, <code>INV-01</code>, <code>INV-04</code>) behind dual-stack HTTP/1.1+HTTP/2 TCP and HTTP/3 QUIC transport (<code>OPS-005</code>). Plane 2 performs visibility-filtered progressive disclosure; Plane 3 governs proposal verification, rug-pull drift pinning, and lock-free snapshot swaps.</figcaption>
+</figure>
+
+<div class="twocol">
+  <h2>1. Introduction &amp; Threat Model</h2>
+  <p>Production AI agents must discover, authorize, compose, and audit operations across heterogeneous backends. Anthropic's Model Context Protocol (MCP) [1] standardizes vertical tool invocation over JSON-RPC, whereas Google's Agent2Agent (A2A) protocol [2] standardizes horizontal multi-agent delegation via Agent Cards and asynchronous task lifecycles. Operating multi-tenant gateways exposes four structural weaknesses that flat catalogs and point-to-point RPC do not solve together:</p>
+  <ol>
+    <li><strong>Prompt Context Explosion &amp; <em>N</em>+1 Waterfalls:</strong> Flat MCP exports grow linearly to <strong>203,421 tokens</strong> at <em>N</em>=1,000 before reasoning begins, forcing models to issue sequential multi-turn round-trips to join cross-backend entities.</li>
+    <li><strong>Semantic Rug Pulls &amp; Spoofed Hints:</strong> Security audits [3,4,5] show unpinned tool descriptors permit hidden prompt injection and post-approval behavioral shifts.</li>
+    <li><strong>Hot-Path Neural Entanglement:</strong> Invoking ML tool classifiers on every request adds tens of milliseconds and mixes probabilistic inference with security-critical authorization.</li>
+    <li><strong>Protocol Silos Without Typed Federation:</strong> Treating SQL tables, REST APIs, CLI binaries, and code ASTs as unrelated untyped tools forces the LLM to act as query planner and join engine.</li>
+  </ol>
+  <p>GAP enforces a simple engineering rule: use deterministic compilers, typed graphs, and formal policy engines wherever structure exists, and confine probabilistic retrieval strictly to bounded, calibrated intent discovery (<code>ARC-002</code>).</p>
+
+  <h2>2. Three-Plane Architecture &amp; Invariants</h2>
+  <p>As Figure 1 shows, GAP assigns every downstream backend (<em>branch</em>) an explicit trust tier: <strong><code>T0</code></strong> (Ed25519-signed internal manifest; signature mismatch downgrades fail-closed to <code>T2</code>), <strong><code>T1</code></strong> (admin-approved and pinned via cryptographic <code>spec_hash</code> and <code>desc_hash</code>), and <strong><code>T2</code></strong> (untrusted external branches whose text outputs are length-capped, scrubbed, and wrapped inside escaped <code>&lt;gap:untrusted&gt;</code> envelopes, with CLI/stdio blocked without OS sandboxing).</p>
+  <p>To prevent architectural erosion, 20 normative invariants (<code>INV-01</code>..<code>INV-20</code>) are enforced continuously via static crate layering checks (<code>tools/check_layers.py</code>) and strict spec traceability (<code>tools/spec_trace.py --strict</code>):</p>
+  <ul>
+    <li><strong><code>INV-01</code> / <code>INV-02</code> (Pinning &amp; Lock-Free Hot Path):</strong> Requests pin one <code>Arc&lt;Snapshot&gt;</code> on ingress; read paths forbid <code>Mutex</code>, <code>RwLock</code>, and <code>DashMap</code>, using wait-free <code>ArcSwap</code> and persistent AVL <code>OrdMap</code> trees.</li>
+    <li><strong><code>INV-04</code> / <code>INV-05</code> (Deterministic Authz &amp; Visibility):</strong> Compiled Cedar rules [10] evaluate before execution and never consume ML scores; <code>__search</code> applies per-principal visibility bitsets before ranking.</li>
+    <li><strong><code>INV-08</code> / <code>INV-09</code> (Pinned Descriptors &amp; Tenants):</strong> Planners read sanitized pinned descriptions only; caches, quotas, stores, and BLAKE3 audits include <code>TenantId</code>.</li>
+    <li><strong><code>INV-17</code> / <code>INV-18</code> / <code>INV-20</code>:</strong> System-1 ML cannot block typed execution; remote joins execute in bounded batched frames; peer A2A delegation tracks hop counters to reject cycles.</li>
+  </ul>
+
+  <h2>3. Protocol Design &amp; Dual-Stack Transport</h2>
+  <h3>3.1 GAP-QL &amp; Three-Level Progressive Disclosure</h3>
+  <p>GAP-QL is a strict GraphQL profile parsed by <code>apollo-compiler</code> with zero custom grammar keywords [9]. Capabilities—<code>__metaGraph</code> (L0 branch summaries), <code>__search</code> (L1 hybrid BM25+HNSW candidates), <code>__type</code> (L2 exact SDL hydration), <code>@sideEffect</code>, <code>@requiresScope</code>, and <code>@join</code>—live purely as standard types and directives. Behind MCP <code>2026-07-28</code>, the five-tool facade (<code>gap_search</code>, <code>gap_describe</code>, <code>gap_query</code>, <code>gap_mutate</code>, <code>gap_task</code>) holds <code>tools/list</code> invariant at <strong>651 tokens</strong>.</p>
+  <h3>3.2 Three-Axis Facades, Native Connectors &amp; Dual-Stack HTTP/2 + HTTP/3</h3>
+  <p>Six reference Native Graph Connectors (<code>OpenAPI</code>, <code>GraphQL</code>, <code>gRPC</code>, <code>SQL</code>, sandboxed <code>CLI</code>, <code>tree-sitter</code> <code>Code</code>) translate heterogeneous protocols into <code>Describe</code>, <code>BatchQuery</code>, and <code>Mutate</code> frames. At L4, <code>gap-transport</code> serves <code>/graphql</code>, <code>/graphql/stream</code>, <code>/mcp</code> (MCP <code>2026-07-28</code>), A2A v1.0, and <code>/ag-ui</code> (AG-UI v1.0 SSE + human approval interrupts, spotlighted via <code>&lt;gap:untrusted&gt;</code>, <code>ADR-027</code>) over <strong>HTTP/1.1+HTTP/2 TCP</strong> (<code>Alt-Svc: h3</code>) and <strong>HTTP/3 QUIC</strong> (<code>RFC 9114</code>, <code>0-RTT</code> disabled, <code>OPS-005</code>). Optional System-1 routing (<code>ADR-028</code>) unifies Candle, <code>@receptron/laya</code>, <code>Jev</code>, and <code>gemini-decision-1</code> (0 output tokens, up to 1,000 parallel heads) under <code>INV-17</code> baseline fallback.</p>
+
+  <h2>4. Zero-Trust Governance &amp; Snapshot Control</h2>
+  <p>All changes enter via sandboxed <code>gap-ingest</code> extraction, CISG injection linting, and admin-approved <code>Proposal</code> records rather than auto-mutating live routing. <code>DriftMonitor</code> hashes sanitized upstream descriptions and immediately freezes tampered branches to <code>BranchStatus::Drift</code> while planners continue serving pinned baselines (<code>SEC-082</code>).</p>
+  <p>Outbound HTTP passes through <code>EgressGuard</code>, which pins resolved DNS sockets once, blocks loopback/RFC 1918/metadata IPs (<code>169.254.169.254</code>) and obfuscated numeric/IPv6-mapped forms across redirects. Subprocesses run inside Linux Bubblewrap or macOS Seatbelt sandboxes with SHA-256 binary allowlists. Snapshots publish off-thread via <code>SnapshotHandle</code> with automatic 60&nbsp;s error-spike rollback and BLAKE3 chained audit logs.</p>
+</div>
+
+<figure>
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 820 400" width="820" height="400" font-family="Helvetica, Arial, sans-serif">
+  <rect x="0" y="0" width="820" height="400" fill="#FFFFFF"/>
+  <!-- Dedicated Legend Header Band (completely above plot axes) -->
+  <rect x="82" y="14" width="570" height="32" rx="5" fill="#F8FAFC" stroke="#CBD5E1"/>
+  <rect x="96" y="24" width="12" height="12" fill="#D55E00" rx="2"/>
+  <text x="114" y="34" font-size="11" font-weight="600" fill="#1B365D">Direct-MCP Schema (O(N): 1,904 -&gt; 203,421)</text>
+  <rect x="387" y="24" width="12" height="12" fill="#0072B2" rx="2"/>
+  <text x="405" y="34" font-size="11" font-weight="600" fill="#1B365D">GAP 5-Tool Facade (constant O(1): 651)</text>
+
+  <line x1="82" y1="309.2" x2="652" y2="309.2" stroke="#CBD5E1" stroke-dasharray="3 3"/><text x="74" y="313.2" text-anchor="end" font-size="10.5" fill="#475569">100</text><line x1="82" y1="247.6" x2="652" y2="247.6" stroke="#CBD5E1" stroke-dasharray="3 3"/><text x="74" y="251.6" text-anchor="end" font-size="10.5" fill="#475569">1,000</text><line x1="82" y1="186.1" x2="652" y2="186.1" stroke="#CBD5E1" stroke-dasharray="3 3"/><text x="74" y="190.1" text-anchor="end" font-size="10.5" fill="#475569">10,000</text><line x1="82" y1="124.5" x2="652" y2="124.5" stroke="#CBD5E1" stroke-dasharray="3 3"/><text x="74" y="128.5" text-anchor="end" font-size="10.5" fill="#475569">100,000</text><line x1="82" y1="242.8" x2="652" y2="242.8" stroke="#009E73" stroke-width="1.8" stroke-dasharray="6 4"/><line x1="652" y1="242.8" x2="664" y2="242.8" stroke="#009E73" stroke-width="1.5"/><rect x="664" y="224.8" width="146" height="36" rx="4" fill="#ECFDF5" stroke="#009E73" stroke-width="1.2"/><text x="672" y="239.8" font-size="10.5" font-weight="700" fill="#009E73">Gate G-F1 Ceiling</text><text x="672" y="253.8" font-size="10" fill="#1B365D">&lt;= 1,200 tokens (O(1))</text>
+  <line x1="82" y1="66" x2="82" y2="340" stroke="#1B365D" stroke-width="1.5"/>
+  <line x1="82" y1="340" x2="652" y2="340" stroke="#1B365D" stroke-width="1.5"/>
+  <rect x="110.2" y="230.4" width="38" height="109.6" fill="#D55E00" rx="3"/><text x="129.2" y="224.4" text-anchor="middle" font-size="10.5" font-weight="700" fill="#D55E00">1,904</text><rect x="158.2" y="259.1" width="38" height="80.9" fill="#0072B2" rx="3"/><text x="177.2" y="253.1" text-anchor="middle" font-size="10.5" font-weight="700" fill="#0072B2">651</text><text x="153.2" y="360" text-anchor="middle" font-size="11.5" font-weight="700" fill="#1B365D">N = 10</text><text x="153.2" y="376" text-anchor="middle" font-size="10" fill="#475569">(2 branches)</text><rect x="252.8" y="185.9" width="38" height="154.1" fill="#D55E00" rx="3"/><text x="271.8" y="179.9" text-anchor="middle" font-size="10.5" font-weight="700" fill="#D55E00">10,066</text><rect x="300.8" y="259.1" width="38" height="80.9" fill="#0072B2" rx="3"/><text x="319.8" y="253.1" text-anchor="middle" font-size="10.5" font-weight="700" fill="#0072B2">651</text><text x="295.8" y="360" text-anchor="middle" font-size="11.5" font-weight="700" fill="#1B365D">N = 50</text><text x="295.8" y="376" text-anchor="middle" font-size="10" fill="#475569">(5 branches)</text><rect x="395.2" y="148.6" width="38" height="191.4" fill="#D55E00" rx="3"/><text x="414.2" y="142.6" text-anchor="middle" font-size="10.5" font-weight="700" fill="#D55E00">40,586</text><rect x="443.2" y="259.1" width="38" height="80.9" fill="#0072B2" rx="3"/><text x="462.2" y="253.1" text-anchor="middle" font-size="10.5" font-weight="700" fill="#0072B2">651</text><text x="438.2" y="360" text-anchor="middle" font-size="11.5" font-weight="700" fill="#1B365D">N = 200</text><text x="438.2" y="376" text-anchor="middle" font-size="10" fill="#475569">(20 branches)</text><rect x="537.8" y="105.5" width="38" height="234.5" fill="#D55E00" rx="3"/><text x="556.8" y="99.5" text-anchor="middle" font-size="10.5" font-weight="700" fill="#D55E00">203,421</text><rect x="585.8" y="259.1" width="38" height="80.9" fill="#0072B2" rx="3"/><text x="604.8" y="253.1" text-anchor="middle" font-size="10.5" font-weight="700" fill="#0072B2">651</text><text x="580.8" y="360" text-anchor="middle" font-size="11.5" font-weight="700" fill="#1B365D">N = 1000</text><text x="580.8" y="376" text-anchor="middle" font-size="10" fill="#475569">(100 branches)</text>
+  <text x="20" y="203.0" text-anchor="middle" font-size="11.5" font-weight="700" fill="#1B365D" transform="rotate(-90 20 203.0)">MCP tools/list Tokens (log10)</text>
+</svg>
+  <figcaption><strong>Figure 2:</strong> Static MCP <code>tools/list</code> token scaling (<code>GQL-022</code> estimator). Publishing flat tool catalogs explodes to 203,421 tokens at <em>N</em>=1,000 tools across 100 branches, whereas GAP's five-tool progressive facade remains fixed at <strong>651 tokens</strong> (46% below Gate G-F1's 1,200-token ceiling).</figcaption>
+</figure>
+
+<div class="table-wrap">
+  <div class="table-caption"><strong>Table 1:</strong> Reproducible <code>GAP-Bench</code> end-to-end comparison across catalog scales (<em>N</em>), uncached vs. 0.10x warm-prefix cached regimes, and agent turn counts (100% task success across all cells; ratio &lt; 1.000x denotes GAP token savings).</div>
+  <table>
+    <thead>
+      <tr>
+        <th>Suite</th><th><em>N</em></th><th>Direct Unc.</th><th>GAP Unc.</th><th>Ratio (U)</th><th>Direct Cac.</th><th>GAP Cac.</th><th>Ratio (C)</th><th>Turns D &rarr; G</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr><td>api_lookup</td><td>10</td><td>2,041.6</td><td>5,823.0</td><td>2.852x</td><td>547.2</td><td>4,691.9</td><td>8.575x</td><td>1.0 &rarr; 2.0</td></tr><tr><td>cross_branch_join</td><td>10</td><td>8,891.8</td><td>8,517.9</td><td><strong>0.958x</strong></td><td>2,200.5</td><td>7,383.7</td><td>3.355x</td><td>4.0 &rarr; 2.0</td></tr><tr><td>api_lookup</td><td>50</td><td>10,205.5</td><td>5,859.5</td><td><strong>0.574x</strong></td><td>2,385.2</td><td>4,728.0</td><td>1.982x</td><td>1.0 &rarr; 2.0</td></tr><tr><td>cross_branch_join</td><td>50</td><td>41,539.8</td><td>8,547.9</td><td><strong>0.206x</strong></td><td>6,740.7</td><td>7,413.7</td><td>1.100x</td><td>4.0 &rarr; 2.0</td></tr><tr><td>api_lookup</td><td>200</td><td>40,724.3</td><td>5,865.5</td><td><strong>0.144x</strong></td><td>9,251.2</td><td>4,734.9</td><td><strong>0.512x</strong></td><td>1.0 &rarr; 2.0</td></tr><tr><td>cross_branch_join</td><td>200</td><td>163,619.8</td><td>8,547.9</td><td><strong>0.052x</strong></td><td>23,717.4</td><td>7,413.7</td><td><strong>0.313x</strong></td><td>4.0 &rarr; 2.0</td></tr><tr><td>api_lookup</td><td>1000</td><td>203,559.5</td><td>5,878.0</td><td><strong>0.029x</strong></td><td>45,889.1</td><td>4,747.0</td><td><strong>0.103x</strong></td><td>1.0 &rarr; 2.0</td></tr><tr><td>cross_branch_join</td><td>1000</td><td>814,959.8</td><td>8,547.9</td><td><strong>0.010x</strong></td><td>114,294.4</td><td>7,413.7</td><td><strong>0.065x</strong></td><td>4.0 &rarr; 2.0</td></tr><tr><td>code_graph</td><td>24</td><td>141,681.3</td><td>1,187.4</td><td><strong>0.008x</strong></td><td>137,810.4</td><td>660.4</td><td><strong>0.005x</strong></td><td>11.0 &rarr; 1.0</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<figure>
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 440" width="880" height="440" font-family="Helvetica, Arial, sans-serif">
+  <rect x="0" y="0" width="880" height="440" fill="#FFFFFF"/>
+  <!-- Top Legend Band completely outside data region -->
+  <rect x="84" y="14" width="762" height="32" rx="5" fill="#F8FAFC" stroke="#CBD5E1"/>
+  <rect x="98" y="24" width="12" height="12" fill="#0072B2" rx="2"/>
+  <text x="116" y="34" font-size="11" font-weight="600" fill="#1B365D">Uncached Token Ratio (GAP / Direct)</text>
+  <rect x="359" y="24" width="12" height="12" fill="#D55E00" rx="2"/>
+  <text x="377" y="34" font-size="11" font-weight="600" fill="#1B365D">Cached Token Ratio (0.10x Warm Prefix)</text>
+  <text x="834" y="34" text-anchor="end" font-size="10.5" font-weight="700" fill="#009E73">&lt; 1.0x = GAP Saves Tokens</text>
+
+  <rect x="84" y="68" width="762" height="99.8" fill="#FEF2F2" opacity="0.7"/><rect x="84" y="167.8" width="762" height="200.2" fill="#ECFDF5" opacity="0.6"/><line x1="84" y1="308.3" x2="846" y2="308.3" stroke="#CBD5E1" stroke-width="1" stroke-dasharray="3 3"/><text x="76" y="312.3" text-anchor="end" font-size="10.5" fill="#475569">0.01x</text><line x1="84" y1="238.0" x2="846" y2="238.0" stroke="#CBD5E1" stroke-width="1" stroke-dasharray="3 3"/><text x="76" y="242.0" text-anchor="end" font-size="10.5" fill="#475569">0.1x</text><line x1="84" y1="167.8" x2="846" y2="167.8" stroke="#1B365D" stroke-width="1.8" stroke-dasharray="6 4"/><text x="76" y="171.8" text-anchor="end" font-size="10.5" fill="#1B365D">1.0x (Parity)</text><line x1="84" y1="97.5" x2="846" y2="97.5" stroke="#CBD5E1" stroke-width="1" stroke-dasharray="3 3"/><text x="76" y="101.5" text-anchor="end" font-size="10.5" fill="#475569">10.0x</text>
+  <line x1="84" y1="68" x2="84" y2="368" stroke="#1B365D" stroke-width="1.5"/>
+  <line x1="84" y1="368" x2="846" y2="368" stroke="#1B365D" stroke-width="1.5"/>
+  <rect x="100.3" y="135.8" width="23" height="32.0" fill="#0072B2" rx="2"/><text x="108.8" y="129.8" text-anchor="middle" font-size="8.2" font-weight="700" fill="#0072B2">2.85x</text><rect x="129.3" y="102.2" width="23" height="65.6" fill="#D55E00" rx="2"/><text x="143.8" y="96.2" text-anchor="middle" font-size="8.2" font-weight="700" fill="#D55E00">8.57x</text><text x="126.3" y="386" text-anchor="middle" font-size="10.5" font-weight="700" fill="#1B365D">API</text><text x="126.3" y="401" text-anchor="middle" font-size="10" fill="#475569">N=10</text><rect x="185.0" y="167.8" width="23" height="2.0" fill="#0072B2" rx="2"/><text x="193.5" y="181.1" text-anchor="middle" font-size="8.2" font-weight="700" fill="#0072B2">0.958x</text><rect x="214.0" y="130.8" width="23" height="36.9" fill="#D55E00" rx="2"/><text x="228.5" y="124.8" text-anchor="middle" font-size="8.2" font-weight="700" fill="#D55E00">3.36x</text><text x="211.0" y="386" text-anchor="middle" font-size="10.5" font-weight="700" fill="#1B365D">Join</text><text x="211.0" y="401" text-anchor="middle" font-size="10" fill="#475569">N=10</text><rect x="269.7" y="167.8" width="23" height="16.9" fill="#0072B2" rx="2"/><text x="278.2" y="196.7" text-anchor="middle" font-size="8.2" font-weight="700" fill="#0072B2">0.574x</text><rect x="298.7" y="146.9" width="23" height="20.9" fill="#D55E00" rx="2"/><text x="313.2" y="140.9" text-anchor="middle" font-size="8.2" font-weight="700" fill="#D55E00">1.98x</text><text x="295.7" y="386" text-anchor="middle" font-size="10.5" font-weight="700" fill="#1B365D">API</text><text x="295.7" y="401" text-anchor="middle" font-size="10" fill="#475569">N=50</text><rect x="354.3" y="167.8" width="23" height="48.2" fill="#0072B2" rx="2"/><text x="362.8" y="228.0" text-anchor="middle" font-size="8.2" font-weight="700" fill="#0072B2">0.206x</text><rect x="383.3" y="164.9" width="23" height="2.9" fill="#D55E00" rx="2"/><text x="397.8" y="158.9" text-anchor="middle" font-size="8.2" font-weight="700" fill="#D55E00">1.10x</text><text x="380.3" y="386" text-anchor="middle" font-size="10.5" font-weight="700" fill="#1B365D">Join</text><text x="380.3" y="401" text-anchor="middle" font-size="10" fill="#475569">N=50</text><rect x="439.0" y="167.8" width="23" height="59.1" fill="#0072B2" rx="2"/><text x="447.5" y="238.9" text-anchor="middle" font-size="8.2" font-weight="700" fill="#0072B2">0.144x</text><rect x="468.0" y="167.8" width="23" height="20.4" fill="#D55E00" rx="2"/><text x="482.5" y="200.2" text-anchor="middle" font-size="8.2" font-weight="700" fill="#D55E00">0.512x</text><text x="465.0" y="386" text-anchor="middle" font-size="10.5" font-weight="700" fill="#1B365D">API</text><text x="465.0" y="401" text-anchor="middle" font-size="10" fill="#475569">N=200</text><rect x="523.7" y="167.8" width="23" height="90.1" fill="#0072B2" rx="2"/><text x="532.2" y="269.8" text-anchor="middle" font-size="8.2" font-weight="700" fill="#0072B2">0.052x</text><rect x="552.7" y="167.8" width="23" height="35.5" fill="#D55E00" rx="2"/><text x="567.2" y="215.2" text-anchor="middle" font-size="8.2" font-weight="700" fill="#D55E00">0.313x</text><text x="549.7" y="386" text-anchor="middle" font-size="10.5" font-weight="700" fill="#1B365D">Join</text><text x="549.7" y="401" text-anchor="middle" font-size="10" fill="#475569">N=200</text><rect x="608.3" y="167.8" width="23" height="108.2" fill="#0072B2" rx="2"/><text x="616.8" y="287.9" text-anchor="middle" font-size="8.2" font-weight="700" fill="#0072B2">0.0289x</text><rect x="637.3" y="167.8" width="23" height="69.2" fill="#D55E00" rx="2"/><text x="651.8" y="249.0" text-anchor="middle" font-size="8.2" font-weight="700" fill="#D55E00">0.103x</text><text x="634.3" y="386" text-anchor="middle" font-size="10.5" font-weight="700" fill="#1B365D">API</text><text x="634.3" y="401" text-anchor="middle" font-size="10" fill="#475569">N=1000</text><rect x="693.0" y="167.8" width="23" height="139.1" fill="#0072B2" rx="2"/><text x="701.5" y="318.8" text-anchor="middle" font-size="8.2" font-weight="700" fill="#0072B2">0.0105x</text><rect x="722.0" y="167.8" width="23" height="83.5" fill="#D55E00" rx="2"/><text x="736.5" y="263.2" text-anchor="middle" font-size="8.2" font-weight="700" fill="#D55E00">0.065x</text><text x="719.0" y="386" text-anchor="middle" font-size="10.5" font-weight="700" fill="#1B365D">Join</text><text x="719.0" y="401" text-anchor="middle" font-size="10" fill="#475569">N=1000</text><rect x="777.7" y="167.8" width="23" height="145.9" fill="#0072B2" rx="2"/><text x="786.2" y="325.7" text-anchor="middle" font-size="8.2" font-weight="700" fill="#0072B2">0.0084x</text><rect x="806.7" y="167.8" width="23" height="163.0" fill="#D55E00" rx="2"/><text x="821.2" y="353.7" text-anchor="middle" font-size="8.2" font-weight="700" fill="#D55E00">0.0048x</text><text x="803.7" y="386" text-anchor="middle" font-size="10.5" font-weight="700" fill="#1B365D">Code</text><text x="803.7" y="401" text-anchor="middle" font-size="10" fill="#475569">N=24</text>
+
+  <!-- Zone callouts placed inside empty bar-free quadrants -->
+  <rect x="608" y="80" width="224" height="24" rx="4" fill="#FFFFFF" fill-opacity="0.92" stroke="#D55E00" stroke-width="1"/>
+  <text x="824" y="96" text-anchor="end" font-size="10.5" font-weight="700" fill="#D55E00">Direct-MCP Favored (&gt; 1.0x at small N)</text>
+
+  <rect x="96" y="334" width="256" height="24" rx="4" fill="#FFFFFF" fill-opacity="0.92" stroke="#009E73" stroke-width="1"/>
+  <text x="106" y="350" text-anchor="start" font-size="10.5" font-weight="700" fill="#009E73">GAP Favored (&lt; 1.0x · up to 209x win)</text>
+
+  <text x="20" y="218.0" text-anchor="middle" font-size="11.5" font-weight="700" fill="#1B365D" transform="rotate(-90 20 218.0)">GAP / Direct Token Ratio (log10)</text>
+</svg>
+  <figcaption><strong>Figure 3:</strong> Crossover regime law plotting <code>GAP / Direct-MCP</code> prompt token ratio on a log scale. Below 1.0x (mint region), batched federation and progressive disclosure cut tokens by <strong>95.3x–208.7x</strong>; above 1.0x (rose region), tiny cached catalogs (<em>N</em>&le;50) still favor Direct-MCP.</figcaption>
+</figure>
+
+<div class="twocol">
+  <h2>5. Rust Implementation &amp; Formal Traceability</h2>
+  <p>GAP is built in Rust Edition 2024 (<code>rustc 1.98.1</code>) across 32 crates (<code>L0</code>–<code>L6</code>, including <code>gap-agui</code> and multi-provider <code>gap-s1</code>), forbidding <code>unsafe</code> everywhere outside optional <code>gap-s1</code> and denying <code>unwrap</code>, <code>expect</code>, and <code>panic</code> in non-test paths. BSL dependencies remain strictly behind optional <code>store-surreal</code>. To eliminate every unmaintained/unsound third-party crate from the supply chain, snapshot maps use an owned zero-unsafe AVL <code>OrdMap</code> and PEM parsing uses <code>rustls-pki-types</code> directly, achieving <strong>0 errors</strong> across <code>cargo deny check advisories bans licenses sources</code> (<code>ignore = []</code>).</p>
+  <p>Verification passes end-to-end across <strong>362 specification requirements</strong> (89 <code>MUST</code>, 0 uncovered across 2,511 markers), <strong>135/136</strong> offline/loopback conformance checks, <strong>365</strong> 1,024-case proptests, 10 fuzz targets (34 corpora), chaos, soak, and upgrade/backup drills.</p>
+
+  <h2>6. Experimental Evaluation &amp; Crossover Analysis</h2>
+  <p>Across Table 1 and Figure 3, <code>GAP-Bench</code> demonstrates both massive wins and honest boundaries (<code>ADR-017</code>, <code>ADR-021</code>): at <em>N</em>=1,000, GAP cuts cross-branch join tokens by <strong>99.0%</strong> uncached (<strong>93.5%</strong> cached) and halves turns (4.0 &rarr; 2.0); on <code>code_graph</code> (24 symbols), typed graph walks reduce turns from 11.0 to 1.0 for <strong>119.32x</strong> uncached and <strong>208.68x</strong> cached savings. Conversely, on tiny flat catalogs (<em>N</em>=10 cached: 547.2 vs. 4,691.9 tokens), single-turn Direct-MCP stays smaller, and conditional <code>X-1</code> wire columnarization yielded &lt;20% suite reduction and remains deferred.</p>
+  <p>Table 2 isolates <code>RouteBench</code> discovery routing: un-finetuned Candle weights score only 14.29% debiased top-1 at 73.85&nbsp;ms p95, whereas GAP's deterministic lexical+structural baseline achieves <strong>95.24%</strong> test / <strong>97.22%</strong> held-out top-1 in <strong>0.887&nbsp;ms</strong>, justifying fail-safe <code>BASELINE_FALLBACK</code> under Gate <code>G-S1</code>.</p>
+</div>
+
+<div class="table-wrap">
+  <div class="table-caption"><strong>Table 2:</strong> <code>RouteBench</code> comparison (<em>n</em><sub>test</sub>=48, <em>n</em><sub>held</sub>=72; 1,000 bootstrap resamples), lock-free micro-primitives (<code>m3-baseline.json</code>), and live bit-identical dual-stack <code>HTTP/2</code> + <code>HTTP/3 QUIC</code> verification drills (<code>bench/results/ga_local/report.json</code>).</div>
+  <table>
+    <thead>
+      <tr>
+        <th>Benchmark / Drill Component</th><th>Metric 1</th><th>Metric 2</th><th>Latency / Throughput</th><th>Artifact Source</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr><td class="mono">baseline (BM25+Struct)</td><td>Test Top-1: <strong>95.24%</strong></td><td>Held Top-1: <strong>97.22%</strong></td><td><strong>0.887&nbsp;ms</strong> p95</td><td class="mono">s1_comparison.json</td></tr>
+      <tr><td class="mono">s1_forward (laya-candle:f32)</td><td>Test Top-1: 7.14%</td><td>ECE<sub>15</sub>: 0.0445</td><td>42.34&nbsp;ms p95</td><td class="mono">s1_comparison.json</td></tr>
+      <tr><td class="mono">s1_debiased (Laya + PMI)</td><td>Test Top-1: 14.29%</td><td>ECE<sub>15</sub>: <strong>0.0303</strong></td><td>73.85&nbsp;ms p95</td><td class="mono">s1_comparison.json</td></tr>
+      <tr><td class="mono">Lock-Free Balance / RCU</td><td>ArcSwap load: <strong>15&nbsp;ns</strong></td><td>Guard / CAS / P2C: 42 / 44 / 94&nbsp;ns</td><td>Store p99 @256r: 59&nbsp;&micro;s</td><td class="mono">m3-baseline.json</td></tr>
+      <tr><td class="mono">gap serve (TCP HTTP/1.1+2)</td><td>Cold start: <strong>314.0&nbsp;ms</strong></td><td>Idle / Peak RSS: <strong>9.24 / 15.75&nbsp;MiB</strong></td><td><strong>2,227.6&nbsp;req/s</strong> (5.11&nbsp;ms p95, 0 err)</td><td class="mono">ga_local/report.json</td></tr>
+      <tr><td class="mono">HTTP/3 QUIC (8 mux conns)</td><td>TLS 1.3 ALPN <code>h3</code></td><td>0-RTT: <strong>Disabled</strong> · Alt-Svc</td><td><strong>7,869.5&nbsp;req/s</strong> (1.45&nbsp;ms p95, 0 err)</td><td class="mono">ga_local/report.json</td></tr>
+      <tr><td class="mono">Binary Parity &amp; Crash</td><td>Size: 26,902,360&nbsp;B</td><td>Double SHA-256: <strong>Identical</strong></td><td>SIGKILL recover: <strong>12.96&nbsp;ms</strong></td><td class="mono">ga_local/report.json</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<figure>
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 448" width="880" height="448" font-family="Helvetica, Arial, sans-serif">
+  <rect x="0" y="0" width="880" height="448" fill="#FFFFFF"/>
+  <!-- Category Legend Strip above axes -->
+  <rect x="24" y="14" width="832" height="32" rx="5" fill="#F8FAFC" stroke="#CBD5E1"/>
+  <rect x="38" y="24" width="11" height="11" fill="#0072B2" rx="2"/>
+  <text x="54" y="34" font-size="10.5" font-weight="600" fill="#1B365D">Lock-Free RCU / Balance (ns)</text>
+  <rect x="248" y="24" width="11" height="11" fill="#009E73" rx="2"/>
+  <text x="264" y="34" font-size="10.5" font-weight="600" fill="#1B365D">Deterministic Route &amp; HTTP/2 + HTTP/3 Load (ms)</text>
+  <rect x="572" y="24" width="11" height="11" fill="#7A5195" rx="2"/>
+  <text x="588" y="34" font-size="10.5" font-weight="600" fill="#1B365D">Lifecycle (ms)</text>
+  <rect x="698" y="24" width="11" height="11" fill="#D55E00" rx="2"/>
+  <text x="714" y="34" font-size="10.5" font-weight="600" fill="#1B365D">Un-finetuned S1 (ms)</text>
+
+  <line x1="212.6" y1="66" x2="212.6" y2="394" stroke="#CBD5E1" stroke-dasharray="3 3"/><text x="212.6" y="412" text-anchor="middle" font-size="10" fill="#475569">10 ns</text><line x1="270.9" y1="66" x2="270.9" y2="394" stroke="#CBD5E1" stroke-dasharray="3 3"/><text x="270.9" y="412" text-anchor="middle" font-size="10" fill="#475569">100 ns</text><line x1="329.2" y1="66" x2="329.2" y2="394" stroke="#CBD5E1" stroke-dasharray="3 3"/><text x="329.2" y="412" text-anchor="middle" font-size="10" fill="#475569">1 µs</text><line x1="387.6" y1="66" x2="387.6" y2="394" stroke="#CBD5E1" stroke-dasharray="3 3"/><text x="387.6" y="412" text-anchor="middle" font-size="10" fill="#475569">10 µs</text><line x1="445.9" y1="66" x2="445.9" y2="394" stroke="#CBD5E1" stroke-dasharray="3 3"/><text x="445.9" y="412" text-anchor="middle" font-size="10" fill="#475569">100 µs</text><line x1="504.2" y1="66" x2="504.2" y2="394" stroke="#CBD5E1" stroke-dasharray="3 3"/><text x="504.2" y="412" text-anchor="middle" font-size="10" fill="#475569">1 ms</text><line x1="562.5" y1="66" x2="562.5" y2="394" stroke="#CBD5E1" stroke-dasharray="3 3"/><text x="562.5" y="412" text-anchor="middle" font-size="10" fill="#475569">10 ms</text><line x1="620.8" y1="66" x2="620.8" y2="394" stroke="#CBD5E1" stroke-dasharray="3 3"/><text x="620.8" y="412" text-anchor="middle" font-size="10" fill="#475569">100 ms</text><line x1="679.2" y1="66" x2="679.2" y2="394" stroke="#CBD5E1" stroke-dasharray="3 3"/><text x="679.2" y="412" text-anchor="middle" font-size="10" fill="#475569">1 s</text>
+  <line x1="198" y1="66" x2="198" y2="394" stroke="#1B365D" stroke-width="1.5"/>
+  <line x1="198" y1="394" x2="850" y2="394" stroke="#1B365D" stroke-width="1.5"/>
+  <text x="188" y="86.4" text-anchor="end" font-size="11" font-weight="600" fill="#1B365D">ArcSwap::load (M0)</text><rect x="198" y="73.4" width="24.9" height="18" fill="#0072B2" rx="3"/><text x="230.9" y="86.4" font-size="10.2" font-weight="700" fill="#0072B2">15 ns</text><text x="188" y="119.2" text-anchor="end" font-size="11" font-weight="600" fill="#1B365D">In-Flight RAII Guard</text><rect x="198" y="106.2" width="50.9" height="18" fill="#0072B2" rx="3"/><text x="256.9" y="119.2" font-size="10.2" font-weight="700" fill="#0072B2">42 ns</text><text x="188" y="152.0" text-anchor="end" font-size="11" font-weight="600" fill="#1B365D">EWMA Update (CAS)</text><rect x="198" y="139.0" width="52.1" height="18" fill="#0072B2" rx="3"/><text x="258.1" y="152.0" font-size="10.2" font-weight="700" fill="#0072B2">44 ns</text><text x="188" y="184.8" text-anchor="end" font-size="11" font-weight="600" fill="#1B365D">P2C N=2 Select</text><rect x="198" y="171.8" width="71.3" height="18" fill="#0072B2" rx="3"/><text x="277.3" y="184.8" font-size="10.2" font-weight="700" fill="#0072B2">94 ns</text><text x="188" y="217.6" text-anchor="end" font-size="11" font-weight="600" fill="#1B365D">Baseline Route p95</text><rect x="198" y="204.6" width="303.2" height="18" fill="#009E73" rx="3"/><text x="509.2" y="217.6" font-size="10.2" font-weight="700" fill="#009E73">0.887 ms (95.2% top-1)</text><text x="188" y="250.4" text-anchor="end" font-size="11" font-weight="600" fill="#1B365D">HTTP/3 QUIC Mixed p95</text><rect x="198" y="237.4" width="315.6" height="18" fill="#009E73" rx="3"/><text x="521.6" y="250.4" font-size="10.2" font-weight="700" fill="#009E73">1.45 ms (7,870 req/s, 8 conn)</text><text x="188" y="283.2" text-anchor="end" font-size="11" font-weight="600" fill="#1B365D">HTTP/2 TCP Mixed p95</text><rect x="198" y="270.2" width="347.5" height="18" fill="#009E73" rx="3"/><text x="553.5" y="283.2" font-size="10.2" font-weight="700" fill="#009E73">5.11 ms (2,228 req/s, urllib)</text><text x="188" y="316.0" text-anchor="end" font-size="11" font-weight="600" fill="#1B365D">SIGKILL Recover /readyz</text><rect x="198" y="303.0" width="371.1" height="18" fill="#7A5195" rx="3"/><text x="577.1" y="316.0" font-size="10.2" font-weight="700" fill="#7A5195">12.96 ms</text><text x="188" y="348.8" text-anchor="end" font-size="11" font-weight="600" fill="#1B365D">Laya S1 Debiased p95</text><rect x="198" y="335.8" width="415.2" height="18" fill="#D55E00" rx="3"/><text x="621.2" y="348.8" font-size="10.2" font-weight="700" fill="#D55E00">73.9 ms (14.3% top-1)</text><text x="188" y="381.6" text-anchor="end" font-size="11" font-weight="600" fill="#1B365D">Cold Start /readyz</text><rect x="198" y="368.6" width="451.8" height="18" fill="#7A5195" rx="3"/><text x="657.8" y="381.6" font-size="10.2" font-weight="700" fill="#7A5195">314 ms (9.2 MiB RSS)</text>
+  <text x="441.5" y="436" text-anchor="middle" font-size="11" font-weight="700" fill="#1B365D">Measured Latency Spectrum (log10 nanoseconds · Release &amp; Offline Drills)</text>
+</svg>
+  <figcaption><strong>Figure 4:</strong> Multi-scale latency spectrum across lock-free RCU/balance primitives (15–94&nbsp;ns), deterministic baseline discovery (0.887&nbsp;ms), live multiplexed HTTP/3 QUIC (1.45&nbsp;ms p95) and HTTP/2 TCP (5.11&nbsp;ms p95) mixed loads, and OS <code>SIGKILL</code> recovery (12.96&nbsp;ms).</figcaption>
+</figure>
+
+<div class="twocol">
+  <h2>7. Related Work &amp; Limitations</h2>
+  <p>Retriever-assisted tool routers such as Gorilla [7] and ToolLLM [8] expand API coverage yet omit deterministic Cedar authorization [10], conformal abstention [11], and cross-backend DataLoader joins. Recent MCP security audits [3,4,5] and A2A security analyses [6] catalog poisoning and rug pulls; GAP neutralizes these via propose-not-activate ingestion, <code>desc_hash</code> pinning, <code>EgressGuard</code>, and sandboxing. GraphQL MCP servers [12] pioneered progressive GraphQL discovery, which GAP extends across arbitrary non-GraphQL backends over HTTP/2 and QUIC.</p>
+  <p>Multi-day cloud soak runs (72&nbsp;h), 24&nbsp;h libFuzzer sweeps, live frontier LLM sweeps, and Linux OIDC signing remain CI/cloud release gates rather than local macOS drills; locally all HTTP/2 (short-lived Python <code>urllib</code> clients to subprocesses) and HTTP/3 (persistent QUIC streams to in-process fixtures) benchmarks measure distinct transport topologies reported transparently above.</p>
+
+  <h2>8. Conclusion</h2>
+  <p>GAP reconciles MCP usability, A2A horizontal tasks, dual-stack HTTP/2 and HTTP/3 QUIC performance, and enterprise zero-trust security in one verified Rust gateway. All specifications, conformance tests, reproducible benchmarks, and Apache-2.0 source artifacts are openly published for verification and reuse.</p>
+
+  <h2>References</h2>
+  <ol class="refs">
+    <li>Anthropic. <em>Model Context Protocol (MCP) Specification</em> (incl. 2026-07-28 revision). <code>https://modelcontextprotocol.io</code>, 2024–2026.</li>
+    <li>Google LLC and A2A Contributors. <em>Agent2Agent (A2A) Protocol Specification</em>. <code>https://a2a-protocol.org</code>, 2025.</li>
+    <li>H. Song et al. Beyond the Protocol: Unveiling Attack Vectors in the Model Context Protocol Ecosystem. <em>arXiv:2506.02040</em>, 2025.</li>
+    <li>Z. Wang et al. MCPTox: A Benchmark for Tool Poisoning Attack on Real-World MCP Servers. <em>arXiv:2508.14925</em>, 2025.</li>
+    <li>arXiv:2512.06556 Authors. Semantic Attacks on Tool-Augmented LLMs: Securing MCP Against Descriptor Manipulation, 2025.</li>
+    <li>arXiv:2504.16902 Authors. Building a Secure Agentic AI Application Leveraging A2A Protocol, 2025.</li>
+    <li>S. G. Patil et al. Gorilla: Large Language Model Connected with Massive APIs. <em>arXiv:2305.15334</em> (NeurIPS), 2023.</li>
+    <li>Y. Qin et al. ToolLLM: Facilitating LLMs to Master 16000+ Real-world APIs. <em>arXiv:2307.16789</em> (ICLR), 2023.</li>
+    <li>O. Hartig and J. P&eacute;rez. Semantics and Complexity of GraphQL. In <em>Proc. WWW '18</em>, 2018.</li>
+    <li>J. W. Cutler et al. Cedar: A New Language for Expressive, Fast, Safe, and Analyzable Authorization. <em>Proc. ACM Program. Lang. (OOPSLA)</em>, 2024.</li>
+    <li>A. N. Angelopoulos and S. Bates. A Gentle Introduction to Conformal Prediction. <em>arXiv:2107.07511</em>, 2021.</li>
+    <li>Apollo GraphQL and Grafbase Engineering. Progressive Schema Disclosure Patterns in GraphQL MCP Servers, 2025.</li>
+  </ol>
+</div>
+</body>
+</html>
