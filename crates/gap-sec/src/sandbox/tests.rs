@@ -67,6 +67,11 @@ fn sandbox_profiles_render_seatbelt_and_bwrap_and_doctor_probe_runs() {
     assert!(joined.contains(&"--unshare-net".to_owned()));
     assert!(joined.contains(&"--cap-drop".to_owned()));
     assert!(joined.contains(&"--new-session".to_owned()));
+    let bin_str = bin.to_string_lossy().into_owned();
+    assert!(
+        joined.iter().filter(|a| *a == &bin_str).count() >= 3,
+        "expected `--ro-bind <bin> <bin>` plus command argv in {joined:?}"
+    );
 
     let mut proxy_profile = profile;
     proxy_profile.allow_network_via_egress_proxy =

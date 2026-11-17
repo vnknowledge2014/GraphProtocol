@@ -164,6 +164,17 @@ pub fn render_linux_bwrap_args(
         OsString::from("ALL"),
     ];
 
+    if !binary_canonical.starts_with(work_dir_canonical) {
+        out.splice(
+            14..14,
+            [
+                OsString::from("--ro-bind"),
+                binary_canonical.as_os_str().to_os_string(),
+                binary_canonical.as_os_str().to_os_string(),
+            ],
+        );
+    }
+
     if profile.allow_network_via_egress_proxy.is_none() {
         out.push(OsString::from("--unshare-net"));
     }

@@ -104,8 +104,10 @@ jobs:
         run: cargo clippy --workspace --all-targets -- -D warnings
       - name: Build workspace targets
         run: cargo build --workspace --all-targets
-      - name: Run workspace test suite (excluding stress and release-latency gates)
-        run: cargo nextest run --workspace --exclude gap-snapshot -E 'not test(e2e_typed_path_overhead_p99_under_10ms_with_zero_io_mocks)'
+      - name: Run workspace test suite (excluding stress, conformance, and release-latency gates)
+        run: cargo nextest run --workspace --exclude gap-snapshot --exclude gap-conformance -E 'not test(e2e_typed_path_overhead_p99_under_10ms_with_zero_io_mocks)'
+      - name: Run gap-conformance suite serially
+        run: CI=1 cargo nextest run --no-pager -j 1 -p gap-conformance
       - name: Run gap-snapshot composition and handle tests
         run: cargo nextest run -p gap-snapshot --lib --test compose --test handle
       - name: Run release-mode timing & swap-stress gates
@@ -131,10 +133,15 @@ jobs:
         with:
           toolchain: '1.98.1'
           components: llvm-tools-preview
-      - name: Install cargo-llvm-cov
+      - name: Install cargo-llvm-cov and cargo-nextest
         uses: taiki-e/install-action@v2
         with:
-          tool: cargo-llvm-cov
+          tool: cargo-llvm-cov,cargo-nextest
       - uses: Swatinem/rust-cache@v2
-      - name: Measure workspace library coverage
-        run: cargo llvm-cov --workspace --lib --summary-only
+      - name: Install Linux sandbox tool (SEC-070)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends bubblewrap
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
+      - name: Measure workspace coverage across unit + integration suites
+        run: cargo llvm-cov nextest --workspace --exclude gap-snapshot --exclude gap-s1 --exclude gap-conformance -E 'not test(e2e_typed_path_overhead_p99_under_10ms_with_zero_io_mocks)' --summary-only

@@ -28,8 +28,9 @@ class H(http.server.BaseHTTPRequestHandler):
         body = json.dumps({"data": {"ok": True}, "extensions": {"gap": {"generation": 1}}} if authorized else {"errors": [{"message": "no", "extensions": {"code": "GAP_UNAUTHENTICATED"}}]}).encode()
         self.send_response(200 if authorized else 401)
         self.send_header("Content-Type", "application/json"); self.send_header("Content-Length", str(len(body))); self.end_headers(); self.wfile.write(body)
+srv = http.server.ThreadingHTTPServer(("127.0.0.1", port), H)
 print("server listening on", port, flush=True)
-http.server.ThreadingHTTPServer(("127.0.0.1", port), H).serve_forever()
+srv.serve_forever()
 "#;
 
 const SLEEPER_PY: &str = r#"
