@@ -112,6 +112,7 @@ fn options(header_ms: u64, max_connections: usize, grace_ms: u64) -> ServeOption
         header_read_timeout: Duration::from_millis(header_ms),
         max_connections,
         shutdown_grace: Duration::from_millis(grace_ms),
+        alt_svc_h3_port: None,
     }
 }
 

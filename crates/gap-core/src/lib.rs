@@ -16,6 +16,7 @@ pub mod cursor;
 pub mod error;
 pub mod ids;
 pub mod joingraph;
+pub mod ord_map;
 pub mod secret;
 pub mod snapshot;
 pub mod telemetry;

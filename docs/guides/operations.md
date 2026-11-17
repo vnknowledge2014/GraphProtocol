@@ -8,7 +8,7 @@ Normative specification: [08 — Operations, Observability, and Release Engineer
 
 | Command | Purpose |
 |---|---|
-| `gap serve --config gap.toml` | Run HTTP (`/graphql`, `/graphql/stream`, `/mcp`, `/healthz`, `/readyz`, `/metrics`) or `--stdio` gateway |
+| `gap serve --config gap.toml` | Run dual-stack HTTP/1.1+HTTP/2 TCP + optional HTTP/3 QUIC (`/graphql`, `/graphql/stream`, `/mcp`, `/healthz`, `/readyz`, `/metrics`) or `--stdio` gateway (`OPS-005`) |
 | `gap doctor --json --config gap.toml` | Preflight report across config, sandbox, egress, allow-list, vault, Cedar policy, and models |
 | `gap config check <gap.toml>` | Validate `gap.toml` and emit JSON Schema |
 | `gap snapshot show / diff / rollback` | Inspect active generation, diff supergraphs, or roll back cleanly (`INV-01`) |

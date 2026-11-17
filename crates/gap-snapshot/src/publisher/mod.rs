@@ -427,7 +427,7 @@ pub fn prewarm_snapshot(
 /// Entry retained in the bounded structural-sharing generation ring (`ADR-009` §4, `RUN-007`).
 #[derive(Debug, Clone)]
 pub struct RingGeneration {
-    /// Retained immutable snapshot (sharing unchanged `Arc`s / `im::OrdMap` nodes).
+    /// Retained immutable snapshot (sharing unchanged `Arc`s / `gap_core::snapshot::OrdMap` nodes).
     pub snapshot: Arc<Snapshot>,
     /// Marked `true` after automatic or explicit rollback so it cannot be re-promoted without `--force`.
     pub bad: bool,
@@ -1090,7 +1090,9 @@ impl SnapshotRestoreExt for Snapshot {
     }
 }
 
-fn compute_branch_set_digest(branches: &im::OrdMap<BranchUid, Arc<BranchDescriptor>>) -> [u8; 32] {
+fn compute_branch_set_digest(
+    branches: &gap_core::snapshot::OrdMap<BranchUid, Arc<BranchDescriptor>>,
+) -> [u8; 32] {
     let mut hasher = blake3::Hasher::new();
     for (uid, desc) in branches {
         hasher.update(uid.as_uuid().as_bytes());

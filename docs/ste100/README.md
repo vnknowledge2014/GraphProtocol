@@ -23,7 +23,7 @@ The automated checker [`dist/check-ste100.py`](../../dist/check-ste100.py) audit
 |---|---|---|
 | [`00-DICTIONARY.md`](00-DICTIONARY.md) | Approved nouns, approved verbs, and banned filler | `ARC-001`, `CMP-001` |
 | [`01-SYSTEM-OVERVIEW.md`](01-SYSTEM-OVERVIEW.md) | Three-plane architecture, invariants, and crossover limits | `ARC-002`, `INV-01`–`INV-20`, `ADR-017` |
-| [`02-OPERATING-PROCEDURES.md`](02-OPERATING-PROCEDURES.md) | Build, server startup, GraphQL, MCP, and host checklists | `OPS-001`, `OPS-044`, `CMP-008` |
+| [`02-OPERATING-PROCEDURES.md`](02-OPERATING-PROCEDURES.md) | Build, HTTP/3, GraphQL, MCP, `AG-UI`, and System-1 startup | `OPS-005`, `CMP-008`, `CMP-025`, `RTE-047` |
 | [`03-CONNECTORS-AND-INGESTION.md`](03-CONNECTORS-AND-INGESTION.md) | Connectors, proposals, join checks, and snapshot diffs | `NGC-001`, `ING-052`, `ADR-012` |
 | [`04-SECURITY-AND-FAULT-PROCEDURES.md`](04-SECURITY-AND-FAULT-PROCEDURES.md) | Cedar policies, audit verification, drift freeze, and backup/restore | `SEC-020`, `SEC-082`, `SEC-092`, `OPS-043` |
 

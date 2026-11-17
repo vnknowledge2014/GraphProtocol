@@ -20,14 +20,21 @@ gap-proto.workspace = true
 gap-ql.workspace = true
 gap-sec.workspace = true
 gap-snapshot.workspace = true
+h3.workspace = true
+h3-quinn.workspace = true
+http.workspace = true
 http-body-util.workspace = true
 hyper-util = { workspace = true, features = ["http1", "http2", "server-auto", "server-graceful", "service", "tokio"] }
+quinn.workspace = true
+rcgen.workspace = true
+rustls.workspace = true
+rustls-pki-types.workspace = true
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
 thiserror.workspace = true
 tokio = { workspace = true, features = ["macros", "net", "rt", "sync", "time"] }
 tokio-util.workspace = true
-tower.workspace = true
+tower = { workspace = true, features = ["util"] }
 tracing.workspace = true
 uuid = { workspace = true, features = ["v7"] }
 

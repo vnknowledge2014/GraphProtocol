@@ -14,12 +14,12 @@ Tài liệu này hướng dẫn từng bước cụ thể để bạn:
 2. Chạy đúng 1 lệnh từ thư mục gốc của repo để đồng bộ tên thật, email, đơn vị công tác và ORCID vào cả `CITATION.cff`, `.zenodo.json`, `NOTICE`, `paper/author_config.tex` và `docs/paper/GAP-PAPER.md`:
    ```bash
    python3 dist/set-author.py \
-     --given-names "Ten Cua Ban" \
-     --family-names "Ho Cua Ban" \
-     --affiliation "Don vi / Independent Researcher" \
-     --email "email-chinh-thuc@domain.com" \
-     --orcid "0000-000X-XXXX-XXXX" \
-     --repo-url "https://github.com/<username>/GraphProtocol"
+     --given-names "Mike (vnknowledge2014)" \
+     --family-names "" \
+     --affiliation "Graph Agent Protocol Project" \
+     --email "vnknowledge2014@users.noreply.github.com" \
+     --orcid "ORCID pending registration" \
+     --repo-url "https://github.com/vnknowledge2014/GraphProtocol"
    ```
 3. Kiểm tra lại cấu hình git trước khi commit & push:
    ```bash

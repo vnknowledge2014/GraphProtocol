@@ -1377,3 +1377,66 @@ deliverables = [
   "memo: data needs, compute, expected gain vs cost, licensing of base models, evaluation plan, stop criteria; recommendation (go/no-go) with explicit budget",
 ]
 acceptance = ["test -f docs/decisions/r1-custom-s1.md"]
+
+[[wp]]
+id = "WP-M7-12"
+title = "Dual-stack HTTP/3 over QUIC (RFC 9114) transport and server integration"
+milestone = "M7"
+role = "coder"
+size = "M"
+depends_on = ["WP-M7-10", "WP-M2-09", "WP-M4-10", "WP-M0-08", "WP-M1-05", "WP-M1-08", "WP-M1-12"]
+owns = [
+  "Cargo.lock",
+  "crates/gap-core/src/ord_map.rs",
+  "crates/gap-core/src/lib.rs",
+  "crates/gap-core/src/snapshot/mod.rs",
+  "crates/gap-core/src/config.rs",
+  "crates/gap-snapshot/Cargo.toml",
+  "crates/gap-snapshot/src/groups/mod.rs",
+  "crates/gap-snapshot/src/publisher/mod.rs",
+  "crates/gap-snapshot/src/handle.rs",
+  "crates/gap-snapshot/tests/handle.rs",
+  "crates/gap-transport/**",
+  "crates/gap-server/**",
+  "docs/config.schema.json",
+  "docs/decisions/2026-11-16-http3-quic-transport.md",
+]
+spec_refs = ["OPS-005", "OPS-002", "RUN-090", "INV-02", "INV-15", "ADR-026"]
+deliverables = [
+  "crates/gap-transport/src/http3.rs implementing QUIC/HTTP/3 (RFC 9114, TLS 1.3 ALPN h3, 0-RTT disabled), connection caps, streaming bodies, request size cap, Alt-Svc header injection, and dual-stack wiring in gap-core/gap-server",
+]
+acceptance = [
+  "cargo nextest run -p gap-core -p gap-transport -p gap-server",
+  "python3 tools/spec_trace.py --strict",
+  "python3 tools/check_layers.py",
+  "cargo deny check advisories bans licenses sources",
+]
+
+[[wp]]
+id = "WP-M7-13"
+title = "AG-UI v1.0 facade, multi-provider System-1 decision models (Laya/Jev/Gemini), and promo videos"
+milestone = "M7"
+role = "coder"
+size = "L"
+depends_on = ["WP-M7-12"]
+owns = [
+  "adapters/gap-agui/**",
+  "crates/gap-s1/**",
+  "crates/gap-core/src/config.rs",
+  "crates/gap-server/src/assemble.rs",
+  "crates/gap-server/src/wiring_s1.rs",
+  "crates/gap-server/tests/**",
+  "conformance/agui/**",
+  "docs/config.schema.json",
+  "docs/decisions/2026-11-17-agui-and-decision-models.md",
+]
+spec_refs = ["CMP-025", "CMP-026", "CMP-027", "CMP-028", "RTE-047", "RTE-048", "RTE-049", "ADR-027", "ADR-028"]
+deliverables = [
+  "adapters/gap-agui implementing AG-UI v1.0 SSE & interrupt facade, gap-s1 multi-provider Laya/Jev/Gemini Decision 1 adapters, server/config wiring, and English/Vietnamese promotional videos via HyperFrames + Concat",
+]
+acceptance = [
+  "cargo nextest run -p gap-agui -p gap-s1 -p gap-server -p gap-core",
+  "python3 tools/spec_trace.py --strict",
+  "python3 tools/check_layers.py",
+  "python3 tools/wp.py validate",
+]

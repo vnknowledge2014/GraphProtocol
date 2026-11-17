@@ -17,8 +17,10 @@ use gap_core::config::{Profile, TelemetryConfig};
 use gap_core::context::{Budget, Principal, PrincipalKind, RequestContext, TraceCtx};
 use gap_core::error::GapError;
 use gap_mcp::inbound::{ContextFactory, StdioServer};
-use gap_transport::ServeOptions;
 use gap_transport::config::HARD_MAX_DEADLINE;
+use gap_transport::{
+    DEFAULT_HTTP3_MAX_BODY_BYTES, Http3ServeOptions, Http3TlsConfig, ServeOptions,
+};
 use thiserror::Error;
 use tokio::io::{AsyncBufRead, AsyncWrite};
 use tokio::net::TcpListener;
@@ -345,17 +347,94 @@ fn serve_options(config: &gap_core::config::GapConfig) -> ServeOptions {
 ///
 /// Returns [`RunError`] if signal setup, listener options, or forced shutdown fails.
 pub async fn serve_http(assembled: Assembled, listener: TcpListener) -> Result<(), RunError> {
+    serve_dual_stack(assembled, listener, None).await
+}
+
+/// Serves `assembled` concurrently on TCP HTTP/1.1+HTTP/2 (`listener`) and optional QUIC HTTP/3
+/// (`http3_udp`) with OS `SIGTERM`/`SIGINT` graceful shutdown (`OPS-005`, `OPS-002`, `RUN-090`).
+///
+/// When `http3_udp` is `Some((udp_socket, tls))`, all TCP responses advertise
+/// `Alt-Svc: h3=":<udp_port>"; ma=86400`.
+///
+/// # Errors
+///
+/// Returns [`RunError`] if signal setup, socket inspection, listener options, or forced shutdown
+/// fails.
+pub async fn serve_dual_stack(
+    assembled: Assembled,
+    listener: TcpListener,
+    http3_udp: Option<(std::net::UdpSocket, Http3TlsConfig)>,
+) -> Result<(), RunError> {
     let shutdown = Shutdown::os(Arc::clone(&assembled.draining))?;
+    serve_dual_stack_with_shutdown(assembled, listener, http3_udp, shutdown).await
+}
+
+/// Serves `assembled` concurrently on TCP HTTP/1.1+HTTP/2 and optional QUIC HTTP/3 using an
+/// explicit [`Shutdown`] controller (useful for deterministic socket tests without OS signals).
+///
+/// # Errors
+///
+/// Returns [`RunError`] if socket inspection, transport setup, or forced shutdown fails.
+pub async fn serve_dual_stack_with_shutdown(
+    assembled: Assembled,
+    listener: TcpListener,
+    http3_udp: Option<(std::net::UdpSocket, Http3TlsConfig)>,
+    shutdown: Shutdown,
+) -> Result<(), RunError> {
     let app = gap_transport::router(Arc::clone(&assembled.app_state));
-    let options = serve_options(&assembled.config);
+    let mut tcp_options = serve_options(&assembled.config);
+    let generation = assembled.snapshot_handle.generation();
+    let shutdown_grace_ms = assembled.config.server.shutdown_grace_ms;
+    let max_body = usize::try_from(assembled.config.limits.max_request_body_bytes)
+        .unwrap_or(DEFAULT_HTTP3_MAX_BODY_BYTES);
+
+    let h3_pair = match http3_udp {
+        Some((udp_socket, tls)) => {
+            let h3_port = udp_socket.local_addr()?.port();
+            tcp_options.alt_svc_h3_port = Some(h3_port);
+            let h3_options = Http3ServeOptions {
+                serve: tcp_options,
+                max_request_body_bytes: max_body,
+            };
+            Some((udp_socket, tls, h3_port, h3_options))
+        }
+        None => None,
+    };
+
     tracing::info!(
-        generation = assembled.snapshot_handle.generation(),
-        shutdown_grace_ms = assembled.config.server.shutdown_grace_ms,
-        "starting GAP HTTP server"
+        generation,
+        shutdown_grace_ms,
+        http3_port = h3_pair.as_ref().map(|p| p.2),
+        "starting GAP gateway listener"
     );
     let _keep_alive = assembled;
     shutdown
-        .drive(|trigger| gap_transport::serve(listener, app, trigger, options))
+        .drive(|trigger| async move {
+            let Some((udp_socket, tls, _port, h3_options)) = h3_pair else {
+                return gap_transport::serve(listener, app, trigger, tcp_options).await;
+            };
+            let h3_app = app.clone();
+            let (stop_tx, stop_rx) = tokio::sync::watch::channel(false);
+            let mut tcp_rx = stop_rx.clone();
+            let mut h3_rx = stop_rx;
+            let tcp_stop = async move {
+                let _ = tcp_rx.wait_for(|&stopped| stopped).await;
+            };
+            let h3_stop = async move {
+                let _ = h3_rx.wait_for(|&stopped| stopped).await;
+            };
+            let signal_relay = async move {
+                trigger.await;
+                let _ = stop_tx.send(true);
+                Ok::<(), io::Error>(())
+            };
+            tokio::try_join!(
+                signal_relay,
+                gap_transport::serve(listener, app, tcp_stop, tcp_options),
+                gap_transport::serve_http3(udp_socket, tls, h3_app, h3_stop, h3_options),
+            )?;
+            Ok(())
+        })
         .await
 }
 
@@ -437,6 +516,7 @@ const fn classify_assemble_exit_code(err: &AssembleError) -> i32 {
         AssembleError::Config(_)
         | AssembleError::Transport(_)
         | AssembleError::Facade(_)
+        | AssembleError::Http3Tls(_)
         | AssembleError::Composition { .. }
         | AssembleError::Branch(BranchBuildError::SecretResolution { .. }) => EXIT_CONFIG_ERROR,
         AssembleError::Branch(BranchBuildError::Describe { .. })
@@ -446,8 +526,9 @@ const fn classify_assemble_exit_code(err: &AssembleError) -> i32 {
 }
 
 /// Loads `config_path`, initialises `stderr` logging, assembles the gateway, and serves either
-/// `stdio` MCP (`stdio == true`) or HTTP (`stdio == false`), returning the standardized process
-/// exit code (`0` clean shutdown, `1` runtime failure, `2` config/usage error).
+/// `stdio` MCP (`stdio == true`) or dual-stack TCP HTTP/1.1+HTTP/2 + optional HTTP/3 QUIC
+/// (`stdio == false`), returning the standardized process exit code (`0` clean shutdown, `1`
+/// runtime failure, `2` config/usage error).
 pub async fn run_server_from_path(config_path: &Path, stdio: bool) -> i32 {
     let server_file = match ServerFile::load(config_path) {
         Ok(sf) => sf,
@@ -457,11 +538,11 @@ pub async fn run_server_from_path(config_path: &Path, stdio: bool) -> i32 {
         }
     };
 
-    let listen_addr: Option<SocketAddr> = if stdio {
-        None
+    let (listen_addr, h3_listen_addr): (Option<SocketAddr>, Option<SocketAddr>) = if stdio {
+        (None, None)
     } else {
-        match server_file.config().server.listen.parse::<SocketAddr>() {
-            Ok(addr) => Some(addr),
+        let tcp = match server_file.config().server.listen.parse::<SocketAddr>() {
+            Ok(addr) => addr,
             Err(err) => {
                 let _ = io::Write::write_fmt(
                     &mut io::stderr(),
@@ -472,7 +553,23 @@ pub async fn run_server_from_path(config_path: &Path, stdio: bool) -> i32 {
                 );
                 return EXIT_CONFIG_ERROR;
             }
-        }
+        };
+        let udp = match &server_file.config().server.http3_listen {
+            Some(raw) => match raw.parse::<SocketAddr>() {
+                Ok(addr) => Some(addr),
+                Err(err) => {
+                    let _ = io::Write::write_fmt(
+                        &mut io::stderr(),
+                        format_args!(
+                            "error: invalid `server.http3_listen` socket address `{raw}`: {err}\n"
+                        ),
+                    );
+                    return EXIT_CONFIG_ERROR;
+                }
+            },
+            None => None,
+        };
+        (Some(tcp), udp)
     };
 
     init_tracing(&server_file.config().telemetry);
@@ -503,7 +600,26 @@ pub async fn run_server_from_path(config_path: &Path, stdio: bool) -> i32 {
                 return EXIT_RUNTIME_ERROR;
             }
         };
-        match serve_http(assembled, listener).await {
+        let http3_udp = if let Some(h3_addr) = h3_listen_addr {
+            let Some(tls) = assembled.http3_tls().cloned() else {
+                tracing::error!("missing resolved HTTP/3 TLS configuration");
+                return EXIT_CONFIG_ERROR;
+            };
+            match std::net::UdpSocket::bind(h3_addr) {
+                Ok(udp_socket) => Some((udp_socket, tls)),
+                Err(err) => {
+                    tracing::error!(%h3_addr, error = %err, "failed to bind HTTP/3 UDP listener");
+                    let _ = io::Write::write_fmt(
+                        &mut io::stderr(),
+                        format_args!("error: failed to bind HTTP/3 `{h3_addr}`: {err}\n"),
+                    );
+                    return EXIT_RUNTIME_ERROR;
+                }
+            }
+        } else {
+            None
+        };
+        match serve_dual_stack(assembled, listener, http3_udp).await {
             Ok(()) => EXIT_OK,
             Err(RunError::ForcedShutdown { exit_code }) => exit_code,
             Err(err) => {

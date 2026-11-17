@@ -12,7 +12,7 @@ must include a migration note here alongside the corresponding conformance diff.
 
 ## [0.1.0-rc.1] - 2026-11-16
 
-First Release Candidate (`1.0-RC`) implementing the full GAP protocol, gateway runtime, six native connectors, security & isolation pipeline, benchmark harness, chaos/soak/upgrade tests, and reproducible signed release pipeline across all 85 work packages (`M0`–`M7` + `R1`).
+First Release Candidate (`1.0-RC`) implementing the full GAP protocol, dual-stack HTTP/2 + HTTP/3 QUIC gateway runtime, three-axis open agent facades (MCP `2026-07-28`, A2A `v1.0`, AG-UI `v1.0`), multi-provider System-1 decision models (`Laya`, `Jev`, `gemini-decision-1`), six native connectors, security & isolation pipeline, benchmark harness, chaos/soak/upgrade tests, and reproducible signed release pipeline across all 87 work packages (`M0`–`M7` + `R1`).
 
 ### Added
 
@@ -28,6 +28,8 @@ First Release Candidate (`1.0-RC`) implementing the full GAP protocol, gateway r
   - Seed corpora for all 10 fuzz targets (`fuzz/corpus/`), `1024`-case proptest verification, and external pen-test checklist (`docs/security/fuzz-report.md`, `docs/security/pentest-scope.md`).
   - `N-1 -> N` upgrade, backup/restore, chaos, and configurable soak suites (`tests/upgrade/upgrade.rs`, `tests/soak/soak.rs`, `docs/gates/soak.md`).
   - Multi-stage non-root distroless `Dockerfile`, reproducible build script (`dist/build-reproducible.sh`), CycloneDX 1.5 SBOM generator (`dist/generate-sbom.py`), `dist/dist-workspace.toml`, model integrity guide (`dist/MODELS.md`), GitHub Actions signed release workflow (`.github/workflows/release.yml`), and `1.0-RC` readiness gate report (`docs/gates/RC.md`).
+  - **Dual-Stack HTTP/3 (QUIC, RFC 9114) & Supply-Chain Hygiene (`WP-M7-12`, `ADR-026`, `OPS-005`):** Added concurrent QUIC/UDP HTTP/3 listener (`quinn` + `h3` + `h3-quinn`) with TLS 1.3 ALPN `h3`, explicit `0-RTT` replay prevention (`max_early_data_size = 0`), `Alt-Svc` advertisement on TCP HTTP/1.1+HTTP/2, fail-closed `prod` TLS secret validation, pure-Rust zero-`unsafe` persistent AVL `OrdMap` removing `im`, and direct `rustls-pki-types` PEM parsing removing `rustls-pemfile` (`0` advisories under `cargo deny check advisories bans licenses sources`).
+  - **AG-UI v1.0, Multi-Provider System-1 Decision Models & Bilingual Video Showcase (`WP-M7-13`, `ADR-027`, `ADR-028`):** Added `adapters/gap-agui` (`Layer L4`, `/ag-ui` SSE + `/ag-ui/capabilities`) completing the 3-axis stack (MCP + A2A + AG-UI) with approval interrupts (`CMP-027`), event compaction (`CMP-026`), and escaped `<gap:untrusted>` spotlighting (`CMP-028`); added `@receptron/laya`, TypeSafe `Jev` (`/v1/systemone`), and Google `gemini-decision-1` (`/v1beta/decisions`) adapters in `gap-s1` + `[router]` config (`RTE-047`..`049`, `INV-15`, `INV-17`); produced English & Vietnamese 1080p promo videos (`web/media/gap-promo-{en,vi}.mp4`) embedded in the learning portal (`32` workspace crates).
 
 ### Security
 
@@ -36,7 +38,7 @@ First Release Candidate (`1.0-RC`) implementing the full GAP protocol, gateway r
 
 ### Changed / Decisions
 
-- **Default Router Mode (`RTE-044`, `INV-17`):** Shipped `laya-candle:f32` failed gate `G-S1` (`0.0714` forward / `0.1429` debiased top-1, `0.6778` ECE) against the deterministic lexical/structural baseline (`0.9524` test top-1 / `0.9722` held-out at `0.882 ms` p95); `0.1.0-rc.1` defaults to `BASELINE_FALLBACK` (`docs/decisions/G-S1.md`, `docs/benchmarks/REPORT.md`).
+- **Default Router Mode (`RTE-044`, `INV-17`):** Shipped `laya-candle:f32` failed gate `G-S1` (`0.0714` forward / `0.1429` debiased top-1, `0.6778` ECE) against the deterministic lexical/structural baseline (`0.9524` test top-1 / `0.9722` held-out at `0.887 ms` p95); `0.1.0-rc.1` defaults to `BASELINE_FALLBACK` (`docs/decisions/G-S1.md`, `docs/benchmarks/REPORT.md`).
 - **Columnar Wire Extension (`GQL-003`):** Deferred `@format(as: COLUMNAR)` wire activation out of `1.0-RC` because `GAP-Bench` measured `< 20%` token reduction on the large-list suite (`docs/decisions/x1-columnar.md`).
 
 ### Earlier Bootstrap History

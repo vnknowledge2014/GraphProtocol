@@ -738,8 +738,12 @@ mod tests {
             .expect("g2");
 
         assert!(Arc::ptr_eq(
-            &g1.branches[&shared_branch.uid],
-            &g2.branches[&shared_branch.uid]
+            g1.branches
+                .get(&shared_branch.uid)
+                .expect("shared_branch in g1"),
+            g2.branches
+                .get(&shared_branch.uid)
+                .expect("shared_branch in g2")
         ));
 
         // Invalid tenant slug must fail.

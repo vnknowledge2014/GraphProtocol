@@ -17,7 +17,7 @@ use gap_ql::{ValidatedOperation, validate_document, with_gap_builtins};
 
 /// Deterministic branch UIDs (`crm` > `shop` or `shop` < `crm` — note we intentionally give `shop`
 /// the lower UUIDv7 and `crm` the higher UUIDv7 so `shop` is ALWAYS the first branch in
-/// `Snapshot.branches: im::OrdMap<BranchUid, Arc<BranchDescriptor>>`).
+/// `Snapshot.branches: OrdMap<BranchUid, Arc<BranchDescriptor>>`).
 pub fn shop_uid() -> BranchUid {
     BranchUid::parse("018bcfe5-6c01-7010-8101-010101010101").expect("valid shop UUIDv7")
 }
@@ -145,10 +145,7 @@ pub fn two_branch_snapshot() -> (Snapshot, Valid<Schema>) {
     let valid_schema = valid_two_branch_schema();
     let s_uid = shop_uid();
     let c_uid = crm_uid();
-    assert!(
-        s_uid < c_uid,
-        "shop_uid must sort before crm_uid in im::OrdMap"
-    );
+    assert!(s_uid < c_uid, "shop_uid must sort before crm_uid in OrdMap");
 
     let shop_id: BranchId = "shop".parse().expect("shop id");
     let crm_id: BranchId = "crm".parse().expect("crm id");

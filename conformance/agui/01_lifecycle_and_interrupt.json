@@ -1,0 +1,19 @@
+{
+  "name": "facade-agui streaming lifecycle, interrupt resume, and spotlighting contract",
+  "class": [
+    "Facade-AGUI"
+  ],
+  "spec": [
+    "CMP-025",
+    "CMP-026",
+    "CMP-027",
+    "CMP-028"
+  ],
+  "request": {
+    "query": "{ customer(id: 1) { id name } }"
+  },
+  "expect": {
+    "status": 200,
+    "errors": []
+  }
+}

@@ -17,7 +17,6 @@ otel = [
 
 [dependencies]
 apollo-compiler.workspace = true
-im.workspace = true
 opentelemetry = { workspace = true, optional = true }
 opentelemetry-otlp = { workspace = true, optional = true, default-features = false, features = ["grpc-tonic", "trace"] }
 opentelemetry_sdk = { workspace = true, optional = true }

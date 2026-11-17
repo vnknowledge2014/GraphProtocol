@@ -570,7 +570,7 @@ fn snapshot_builder_reuses_unchanged_arcs_shares_ordmap_nodes_and_matches_permut
     drop(gen2_permuted);
 
     // Because `SnapshotBuilder` delta-updates `gen1.branches` rather than rebuilding/cloning
-    // `OrdMap` contents, untouched `im::OrdMap` B-tree leaf nodes are shared by pointer between
+    // `OrdMap` contents, untouched `OrdMap` B-tree leaf nodes are shared by pointer between
     // `gen1` and `gen2`, keeping `Arc::strong_count == 1` on descriptors in untouched leaves.
     let shared_leaf_descriptors = (0..255_u16)
         .filter(|&idx| {
@@ -580,7 +580,7 @@ fn snapshot_builder_reuses_unchanged_arcs_shares_ordmap_nodes_and_matches_permut
         .count();
     assert!(
         shared_leaf_descriptors >= 180,
-        "expected >= 180/255 unchanged descriptors in shared im::OrdMap leaves (strong_count == 1), got {shared_leaf_descriptors}"
+        "expected >= 180/255 unchanged descriptors in shared OrdMap leaves (strong_count == 1), got {shared_leaf_descriptors}"
     );
 
     // Removing a branch in generation 3 prunes both `branches` and `groups` while keeping 0..255 shared.

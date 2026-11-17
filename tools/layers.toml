@@ -18,6 +18,7 @@ gap-s1 = 3           # Laya backends (only crate allowed `unsafe`, ADR-002)
 gap-transport = 4
 gap-mcp = 4
 gap-a2a = 4
+gap-agui = 4
 gap-ngc-openapi = 4
 gap-ngc-grpc = 4
 gap-ngc-graphql = 4

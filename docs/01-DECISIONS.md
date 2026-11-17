@@ -4,7 +4,7 @@ Status legend: **Accepted** = binding for agents · **Default** = binding unless
 Changing an Accepted ADR requires: new ADR that supersedes it + spec diff + conformance/test diff, in one change set (ADR-022).
 Normative keywords (MUST, SHOULD, MAY) follow RFC 2119 / RFC 8174.
 
-Index: 001 GraphQL profile · 002 toolchain/deps · 003 three planes · 004 open-jev · 005 System-1 backend · 006 capability groups · 007 RouteBench & adoption gate · 008 split-conformal · 009 snapshot lifecycle · 010 operation-level index · 011 telemetry/LB/breaker · 012 join verification · 013 trust tiers · 014 poisoning/sandbox/SSRF · 015 mutations · 016 tasks · 017 MCP/A2A facade · 018 tenant · 019 deferred scope · 020 ContextStore · 021 measured claims · 022 agent execution protocol · 023 error model · 024 naming/versioning · 025 scope/capacity/deferral clarifications.
+Index: 001 GraphQL profile · 002 toolchain/deps · 003 three planes · 004 open-jev · 005 System-1 backend · 006 capability groups · 007 RouteBench & adoption gate · 008 split-conformal · 009 snapshot lifecycle · 010 operation-level index · 011 telemetry/LB/breaker · 012 join verification · 013 trust tiers · 014 poisoning/sandbox/SSRF · 015 mutations · 016 tasks · 017 MCP/A2A facade · 018 tenant · 019 deferred scope · 020 ContextStore · 021 measured claims · 022 agent execution protocol · 023 error model · 024 naming/versioning · 025 scope/capacity/deferral clarifications · 026 HTTP/3 QUIC transport · 027 AG-UI v1.0 facade · 028 multi-provider System-1 decision models.
 
 ---
 
@@ -78,7 +78,7 @@ Authorization is always evaluated by the deterministic policy engine (ADR-014) a
 1. Readers use `ArcSwap::load_full()` once per request and pin that `Arc<Snapshot>` for the whole request (and for a Task's lifetime if it needs schema stability).
 2. Publish via a single `Publisher` actor: build → verify → prewarm → `store()`. The previous generation is handed to a **reclaimer thread** (drop off the swap path); `store()` caller blocking budget ≤ 1 ms.
 3. SLOs: swap p99 ≤ 250 µs @256 busy readers (baseline 59 µs); zero failed/torn requests across 100 swaps with 1,000 concurrent requests; reader p99 regression ≤ 5% during swaps.
-4. Ring of the last 5 generations kept via structural sharing (`im`/`Arc` per branch) so memory growth is bounded (gate: ≤ +15% RSS vs 1 generation for a 1-branch change).
+4. Ring of the last 5 generations kept via structural sharing (persistent `OrdMap` / `Arc` per branch) so memory growth is bounded (gate: ≤ +15% RSS vs 1 generation for a 1-branch change).
 5. Auto-rollback: after promotion, a 60 s watch window compares **snapshot-attributable** errors (planning/validation errors, errors from branches whose `spec_hash` changed) with the previous generation's baseline; roll back once iff rate > max(2× baseline, baseline + 2 pp) with ≥ 200 samples; the bad generation is marked and cannot be re-promoted without `--force`. Unrelated infrastructure errors do not trigger rollback.
 6. Plan-cache key = `(tenant_id, policy_version, snapshot.branch_set_hash, normalized_query_hash, variable_shape_hash)`. Prewarm replays top-100 plans; promotion is **blocked** if < 95% re-plan successfully unless `breaking_change_ack` is set.
 7. Telemetry slots are keyed by stable `BranchUid` in a registry independent of snapshot generations; removing a branch tombstones its slot after a grace period.
@@ -134,8 +134,8 @@ Authorization is always evaluated by the deterministic policy engine (ADR-014) a
 **Verification:** cross-tenant property tests (WP-M6-07).
 
 ## ADR-019 — Deferred scope (explicit non-goals for 1.0)
-**Status:** Accepted
-**Decision:** Not in 1.0: QUIC transport, Rhai/coprocessor plugin tiers (a compile-time `Plugin` trait with `tower::Layer` hooks is allowed), TOURNAMENT federation mode, field-level `@rateLimit` (global/per-subject limits via `tower`/`governor` are in), multi-region replication, training a custom System-1 (Track R1), SDK codegen beyond thin TS/Python clients. Each has a tracking entry in `docs/02-PLAN.md` §8.
+**Status:** Accepted (partially superseded by `ADR-026` for QUIC/HTTP/3 transport)
+**Decision:** Not in 1.0: ~~QUIC transport~~ (promoted to `1.0-RC` by `ADR-026` / `OPS-005`), Rhai/coprocessor plugin tiers (a compile-time `Plugin` trait with `tower::Layer` hooks is allowed), TOURNAMENT federation mode, field-level `@rateLimit` (global/per-subject limits via `tower`/`governor` are in), multi-region replication, training a custom System-1 (Track R1), SDK codegen beyond thin TS/Python clients. Each has a tracking entry in `docs/02-PLAN.md` §8.
 
 ## ADR-020 — `ContextStore` trait; SQLite default; SurrealDB optional
 **Status:** Default (D-003)
@@ -167,3 +167,35 @@ Authorization is always evaluated by the deterministic policy engine (ADR-014) a
 3. *`WEIGHTED` traversal.* Edge cost, tie-break and the unsupported-branch error are fixed by ING-067.
 4. *Deferred past 1.0 (D-008), supplementing ADR-019:* interval/history temporal walks (`@between`, `[from, to]` over superseded nodes) — only `asOf` ships; multi-pass System-1 tournament — RTE-030's single-pass shortlist is the 1.0 behaviour and review item K-7 records Laya's technique, not a requirement; listener-socket handoff for single-node binary upgrades — zero-downtime upgrades use the active/standby topology of OPS-003. Tracking entries are in `docs/02-PLAN.md` §8.
 **Consequences:** WP-M2-01 and WP-M2-03 implement scopes and `WEIGHTED` without guessing; the `ngc.proto` golden of WP-M0-06 is unaffected; conformance tests for ING-065 (visibility is indistinguishable from absence) and ING-067 (determinism) are required in the `ContextStore` trait suite.
+
+## ADR-026 — Dual-stack HTTP/3 (QUIC, RFC 9114) gateway transport
+**Status:** Accepted (supersedes QUIC deferral in `ADR-019`; memo: `docs/decisions/2026-11-16-http3-quic-transport.md`)
+**Context:** Edge, WAN, and mobile agent hosts benefit from HTTP/3 over QUIC (`RFC 9114`) multiplexed transport and `Alt-Svc` upgrade discovery, while GAP's L4 transport boundary (`ARC-001`) isolates wire framing completely from `gap-ql`, `gap-exec`, `gap-snapshot`, and `gap-authz`.
+**Decision:**
+1. `gap-transport` and `gap-server` support optional dual-stack HTTP/3 over QUIC UDP via `quinn` (`0.11.12`), `h3` (`0.0.8`), and `h3-quinn` (`0.0.10`) backed by `rustls` (`0.23.46`, `ring` crypto provider, TLS 1.3 ALPN `h3`) alongside TCP HTTP/1.1 + HTTP/2.
+2. Configured via `[server].http3_listen` (`Option<String>`, `GAP_SERVER__HTTP3_LISTEN`) and `[server].tls_self_signed_dev` (`bool`, forbidden in `profile = "prod"`).
+3. Security invariants (`OPS-005`): TLS 1.3 `0-RTT` early data MUST remain disabled (`max_early_data_size = 0`) to block mutation/tool replay; `profile = "prod"` MUST fail closed at startup if `http3_listen` lacks explicit `tls_cert_secret` and `tls_key_secret`; active connections and request body sizes enforce the exact same caps as TCP; TCP responses advertise `Alt-Svc: h3=":<port>"; ma=86400`.
+4. `deny.toml` keeps `axum`, `hyper`, `prost`, and `tower` strictly single-version (`ADR-002`); `#![forbid(unsafe_code)]` holds across `gap-core`, `gap-transport`, and `gap-server`.
+**Consequences:** Zero changes to L0–L3 semantics; HTTP/3 traffic executes the exact same wait-free snapshot, Cedar policy, and `BatchQuery` pipeline; measured HTTP/2 vs HTTP/3 mixed-load latency is recorded in `bench/results/ga_local/report.json`.
+**Verification:** `crates/gap-transport/tests/http3.rs` (`OPS-005`, `OPS-002`, `RUN-090`), `crates/gap-server` dual-stack integration test, `cargo deny check`, `python3 tools/check_layers.py`, and `python3 dist/verify-ga-local.py`.
+
+## ADR-027 — Inbound AG-UI v1.0 (`ag-ui-protocol/ag-ui`) Event-Stream & Interrupt Facade
+**Status:** Accepted (`WP-M7-13`; memo: `docs/decisions/2026-11-17-agui-and-decision-models.md`)
+**Context:** MCP `2026-07-28` handles vertical agent-to-tool calls and A2A `v1.0` handles horizontal agent-to-agent tasks, leaving agent-to-frontend real-time event streaming and interactive interrupts (`ag-ui-protocol/ag-ui` v1.0) unstandardized behind GAP.
+**Decision:**
+1. Add `adapters/gap-agui` (`Layer L4`) implementing `gap_core::traits::HttpModule` mounted by `gap-server` at `/ag-ui` (available on HTTP/1.1, HTTP/2, and HTTP/3 QUIC with zero transport edits).
+2. `POST /ag-ui` parses `RunAgentInput` (`threadId`, `runId`, optional `parentRunId`, `state`, `messages`, `tools`, `context`, `forwardedProps`, `resume[]`) and streams `200 text/event-stream` `EventType` frames (`RUN_STARTED`, `STEP_STARTED`, `TOOL_CALL_*`, `STATE_SNAPSHOT`/`STATE_DELTA`, `TEXT_MESSAGE_*`, `STEP_FINISHED`, `RUN_FINISHED`, `RUN_ERROR`) per `CMP-025`–`CMP-028`. `GET /ag-ui/capabilities` publishes supported AG-UI `1.0` capabilities.
+3. Mutations requiring human approval (`INPUT_REQUIRED`) terminate cleanly via `RUN_FINISHED { outcome: { type: "interrupt", interrupts: [...] } }` and resume via `RunAgentInput.resume[]`. `T2` outputs remain wrapped in `<gap:untrusted>`, `INV-01` pins one `Arc<Snapshot>`, `INV-04` runs Cedar deterministically, and `ARC-002` keeps ML off execution.
+**Verification:** `adapters/gap-agui/tests/agui_wire.rs` (`CMP-025`..`CMP-028`), `crates/gap-server/tests/http3_dual_stack.rs`, and `conformance/agui/01_lifecycle_and_interrupt.json`.
+
+## ADR-028 — Multi-Provider System-1 Decision Models (`Laya`, `Jev`, `Gemini Decision 1`)
+**Status:** Accepted (extends `ADR-005`; memo: `docs/decisions/2026-11-17-agui-and-decision-models.md`)
+**Context:** Fast non-generative System-1 models (`Laya` / `@receptron/laya`, TypeSafe `Jev`, and Google `Gemini Decision 1`) evaluate shared unstructured state against typed `choice`, `score`, and `noul` questions in one forward pass with zero output tokens.
+**Decision:**
+1. Extend `gap-s1` (`Layer L3`) with multi-provider adapters implementing `gap_route::s1_adapter::DecisionBackend` plus multi-head `DecisionQuestion`/`DecisionAnswer` codecs (`RTE-047`..`RTE-049`):
+   - `ReceptronLayaBackend` (`@receptron/laya` `systemOne` JSON schema & `$LAYA_CACHE`/`~/.cache/receptron-laya` local bundle locator).
+   - `JevBackend` (TypeSafe `POST /v1/systemone` with `model: "jev-latest"` and `SecretString` bearer header).
+   - `GeminiDecisionBackend` (Google `POST /v1beta/decisions` with `model: "gemini-decision-1"`, 1,000-question batch cap, zero output tokens, and `SecretString` `x-goog-api-key` header).
+2. Convert returned calibrated probabilities into raw log-odds (`prob_to_logit`) so `gap-route` retains ownership of temperature scaling and split-conformal abstention (`RTE-041`).
+3. Enforce `EgressGuardHook` SSRF blocking, `SecretString` redaction (`INV-15`), `profile = "prod"` fail-closed secret validation, and `RTE-044` timeout preemption back to `BaselineRouter` (`INV-17`).
+**Verification:** `crates/gap-s1/tests/decision_providers.rs`, `crates/gap-server/src/wiring_s1.rs` (`RTE-047`..`RTE-049`, `INV-15`, `INV-17`), and `crates/gap-core/src/config.rs` (`docs/config.schema.json`).

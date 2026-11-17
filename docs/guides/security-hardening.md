@@ -8,6 +8,7 @@ Always set `profile = "prod"` in production `gap.toml` deployments. In `prod` pr
 
 - `auth.allow_anonymous = false` (`INV-04`, `CMP-006`)
 - API keys stored exclusively as 64-character lowercase `BLAKE3` hex digests (`key_hash`), never plaintext secrets
+- Explicit `tls_cert` and `tls_key` secrets required fail-closed whenever `server.http3_listen` is configured in `prod`, with TLS 1.3 `0-RTT` (`max_early_data_size = 0`) disabled against replay (`OPS-005`, `ADR-026`)
 - TLS / mTLS enabled on downstream production connectors where configured
 - Strict SSRF egress filtering denying loopback, RFC 1918 private ranges, link-local metadata endpoints (`169.254.169.254`), and DNS-rebinding redirects
 - Fail-closed behavior on policy compile errors or unverified pinned S1/embedding model digests (`SEC-102`)

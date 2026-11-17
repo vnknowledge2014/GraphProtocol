@@ -12,6 +12,10 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use axum::Router;
+use axum::extract::Request as AxumRequest;
+use axum::middleware::{self, Next};
+use axum::response::Response as AxumResponse;
+use http::header::{HeaderName, HeaderValue};
 use hyper_util::rt::{TokioExecutor, TokioIo, TokioTimer};
 use hyper_util::server::conn::auto::Builder;
 use hyper_util::server::graceful::GracefulShutdown;
@@ -35,6 +39,8 @@ pub struct ServeOptions {
     pub max_connections: usize,
     /// How long in-flight requests may keep running after the shutdown signal.
     pub shutdown_grace: Duration,
+    /// When set, TCP HTTP/1.1 & HTTP/2 responses advertise `Alt-Svc: h3=":<port>"; ma=86400` (`OPS-005`).
+    pub alt_svc_h3_port: Option<u16>,
 }
 
 impl Default for ServeOptions {
@@ -43,6 +49,7 @@ impl Default for ServeOptions {
             header_read_timeout: DEFAULT_HEADER_READ_TIMEOUT,
             max_connections: DEFAULT_MAX_CONNECTIONS,
             shutdown_grace: DEFAULT_SHUTDOWN_GRACE,
+            alt_svc_h3_port: None,
         }
     }
 }
@@ -81,6 +88,24 @@ pub async fn serve(
     options: ServeOptions,
 ) -> io::Result<()> {
     options.validate()?;
+    let app = if let Some(port) = options.alt_svc_h3_port {
+        let header_val = HeaderValue::from_str(&format!("h3=\":{port}\"; ma=86400"))
+            .map_err(|err| invalid(&format!("invalid Alt-Svc header value: {err}")))?;
+        let alt_svc_name = HeaderName::from_static("alt-svc");
+        app.layer(middleware::from_fn(move |req: AxumRequest, next: Next| {
+            let val = header_val.clone();
+            let name = alt_svc_name.clone();
+            async move {
+                let mut resp: AxumResponse = next.run(req).await;
+                if !resp.headers().contains_key(&name) {
+                    resp.headers_mut().insert(name, val);
+                }
+                resp
+            }
+        }))
+    } else {
+        app
+    };
     let permits = Arc::new(Semaphore::new(options.max_connections));
     let graceful = GracefulShutdown::new();
 

@@ -12,6 +12,7 @@ use serde::{Deserialize, Serialize};
 use crate::clock::Timestamp;
 use crate::ids::{BranchId, BranchUid, GroupId, OperationId, ProposalId, TenantId};
 use crate::joingraph::JoinGraph;
+pub use crate::ord_map::OrdMap;
 use crate::traits::{ElementSearch, EmptyElementSearch};
 
 /// Current binary/in-memory `Snapshot` format version (`ADR-024`).
@@ -400,7 +401,7 @@ impl FieldOwnership {
 
 /// Immutable compiled supergraph snapshot (`spec/01-architecture.md` §4, `ARC-005`, `ARC-006`).
 ///
-/// Persistent `im::OrdMap` collections and [`Arc`]-wrapped artifacts allow publishing generation
+/// Persistent `OrdMap` collections and [`Arc`]-wrapped artifacts allow publishing generation
 /// `g + 1` to structurally share unchanged [`BranchDescriptor`]s, [`CapabilityGroup`]s,
 /// [`FieldOwnership`], [`JoinGraph`], and [`apollo_compiler::Schema`] without copying (`ARC-005`),
 /// while containing zero live telemetry state (`ARC-006`).
@@ -413,9 +414,9 @@ pub struct Snapshot {
     /// Owning tenant (`INV-09`, `ADR-018`).
     pub tenant_id: TenantId,
     /// Registered branches keyed by stable [`BranchUid`] (`ARC-005`).
-    pub branches: im::OrdMap<BranchUid, Arc<BranchDescriptor>>,
+    pub branches: OrdMap<BranchUid, Arc<BranchDescriptor>>,
     /// Interchangeable capability groups keyed by [`GroupId`] (`ARC-005`).
-    pub groups: im::OrdMap<GroupId, Arc<CapabilityGroup>>,
+    pub groups: OrdMap<GroupId, Arc<CapabilityGroup>>,
     /// Composed supergraph GraphQL schema (`apollo_compiler::Schema`).
     pub schema: Arc<Schema>,
     /// Deterministic field-ownership table consistent with `@branch` directives (`RUN-009`, `RUN-011`).
@@ -471,8 +472,8 @@ impl Snapshot {
             generation,
             format_version: SNAPSHOT_FORMAT_VERSION,
             tenant_id,
-            branches: im::OrdMap::new(),
-            groups: im::OrdMap::new(),
+            branches: OrdMap::new(),
+            groups: OrdMap::new(),
             schema: Arc::new(Schema::new()),
             ownership: Arc::new(FieldOwnership::empty()),
             joins: Arc::new(JoinGraph::empty()),
@@ -621,7 +622,7 @@ mod tests {
     fn arc_005_snapshot_structurally_shares_unchanged_branches_across_generations() {
         let billing = sample_branch("billing");
         let crm = sample_branch("crm");
-        let mut map_g1 = im::OrdMap::new();
+        let mut map_g1 = OrdMap::new();
         map_g1.insert(billing.uid, Arc::clone(&billing));
         map_g1.insert(crm.uid, Arc::clone(&crm));
 
@@ -660,7 +661,7 @@ mod tests {
         let many: Vec<Arc<BranchDescriptor>> = (0..500)
             .map(|i| sample_branch(&format!("br-{i:04}")))
             .collect();
-        let mut ord_g1 = im::OrdMap::new();
+        let mut ord_g1 = OrdMap::new();
         for b in &many {
             ord_g1.insert(b.uid, Arc::clone(b));
         }
@@ -671,7 +672,7 @@ mod tests {
         let untouched_leaves = many.iter().filter(|b| Arc::strong_count(b) == 2).count();
         assert!(
             untouched_leaves > 400,
-            "im::OrdMap must share untouched B-tree leaf nodes (got {untouched_leaves}/500)"
+            "OrdMap must share untouched B-tree leaf nodes (got {untouched_leaves}/500)"
         );
         for b in &many {
             assert!(Arc::ptr_eq(

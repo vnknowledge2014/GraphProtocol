@@ -59,6 +59,14 @@
       "$ref": "#/$defs/Profile",
       "default": "prod"
     },
+    "router": {
+      "description": "Discovery System-1 decision router configuration (`ADR-028`, `INV-17`).",
+      "$ref": "#/$defs/RouterSectionConfig",
+      "default": {
+        "provider": "disabled",
+        "timeout_ms": 400
+      }
+    },
     "security": {
       "description": "Policy, approval, and sandbox settings.",
       "$ref": "#/$defs/SecurityConfig",
@@ -75,7 +83,8 @@
         "admin_listen": "127.0.0.1:9090",
         "grpc_listen": "127.0.0.1:8081",
         "listen": "127.0.0.1:8080",
-        "shutdown_grace_ms": 30000
+        "shutdown_grace_ms": 30000,
+        "tls_self_signed_dev": false
       }
     },
     "storage": {
@@ -598,6 +607,90 @@
         }
       ]
     },
+    "RouterProviderConfig": {
+      "description": "Optional System-1 decision model provider configured under `[router]` (`ADR-028`, `RTE-047`..`049`).",
+      "oneOf": [
+        {
+          "description": "Default deterministic BM25+HNSW baseline router (`BASELINE_FALLBACK`, `INV-17`).",
+          "type": "string",
+          "const": "disabled"
+        },
+        {
+          "description": "Built-in Candle ModernBERT System-1 backend (`LayaCandle`).",
+          "type": "string",
+          "const": "laya_candle"
+        },
+        {
+          "description": "ONNX Runtime System-1 backend (`LayaOrt`, requires `--features s1-ort`).",
+          "type": "string",
+          "const": "laya_ort"
+        },
+        {
+          "description": "Generic `/v1/systemone` HTTP sidecar (`omni decide --endpoint`).",
+          "type": "string",
+          "const": "http_sidecar"
+        },
+        {
+          "description": "`@receptron/laya` ONNX HTTP bridge (`github.com/receptron/laya`).",
+          "type": "string",
+          "const": "receptron_laya"
+        },
+        {
+          "description": "TypeSafe AI `Jev` (`POST /v1/systemone`).",
+          "type": "string",
+          "const": "jev"
+        },
+        {
+          "description": "Google `Gemini Decision 1` (`POST /v1beta/decisions`).",
+          "type": "string",
+          "const": "gemini_decision_1"
+        }
+      ]
+    },
+    "RouterSectionConfig": {
+      "description": "Optional discovery-plane router configuration (`[router]`, `RTE-044`, `RTE-049`, `INV-17`).",
+      "type": "object",
+      "properties": {
+        "api_key_secret": {
+          "description": "Optional secret reference for provider API key (`env://...` or `file://...`, `INV-15`).",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SecretRef"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "endpoint": {
+          "description": "Optional provider base or full endpoint URL (`http://127.0.0.1:4000` or proxy).",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "model": {
+          "description": "Optional provider model override (e.g. `jev-latest`, `gemini-decision-1`, `convaiinnovations/laya`).",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "provider": {
+          "description": "Selected System-1 decision provider (`disabled` by default per `G-S1` / `INV-17`).",
+          "$ref": "#/$defs/RouterProviderConfig",
+          "default": "disabled"
+        },
+        "timeout_ms": {
+          "description": "Per-call S1 inference preemption budget in milliseconds (`RTE-044`, default `400`).",
+          "type": "integer",
+          "format": "uint64",
+          "default": 400,
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false
+    },
     "SecretRef": {
       "description": "External secret reference (`secret://<vault>/<name>`, `env://<VAR>`, or `file:///<abs-path>`). Inline secrets are forbidden (INV-15).",
       "type": "string",
@@ -637,7 +730,7 @@
       "additionalProperties": false
     },
     "ServerConfig": {
-      "description": "`[server]` listener and graceful-shutdown settings (`OPS-002`, `RUN-090`).",
+      "description": "`[server]` listener and graceful-shutdown settings (`OPS-002`, `OPS-005`, `RUN-090`).",
       "type": "object",
       "properties": {
         "admin_listen": {
@@ -650,8 +743,15 @@
           "type": "string",
           "default": "127.0.0.1:8081"
         },
+        "http3_listen": {
+          "description": "Optional dual-stack HTTP/3 over QUIC (`RFC 9114`, UDP) bind address (`OPS-005`, `ADR-026`).",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "listen": {
-          "description": "Primary HTTP/2 GraphQL, SSE, MCP, and A2A bind address (`OPS-002`).",
+          "description": "Primary HTTP/1.1 + HTTP/2 (TCP) GraphQL, SSE, MCP, and A2A bind address (`OPS-002`).",
           "type": "string",
           "default": "127.0.0.1:8080"
         },
@@ -663,7 +763,7 @@
           "minimum": 0
         },
         "tls_cert_secret": {
-          "description": "Optional TLS certificate reference (`file:///...` or `secret://...`).",
+          "description": "Optional TLS certificate reference (`file:///...`, `env://...`, or `secret://...`).",
           "anyOf": [
             {
               "$ref": "#/$defs/SecretRef"
@@ -674,7 +774,7 @@
           ]
         },
         "tls_key_secret": {
-          "description": "Optional TLS private key reference (`file:///...` or `secret://...`, `INV-15`).",
+          "description": "Optional TLS private key reference (`file:///...`, `env://...`, or `secret://...`, `INV-15`).",
           "anyOf": [
             {
               "$ref": "#/$defs/SecretRef"
@@ -683,6 +783,11 @@
               "type": "null"
             }
           ]
+        },
+        "tls_self_signed_dev": {
+          "description": "Permits ephemeral self-signed TLS 1.3 cert generation strictly in `profile = \"dev\"` (`OPS-005`).",
+          "type": "boolean",
+          "default": false
         }
       },
       "additionalProperties": false

@@ -256,35 +256,43 @@ pub enum OperationMode {
     Safelist,
 }
 
-/// `[server]` listener and graceful-shutdown settings (`OPS-002`, `RUN-090`).
+/// `[server]` listener and graceful-shutdown settings (`OPS-002`, `OPS-005`, `RUN-090`).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(default, deny_unknown_fields)]
 pub struct ServerConfig {
-    /// Primary HTTP/2 GraphQL, SSE, MCP, and A2A bind address (`OPS-002`).
+    /// Primary HTTP/1.1 + HTTP/2 (TCP) GraphQL, SSE, MCP, and A2A bind address (`OPS-002`).
     pub listen: String,
+    /// Optional dual-stack HTTP/3 over QUIC (`RFC 9114`, UDP) bind address (`OPS-005`, `ADR-026`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub http3_listen: Option<String>,
     /// Separate authenticated `/admin/*` listener (`OPS-002`).
     pub admin_listen: String,
     /// Dedicated gRPC Gateway listener (`OPS-002`).
     pub grpc_listen: String,
     /// Graceful drain window on `SIGTERM` in milliseconds (`RUN-090`, default `30_000`).
     pub shutdown_grace_ms: u64,
-    /// Optional TLS certificate reference (`file:///...` or `secret://...`).
+    /// Optional TLS certificate reference (`file:///...`, `env://...`, or `secret://...`).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tls_cert_secret: Option<SecretRef>,
-    /// Optional TLS private key reference (`file:///...` or `secret://...`, `INV-15`).
+    /// Optional TLS private key reference (`file:///...`, `env://...`, or `secret://...`, `INV-15`).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tls_key_secret: Option<SecretRef>,
+    /// Permits ephemeral self-signed TLS 1.3 cert generation strictly in `profile = "dev"` (`OPS-005`).
+    #[serde(default)]
+    pub tls_self_signed_dev: bool,
 }
 
 impl Default for ServerConfig {
     fn default() -> Self {
         Self {
             listen: "127.0.0.1:8080".to_owned(),
+            http3_listen: None,
             admin_listen: "127.0.0.1:9090".to_owned(),
             grpc_listen: "127.0.0.1:8081".to_owned(),
             shutdown_grace_ms: 30_000,
             tls_cert_secret: None,
             tls_key_secret: None,
+            tls_self_signed_dev: false,
         }
     }
 }
@@ -483,6 +491,59 @@ impl Default for TelemetryConfig {
     }
 }
 
+/// Optional System-1 decision model provider configured under `[router]` (`ADR-028`, `RTE-047`..`049`).
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum RouterProviderConfig {
+    /// Default deterministic BM25+HNSW baseline router (`BASELINE_FALLBACK`, `INV-17`).
+    #[default]
+    Disabled,
+    /// Built-in Candle ModernBERT System-1 backend (`LayaCandle`).
+    LayaCandle,
+    /// ONNX Runtime System-1 backend (`LayaOrt`, requires `--features s1-ort`).
+    LayaOrt,
+    /// Generic `/v1/systemone` HTTP sidecar (`omni decide --endpoint`).
+    HttpSidecar,
+    /// `@receptron/laya` ONNX HTTP bridge (`github.com/receptron/laya`).
+    ReceptronLaya,
+    /// TypeSafe AI `Jev` (`POST /v1/systemone`).
+    Jev,
+    /// Google `Gemini Decision 1` (`POST /v1beta/decisions`).
+    #[serde(rename = "gemini_decision_1")]
+    GeminiDecision1,
+}
+
+/// Optional discovery-plane router configuration (`[router]`, `RTE-044`, `RTE-049`, `INV-17`).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(default, deny_unknown_fields)]
+pub struct RouterSectionConfig {
+    /// Selected System-1 decision provider (`disabled` by default per `G-S1` / `INV-17`).
+    pub provider: RouterProviderConfig,
+    /// Optional provider base or full endpoint URL (`http://127.0.0.1:4000` or proxy).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub endpoint: Option<String>,
+    /// Optional provider model override (e.g. `jev-latest`, `gemini-decision-1`, `convaiinnovations/laya`).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub model: Option<String>,
+    /// Optional secret reference for provider API key (`env://...` or `file://...`, `INV-15`).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub api_key_secret: Option<SecretRef>,
+    /// Per-call S1 inference preemption budget in milliseconds (`RTE-044`, default `400`).
+    pub timeout_ms: u64,
+}
+
+impl Default for RouterSectionConfig {
+    fn default() -> Self {
+        Self {
+            provider: RouterProviderConfig::Disabled,
+            endpoint: None,
+            model: None,
+            api_key_secret: None,
+            timeout_ms: 400,
+        }
+    }
+}
+
 /// Root `gap.toml` configuration (`spec/00-conventions.md` §8).
 #[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(default, deny_unknown_fields)]
@@ -503,6 +564,8 @@ pub struct GapConfig {
     pub storage: StorageConfig,
     /// Structured logging and OpenTelemetry settings.
     pub telemetry: TelemetryConfig,
+    /// Discovery System-1 decision router configuration (`ADR-028`, `INV-17`).
+    pub router: RouterSectionConfig,
     /// Branch inventory the gateway is assembled from (`[[branches]]`).
     pub branches: Vec<BranchSpec>,
     /// API keys the gateway accepts, as `blake3` digests (`[[api_keys]]`, `SEC-001`).
@@ -515,7 +578,8 @@ fn is_bool_leaf(path: &[String]) -> bool {
             path.first().map(String::as_str),
             path.get(1).map(String::as_str)
         ),
-        (Some("gateway"), Some("facade_spotlight"))
+        (Some("server"), Some("tls_self_signed_dev"))
+            | (Some("gateway"), Some("facade_spotlight"))
             | (Some("auth"), Some("allow_anonymous"))
             | (
                 Some("security"),
@@ -555,6 +619,7 @@ fn is_int_leaf(path: &[String]) -> bool {
                 Some("blocking_pool_threads" | "blocking_queue_capacity")
             )
             | (Some("telemetry"), Some("slow_ms"))
+            | (Some("router"), Some("timeout_ms"))
     ) && path.len() == 2
 }
 
@@ -705,6 +770,39 @@ impl GapConfig {
                     .to_owned(),
             });
         }
+        if let Some(h3_addr) = &self.server.http3_listen
+            && h3_addr.trim().is_empty()
+        {
+            return Err(ConfigError::Validation {
+                field: "server.http3_listen",
+                reason: "HTTP/3 listen address must not be empty (`OPS-005`)".to_owned(),
+            });
+        }
+        if self.server.tls_cert_secret.is_some() != self.server.tls_key_secret.is_some() {
+            return Err(ConfigError::Validation {
+                field: "server.tls_cert_secret",
+                reason: "`server.tls_cert_secret` and `server.tls_key_secret` must either both be set or both omitted (`INV-15`)"
+                    .to_owned(),
+            });
+        }
+        if self.profile == Profile::Prod {
+            if self.server.tls_self_signed_dev {
+                return Err(ConfigError::Validation {
+                    field: "server.tls_self_signed_dev",
+                    reason: "ephemeral self-signed TLS certificates are forbidden when profile = \"prod\" (`OPS-005`, `INV-15`)"
+                        .to_owned(),
+                });
+            }
+            if self.server.http3_listen.is_some()
+                && (self.server.tls_cert_secret.is_none() || self.server.tls_key_secret.is_none())
+            {
+                return Err(ConfigError::Validation {
+                    field: "server.http3_listen",
+                    reason: "`server.http3_listen` requires both `server.tls_cert_secret` and `server.tls_key_secret` when profile = \"prod\" (`OPS-005`, `INV-15`)"
+                        .to_owned(),
+                });
+            }
+        }
 
         validate_branches_and_keys(&self.branches, &self.api_keys)?;
         check_range("gateway.max_hops", self.gateway.max_hops, 1, 16)?;
@@ -776,6 +874,42 @@ impl GapConfig {
             return Err(ConfigError::Validation {
                 field: "telemetry.head_sample_ratio",
                 reason: "must be finite and within 0.0..=1.0 (OPS-010)".to_owned(),
+            });
+        }
+        check_range("router.timeout_ms", self.router.timeout_ms, 10, 10_000)?;
+        let remote_provider = matches!(
+            self.router.provider,
+            RouterProviderConfig::HttpSidecar
+                | RouterProviderConfig::ReceptronLaya
+                | RouterProviderConfig::Jev
+                | RouterProviderConfig::GeminiDecision1
+        );
+        if remote_provider {
+            let empty_ep = self
+                .router
+                .endpoint
+                .as_deref()
+                .is_none_or(|e| e.trim().is_empty());
+            if empty_ep {
+                return Err(ConfigError::Validation {
+                    field: "router.endpoint",
+                    reason:
+                        "remote decision provider requires non-empty `router.endpoint` (`RTE-049`)"
+                            .to_owned(),
+                });
+            }
+        }
+        if self.profile == Profile::Prod
+            && matches!(
+                self.router.provider,
+                RouterProviderConfig::Jev | RouterProviderConfig::GeminiDecision1
+            )
+            && self.router.api_key_secret.is_none()
+        {
+            return Err(ConfigError::Validation {
+                field: "router.api_key_secret",
+                reason: "`router.api_key_secret` is required for Jev / Gemini Decision 1 in `prod` (`RTE-049`, `INV-15`)"
+                    .to_owned(),
             });
         }
         Ok(())
@@ -929,5 +1063,99 @@ max_cost_units = 10000
             committed, expected,
             "docs/config.schema.json is out of date with GapConfig::json_schema_pretty()"
         );
+    }
+
+    // spec: OPS-005, INV-15
+    #[test]
+    fn http3_config_validation_enforces_prod_tls_and_supports_env_overrides() {
+        let prod_missing_tls = GapConfig::from_toml_str(
+            "profile = \"prod\"\n[server]\nhttp3_listen = \"127.0.0.1:8443\"\n",
+        );
+        assert!(
+            matches!(
+                prod_missing_tls,
+                Err(ConfigError::Validation {
+                    field: "server.http3_listen",
+                    ..
+                })
+            ),
+            "prod http3_listen without TLS secrets must fail closed"
+        );
+
+        let prod_self_signed =
+            GapConfig::from_toml_str("profile = \"prod\"\n[server]\ntls_self_signed_dev = true\n");
+        assert!(matches!(
+            prod_self_signed,
+            Err(ConfigError::Validation {
+                field: "server.tls_self_signed_dev",
+                ..
+            })
+        ));
+
+        let mismatched_tls = GapConfig::from_toml_str(
+            "profile = \"dev\"\n[server]\ntls_cert_secret = \"file:///etc/gap/cert.pem\"\n",
+        );
+        assert!(matches!(
+            mismatched_tls,
+            Err(ConfigError::Validation {
+                field: "server.tls_cert_secret",
+                ..
+            })
+        ));
+
+        let prod_valid = GapConfig::from_toml_str(
+            "profile = \"prod\"\n[server]\nhttp3_listen = \"0.0.0.0:8443\"\ntls_cert_secret = \"file:///etc/gap/cert.pem\"\ntls_key_secret = \"file:///etc/gap/key.pem\"\n",
+        )
+        .expect("prod with explicit TLS secret refs must succeed");
+        assert_eq!(
+            prod_valid.server.http3_listen.as_deref(),
+            Some("0.0.0.0:8443")
+        );
+
+        let dev_env = GapConfig::from_toml_and_env(
+            "profile = \"dev\"\n",
+            [
+                ("GAP_SERVER__HTTP3_LISTEN", "127.0.0.1:8443"),
+                ("GAP_SERVER__TLS_SELF_SIGNED_DEV", "true"),
+            ],
+        )
+        .expect("dev with env http3_listen override must succeed");
+        assert_eq!(
+            dev_env.server.http3_listen.as_deref(),
+            Some("127.0.0.1:8443")
+        );
+        assert!(dev_env.server.tls_self_signed_dev);
+    }
+
+    // spec: RTE-049, INV-15
+    #[test]
+    fn router_decision_provider_validation_enforces_endpoint_and_prod_secret() {
+        let missing_ep =
+            GapConfig::from_toml_str("profile = \"dev\"\n[router]\nprovider = \"jev\"\n");
+        assert!(matches!(
+            missing_ep,
+            Err(ConfigError::Validation {
+                field: "router.endpoint",
+                ..
+            })
+        ));
+
+        let prod_missing_key = GapConfig::from_toml_str(
+            "profile = \"prod\"\n[router]\nprovider = \"gemini_decision_1\"\nendpoint = \"http://127.0.0.1:4200\"\n",
+        );
+        assert!(matches!(
+            prod_missing_key,
+            Err(ConfigError::Validation {
+                field: "router.api_key_secret",
+                ..
+            })
+        ));
+
+        let valid = GapConfig::from_toml_str(
+            "profile = \"prod\"\n[router]\nprovider = \"gemini_decision_1\"\nendpoint = \"http://127.0.0.1:4200\"\napi_key_secret = \"env://GEMINI_API_KEY\"\ntimeout_ms = 250\n",
+        )
+        .expect("prod router with env secret ref must validate");
+        assert_eq!(valid.router.provider, RouterProviderConfig::GeminiDecision1);
+        assert_eq!(valid.router.timeout_ms, 250);
     }
 }

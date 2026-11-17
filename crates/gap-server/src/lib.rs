@@ -49,5 +49,6 @@ pub use assemble::{
 pub use run::{
     EXIT_CONFIG_ERROR, EXIT_OK, EXIT_RUNTIME_ERROR, FORCE_SHUTDOWN_EXIT_CODE, RunError, Shutdown,
     ShutdownTrigger, build_stdio_context_factory, init_tracing, make_tracing_dispatch,
-    run_server_from_path, serve_http, serve_stdio, serve_stdio_with_io, serve_stdio_with_streams,
+    run_server_from_path, serve_dual_stack, serve_dual_stack_with_shutdown, serve_http,
+    serve_stdio, serve_stdio_with_io, serve_stdio_with_streams,
 };

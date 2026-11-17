@@ -113,7 +113,7 @@ fn make_capability_group(branch_uid: BranchUid, op: &OperationDescriptor) -> Arc
     })
 }
 
-/// Incremental [`Snapshot`] builder that reuses unchanged [`Arc`] descriptors and `im::OrdMap`
+/// Incremental [`Snapshot`] builder that reuses unchanged [`Arc`] descriptors and `gap_core::snapshot::OrdMap`
 /// B-tree nodes from a parent [`Snapshot`] (`ARC-005`).
 #[derive(Debug)]
 pub struct SnapshotBuilder<'a> {
@@ -188,7 +188,7 @@ impl<'a> SnapshotBuilder<'a> {
             let branch_uid = new_branch.uid;
             if let Some(old_branch) = self.current.branches.get(&branch_uid) {
                 if old_branch.as_ref() == new_branch.as_ref() {
-                    // Unchanged branch: skip `next.branches.insert` so `im::OrdMap` leaf nodes
+                    // Unchanged branch: skip `next.branches.insert` so `gap_core::snapshot::OrdMap` leaf nodes
                     // and the `Arc<BranchDescriptor>` stay shared by pointer (`ARC-005`).
                     for op in &old_branch.operations {
                         if !next.groups.contains_key(&op.group) {

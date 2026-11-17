@@ -389,7 +389,12 @@
   updateScenarioView();
 
   async function pollServerStatus() {
-    if (window.location.protocol === "file:") return;
+    if (window.location.protocol === "file:" || window.location.hostname.endsWith(".github.io")) {
+      if (window.location.hostname.endsWith(".github.io")) {
+        statusPillText.textContent = "GitHub Pages (Mô phỏng tương tác)";
+      }
+      return;
+    }
     try {
       const resp = await fetch("/api/status");
       if (!resp.ok) return;

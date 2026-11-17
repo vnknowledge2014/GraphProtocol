@@ -2,7 +2,7 @@
 
 ## 1. Core Function
 
-The GAP `gateway` unifies REST APIs, SQL databases, gRPC services, GraphQL subgraphs, CLI tools, code graphs, MCP servers, and A2A workers. Clients send standard GraphQL operations (`GAP-QL`) over HTTP or invoke five fixed tools through the MCP `facade`.
+The GAP `gateway` unifies REST APIs, SQL databases, gRPC services, GraphQL subgraphs, CLI tools, code graphs, MCP servers, A2A workers, and AG-UI frontends. Clients send `GAP-QL` requests over HTTP/1.1, HTTP/2, or HTTP/3 (QUIC). Clients can also call five MCP `facade` tools or stream `/ag-ui` events.
 
 ## 2. Three Architectural Planes
 
@@ -22,8 +22,8 @@ The MCP `facade` exports five fixed tools (`gap_search`, `gap_describe`, `gap_qu
 ### Batched Joins and Lock-Free Reads (`INV-01`, `INV-02`, `INV-18`)
 Each request pins one immutable `Arc<Snapshot>` upon arrival (`15 ns` load latency) and keeps that `generation` until exit. Zero `Mutex` or `RwLock` locks sit on the read path (`INV-02`). For cross-branch joins, the executor collects unique parent keys and sends bounded `BatchQuery` calls instead of `N+1` loops (`INV-18`).
 
-### Default Router Behavior (`RTE-044`, `G-S1`)
-Shipped un-finetuned `laya-candle:f32` weights scored `14.29%` debiased top-1 accuracy at `73.85 ms` p95 on `RouteBench`. The deterministic BM25 plus structural baseline achieved `95.24%` test top-1 accuracy at `0.887 ms` p95. GAP runs on `BASELINE_FALLBACK` by default (`INV-17`).
+### Default Router Behavior and External System-1 Models (`RTE-044`, `RTE-047`, `RTE-048`, `G-S1`)
+Shipped un-finetuned `laya-candle:f32` weights scored `14.29%` debiased top-1 accuracy at `73.85 ms` p95 on `RouteBench`. The deterministic BM25 plus structural baseline achieved `95.24%` test top-1 accuracy at `0.887 ms` p95. GAP runs on `BASELINE_FALLBACK` by default (`INV-17`). Operators can also attach optional `@receptron/laya`, `Jev`, or `gemini-decision-1` discovery routers under `[router]` without entering Plane 1 execution (`ARC-002`, `INV-17`).
 
 ## 4. Measured Operating Limits and Crossover Rules (`ADR-017`, `ADR-021`)
 
@@ -33,6 +33,7 @@ Shipped un-finetuned `laya-candle:f32` weights scored `14.29%` debiased top-1 ac
 | Cross-branch join tokens (`N = 1,000`) | `814,959.8` uncached | `8,547.9` uncached (`0.010x`) | GAP saves `99.0%` uncached tokens (`93.5%` cached) |
 | Code-graph comprehension (`24` symbols) | `141,681.3` uncached | `1,187.4` uncached (`0.008x`) | GAP cuts round-trips `11.0 -> 1.0` (`208.7x` cached gain) |
 | Small flat cached catalog (`N = 10`) | `547.2` cached | `4,691.9` cached (`8.575x`) | Use Direct-MCP if token budget outweighs security governance |
-| Cold start and idle memory (`gap serve`) | `—` | `1,197.43 ms` · `9.16 MiB` RSS | Passes `<= 2,000 ms` and `<= 600 MiB` local gates |
-| Mixed live load (`800` reqs, `8` threads) | `—` | `1,889.0 req/s` · `6.356 ms` p95 · `0` errs | Meets `VER-032` ratio offline |
-| OS `SIGKILL` (`kill -9`) restart | `—` | `19.24 ms` to HTTP `200 /readyz` | Passes `<= 60,000 ms` recovery gate (`VER-051`) |
+| Cold start and idle memory (`gap serve`) | `—` | `313.98 ms` · `9.24 MiB` RSS | Passes `<= 2,000 ms` and `<= 600 MiB` local gates |
+| Mixed TCP load (`800` reqs, `8` threads) | `—` | `2,227.6 req/s` · `5.11 ms` p95 · `0` errs | Meets `VER-032` ratio offline |
+| Multiplexed HTTP/3 QUIC load (`8` conns, `800` reqs) | `—` | `7,869.5 req/s` · `1.452 ms` p95 · `0` errs | Zero `0-RTT` replay (`OPS-005`) |
+| OS `SIGKILL` (`kill -9`) restart | `—` | `12.96 ms` to HTTP `200 /readyz` | Passes `<= 60,000 ms` recovery gate (`VER-051`) |

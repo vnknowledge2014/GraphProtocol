@@ -1,0 +1,21 @@
+[package]
+name = "gap-agui"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Inbound AG-UI v1.0 event-stream and interrupt-resume facade mounted at /ag-ui (L4)."
+
+[dependencies]
+bytes.workspace = true
+gap-core.workspace = true
+gap-ql.workspace = true
+http.workspace = true
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
+uuid = { workspace = true, features = ["v7"] }
+
+[dev-dependencies]
+gap-testkit.workspace = true
+gap-transport.workspace = true
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }

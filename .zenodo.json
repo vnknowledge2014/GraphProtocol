@@ -8,8 +8,8 @@
   "access_right": "open",
   "creators": [
     {
-      "name": "GAP Project Lead, Mike",
-      "affiliation": "Graph Agent Protocol Contributors"
+      "name": "Mike (vnknowledge2014)",
+      "affiliation": "Graph Agent Protocol Project"
     }
   ],
   "keywords": [
@@ -25,7 +25,7 @@
   ],
   "related_identifiers": [
     {
-      "identifier": "https://github.com/mike/GraphProtocol",
+      "identifier": "https://github.com/vnknowledge2014/GraphProtocol",
       "relation": "isSupplementTo",
       "scheme": "url"
     }

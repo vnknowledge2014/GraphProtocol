@@ -9,6 +9,7 @@ use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use std::time::Duration;
 
+use gap_agui::{AgUiConfig, AgUiFacade, MAX_AGUI_REQUEST_BYTES};
 use gap_core::config::{
     BranchAuthKind, BranchAuthSpec, BranchProtocol, BranchSpec, ConfigError, GapConfig,
     McpBranchSpec, McpTransportKind, OpenApiBranchSpec, Profile, SecretRef,
@@ -46,8 +47,8 @@ use gap_snapshot::{
 };
 use gap_transport::config::HARD_MAX_DEADLINE;
 use gap_transport::{
-    ApiKeyRecord, AppState, ConfigValidationError, DEFAULT_MAX_DEADLINE, TransportConfig,
-    TransportEngine, TransportMetrics,
+    ApiKeyRecord, AppState, ConfigValidationError, DEFAULT_MAX_DEADLINE, Http3TlsConfig,
+    TransportConfig, TransportEngine, TransportMetrics,
 };
 use http::header::{HeaderName, HeaderValue};
 use thiserror::Error;
@@ -812,6 +813,9 @@ pub enum AssembleError {
     /// Constructing [`McpFacade`] failed validation.
     #[error(transparent)]
     Facade(#[from] FacadeConfigError),
+    /// Constructing HTTP/3 TLS 1.3 server credentials failed (`OPS-005`, `INV-15`).
+    #[error("HTTP/3 TLS configuration failed: {0}")]
+    Http3Tls(String),
 }
 
 /// Fully wired, ready-to-serve gateway runtime (`Brief §3.2`).
@@ -832,6 +836,23 @@ pub struct Assembled {
     pub warnings: Vec<CompositionWarning>,
     #[allow(dead_code)]
     branch_handles: Vec<BranchKeepAlive>,
+    http3_tls: Option<Http3TlsConfig>,
+    http3_dev_cert_der: Option<Vec<u8>>,
+}
+
+impl Assembled {
+    /// Resolved TLS 1.3 QUIC configuration when `[server].http3_listen` or TLS secrets are set (`OPS-005`).
+    #[must_use]
+    pub const fn http3_tls(&self) -> Option<&Http3TlsConfig> {
+        self.http3_tls.as_ref()
+    }
+
+    /// Ephemeral self-signed DER certificate generated only in `profile = "dev"` when explicit TLS
+    /// secrets were omitted (`OPS-005`).
+    #[must_use]
+    pub fn http3_dev_cert_der(&self) -> Option<&[u8]> {
+        self.http3_dev_cert_der.as_deref()
+    }
 }
 
 impl fmt::Debug for Assembled {
@@ -1016,6 +1037,13 @@ pub async fn assemble(
         .config(facade_cfg)
         .build()?;
 
+    let agui_cfg = AgUiConfig {
+        spotlight: cfg.gateway.facade_spotlight,
+        max_request_bytes: max_request_bytes.min(MAX_AGUI_REQUEST_BYTES),
+        ..AgUiConfig::default()
+    };
+    let agui_facade = AgUiFacade::new(Arc::new(engine.clone())).with_config(agui_cfg);
+
     let app_state = Arc::new(
         AppState::try_new(
             Arc::clone(&snapshot_handle),
@@ -1024,8 +1052,41 @@ pub async fn assemble(
             transport_config,
             metrics,
         )?
-        .with_http_module(Arc::new(facade.clone())),
+        .with_http_module(Arc::new(facade.clone()))
+        .with_http_module(Arc::new(agui_facade)),
     );
+
+    let (http3_tls, http3_dev_cert_der) = if let (Some(cert_ref), Some(key_ref)) =
+        (&cfg.server.tls_cert_secret, &cfg.server.tls_key_secret)
+    {
+        let cert_sec = server_file.resolve_secret(cert_ref, "server.tls_cert_secret")?;
+        let key_sec = server_file.resolve_secret(key_ref, "server.tls_key_secret")?;
+        let tls = Http3TlsConfig::from_pem(
+            cert_sec.expose_secret().as_bytes(),
+            key_sec.expose_secret().as_bytes(),
+        )
+        .map_err(|err| AssembleError::Http3Tls(err.to_string()))?;
+        (Some(tls), None)
+    } else if cfg.server.http3_listen.is_some() {
+        if cfg.profile == Profile::Dev {
+            tracing::warn!(
+                "`server.http3_listen` configured without TLS secrets in `dev` profile; generating ephemeral self-signed TLS 1.3 certificate"
+            );
+            let (tls, cert_der) = Http3TlsConfig::self_signed_for_dev(&[
+                "localhost".to_owned(),
+                "127.0.0.1".to_owned(),
+            ])
+            .map_err(|err| AssembleError::Http3Tls(err.to_string()))?;
+            (Some(tls), Some(cert_der))
+        } else {
+            return Err(AssembleError::Http3Tls(
+                    "`server.http3_listen` requires `server.tls_cert_secret` and `server.tls_key_secret` in `prod` profile"
+                        .to_owned(),
+                ));
+        }
+    } else {
+        (None, None)
+    };
 
     Ok(Assembled {
         app_state,
@@ -1036,6 +1097,8 @@ pub async fn assemble(
         config: cfg.clone(),
         warnings,
         branch_handles,
+        http3_tls,
+        http3_dev_cert_der,
     })
 }
 

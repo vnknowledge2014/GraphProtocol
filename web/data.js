@@ -19,28 +19,28 @@ window.GAP_DATA = {
     {
       id: "planner-arcswap",
       plane: "Mặt phẳng 1 — Thực thi Tất định (Zero-ML)",
-      title: "GAP-QL Planner + ArcSwap",
-      crates: "gap-ql, gap-plan, gap-snapshot",
+      title: "GAP-QL Planner + ArcSwap + AVL OrdMap",
+      crates: "gap-ql, gap-plan, gap-snapshot, gap-core",
       invariants: "INV-01, INV-02, INV-09",
-      latency: "15 ns ArcSwap::load; 0 khóa Mutex/RwLock",
+      latency: "15 ns ArcSwap::load; 0 khóa Mutex/RwLock · 0 RUSTSEC",
       summary:
-        "Ngay khi request tới gateway, hệ thống đọc nguyên tử đúng 1 bản Arc<Snapshot> bất biến qua ArcSwap và ghim chặt thế hệ (generation) đó từ đầu đến cuối request.",
+        "Ngay khi request tới gateway, hệ thống đọc nguyên tử đúng 1 bản Arc<Snapshot> bất biến qua ArcSwap và AVL OrdMap thuần Rust (0 unsafe, thay thế hoàn toàn im) từ đầu đến cuối request.",
       details:
         "Khóa của PlanCache luôn chứa đồng thời (TenantId, policy_version, branch_set_hash, query_hash) để không bao giờ rò rỉ kế hoạch truy vấn giữa hai tenant hoặc giữa hai thế hệ snapshot khác nhau.",
-      files: ["crates/gap-ql/src/schema.rs", "crates/gap-plan/", "crates/gap-snapshot/src/handle.rs"]
+      files: ["crates/gap-core/src/ord_map.rs", "crates/gap-plan/", "crates/gap-snapshot/src/handle.rs"]
     },
     {
       id: "exec-p2c",
       plane: "Mặt phẳng 1 — Thực thi Tất định (Zero-ML)",
-      title: "Batch Executor + P2C Balancer",
-      crates: "gap-exec, gap-balance, gap-transport",
-      invariants: "INV-12, INV-18, ARC-012",
-      latency: "EWMA 44 ns · P2C N=2 94 ns · Guard 42 ns",
+      title: "Dual-Stack HTTP/2+3, AG-UI v1.0 & P2C",
+      crates: "gap-exec, gap-balance, gap-transport, gap-agui",
+      invariants: "INV-12, INV-18, OPS-005, CMP-025..028",
+      latency: "7.870 req/s H3 QUIC (1,45 ms p95) · 2.228 req/s TCP",
       summary:
-        "Thực thi các truy vấn liên nhánh bằng cơ chế gom batch chuẩn DataLoader (chỉ gọi tối đa ceil(unique_keys / max_batch) lượt tới backend nguồn), dập tắt triệt để lỗi N+1 waterfall.",
+        "Tầng truyền tải dual-stack phục vụ đồng thời HTTP/1.1+HTTP/2 TCP (Alt-Svc), HTTP/3 QUIC RFC 9114 (tắt 0-RTT chống replay) và AG-UI v1.0 (/ag-ui SSE + interrupt). Bộ thực thi gom batch DataLoader dập tắt lỗi N+1.",
       details:
-        "Bộ cân bằng tải Power-of-Two-Choices (P2C) dùng EWMA phân rã theo thời gian bằng atomic CAS (0 lock), kết hợp Circuit Breaker 3 trạng thái và RAII InFlightGuard bảo đảm không rò đếm khi request bị hủy.",
-      files: ["crates/gap-exec/src/join/mod.rs", "crates/gap-balance/src/", "crates/gap-transport/src/"]
+        "HTTP/3 tắt hoàn toàn max_early_data_size = 0 (OPS-005) và bắt buộc tls_cert/tls_key ở profile prod. AG-UI tạm dừng mutation cần duyệt qua RUN_FINISHED interrupt và bọc T2 trong <gap:untrusted>. P2C dùng EWMA atomic CAS (44 ns).",
+      files: ["crates/gap-transport/src/http3.rs", "adapters/gap-agui/src/facade.rs", "crates/gap-exec/src/join/mod.rs"]
     },
     {
       id: "egress-sandbox",
@@ -61,7 +61,7 @@ window.GAP_DATA = {
       title: "6 NGC Adapters + SQLite/BLAKE3 Stores",
       crates: "adapters/gap-ngc-*, crates/gap-store",
       invariants: "INV-13, INV-14, INV-19",
-      latency: "Online SQLite backup; SIGKILL recover 19.24 ms",
+      latency: "Online SQLite backup; SIGKILL recover 12.96 ms",
       summary:
         "6 adapter chính thức chuyển đổi OpenAPI, GraphQL, gRPC, SQL, CLI và Code Tree-Sitter về hợp đồng protobuf thống nhất. Toàn bộ state bền vững lưu trong SQLite cô lập theo TenantScope.",
       details:
@@ -84,15 +84,15 @@ window.GAP_DATA = {
     {
       id: "s1-fallback",
       plane: "Mặt phẳng 2 — Khám phá Lũy tiến",
-      title: "Conformal Calibration & BASELINE_FALLBACK",
+      title: "System-1 (Laya, Jev, Gemini Dec. 1) & BASELINE_FALLBACK",
       crates: "gap-route, gap-s1, gap-models",
-      invariants: "INV-17, RTE-044",
+      invariants: "INV-15, INV-17, RTE-044, RTE-047..049",
       latency: "Baseline 95.24% top-1 @ 0.887 ms p95",
       summary:
-        "GAP tách riêng bộ định tuyến S1 tùy chọn (Candle). Khi đo thực tế trên RouteBench, trọng số Laya f32 mặc định chỉ đạt 14.29% top-1 (73.85 ms p95), thua xa baseline từ vựng + cấu trúc (95.24% ở 0.887 ms).",
+        "GAP tách riêng bộ định tuyến S1 tùy chọn (Candle, @receptron/laya, TypeSafe Jev /v1/systemone, Google gemini-decision-1 /v1beta/decisions). Trên RouteBench, baseline từ vựng + cấu trúc đạt 95.24% top-1 ở 0.887 ms, vượt xa laya-candle:f32 mặc định (14.29%).",
       details:
-        "Nhờ thiết kế INV-17 và cổng G-S1, GAP chạy mặc định ở chế độ BASELINE_FALLBACK cực nhanh và an toàn tuyệt đối mà không làm giảm bất kỳ tính năng nào.",
-      files: ["docs/decisions/G-S1.md", "crates/gap-route/", "crates/gap-s1/"]
+        "Nhờ thiết kế INV-17 và cổng G-S1, mọi provider ngoài đều chịu kiểm soát EgressGuard SSRF, giấu SecretString và tự động rơi về BASELINE_FALLBACK khi quá hạn mà không ảnh hưởng Cedar hoặc thực thi.",
+      files: ["docs/decisions/G-S1.md", "crates/gap-s1/src/providers/", "crates/gap-server/src/wiring_s1.rs"]
     },
     {
       id: "propose-not-activate",
@@ -244,7 +244,7 @@ window.GAP_DATA = {
       concepts: [
         "Hot-Swap an toàn (INV-01 / INV-16): Thế hệ snapshot mới được pre-warm top-100 plan trước khi đổi con trỏ ArcSwap. Giải phóng bộ nhớ thế hệ cũ được đẩy ra thread nền để không khựng request đang chạy.",
         "Tự động RollbackWatcher theo dõi cửa sổ 60 giây (>= 200 mẫu) và lùi thế hệ ngay khi lỗi tăng quá ngưỡng; ngoài ra có lệnh gap snapshot rollback --to <gen>.",
-        "Kiểm tra thực địa cho thấy binary phát hành của GAP phục hồi sẵn sàng HTTP 200 /readyz chỉ sau 19.24 ms ngay sau khi nhận lệnh kill -9 (SIGKILL)."
+        "Kiểm tra thực địa cho thấy binary phát hành 26,9 MB của GAP phục hồi sẵn sàng HTTP 200 /readyz chỉ sau 12.96 ms ngay sau khi nhận lệnh kill -9 (SIGKILL), và chạy hỗn hợp 2.227,6 req/s TCP + 7.869,5 req/s HTTP/3 QUIC (0 lỗi)."
       ],
       commands: `# Chạy bộ test nâng cấp N-1->N, backup/restore SQLite & thu hồi task sau crash\nCI=1 cargo nextest run --no-pager -j 1 -p gap-server --test upgrade --offline\n\n# Chạy bộ chaos + soak có cấu hình thời gian (mặc định 3s cục bộ, 259200s cho 72h CI)\nCI=1 cargo nextest run --no-pager -j 1 -p gap-server --test soak --test chaos --offline`,
       files: [
@@ -263,12 +263,12 @@ window.GAP_DATA = {
       id: "level-6",
       tabLabel: "6. Master (Protocol Architect)",
       badge: "Kiến trúc sư giao thức",
-      title: "Cấp độ 6 — Master: 31 Crates L0-L6, Truy vết Spec, Định tuyến S1 & Tự mở rộng",
+      title: "Cấp độ 6 — Master: 32 Crates L0-L6, Truy vết Spec, Định tuyến S1 & Tự mở rộng",
       goal:
-        "Nắm toàn quyền làm chủ kiến trúc 31 crates Rust, đọc hiểu mọi quyết định thiết kế (ADR-001..025), quy trình benchmark tái lập và chuẩn tài liệu ASD-STE100.",
+        "Nắm toàn quyền làm chủ kiến trúc 32 crates Rust, đọc hiểu mọi quyết định thiết kế (ADR-001..028), quy trình benchmark tái lập, HTTP/3 QUIC, AG-UI v1.0, Laya/Jev/Gemini Decision 1 và chuẩn ASD-STE100.",
       concepts: [
-        "Mọi crate đều phải tuân thủ phân tầng L0 -> L6 và luật ARC-002 (cấm tuyệt đối gap-exec, gap-plan, gap-transport, gap-snapshot, gap-balance phụ thuộc vào crate ML). Công cụ python3 tools/check_layers.py chặn ngay ở CI nếu vi phạm.",
-        "100% yêu cầu MUST trong spec/00..09 (82 MUST / 354 tổng yêu cầu) đều được gắn thẻ // spec: <ID> trên bài test thực tế và kiểm tra nghiêm ngặt qua tools/spec_trace.py --strict (2.481 markers).",
+        "Mọi crate đều phải tuân thủ phân tầng L0 -> L6 và luật ARC-002 (cấm tuyệt đối gap-exec, gap-plan, gap-transport, gap-snapshot, gap-balance phụ thuộc vào crate ML). Supply chain sạch 0 lỗ hổng RUSTSEC nhờ AVL OrdMap tự chủ và rustls-pki-types.",
+        "100% yêu cầu MUST trong spec/00..09 (89 MUST / 362 tổng yêu cầu) đều được gắn thẻ // spec: <ID> trên bài test thực tế và kiểm tra nghiêm ngặt qua tools/spec_trace.py --strict (2.511 markers).",
         "Theo tinh thần ADR-021, toàn bộ số liệu đều kèm đường dẫn tái lập (./bench/results/gapbench/reproduce.sh, python3 dist/verify-ga-local.py) và công khai cả vùng thua cuộc (N<=50 cached, X-1 columnar, S1 f32 fallback)."
       ],
       commands: `# Toàn bộ cổng kiểm chứng kiến trúc & truy vết chuẩn Master\npython3 tools/check_layers.py\npython3 tools/spec_trace.py --strict\npython3 tools/check_refs.py\npython3 dist/check-ste100.py`,
@@ -463,9 +463,9 @@ window.GAP_DATA = {
     }
   ],
 
-  // Chính xác 31 workspace crates theo tools/layers.toml
+  // Chính xác 32 workspace crates theo tools/layers.toml
   crates: [
-    { name: "gap-core", layer: "L0", role: "Kiểu cốt lõi (TenantScope, Ids, Snapshot, Config, Clock, Secret<T>, Telemetry)" },
+    { name: "gap-core", layer: "L0", role: "Kiểu cốt lõi (TenantScope, Snapshot, AVL OrdMap, Config TLS/HTTP3/[router], Secret<T>)" },
     { name: "gap-proto", layer: "L1", role: "Biên dịch .proto thuần Rust bằng protox (NGC v1, Gateway v1, A2A)" },
     { name: "gap-ql", layer: "L1", role: "Lexer/Parser/Validator GAP-QL (apollo-compiler) và builtin SDL" },
     { name: "gap-index", layer: "L1", role: "Chỉ mục lai BM25 + HNSW + visibility bitset (0 phụ thuộc ML)" },
@@ -479,17 +479,18 @@ window.GAP_DATA = {
     { name: "gap-ngc-sdk", layer: "L2", role: "SDK chuẩn xây dựng Native Graph Connector (gRPC / HTTP / stdio)" },
     { name: "gap-snapshot", layer: "L3", role: "ArcSwap SnapshotHandle, pre-warm publisher & RollbackWatcher" },
     { name: "gap-exec", layer: "L3", role: "Bộ thực thi truy vấn, gom batch join (INV-18), codec columnar X-1" },
-    { name: "gap-s1", layer: "L3", role: "Adapter Candle S1 tùy chọn (crate duy nhất cho phép unsafe trong repo)" },
-    { name: "gap-transport", layer: "L4", role: "HTTP/SSE & gRPC tower pipeline, giới hạn deadline & shedding" },
+    { name: "gap-s1", layer: "L3", role: "Adapter Candle S1 + @receptron/laya, TypeSafe Jev & Gemini Decision 1 (INV-17)" },
+    { name: "gap-transport", layer: "L4", role: "Dual-stack HTTP/1.1+2 (Alt-Svc) + HTTP/3 QUIC (quinn/h3, 0-RTT off) & gRPC" },
     { name: "gap-mcp", layer: "L4", role: "Facade MCP 2026-07-28 phía vào (5 tools) & outbound MCP client" },
     { name: "gap-a2a", layer: "L4", role: "Facade A2A v1.0, Agent Card & chống vòng lặp hop (INV-20)" },
+    { name: "gap-agui", layer: "L4", role: "Facade AG-UI v1.0 (/ag-ui SSE, StateSnapshot, Interrupt/Resume & <gap:untrusted>)" },
     { name: "gap-ngc-openapi", layer: "L4", role: "Connector OpenAPI 3.0 hỗ trợ batch x-gap-in-param" },
     { name: "gap-ngc-grpc", layer: "L4", role: "Connector gRPC/Protobuf phản chiếu dịch vụ" },
     { name: "gap-ngc-graphql", layer: "L4", role: "Connector liên kết GraphQL subgraph" },
     { name: "gap-ngc-sql", layer: "L4", role: "Connector ánh xạ bảng & khóa ngoại SQL sang đồ thị" },
     { name: "gap-ngc-cli", layer: "L4", role: "Connector bọc công cụ dòng lệnh an toàn trong sandbox" },
     { name: "gap-ngc-code", layer: "L4", role: "Connector phân tích AST mã nguồn đa ngôn ngữ (tree-sitter)" },
-    { name: "gap-server", layer: "L5", role: "Lắp ráp runtime hoàn chỉnh, serve HTTP/stdio và tắt máy 2 pha" },
+    { name: "gap-server", layer: "L5", role: "Lắp ráp runtime dual-stack HTTP/2+3 QUIC, serve stdio và tắt máy 2 pha" },
     { name: "gap-conformance", layer: "L5", role: "Bộ kiểm chuẩn conformance đa giao thức & NGC Kit" },
     { name: "routebench", layer: "L5", role: "Harness đo chất lượng định tuyến & calibration G-S1" },
     { name: "gapbench", layer: "L5", role: "Harness đo hiệu quả token Direct-MCP vs GAP trên N=10..1000" },
@@ -499,7 +500,7 @@ window.GAP_DATA = {
   ],
 
   cliSubcommands: [
-    { sub: "serve", summary: "Khởi chạy máy chủ HTTP / gRPC hoặc MCP stdio (`--config`, `--stdio`, `--check-only`)" },
+    { sub: "serve", summary: "Khởi chạy máy chủ dual-stack HTTP/1.1+2 + HTTP/3 QUIC / gRPC hoặc MCP stdio (`--config`, `--stdio`, `--check-only`)" },
     { sub: "init", summary: "Tạo nhanh một thư mục dự án GAP mẫu kèm `gap.toml` và fixtures" },
     { sub: "doctor", summary: "Chẩn đoán toàn diện config, khóa API, sandbox, egress guard và models" },
     { sub: "config", summary: "Kiểm tra `gap.toml` (`check`) hoặc xuất JSON Schema (`schema`)" },
@@ -561,7 +562,8 @@ window.GAP_DATA = {
     { term: "tenant", def: "Phạm vi cô lập dữ liệu của một tổ chức/không gian làm việc (INV-09).", forbidden: "org slice, namespace" },
     { term: "proposal", def: "Đề xuất thay đổi schema hoặc cạnh @join đang chờ quản trị viên duyệt.", forbidden: "draft patch, pending update" },
     { term: "untrusted envelope", def: "Thẻ <gap:untrusted> cô lập văn bản từ nhánh T1/T2 (SEC-080).", forbidden: "safety tag, wrapper" },
-    { term: "audit chain", def: "Nhật ký SQLite nối tiếp bằng mã băm mật mã BLAKE3 (INV-10).", forbidden: "event trail, history log" }
+    { term: "audit chain", def: "Nhật ký SQLite nối tiếp bằng mã băm mật mã BLAKE3 (INV-10).", forbidden: "event trail, history log" },
+    { term: "HTTP/3 (QUIC)", def: "Giao thức truyền tải mã hóa UDP dùng TLS 1.3 ALPN h3, tắt 0-RTT chống replay (OPS-005).", forbidden: "HTTP3 proxy, QUIC tunnel" }
   ],
 
   quiz: [

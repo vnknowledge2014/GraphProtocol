@@ -11,6 +11,15 @@
 
 pub mod candle;
 pub mod ort;
+pub mod providers;
 pub mod sidecar;
 
 pub use candle::{LayaCandle, LayaConfig, LayaForwardOutput, LayaTokenizer, Precision};
+pub use providers::{
+    DecisionAnswer, DecisionBatchResponse, DecisionHttpResponse, DecisionHttpTransport,
+    DecisionQuestion, GEMINI_DECISION_1_DEFAULT_MODEL, GEMINI_MAX_QUESTIONS_PER_CALL,
+    GeminiDecisionBackend, GeminiDecisionConfig, JEV_DEFAULT_MODEL, JevBackend, JevConfig,
+    QuestionKind, RECEPTON_LAYA_DEFAULT_MODEL, ReceptronLayaBackend, ReceptronLayaConfig,
+    TcpHttpDecisionTransport, align_choice_probabilities_to_logits, prob_to_logit,
+    resolve_receptron_laya_cache_dir,
+};

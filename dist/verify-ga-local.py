@@ -323,6 +323,21 @@ scopes = ["read"]
                     proc.wait(timeout=5.0)
 
 
+def run_http3_live_drill() -> dict:
+    res = subprocess.run(
+        ["cargo", "run", "--release", "-p", "gap-server", "--example", "http3_live_drill", "--offline", "--locked"],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    for line in reversed(res.stdout.splitlines()):
+        line = line.strip()
+        if line.startswith("{"):
+            return json.loads(line)
+    raise RuntimeError(f"http3_live_drill produced no JSON line:\n{res.stdout}\n{res.stderr}")
+
+
 def run_loopback_conformance() -> dict:
     tests = [
         ("ngc_kit_openapi", ["cargo", "test", "-p", "gap-conformance", "--test", "ngc_kit_openapi", "--offline", "--", "--ignored"]),
@@ -342,16 +357,18 @@ def main() -> int:
     repro = verify_reproducible_double_build()
     gap_bin = ROOT / "target" / "dist" / "gap"
     runtime = run_live_runtime_drills(gap_bin)
+    http3 = run_http3_live_drill()
     loopback = run_loopback_conformance()
     git_head = subprocess.check_output(["git", "rev-parse", "--short", "HEAD"], cwd=ROOT, text=True).strip()
 
     report = {
-        "schema_version": 1,
+        "schema_version": 2,
         "generated_at_utc": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "git_head_base": git_head,
         "platform": f"{platform.system().lower()}/{platform.machine().lower()}",
         "reproducible_build": repro,
         "live_runtime_drills": runtime,
+        "http3_live_drills": http3,
         "loopback_conformance": loopback,
     }
     out_path = ROOT / "bench" / "results" / "ga_local" / "report.json"
@@ -363,6 +380,8 @@ def main() -> int:
     assert runtime["rss_gate_le_600mib"], "RSS exceeded 600 MiB!"
     assert runtime["errors"] == 0, f"Live mixed load had {runtime['errors']} errors!"
     assert runtime["recovery_gate_le_60000ms"], "SIGKILL recovery failed!"
+    assert http3["errors"] == 0, f"HTTP/3 live mixed load had {http3['errors']} errors!"
+    assert http3["zero_rtt_disabled"] is True, "HTTP/3 0-RTT must be disabled!"
     return 0
 
 

@@ -12,6 +12,7 @@ path = "src/main.rs"
 
 [dependencies]
 gap-a2a.workspace = true
+gap-agui.workspace = true
 gap-balance.workspace = true
 gap-core.workspace = true
 gap-exec.workspace = true
@@ -50,6 +51,8 @@ uuid = { workspace = true, features = ["v7"] }
 
 [dev-dependencies]
 axum.workspace = true
+bytes.workspace = true
+hyper-util = { workspace = true, features = ["client-legacy", "http1", "http2", "tokio"] }
 proptest.workspace = true
 tempfile.workspace = true
 tower = { workspace = true, features = ["util"] }

@@ -8,16 +8,22 @@ use std::time::Duration;
 
 use gap_core::config::Profile;
 use gap_core::error::{ErrorCode, GapError, GapResult};
+use gap_core::secret::SecretString;
 use gap_core::traits::{BoxFuture, DiscoveryService, Embedder};
 use gap_route::s1_adapter::{
     BaselineRouter, DecisionBackend, RoutingModel, S1AdapterConfig, S1RouterAdapter,
 };
 use gap_route::{DiscoveryConfig, GroupOption, RouteDiscoveryService, VisibilityFactory};
-use gap_s1::{LayaCandle, LayaTokenizer, Precision};
+use gap_s1::sidecar::{HttpSidecar, SidecarConfig};
+use gap_s1::{
+    GEMINI_DECISION_1_DEFAULT_MODEL, GeminiDecisionBackend, GeminiDecisionConfig,
+    JEV_DEFAULT_MODEL, JevBackend, JevConfig, LayaCandle, LayaTokenizer, Precision,
+    RECEPTON_LAYA_DEFAULT_MODEL, ReceptronLayaBackend, ReceptronLayaConfig,
+};
 
 /// Configuration selecting which System-1 (`Laya`) backend `gap-server` wires into discovery
 /// (`RTE-041`, `RTE-044`, `INV-17`).
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Default)]
 pub enum S1BackendMode {
     /// Disable System-1 inference and route directly via [`BaselineRouter`] (`INV-17`).
     #[default]
@@ -39,6 +45,44 @@ pub enum S1BackendMode {
         vocab_path: Option<PathBuf>,
         /// Expected tensor precision stored in the checkpoint (`F32` or `F16`).
         precision: Precision,
+    },
+    /// Generic `/v1/systemone` HTTP sidecar (`omni decide --endpoint`).
+    HttpSidecar {
+        /// Base URL of the `/v1/systemone` endpoint.
+        endpoint: String,
+        /// Permit loopback destinations when true (`dev` / local tests).
+        allow_loopback: bool,
+    },
+    /// `@receptron/laya` ONNX HTTP bridge (`github.com/receptron/laya`).
+    ReceptronLaya {
+        /// Base URL of the `@receptron/laya` endpoint.
+        endpoint: String,
+        /// Optional model override (`convaiinnovations/laya` default).
+        model: Option<String>,
+        /// Permit loopback destinations when true.
+        allow_loopback: bool,
+    },
+    /// TypeSafe AI `Jev` (`POST /v1/systemone`, `model: "jev-latest"`).
+    Jev {
+        /// Base URL of Jev endpoint or local TLS proxy.
+        endpoint: String,
+        /// Optional model override (`jev-latest` default).
+        model: Option<String>,
+        /// Optional redacted bearer API credential (`INV-15`).
+        api_key: Option<SecretString>,
+        /// Permit loopback destinations when true.
+        allow_loopback: bool,
+    },
+    /// Google `Gemini Decision 1` (`POST /v1beta/decisions`, zero output tokens).
+    GeminiDecision1 {
+        /// Base URL of Gemini Decisions endpoint or local TLS proxy.
+        endpoint: String,
+        /// Optional model override (`gemini-decision-1` default).
+        model: Option<String>,
+        /// Optional redacted `x-goog-api-key` credential (`INV-15`).
+        api_key: Option<SecretString>,
+        /// Permit loopback destinations when true.
+        allow_loopback: bool,
     },
 }
 
@@ -249,6 +293,72 @@ pub fn wire_s1_discovery(cfg: &S1WiringConfig) -> WiredS1Discovery {
                     baseline_fallback(cfg, Some(msg))
                 }
             }
+        }
+        S1BackendMode::HttpSidecar {
+            endpoint,
+            allow_loopback,
+        } => {
+            let sc_cfg = if *allow_loopback {
+                SidecarConfig::loopback(endpoint)
+            } else {
+                SidecarConfig::strict(endpoint)
+            };
+            match HttpSidecar::new(sc_cfg) {
+                Ok(sidecar) => wire_s1_with_backend(sidecar, cfg),
+                Err(err) => baseline_fallback(
+                    cfg,
+                    Some(format!(
+                        "GAP_DISCOVERY_DEGRADED: failed to initialize HttpSidecar `{endpoint}`: {err}; falling back to baseline router"
+                    )),
+                ),
+            }
+        }
+        S1BackendMode::ReceptronLaya {
+            endpoint,
+            model,
+            allow_loopback,
+        } => {
+            let mut rc = if *allow_loopback {
+                ReceptronLayaConfig::loopback(endpoint)
+            } else {
+                ReceptronLayaConfig::strict(endpoint)
+            };
+            rc.model = model
+                .clone()
+                .unwrap_or_else(|| RECEPTON_LAYA_DEFAULT_MODEL.to_owned());
+            wire_s1_with_backend(ReceptronLayaBackend::new(rc), cfg)
+        }
+        S1BackendMode::Jev {
+            endpoint,
+            model,
+            api_key,
+            allow_loopback,
+        } => {
+            let mut jc = if *allow_loopback {
+                JevConfig::loopback(endpoint, api_key.clone())
+            } else {
+                JevConfig::strict(endpoint, api_key.clone())
+            };
+            jc.model = model
+                .clone()
+                .unwrap_or_else(|| JEV_DEFAULT_MODEL.to_owned());
+            wire_s1_with_backend(JevBackend::new(jc), cfg)
+        }
+        S1BackendMode::GeminiDecision1 {
+            endpoint,
+            model,
+            api_key,
+            allow_loopback,
+        } => {
+            let mut gc = if *allow_loopback {
+                GeminiDecisionConfig::loopback(endpoint, api_key.clone())
+            } else {
+                GeminiDecisionConfig::strict(endpoint, api_key.clone())
+            };
+            gc.model = model
+                .clone()
+                .unwrap_or_else(|| GEMINI_DECISION_1_DEFAULT_MODEL.to_owned());
+            wire_s1_with_backend(GeminiDecisionBackend::new(gc), cfg)
         }
     }
 }
@@ -827,7 +937,30 @@ mod tests {
         );
         assert!(!res_hang.candidates.is_empty());
 
-        // 2. Immediate backend error also falls back to BaselineRouter (`INV-17`).
+        // 2. Unreachable Jev / Gemini providers also fall back cleanly via `BaselineRouter` (`RTE-049`, `INV-17`).
+        let mut remote_cfg = S1WiringConfig::from_profile(Profile::Dev);
+        remote_cfg.discovery.enforce_calibration_for_s1 = false;
+        remote_cfg.mode = S1BackendMode::GeminiDecision1 {
+            endpoint: "http://127.0.0.1:9".to_owned(),
+            model: None,
+            api_key: Some(SecretString::new("canary_secret_wiring".to_owned())),
+            allow_loopback: true,
+        };
+        let wired_gemini = wire_s1_discovery(&remote_cfg);
+        assert!(wired_gemini.using_s1);
+        let res_remote_err = wired_gemini
+            .discovery
+            .resolve_detailed(
+                &ctx,
+                gap_route::ResolveConstraints::default(),
+                "find billing invoice status",
+            )
+            .await
+            .expect("unreachable Gemini Decision 1 falls back cleanly");
+        assert_eq!(res_remote_err.router, "baseline");
+        assert!(!res_remote_err.candidates.is_empty());
+
+        // 3. Immediate backend error also falls back to BaselineRouter (`INV-17`).
         let mut down_cfg = S1WiringConfig::from_profile(Profile::Dev);
         down_cfg.discovery.enforce_calibration_for_s1 = false;
         let wired_down = wire_s1_with_backend(FaultyDecisionBackend::failing(), &down_cfg);

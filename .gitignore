@@ -57,6 +57,7 @@ models/**/*.bin
 .agent/bg/
 .agent/fallback_data/
 .agent/security/
+.agent/*.lock
 
 # Local-only offline build support (never committed): vendored crates and the
 # cargo source-replacement config that points to them.

@@ -21,6 +21,8 @@ Controlled vocabulary eliminates ambiguity for human operators and language mode
 | `untrusted envelope` | The `<gap:untrusted>` XML boundary around `T1`/`T2` outputs (`SEC-080`) | safety wrapper, sanitized tag |
 | `audit chain` | A tamper-evident SQLite log linked by sequential BLAKE3 hashes (`INV-10`) | event trail, journal |
 | `visibility bitset` | A precomputed bitmask hiding unauthorized schema items (`INV-05`) | permission mask, access filter |
+| `HTTP/3 (QUIC)` | Encrypted UDP transport using TLS 1.3 ALPN `h3` without `0-RTT` (`OPS-005`) | HTTP3 proxy, QUIC tunnel |
+| `AG-UI` | Frontend event stream endpoint at `/ag-ui` handling SSE and approval interrupts (`CMP-025`) | chat socket, UI webhook |
 
 ## 3. Approved Procedural Verbs `[REFERENCE]`
 

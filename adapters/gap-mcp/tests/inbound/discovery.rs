@@ -54,7 +54,11 @@ async fn gap_describe_overview_orders_by_op_count_caps_branches_and_clamps_synop
     // so facade-side UTF-8 boundary clamping (`<= 90` bytes) is directly exercised.
     let uids: Vec<_> = snap10_raw.branches.keys().copied().collect();
     for uid in uids {
-        let mut mutated = (*snap10_raw.branches[&uid]).clone();
+        let mut mutated = (**snap10_raw
+            .branches
+            .get(&uid)
+            .expect("uid from keys must exist"))
+        .clone();
         mutated.synopsis = format!("{}🦀trailing-text-past-90-bytes", "a".repeat(88));
         snap10_raw.branches.insert(uid, Arc::new(mutated));
     }
@@ -299,7 +303,12 @@ async fn gap_search_uses_element_search_when_populated_and_lexical_baseline_with
     let billing_uid = *empty_idx_snap
         .branches
         .keys()
-        .find(|uid| empty_idx_snap.branches[*uid].id.as_str() == "billing")
+        .find(|uid| {
+            empty_idx_snap
+                .branches
+                .get(*uid)
+                .is_some_and(|b| b.id.as_str() == "billing")
+        })
         .expect("billing uid");
     let mut populated_snap = (*empty_idx_snap).clone();
     populated_snap.index = Arc::new(PopulatedElementSearch {

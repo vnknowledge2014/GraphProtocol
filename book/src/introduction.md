@@ -8,7 +8,7 @@
 - **Wait-Free RCU Snapshots (`INV-01`, `INV-02`):** Every request pins an immutable `Arc<Snapshot>` with zero locks on the hot execution path.
 - **Deterministic Execution & Authorization (`ARC-002`, `INV-04`):** ML models never sit on the execution, authz, planning, or query-execution path. Optional System-1 routing (`gap-s1`) operates solely behind calibrated conformal discovery (`INV-17`).
 - **Batched Cross-Branch Federation (`INV-18`):** Native batching (`BatchQuery` / `x-gap-in-param`) prevents `O(N)` upstream waterfalls (`VER-040`).
-- **Defense in Depth (`SEC-001`..`SEC-103`):** API key BLAKE3 digests, Cedar policy enforcement, SSRF egress pins, `<gap:untrusted>` envelopes (`CMP-007`), and BLAKE3 hash-chained audit trails (`SEC-092`).
+- **Defense in Depth (`SEC-001`..`SEC-103`, `OPS-005`):** API key BLAKE3 digests, Cedar policy enforcement, SSRF egress pins, `<gap:untrusted>` envelopes (`CMP-007`), BLAKE3 hash-chained audit trails (`SEC-092`), and dual-stack HTTP/2 + HTTP/3 QUIC transport with `0-RTT` disabled.
 
 ## Getting Started
 

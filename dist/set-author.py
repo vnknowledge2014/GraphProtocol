@@ -59,8 +59,9 @@ def update_all(
     # 2. .zenodo.json
     zen_path = ROOT / ".zenodo.json"
     zen = json.loads(zen_path.read_text(encoding="utf-8"))
+    zen_name = full_name if family.startswith("(") else f"{family}, {given}"
     creator: dict[str, str] = {
-        "name": f"{family}, {given}",
+        "name": zen_name,
         "affiliation": affiliation,
     }
     if orcid:

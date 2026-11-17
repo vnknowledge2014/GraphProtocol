@@ -248,7 +248,7 @@ impl AssembledGroups {
         index_config: HybridIndexConfig,
     ) -> GapResult<Snapshot> {
         let mut next = snapshot.clone();
-        let mut updated_branches = im::OrdMap::new();
+        let mut updated_branches = gap_core::snapshot::OrdMap::new();
         let mut branch_list: Vec<Arc<BranchDescriptor>> = Vec::with_capacity(next.branches.len());
 
         for (&uid, branch_arc) in &next.branches {
@@ -935,7 +935,7 @@ mod tests {
             )
             .unwrap();
         assert_eq!(snap.groups.len(), 1);
-        assert_eq!(snap.groups[&gid_1].members.len(), 5);
+        assert_eq!(snap.groups.get(&gid_1).unwrap().members.len(), 5);
         assert_eq!(snap.index.element_count(), 1);
     }
 

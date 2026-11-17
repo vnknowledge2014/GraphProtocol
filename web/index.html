@@ -50,7 +50,7 @@
         <a href="#tong-quan">1. Tổng quan &amp; 3 Mặt phẳng</a>
         <a href="#lo-trinh-6-cap">2. Lộ trình 6 Cấp độ (Novice &rarr; Master)</a>
         <a href="#phong-thi-nghiem">3. Bộ tính Crossover &amp; Lab Thực hành</a>
-        <a href="#ban-do-crates">4. Bản đồ 31 Crates (L0&ndash;L6)</a>
+        <a href="#ban-do-crates">4. Bản đồ 32 Crates (L0&ndash;L6)</a>
         <a href="#cli-va-runbooks">5. 15 Lệnh CLI &amp; 9 Runbooks</a>
         <a href="#bat-bien-va-tu-dien">6. 20 Bất biến, STE-100 &amp; Quiz</a>
       </nav>
@@ -78,20 +78,43 @@
             <div class="lbl">MCP <code>tools/list</code> cố định từ N=10 tới 1.000 tools (Direct-MCP: 203.421)</div>
           </div>
           <div class="kpi">
+            <div class="val">7.870 / 2.228 req/s</div>
+            <div class="lbl">HTTP/3 QUIC (1,45 ms p95, 0-RTT tắt) &amp; TCP HTTP/2 (5,11 ms p95, binary 26,9 MB)</div>
+          </div>
+          <div class="kpi">
             <div class="val">99.0% / 208.7x</div>
             <div class="lbl">Tiết kiệm token join ở N=1000 &amp; duyệt Code Graph (24 symbols)</div>
           </div>
           <div class="kpi">
-            <div class="val">1.889 req/s</div>
-            <div class="lbl">Đo trực tiếp trên binary 23,8 MB (0 lỗi, p95 6,36 ms, RSS 9,16 MiB)</div>
+            <div class="val">12.96 ms</div>
+            <div class="lbl">Phục hồi /readyz sau sập nóng SIGKILL (kill -9) · 0 lỗ hổng RUSTSEC</div>
           </div>
           <div class="kpi">
-            <div class="val">19.24 ms</div>
-            <div class="lbl">Thời gian phục hồi truy vấn ngay sau sập nóng SIGKILL (kill -9)</div>
+            <div class="val">87 / 87 WP</div>
+            <div class="lbl">Hoàn tất 100% kế hoạch · 32 crates · 2.511 markers truy vết · Apache-2.0</div>
           </div>
-          <div class="kpi">
-            <div class="val">85 / 85 WP</div>
-            <div class="lbl">Hoàn tất 100% kế hoạch · 31 crates · 2.481 markers truy vết</div>
+        </div>
+
+        <div class="control-row" style="margin: 0.9rem 0 1.1rem 0; flex-wrap: wrap; gap: 0.6rem;">
+          <a class="btn btn-primary" href="./paper/" target="_blank" rel="noopener">Đọc Bài báo Khoa học (HTML)</a>
+          <a class="btn" href="./paper/gap-paper.pdf" target="_blank" rel="noopener">Tải Bài báo PDF (Camera-Ready)</a>
+          <a class="btn" href="https://github.com/vnknowledge2014/GraphProtocol" target="_blank" rel="noopener">Kho mã nguồn GitHub</a>
+        </div>
+
+        <div class="lab-grid" style="margin: 1rem 0 1.25rem 0;">
+          <div class="subcard">
+            <h3 style="margin-bottom:0.5rem;">Video Giới Thiệu (Tiếng Việt · 1080p)</h3>
+            <video controls preload="metadata" playsinline style="width:100%;aspect-ratio:16/9;border-radius:10px;background:#05070c;">
+              <source src="./media/gap-promo-vi.mp4" type="video/mp4" />
+              Trình duyệt của bạn không hỗ trợ phát video MP4 (<a href="./media/gap-promo-vi.mp4">tải video Tiếng Việt</a>).
+            </video>
+          </div>
+          <div class="subcard">
+            <h3 style="margin-bottom:0.5rem;">Product Launch Video (English · 1080p)</h3>
+            <video controls preload="metadata" playsinline style="width:100%;aspect-ratio:16/9;border-radius:10px;background:#05070c;">
+              <source src="./media/gap-promo-en.mp4" type="video/mp4" />
+              Your browser does not support MP4 playback (<a href="./media/gap-promo-en.mp4">download English promo MP4</a>).
+            </video>
           </div>
         </div>
 
@@ -165,9 +188,9 @@
         </div>
       </section>
 
-      <!-- SECTION 4: BAN DO 31 CRATES -->
+      <!-- SECTION 4: BAN DO 32 CRATES -->
       <section id="ban-do-crates" class="card" tabindex="-1">
-        <h2>4. Bản đồ Kiến trúc 31 Crates Rust (Phân tầng L0&ndash;L6)</h2>
+        <h2>4. Bản đồ Kiến trúc 32 Crates Rust (Phân tầng L0&ndash;L6)</h2>
         <p class="section-lead">
           Mỗi crate ở tầng cao hơn chỉ được phép phụ thuộc vào tầng thấp hơn (<code>tools/check_layers.py</code>). Đặc biệt, 5 crate đường nóng (<code>gap-exec</code>, <code>gap-plan</code>, <code>gap-transport</code>, <code>gap-snapshot</code>, <code>gap-balance</code>) bị cấm tuyệt đối phụ thuộc vào mã ML (<code>ARC-002</code>).
         </p>
@@ -250,7 +273,11 @@
   </div>
 
   <footer class="site-footer">
-    <strong>Graph Agent Protocol (GAP v0.1.0-rc.1)</strong> · Apache-2.0 · Tài liệu học tập tương tác tiếng Việt dựa 100% trên mã nguồn, spec <code>00–09</code> và kết quả đo thật trong repository.
+    <strong>Graph Agent Protocol (GAP v0.1.0-rc.1)</strong> · Copyright 2026 Mike (vnknowledge2014) · Apache-2.0 ·
+    <a href="https://github.com/vnknowledge2014/GraphProtocol" target="_blank" rel="noopener">GitHub</a> ·
+    <a href="./paper/" target="_blank" rel="noopener">Bài báo HTML</a> ·
+    <a href="./paper/gap-paper.pdf" target="_blank" rel="noopener">PDF</a> ·
+    Tài liệu học tập tương tác tiếng Việt dựa 100% trên mã nguồn, spec <code>00–09</code> và kết quả đo thật trong repository.
   </footer>
 
   <script src="data.js"></script>

@@ -83,7 +83,7 @@ Lane F  Quality/Ops     M0-04/05/07/09/10 → M3-08 → M7-*
 ## 8. Phạm vi hoãn (ADR-019) và điều kiện xem lại
 | Hạng mục | Lý do hoãn | Xem lại khi |
 |---|---|---|
-| Transport QUIC | không có người dùng/đo lường cần thiết; tăng bề mặt tấn công | có yêu cầu mobile/edge có số liệu |
+| Transport QUIC | *(Đã nâng lên `1.0-RC` qua `ADR-026`, `OPS-005`, `WP-M7-12`)* | đã triển khai dual-stack TCP HTTP/2 + UDP HTTP/3 QUIC |
 | Rhai / coprocessor plugin | bề mặt tấn công; Rust `tower::Layer` đủ cho 1.0 | có ≥ 3 yêu cầu extension ngoài cây mã |
 | Chế độ TOURNAMENT của federation | S1 chưa được kiểm chứng | sau G-S1 pass |
 | `@rateLimit` mức field | giới hạn theo principal/tenant/branch đã có | có nhu cầu SLA theo field |

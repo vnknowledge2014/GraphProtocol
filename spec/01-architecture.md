@@ -13,7 +13,7 @@ flowchart TB
     H["Agent hosts (MCP clients)"]; P["Peer agents (A2A)"]; G["GraphQL / gRPC clients"]
   end
   subgraph Edge["Transport"]
-    T1["HTTP/2: GraphQL-over-HTTP + SSE"]; T2["gRPC Gateway"]; T3["stdio"]; F1["MCP facade (2026-07-28)"]; F2["A2A v1.0 binding"]
+    T1["HTTP/1.1 + HTTP/2 (TCP) & HTTP/3 QUIC (RFC 9114): GraphQL-over-HTTP + SSE"]; T2["gRPC Gateway"]; T3["stdio"]; F1["MCP facade (2026-07-28)"]; F2["A2A v1.0 binding"]
   end
   subgraph Exec["Execution plane (deterministic, no ML)"]
     GW["GatewayLayer: authn · limits · rate · persisted ops"] --> OP["OperationLayer: parse · validate · complexity"]
@@ -45,13 +45,13 @@ Crates are introduced by the milestone that needs them (see `docs/02-PLAN.md`). 
 | L1 | `gap-proto`, `gap-ql`, `gap-index` (BM25/vector/fusion — **no ML**), `gap-store`, `gap-sec`, `gap-balance` (telemetry/breaker/P2C — **no ML**), `gap-models` (model manager + embedding backends — ML allowed) | L0 |
 | L2 | `gap-route` (discovery plane), `gap-plan`, `gap-ingest`, `gap-ngc-sdk` | L0–L1 |
 | L3 | `gap-snapshot`, `gap-exec`, `gap-s1` (Laya backends) | L0–L2 |
-| L4 | `gap-transport`, `adapters/*` (`gap-mcp`, `gap-a2a`, `gap-ngc-openapi`, `-grpc`, `-graphql`, `-sql`, `-cli`, `-code`) | L0–L3 |
+| L4 | `gap-transport`, `adapters/*` (`gap-mcp`, `gap-a2a`, `gap-agui`, `gap-ngc-openapi`, `-grpc`, `-graphql`, `-sql`, `-cli`, `-code`) | L0–L3 |
 | L5 | `gap-server`, `gap-conformance` (black-box), `bench/*` binaries (`routebench`, `gapbench`, `enrichment-bench`) | L0–L4 |
 | L6 | `gap-cli` (the `gap` front-end: embeds `gap-server` for `gap serve`, reads the shared `gap.toml` model of `gap-core`) | L0–L5 |
 
 - **ARC-001** The layer rule MUST hold; violations fail CI.
 - **ARC-002** `gap-exec`, `gap-plan`, `gap-transport`, `gap-snapshot` and `gap-balance` MUST NOT depend (directly or transitively) on `gap-s1`, `gap-route`, `gap-models` or any ML runtime crate (`candle-*`, `ort`, `tokenizers`, `fastembed`). `gap-route` and `gap-s1` reach models only through traits; concrete backends are wired in `gap-server`. (ADR-003)
-- **ARC-007** Collaboration *upward* across layers happens through traits declared in the lower crate and implemented/injected at `gap-server`: ingest → exec (`PlanReplayer`, `ShadowExecutor` implemented in `gap-exec`), snapshot → embeddings (`Embedder` from `gap-core`, implemented in `gap-models`), exec/transport → discovery (`DiscoveryService`), server → facades (`HttpModule`). Facade crates (`gap-mcp` inbound, `gap-a2a` inbound) implement `HttpModule` and are mounted by `gap-server`; they MUST NOT depend on `gap-transport` except as a dev-dependency (same layer).
+- **ARC-007** Collaboration *upward* across layers happens through traits declared in the lower crate and implemented/injected at `gap-server`: ingest → exec (`PlanReplayer`, `ShadowExecutor` implemented in `gap-exec`), snapshot → embeddings (`Embedder` from `gap-core`, implemented in `gap-models`), exec/transport → discovery (`DiscoveryService`), server → facades (`HttpModule`). Facade crates (`gap-mcp` inbound, `gap-a2a` inbound, `gap-agui` inbound) implement `HttpModule` and are mounted by `gap-server`; they MUST NOT depend on `gap-transport` except as a dev-dependency (same layer).
 - **ARC-003** Every crate has `#![forbid(unsafe_code)]` except `gap-s1` (ADR-002) and carries `#![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::todo, clippy::unimplemented)]` for non-test code.
 - **ARC-004** Public items have rustdoc; `cargo doc -D warnings` passes; public API of L0–L1 crates is guarded by `cargo-semver-checks` from 0.2.0.
 
@@ -61,8 +61,8 @@ pub struct Snapshot {
     pub generation: u64,                       // monotonic
     pub format_version: u32,                   // ADR-024
     pub tenant_id: TenantId,                   // one Snapshot per tenant (shared structurally when identical)
-    pub branches: im::OrdMap<BranchUid, Arc<BranchDescriptor>>,
-    pub groups: im::OrdMap<GroupId, Arc<CapabilityGroup>>,
+    pub branches: OrdMap<BranchUid, Arc<BranchDescriptor>>,
+    pub groups: OrdMap<GroupId, Arc<CapabilityGroup>>,
     pub schema: Arc<apollo_compiler::Schema>,  // composed supergraph SDL (validated)
     pub joins: Arc<JoinGraph>,                 // only ACTIVE joins participate in planning
     pub index: Arc<ElementIndex>,              // discovery (ADR-010); embedding_model_id pinned inside

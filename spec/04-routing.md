@@ -62,6 +62,9 @@ pub struct RankOutput { pub logits: Vec<f32>, pub latency: Duration }   // calib
 - **RTE-044** Backend failure/timeout (`s1.timeout_ms`, default 400) ⇒ fall back to `BaselineRouter` for this request and add warning `GAP_DISCOVERY_DEGRADED`; a rolling failure rate > 20% over 1 min flips the router to baseline for 60 s (INV-17).
 - **RTE-045** ML concurrency: at most `s1.max_concurrency` (default = physical cores / 2) concurrent forward passes, queue depth ≤ 2× that; overflow degrades to baseline (RTE-044) rather than queueing unboundedly.
 - **RTE-046** Identical `(model_id, canonical state, options)` results are cached (moka, TTL 10 min) — the application-level realization of "encode state once" (ADR-004).
+- **RTE-047** *Multi-head System-1 codecs (`@receptron/laya` & TypeSafe `Jev`, ADR-028).* `gap-s1` MAY evaluate typed `choice`, `score` (rubric rating), and `noul` (yes/no probability) questions against `/v1/systemone` (`Jev`) or `@receptron/laya` JSON endpoints (`systemOne(state, questions)`), converting returned probabilities into raw log-odds `ln(clamp(p, 1e-6, 1.0))` before `gap-route` calibration (`RTE-041`).
+- **RTE-048** *Gemini Decision 1 adapter (`/v1beta/decisions`, ADR-028).* `gap-s1` MAY dispatch shared inputs (`<= 1,000` parallel `choice`/`score`/`noul` questions per request) to `gemini-decision-1` with zero generated prose tokens; API keys MUST be read from `SecretString` into `x-goog-api-key` without appearing in errors or logs (`INV-15`).
+- **RTE-049** *Remote decision egress & fallback (`INV-17`).* Remote decision backends (`Jev`, `@receptron/laya`, `Gemini Decision 1`) MUST validate destination hosts through `EgressGuardHook`, honor `s1.timeout_ms` preemption (`RTE-044`), fail closed if `profile = "prod"` omits `api_key_secret` for remote authenticated providers, and fall back to `BaselineRouter` on any network, auth, or timeout failure (`INV-17`).
 
 ## 7. Calibration and abstention
 ### 7.1 Data (ADR-007)

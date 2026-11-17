@@ -1,21 +1,21 @@
 # Graph Agent Protocol (GAP): Unifying Typed Discovery, Batched Federation, and Zero-Trust Governance for AI Agents
 
-**Author:** Mike (GAP Project Lead) (Graph Agent Protocol Contributors) · `contributors@gap-protocol.local` · ORCID pending registration
-**Version / Date:** `0.1.0-rc.1` · 2026-11-16 · **Licence:** `Apache-2.0`
+**Author:** Mike (vnknowledge2014) (Graph Agent Protocol Project) · `vnknowledge2014@users.noreply.github.com` · ORCID pending registration
+**Version / Date:** `0.1.0-rc.1` · 2026-11-16 · **Licence:** `Apache-2.0` · **Repository:** `https://github.com/vnknowledge2014/GraphProtocol`
 **LaTeX Source & arXiv Bundle:** [`paper/main.tex`](../../paper/main.tex) · [`paper/references.bib`](../../paper/references.bib) · [`CITATION.cff`](../../CITATION.cff)
 
 ---
 
 ## Abstract
 
-AI agents increasingly interact with heterogeneous backends—REST/OpenAPI services, SQL stores, GraphQL subgraphs, gRPC services, CLI executables, codebases, Model Context Protocol (MCP) tool servers, and peer Agent2Agent (A2A) workers. Current practice splits these capabilities across flat JSON-RPC tool catalogs (MCP) and horizontal agent task endpoints (A2A), causing $O(N)$ prompt schema inflation (`203,421` tokens at `1,000` tools), client-driven $N+1$ join waterfalls, unpinned mutable descriptions vulnerable to semantic rug pulls, and non-deterministic hot-path routing.
+AI agents increasingly interact with heterogeneous backends—REST/OpenAPI services, SQL stores, GraphQL subgraphs, gRPC services, CLI executables, codebases, Model Context Protocol (MCP) tool servers, peer Agent2Agent (A2A) workers, and interactive AG-UI user interfaces. Current practice splits these capabilities across flat JSON-RPC tool catalogs (MCP), horizontal agent task endpoints (A2A), and ad-hoc frontend streams, causing $O(N)$ prompt schema inflation (`203,421` tokens at `1,000` tools), client-driven $N+1$ join waterfalls, unpinned mutable descriptions vulnerable to semantic rug pulls, and non-deterministic hot-path routing.
 
 **Graph Agent Protocol (GAP)** resolves these problems as a unified, strongly typed GraphQL-profile gateway organized into three separated architectural planes:
 1. A **Zero-ML deterministic execution plane** enforcing Cedar policies (`INV-04`), tenant-isolated query planning (`INV-09`), batched DataLoader federation (`INV-18`), and wait-free per-request snapshot pinning (`INV-01`, `INV-02`).
-2. A **Three-level progressive discovery plane** (`__metaGraph` -> `__search` -> `__type`) exporting an invariant five-tool MCP `2026-07-28` facade (**`651` tokens** across `N = 10..1,000`) alongside calibrated retrieval with transparent deterministic fallback (`INV-17`, `RTE-044`).
+2. A **Three-level progressive discovery plane** (`__metaGraph` -> `__search` -> `__type`) exporting an invariant five-tool MCP `2026-07-28` facade (**`651` tokens** across `N = 10..1,000`), A2A v1.0 tasks, and AG-UI v1.0 (`/ag-ui`) SSE + approval interrupt streams alongside calibrated retrieval (`@receptron/laya`, TypeSafe `Jev`, Google `gemini-decision-1`) with transparent deterministic fallback (`INV-17`, `RTE-044`, `RTE-047`..`049`).
 3. A **Zero-Trust ingestion & snapshot control plane** enforcing propose-not-activate onboarding, SHA-256 description pinning with immediate `BranchStatus::Drift` freeze against rug pulls (`SEC-082`, `INV-08`), DNS-pinned egress SSRF defense (`SEC-075`), sandboxed execution (`SEC-070`), and BLAKE3 hash-chained audit logs (`INV-10`, `SEC-092`).
 
-Implemented across **31 layered Rust crates** (`Edition 2024`, toolchain `1.98.1`), GAP cuts cross-branch token usage at `N = 1,000` by **99.0%** uncached (**93.5%** cached) and reduces code-graph context by **119.3x–208.7x**, while quantifying the exact crossover regimes (`N <= 50` cached flat RPC) where Direct-MCP retains an advantage. Measured locally on the bit-reproducible `23.8 MB` release binary, GAP cold-starts in **`1,197.43 ms`** at **`9.16 MiB`** idle RSS, sustains **`1,889.0 req/s`** mixed HTTP load (`6.356 ms` p95, `0` errors), and recovers from OS `SIGKILL` (`kill -9`) in **`19.24 ms`**.
+Implemented across **32 layered Rust crates** (`Edition 2024`, toolchain `1.98.1`) with zero `RUSTSEC` advisories, GAP cuts cross-branch token usage at `N = 1,000` by **99.0%** uncached (**93.5%** cached) and reduces code-graph context by **119.3x–208.7x**, while quantifying the exact crossover regimes (`N <= 50` cached flat RPC) where Direct-MCP retains an advantage. Measured locally on the bit-reproducible `26.9 MB` (`26,902,360 B`) release binary over dual-stack `HTTP/1.1+HTTP/2` TCP and `HTTP/3` QUIC (`RFC 9114`, `0-RTT` disabled per `OPS-005`), GAP cold-starts in **`313.98 ms`** at **`9.24 MiB`** idle RSS, sustains **`2,227.6 req/s`** mixed TCP load (`5.11 ms` p95, `0` errors) and **`7,869.5 req/s`** multiplexed QUIC load (`1.452 ms` p95, `0` errors), and recovers from OS `SIGKILL` (`kill -9`) in **`12.96 ms`**.
 
 ---
 
@@ -41,15 +41,17 @@ Every external backend (*branch*) carries an explicit trust tier:
 - **`T1` (Admin-Approved):** Vetted branches with cryptographically pinned schema (`spec_hash`) and sanitized description digests (`desc_hash`, `SEC-061`).
 - **`T2` (Untrusted / External):** Default tier for unverified sources; outputs are length-capped, scrubbed, and isolated inside escaped `<gap:untrusted source="...">...</gap:untrusted>` tags (`SEC-080`, `CMP-007`), while process launches fail closed without OS sandbox support (`SEC-071`).
 
-GAP continuously verifies **20 normative architectural invariants (`INV-01`..`INV-20`)** and **17 security threat controls (`TM-01`..`TM-12`, `TM-15`..`TM-18`, `TM-20`..`TM-22`)** defined across `spec/01-architecture.md` and `spec/07-security.md`, backed by automated static checks (`tools/check_layers.py`) and strict test traceability (`tools/spec_trace.py --strict`: `354` requirements, `82` MUST, `0` uncovered, `2,481` markers).
+GAP continuously verifies **20 normative architectural invariants (`INV-01`..`INV-20`)** and **17 security threat controls (`TM-01`..`TM-12`, `TM-15`..`TM-18`, `TM-20`..`TM-22`)** defined across `spec/01-architecture.md` and `spec/07-security.md`, backed by automated static checks (`tools/check_layers.py`) and strict test traceability (`tools/spec_trace.py --strict`: `362` requirements, `89` MUST, `0` uncovered, `2,511` markers).
 
 ---
 
 ## 3. Protocol Design: GAP-QL, Progressive Disclosure, and Federation
 
 - **Strict GraphQL Profile (`ADR-001`, `GQL-001`):** Parsed cleanly by `apollo-compiler` without non-standard keywords (`__metaGraph`, `__search`, `__type`, `@sideEffect`, `@requiresScope`, `@join`).
-- **Five-Tool MCP Facade (`CMP-008`):** Exports constant `gap_search`, `gap_describe`, `gap_query`, `gap_mutate`, and `gap_task`, capping `tools/list` at **`651` tokens** regardless of catalog growth.
+- **Three-Axis Open Agent Stack (`CMP-008`, `CMP-025`..`028`):** Vertical tools (`gap_search`, `gap_describe`, `gap_query`, `gap_mutate`, `gap_task`, holding `tools/list` at **`651` tokens** under MCP `2026-07-28`), horizontal peer workflows (A2A `v1.0`), and frontend SSE event/state/interrupt streaming (`AG-UI v1.0` at `/ag-ui`, mapping Cedar/mutation approvals to `RUN_FINISHED` interrupts and spotlighting `T2` outputs inside escaped `<gap:untrusted>` envelopes).
+- **Multi-Provider System-1 Discovery (`ADR-028`, `RTE-047`..`049`):** Supports local ONNX/Candle (`laya`), `@receptron/laya` HTTP bridges, TypeSafe `Jev` (`/v1/systemone`), and Google `gemini-decision-1` (`/v1beta/decisions`, zero output tokens, `<= 1,000` parallel `choice`/`score`/`noul` questions), guarded by `EgressGuard`, `Secret<T>` redaction (`INV-15`), and automatic `BaselineRouter` fallback (`INV-17`).
 - **Native Graph Connectors (`NGC-001`) & Batched Joins (`INV-18`):** Connectors expose uniform `Describe`, `BatchQuery`, `Mutate`, `StreamEvents`, and `Ping` contracts. Ingestion requires data-verified join containment checks (`ADR-012`), and runtime executors deduplicate join keys deterministically to dispatch $O(\lceil U / B \rceil)$ upstream frames.
+- **Dual-Stack HTTP/2 + HTTP/3 over QUIC (`ADR-026`, `OPS-005`):** `gap-transport` serves `/graphql`, `/graphql/stream` (SSE), `/mcp`, and health routes concurrently over TCP (`HTTP/1.1` + `HTTP/2` with `Alt-Svc: h3=":<port>"; ma=86400`) and UDP QUIC (`HTTP/3`, RFC 9114, TLS 1.3 ALPN `h3` via `quinn` + `h3`). TLS 1.3 `0-RTT` early data is explicitly disabled (`max_early_data_size = 0`) to stop mutation replay, and `profile = "prod"` fails closed if `http3_listen` lacks explicit cert/key secrets.
 - **Durable A2A Tasks (`ADR-016`, `RUN-091`):** Supports the 8-state asynchronous task lifecycle with persistent SQLite leases and peer delegation hop counters preventing cycles (`INV-20`).
 
 ---
@@ -65,9 +67,9 @@ GAP continuously verifies **20 normative architectural invariants (`INV-01`..`IN
 
 ## 5. Reference Implementation & Verification Matrix
 
-- **31 Layered Rust Crates (`L0`–`L6`):** Pure-Rust `protox` codegen (`gap-proto`), SQLite durability with online `backup_to`/`restore_from` (`gap-store`), optional non-BSL-contaminating `store-surreal` isolation (`ADR-020`), 6 native connectors (`OpenAPI`, `GraphQL`, `gRPC`, `SQL`, `CLI`, `tree-sitter` `Code`), and the `gap` binary (`15` operational commands).
+- **32 Layered Rust Crates (`L0`–`L6`):** Pure-Rust `protox` codegen (`gap-proto`), SQLite durability with online `backup_to`/`restore_from` (`gap-store`), optional non-BSL-contaminating `store-surreal` isolation (`ADR-020`), owned zero-`unsafe` persistent AVL `OrdMap` snapshot maps (`gap-core`) + direct `rustls-pki-types` PEM parsing (`gap-transport`), 6 native connectors (`OpenAPI`, `GraphQL`, `gRPC`, `SQL`, `CLI`, `tree-sitter` `Code`), inbound `gap-mcp` / `gap-a2a` / `gap-agui`, multi-provider `gap-s1` (`Candle`, `Laya`, `Jev`, `gemini-decision-1`), and the `gap` binary (`15` operational commands).
 - **Offline Hardening Results:**
-  - `cargo fmt --check`, `cargo clippy --workspace --all-targets --offline -- -D warnings`, `RUSTDOCFLAGS="-D warnings" cargo doc --workspace`, and `cargo deny --offline check licenses bans sources` all pass (`0` warnings, `0` BSL packages in CycloneDX 1.5 SBOM of `398` components).
+  - `cargo fmt --check`, `cargo clippy --workspace --all-targets --offline -- -D warnings`, `RUSTDOCFLAGS="-D warnings" cargo doc --workspace`, and `cargo deny --offline check advisories bans licenses sources` all pass (`0` warnings, `0` `RUSTSEC` advisories with `ignore = []`, `0` BSL packages in CycloneDX 1.5 SBOM of `437` components).
   - Conformance: **`135 / 136`** local tests pass (`133` batch + `2` loopback HTTP socket NGC kits; `1` differential test awaits external `node` + `graphql` 16.x).
   - Property & Resilience: `365/365` proptests (`1,024` cases across `9` crates), `10` fuzz harnesses seeded (`34` inputs), `3/3` upgrade/backup-restore drills, `4/4` chaos scenarios, `4/4` soak/shutdown/rug-pull scenarios.
 
@@ -114,10 +116,11 @@ GAP continuously verifies **20 normative architectural invariants (`INV-01`..`IN
 | Shipped `laya-candle:f32` (`s1_forward` / `s1_debiased`) | `0.0714` / `0.1429` top-1 (`ECE = 0.0303`) @ `42.3`–`73.9 ms` p95 | `bench/results/routebench/s1_comparison/s1_comparison.json` |
 | `ArcSwap::load` / `ArcSwap::store` (256 readers) | **`15 ns`** / **`22.8 us`** p50 (`59 us` p99) | `docs/00-REVIEW.md` (`docs/evidence/arcswap-bench/`) |
 | Lock-Free `in_flight` / CAS EWMA / P2C `N=2` (`net.p50`) | **`42 ns`** / **`44 ns`** / **`94 ns`** | `bench/results/perf/m3-baseline.json` |
-| Reproducible Binary Parity (`--offline --locked`) | `23,811,288` bytes, identical SHA-256 (`fbfa59e2...ad4b2674`) | `bench/results/ga_local/report.json` |
-| Live Cold Start / Idle RSS / Post-Load RSS (`gap serve`) | **`1,197.43 ms`** / **`9.16 MiB`** / **`15.84 MiB`** | `bench/results/ga_local/report.json` |
-| Live Mixed Load (`800` reqs, `8` threads, `VER-032` ratio) | **`1,889.0 req/s`**, `0` errors, **`6.356 ms`** p95 (`9.481 ms` p99) | `bench/results/ga_local/report.json` |
-| OS `SIGKILL` (`kill -9`) Crash Recovery to `/readyz` `200 OK` | **`19.24 ms`** (clean `SIGTERM` exit `0`) | `bench/results/ga_local/report.json` |
+| Reproducible Binary Parity (`--offline --locked`) | `26,902,360` bytes (`26.9 MB`), identical SHA-256 (`62224cb5...89d308acf`) | `bench/results/ga_local/report.json` |
+| Live Cold Start / Idle RSS / Post-Load RSS (`gap serve`) | **`313.98 ms`** / **`9.24 MiB`** / **`15.75 MiB`** | `bench/results/ga_local/report.json` |
+| Live TCP Mixed Load (`800` reqs, `8` threads, `urllib` -> subprocesses) | **`2,227.6 req/s`**, `0` errors, **`5.11 ms`** p95 (`7.173 ms` p99) | `bench/results/ga_local/report.json` |
+| Live HTTP/3 QUIC Load (`8` mux conns, `800` reqs, `0-RTT` off, in-process fixtures) | **`7,869.5 req/s`**, `0` errors, **`1.452 ms`** p95 (`1.62 ms` p99) | `bench/results/ga_local/report.json` |
+| OS `SIGKILL` (`kill -9`) Crash Recovery to `/readyz` `200 OK` | **`12.96 ms`** (clean `SIGTERM` exit `0`) | `bench/results/ga_local/report.json` |
 
 ---
 
@@ -129,4 +132,4 @@ GAP synthesizes lessons across tool-use LLMs (Gorilla `arXiv:2305.15334`, ToolLL
 
 ## 8. Limitations & Reproducibility
 
-Connected Linux staging runs remain queued to transition final cloud gates (`72 h` soak, `24 h` libFuzzer + `ASan`/`TSan`/`miri`, live Docker daemon container verification, OIDC `cosign`/SLSA tagging, live multi-provider LLM `GAP-Bench` evaluations, and `promtool` Alertmanager staging tests — documented cleanly in [`dist/run-linux-ga-gates.sh`](../../dist/run-linux-ga-gates.sh) and [`docs/gates/RC.md`](../gates/RC.md)). Every local result, raw JSON transcript, LaTeX source (`paper/main.tex`), and figure generator (`paper/scripts/generate_figures.py`) is immediately reproducible offline from this repository.
+Connected Linux staging runs remain queued to transition final cloud gates (`72 h` soak, `24 h` libFuzzer + `ASan`/`TSan`/`miri`, live Docker daemon container verification, OIDC `cosign`/SLSA tagging, live multi-provider LLM `GAP-Bench` evaluations, and `promtool` Alertmanager staging tests — documented cleanly in [`dist/run-linux-ga-gates.sh`](../../dist/run-linux-ga-gates.sh) and [`docs/gates/RC.md`](../gates/RC.md)). Locally, HTTP/2 (`urllib` short-lived connections to separate OS subprocesses) and HTTP/3 (persistent multiplexed QUIC connections to in-process fixtures) drills measure distinct transport topologies reported transparently above. Every local result, raw JSON transcript, LaTeX source (`paper/main.tex`), and figure generator (`paper/scripts/generate_figures.py`) is immediately reproducible offline from this repository.

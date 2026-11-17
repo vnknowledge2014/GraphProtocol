@@ -14,6 +14,7 @@ pub mod config;
 pub mod engine;
 pub mod gateway;
 pub mod health;
+pub mod http3;
 pub mod metrics;
 pub mod modules;
 pub mod operation;
@@ -33,6 +34,10 @@ pub use config::{
 pub use engine::TransportEngine;
 pub use gateway::{
     AdmissionGuard, AdmissionOutcome, AdmissionPermit, AdmissionPolicy, AllowAllAdmission,
+};
+pub use http3::{
+    DEFAULT_HTTP3_MAX_BODY_BYTES, Http3Client, Http3ResponseStream, Http3ServeOptions,
+    Http3TlsConfig, serve_http3,
 };
 pub use metrics::{DURATION_BUCKETS_SECS, InFlightGuard, RouteLabel, TransportMetrics};
 pub use operation::{NegotiatedMedia, ParsedHttpGraphqlRequest, retry_after_seconds};

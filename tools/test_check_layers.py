@@ -399,7 +399,7 @@ class LayersTomlCompletenessTests(unittest.TestCase):
 
         layers_doc = tomllib.loads((REPO_ROOT / "tools" / "layers.toml").read_text(encoding="utf-8"))
         configured = set(layers_doc["layers"]) | set(layers_doc.get("exempt_dev", {}).get("crates", []))
-        self.assertEqual(len(configured), 31)
+        self.assertEqual(len(configured), 32)
 
         # Verify standalone fuzz/Cargo.toml is explicitly excluded in root Cargo.toml and references valid crates.
         fuzz_manifest = REPO_ROOT / "fuzz" / "Cargo.toml"

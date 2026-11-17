@@ -9,6 +9,7 @@ Every request and upstream response passes deterministic security gates:
 3. **Rug-Pull Drift Freeze (`SEC-082`, `INV-08`):** `DriftMonitor` computes fresh description hashes during polls and freezes modified branches into `BranchStatus::Drift`.
 4. **SSRF Egress Guard (`SEC-075`):** `EgressGuard` resolves DNS once, blocks private and cloud metadata addresses, and connects to pinned IPs.
 5. **Audit Integrity (`SEC-092`, `INV-10`):** Every SQLite audit record chains sequential BLAKE3 hashes per `tenant` chain and per `system` chain.
+6. **HTTP/3 Replay and TLS Guard (`OPS-005`):** The QUIC listener disables TLS 1.3 `0-RTT` early data and rejects missing `prod` certificates.
 
 ## 2. Validate and Reload Cedar Policies `[PROCEDURAL]`
 
