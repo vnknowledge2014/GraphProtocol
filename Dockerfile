@@ -33,7 +33,7 @@ FROM gcr.io/distroless/cc-debian12:nonroot
 LABEL org.opencontainers.image.title="gap" \
       org.opencontainers.image.description="Graph Agent Protocol (GAP) typed GraphQL-profile gateway" \
       org.opencontainers.image.licenses="Apache-2.0" \
-      org.opencontainers.image.source="https://github.com/graph-agent-protocol/gap"
+      org.opencontainers.image.source="https://github.com/vnknowledge2014/GraphProtocol"
 
 COPY --from=builder /src/target/release/gap /usr/local/bin/gap
 COPY --from=builder /src/models/manifest.toml /etc/gap/models/manifest.toml

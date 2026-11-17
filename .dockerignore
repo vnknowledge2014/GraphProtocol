@@ -1,0 +1,9 @@
+# Exclude large local caches, build targets, and VCS history from Docker build context
+.git/
+.local/
+.agent/
+.cargo/
+target/
+fuzz/target/
+web/media/
+tests/differential/node_modules/

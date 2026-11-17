@@ -48,6 +48,7 @@ jobs:
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@master
         with:
+          toolchain: '1.98.1'
           components: rustfmt
       - uses: Swatinem/rust-cache@v2
       - name: Check formatting
@@ -64,14 +65,16 @@ jobs:
       - uses: actions/checkout@v4
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: '1.98.1'
+      - name: Install cargo-deny and cargo-audit
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-deny,cargo-audit
       - name: Run cargo-deny
-        uses: EmbarkStudios/cargo-deny-action@v2
-        with:
-          command: check advisories bans licenses sources
+        run: cargo deny check advisories bans licenses sources
       - name: Run cargo-audit
-        uses: rustsec/audit-check@v2
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+        run: cargo audit
 
   build-and-test:
     name: Build, Lint & Test (${{ matrix.os }})
@@ -85,19 +88,53 @@ jobs:
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@master
         with:
+          toolchain: '1.98.1'
           components: clippy
       - name: Install cargo-nextest
         uses: taiki-e/install-action@nextest
       - uses: Swatinem/rust-cache@v2
+      - name: Install Linux sandbox & Prometheus tools (SEC-070, G-20)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends bubblewrap prometheus
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
+          promtool check rules ops/prometheus/alerts.yml
       - name: Run clippy across workspace targets
         run: cargo clippy --workspace --all-targets -- -D warnings
       - name: Build workspace targets
         run: cargo build --workspace --all-targets
-      - name: Run workspace test suite (excluding gap-snapshot debug stress)
-        run: cargo nextest run --workspace --exclude gap-snapshot
+      - name: Run workspace test suite (excluding stress and release-latency gates)
+        run: cargo nextest run --workspace --exclude gap-snapshot -E 'not test(e2e_typed_path_overhead_p99_under_10ms_with_zero_io_mocks)'
       - name: Run gap-snapshot composition and handle tests
         run: cargo nextest run -p gap-snapshot --lib --test compose --test handle
-      - name: Run gap-snapshot swap stress in release mode
-        run: cargo test --release -p gap-snapshot --test swap_stress
-      - name: Run offline protocol conformance fixtures
-        run: cargo run -p gap-conformance -- --class Core --offline conformance/gql
+      - name: Run release-mode timing & swap-stress gates
+        run: |
+          cargo test --release -p gap-server --test e2e -- --exact e2e_typed_path_overhead_p99_under_10ms_with_zero_io_mocks
+          cargo test --release -p gap-snapshot --test swap_stress
+      - name: Run offline protocol conformance & graphql-js differential suite (G-1)
+        run: |
+          cargo run -p gap-conformance -- --class Core --offline conformance/gql
+          if [ "${{ runner.os }}" = "Linux" ]; then
+            npm install --no-save --no-package-lock --prefix tests/differential graphql@16.13.2
+            GAP_GRAPHQL_JS_DIR="$PWD/tests/differential/node_modules/graphql" cargo test -p gap-conformance --test differential_gql -- --ignored
+            rm -rf tests/differential/node_modules
+          fi
+
+  coverage:
+    name: Coverage Summary (G-4)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rust toolchain & llvm-tools
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: '1.98.1'
+          components: llvm-tools-preview
+      - name: Install cargo-llvm-cov
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-llvm-cov
+      - uses: Swatinem/rust-cache@v2
+      - name: Measure workspace library coverage
+        run: cargo llvm-cov --workspace --lib --summary-only

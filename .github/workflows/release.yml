@@ -32,11 +32,19 @@ jobs:
       - uses: actions/checkout@v4
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: '1.98.1'
+          components: rustfmt, clippy
       - name: Install cargo-deny and cargo-nextest
         uses: taiki-e/install-action@v2
         with:
           tool: cargo-deny,cargo-nextest
       - uses: Swatinem/rust-cache@v2
+      - name: Verify Prometheus alert rules (G-20)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends prometheus
+          promtool check rules ops/prometheus/alerts.yml
       - name: Check formatting, clippy, and dependency licences (SEC-101)
         run: |
           cargo fmt --all -- --check
@@ -70,6 +78,7 @@ jobs:
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@master
         with:
+          toolchain: '1.98.1'
           targets: ${{ matrix.target }}
       - name: Build reproducible release archive (build #1)
         env:
@@ -109,12 +118,12 @@ jobs:
       - name: Generate CycloneDX 1.5 JSON & assert zero BSL crates
         run: |
           python3 dist/generate-sbom.py \
-            --out target/sbom.cdx.json \
+            --out sbom.cdx.json \
             --timestamp "2026-11-16T00:00:00Z"
       - uses: actions/upload-artifact@v4
         with:
           name: release-sbom
-          path: target/sbom.cdx.json
+          path: sbom.cdx.json
 
   container:
     name: Build Distroless Container (OPS-041, SEC-101)
@@ -168,4 +177,4 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: artifacts/*
-          generate_release_notes: true
+          generate_release_notes: false

@@ -32,9 +32,9 @@ provenance, licensing, SHA-256 digests, and download URLs are governed centrally
 | ID | Role | Licence | Default `1.0-RC` Status |
 |---|---|---|---|
 | `bge-small-en-v1.5` | `embedder` | `MIT` | Pinned (`sha256: 3c9f31665447c8911517620762200d2245a2518d6e7208acc78cd9db317e21ad`, `133466304` bytes) |
-| `laya-typed-decisions` | `s1-router` | `Apache-2.0` | `conditional-advisory-only` · `offline-unpinned-requires-online-verify` · **disabled by default (`BASELINE_FALLBACK`, `RTE-044`)** |
-| `laya-base` | `s1-experiment` | `Apache-2.0` | `experimental-offline-eval-only` · `offline-unpinned-requires-online-verify` |
-| `laya-multilingual` | `s1-experiment` | `Apache-2.0` | `experimental-non-default-regression-0.342` · `offline-unpinned-requires-online-verify` |
+| `laya-typed-decisions` | `s1-router` | `Apache-2.0` | `conditional-advisory-only` · Pinned Hugging Face LFS (`sha256: 4fa56de7...8107a24e`, `842609220` bytes, commit `989e28fe`) · **disabled by default (`BASELINE_FALLBACK`, `RTE-044`, Gate `G-S1`)** |
+| `laya-base` | `s1-experiment` | `Apache-2.0` | `experimental-offline-eval-only` · Pinned Hugging Face LFS (`sha256: 891102d3...cbc8d86c`, `842609210` bytes, commit `e333cb7c`) |
+| `laya-multilingual` | `s1-experiment` | `Apache-2.0` | `experimental-non-default-regression-0.342` · Pinned Hugging Face LFS (`sha256: 9d628fd9...95aa8f204`, `643835514` bytes, commit `92d22143`) |
 
 ---
 

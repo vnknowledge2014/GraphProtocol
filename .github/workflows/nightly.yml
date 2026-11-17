@@ -33,7 +33,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Install nightly Rust toolchain
-        uses: dtolnay/rust-toolchain@nightly
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: nightly
       - name: Install cargo-fuzz
         uses: taiki-e/install-action@cargo-fuzz
       - uses: Swatinem/rust-cache@v2
@@ -50,6 +52,8 @@ jobs:
       - uses: actions/checkout@v4
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: '1.98.1'
       - uses: Swatinem/rust-cache@v2
       - name: Compile workspace criterion benchmarks
         run: cargo bench --workspace --no-run
@@ -63,6 +67,8 @@ jobs:
       - uses: actions/checkout@v4
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: '1.98.1'
       - uses: Swatinem/rust-cache@v2
       - name: Run RouteBench smoke
         run: cargo run --release -p routebench -- --smoke --out target/routebench-smoke
@@ -76,6 +82,8 @@ jobs:
       - uses: actions/checkout@v4
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: '1.98.1'
       - uses: Swatinem/rust-cache@v2
       - name: Run chaos harness baseline
         run: cargo test -p gap-testkit --test chaos

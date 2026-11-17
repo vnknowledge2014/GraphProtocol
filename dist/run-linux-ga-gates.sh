@@ -40,8 +40,10 @@ echo "[4/7] Observability & Prometheus rule verification (G-20)"
 python3 dist/verify-ops-bundle.py
 if command -v promtool >/dev/null 2>&1; then
   promtool check rules ops/prometheus/alerts.yml
+elif command -v docker >/dev/null 2>&1; then
+  docker run --rm --entrypoint promtool -v "${ROOT_DIR}/ops/prometheus:/rules:ro" prom/prometheus:latest check rules /rules/alerts.yml
 else
-  echo "WARN: promtool not installed; install prometheus to run promtool check rules" >&2
+  echo "WARN: promtool/docker not installed; install prometheus to run promtool check rules" >&2
 fi
 
 if [[ "${MODE}" == "--quick-check" ]]; then
@@ -57,13 +59,19 @@ if command -v cargo-mutants >/dev/null 2>&1; then
   cargo mutants --workspace --no-shuffle --timeout 120
 fi
 
-echo "[6/7] Extended 72h soak & nightly sanitizers (G-11, G-14)"
-GAP_SOAK_DURATION_SECS=259200 CI=1 cargo nextest run --release --no-pager -j 1 -p gap-server --test soak
+echo "[6/7] Extended soak & parallel 10-target fuzzing (G-11, G-14)"
+GAP_SOAK_DURATION_SECS="${GAP_SOAK_DURATION_SECS:-259200}" CI=1 cargo nextest run --release --no-pager -j 1 -p gap-server --test soak
+GAP_FUZZ_MAX_TIME="${GAP_FUZZ_MAX_TIME:-86400}"
+fuzz_pids=()
 for target in \
   fuzz_cursor_decode fuzz_extract_graphql fuzz_extract_mcp fuzz_extract_openapi \
   fuzz_extract_proto fuzz_extract_sql fuzz_gapql_parse fuzz_ngc_decode \
   fuzz_policy_input fuzz_sanitize; do
-  (cd fuzz && cargo +nightly fuzz run "${target}" -- -max_total_time=86400)
+  (cd fuzz && cargo +nightly fuzz run "${target}" -- -max_total_time="${GAP_FUZZ_MAX_TIME}") &
+  fuzz_pids+=("$!")
+done
+for pid in "${fuzz_pids[@]}"; do
+  wait "${pid}"
 done
 
 echo "[7/7] GA Linux verification suite completed."

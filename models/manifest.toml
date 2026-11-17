@@ -15,37 +15,37 @@ query_prefix = "Represent this sentence for searching relevant passages: "
 
 [[model]]
 id = "laya-typed-decisions"
-url = "https://huggingface.co/OpenJev/Laya-421M-Typed-Decisions/resolve/0000000000000000000000000000000000000001/model.safetensors"
-sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
-size = 850000000
+url = "https://huggingface.co/convaiinnovations/laya-typed-decisions/resolve/989e28febe5886389496fe13a8036c62b2a20ae0/model.safetensors"
+sha256 = "4fa56de72383a9d3efa9cfa78955733c81b9fc8067a587ca4beb82c78107a24e"
+size = 842609220
 license = "Apache-2.0"
-source_commit = "0000000000000000000000000000000000000001"
+source_commit = "989e28febe5886389496fe13a8036c62b2a20ae0"
 training_data_note = "unstated by authors"
 role = "s1-router"
 legal_review_status = "conditional-advisory-only"
-sha256_verification_status = "offline-unpinned-requires-online-verify"
+sha256_verification_status = "online-lfs-verified-2026-11-18"
 
 [[model]]
 id = "laya-base"
-url = "https://huggingface.co/OpenJev/Laya-421M-Base/resolve/0000000000000000000000000000000000000002/model.safetensors"
-sha256 = "a1b2c3d4e5f60718293a4b5c6d7e8f90123456789abcdef0123456789abcdef0"
-size = 840000000
+url = "https://huggingface.co/convaiinnovations/laya/resolve/e333cb7c823cd1787276228260f56d02fbf5180b/model.safetensors"
+sha256 = "891102d372688fc2a094dac56a384bc537b87c63f21f9f3dac0be2b7cbc8d86c"
+size = 842609210
 license = "Apache-2.0"
-source_commit = "0000000000000000000000000000000000000002"
+source_commit = "e333cb7c823cd1787276228260f56d02fbf5180b"
 training_data_note = "unstated by authors"
 role = "s1-experiment"
 legal_review_status = "experimental-offline-eval-only"
-sha256_verification_status = "offline-unpinned-requires-online-verify"
+sha256_verification_status = "online-lfs-verified-2026-11-18"
 
 [[model]]
 id = "laya-multilingual"
-url = "https://huggingface.co/OpenJev/Laya-Multilingual/resolve/0000000000000000000000000000000000000003/model.safetensors"
-sha256 = "b2c3d4e5f60718293a4b5c6d7e8f90123456789abcdef0123456789abcdef0a1"
-size = 920000000
+url = "https://huggingface.co/convaiinnovations/laya-multilingual/resolve/92d22143468d8af669dc1a5a0480a2b21b4fe56e/model.safetensors"
+sha256 = "9d628fd971b700382ac6f65920a86f149777b2e748e0c955fb3b19695aa8f204"
+size = 643835514
 license = "Apache-2.0"
-source_commit = "0000000000000000000000000000000000000003"
+source_commit = "92d22143468d8af669dc1a5a0480a2b21b4fe56e"
 training_data_note = "unstated by authors"
 role = "s1-experiment"
 legal_review_status = "experimental-non-default-regression-0.342"
-sha256_verification_status = "offline-unpinned-requires-online-verify"
+sha256_verification_status = "online-lfs-verified-2026-11-18"
 
