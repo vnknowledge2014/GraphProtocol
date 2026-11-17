@@ -8,7 +8,7 @@ Normative specification: [08 — Operations, Observability, and Release Engineer
 
 | Command | Purpose |
 |---|---|
-| `gap serve --config gap.toml` | Run dual-stack HTTP/1.1+HTTP/2 TCP + optional HTTP/3 QUIC (`/graphql`, `/graphql/stream`, `/mcp`, `/healthz`, `/readyz`, `/metrics`) or `--stdio` gateway (`OPS-005`) |
+| `gap serve --config gap.toml` | Run dual-stack HTTP/1.1+HTTP/2 TCP + optional HTTP/3 QUIC (`/graphql`, `/graphql/stream`, `/mcp`, `/ag-ui`, `/ag-ui/capabilities`, `/healthz`, `/readyz`, `/metrics`) or `--stdio` gateway (`OPS-005`, `CMP-025`) |
 | `gap doctor --json --config gap.toml` | Preflight report across config, sandbox, egress, allow-list, vault, Cedar policy, and models |
 | `gap config check <gap.toml>` | Validate `gap.toml` and emit JSON Schema |
 | `gap snapshot show / diff / rollback` | Inspect active generation, diff supergraphs, or roll back cleanly (`INV-01`) |
@@ -36,6 +36,20 @@ Pre-built operational assets live under `ops/`:
 - `/readyz`: HTTP `200` only when compiled snapshot generation `>= 1`, policy engine compiled, and stores ready.
 - Zero-downtime reload & rollback (`INV-01`): if a canary snapshot publish raises error rates or fails health gates, `PublisherActor` triggers automatic rollback (`AutoRollback`) and operators can manually restore any retained generation with `gap snapshot rollback --generation <N>`.
 - Follow per-alert escalation and mitigation steps in [docs/runbooks/README.md](../runbooks/README.md).
+
+### Optional `[router]` System-1 Decision Providers (`RTE-049`, `INV-17`)
+
+By default (`provider = "disabled"`), GAP uses deterministic `BaselineRouter` retrieval (`G-S1`). To enable calibrated System-1 reranking on the discovery plane with automatic fallback to `BaselineRouter` on timeout or error:
+
+```toml
+[router]
+# disabled | laya_candle | laya_ort | http_sidecar | receptron_laya | jev | gemini_decision_1
+provider = "gemini_decision_1"
+endpoint = "https://generativelanguage.googleapis.com"
+model = "gemini-decision-1"
+api_key_secret = "env://GEMINI_API_KEY"
+timeout_ms = 400
+```
 
 ## 4. Cardinality & Conformal Coverage Health Check (`OPS-020`, `OPS-030`)
 

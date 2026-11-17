@@ -262,6 +262,44 @@ scopes = ["read"]
                 raise RuntimeError(f"Expected 200 /readyz, got {ready_status}")
             idle_rss_mib = measure_rss_mib(gap_proc.pid)
 
+            # Live AG-UI v1.0 wire verification against compiled release server (`CMP-025`).
+            cap_req = urllib.request.Request(
+                f"{base_url}/ag-ui/capabilities",
+                headers={"Authorization": f"Bearer {GAP_KEY}"},
+                method="GET",
+            )
+            with urllib.request.urlopen(cap_req, timeout=5.0) as cap_resp:
+                if cap_resp.status != 200:
+                    raise RuntimeError(f"Expected 200 /ag-ui/capabilities, got {cap_resp.status}")
+                cap_json = json.loads(cap_resp.read().decode())
+                if cap_json.get("protocol") != "ag-ui" or cap_json.get("version") != "1.0":
+                    raise RuntimeError(f"Unexpected /ag-ui/capabilities payload: {cap_json}")
+
+            agui_body = json.dumps(
+                {
+                    "threadId": "ga-local-th1",
+                    "runId": "ga-local-r1",
+                    "messages": [],
+                    "forwardedProps": {
+                        "graphql": {"query": "{ customer(id: 1) { id name } }"}
+                    },
+                }
+            ).encode()
+            agui_req = urllib.request.Request(
+                f"{base_url}/ag-ui",
+                data=agui_body,
+                headers={
+                    "Content-Type": "application/json",
+                    "Accept": "text/event-stream",
+                    "Authorization": f"Bearer {GAP_KEY}",
+                },
+                method="POST",
+            )
+            with urllib.request.urlopen(agui_req, timeout=5.0) as agui_resp:
+                agui_sse = agui_resp.read().decode()
+                if agui_resp.status != 200 or "RUN_STARTED" not in agui_sse or "RUN_FINISHED" not in agui_sse:
+                    raise RuntimeError(f"Unexpected /ag-ui SSE response (status={agui_resp.status})")
+
             total_requests = 800
             concurrency = 8
             t_load_0 = time.perf_counter()
@@ -315,6 +353,7 @@ scopes = ["read"]
                 "sigkill_recovery_ready_ms": round(recovery_ready_ms, 2),
                 "recovery_gate_le_60000ms": recovery_ready_ms <= 60000.0 and recovery_status == 200 and post_ok,
                 "clean_sigterm_exit_code": clean_shutdown_exit,
+                "agui_live_verified": True,
             }
         finally:
             for proc in (gap_proc, recovered_proc, rest_proc, mcp_proc):

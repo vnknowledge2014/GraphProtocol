@@ -51,6 +51,15 @@
 - [Release Engineering and Error-Budget Policy](../../docs/RELEASE.md)
 - [Unsafe Code Ledger](../../docs/UNSAFE.md)
 
+# Feature Decisions, Benchmarks & Paper
+
+- [HTTP/3 QUIC Transport Design](../../docs/decisions/2026-11-16-http3-quic-transport.md)
+- [AG-UI v1.0 & System-1 Decision Models](../../docs/decisions/2026-11-17-agui-and-decision-models.md)
+- [Gate G-S1 Calibration Decision](../../docs/decisions/G-S1.md)
+- [GAP-Bench Benchmark Report](../../docs/benchmarks/REPORT.md)
+- [1.0-RC Readiness Gate](../../docs/gates/RC.md)
+- [GAP Architecture Paper](../../docs/paper/GAP-PAPER.md)
+
 # ASD-STE100 Aircraft Manual
 
 - [Overview and Linter](../../docs/ste100/README.md)

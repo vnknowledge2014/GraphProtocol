@@ -39,6 +39,13 @@ Instead of registering 10–100 separate MCP servers in Claude Code, Antigravity
 2. Explicitly allow-list any `--stdio` binaries (`SEC-072`).
 3. Point your IDE/agent host at the single GAP endpoint `http://127.0.0.1:8080/mcp` (see [Host Integration Guides](../hosts/README.md)).
 
+### Interactive Agent Frontends (`AG-UI v1.0`, `CMP-025`..`CMP-028`)
+
+Web and UI agent frameworks (such as CopilotKit or any AG-UI `HttpAgent`) can point directly at `http://127.0.0.1:8080/ag-ui` (over HTTP/2 or HTTP/3 `Alt-Svc`):
+
+1. Discover runtime features via `GET /ag-ui/capabilities` (`protocol = "ag-ui"`, `version = "1.0"`, `interrupts = true`).
+2. Stream typed runs over `POST /ag-ui`; `@sideEffect(level: DESTRUCTIVE)` or Cedar-gated `GAP_APPROVAL_REQUIRED` mutations pause cleanly via `RUN_FINISHED(outcome = "interrupt")` and resume with `resume: [{ interruptId, status: "approve" | "deny" }]` (`CMP-027`).
+
 ## 3. Gradual Cutover Checklist
 
 ```bash

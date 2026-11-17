@@ -220,8 +220,16 @@ async fn assemble_walking_skeleton_with_fake_upstreams_composes_generation_one()
 
     assert!(assembled.app_state.registry.get(&shop_desc.uid).is_some());
     assert!(assembled.app_state.registry.get(&notes_desc.uid).is_some());
-    assert_eq!(assembled.app_state.modules.len(), 1);
-    assert_eq!(assembled.app_state.modules[0].module_name(), "mcp");
+    assert_eq!(assembled.app_state.modules.len(), 2);
+    let module_names: Vec<&str> = assembled
+        .app_state
+        .modules
+        .iter()
+        .map(|m| m.module_name())
+        .collect();
+    assert_eq!(module_names, vec!["mcp", "ag-ui"]);
+    assert!(!assembled.discovery.using_s1);
+    assert_eq!(assembled.discovery.router_id(), "baseline");
 }
 
 // spec: OPS-001, INV-01
@@ -754,4 +762,141 @@ fn derived_branch_uids_are_pinned_so_snapshots_stay_reproducible_across_releases
     assert_eq!(uid("shop"), "e0fd74ae-a7cc-776b-a45e-bfa9b2ffbf7c");
     assert_eq!(uid("notes"), "15c63a7a-0bbe-7802-9a1f-7ec18cfceddb");
     assert_ne!(uid("shop"), uid("notes"));
+}
+
+// spec: RTE-049, CMP-025, INV-17
+#[tokio::test]
+async fn router_config_wires_system1_discovery_into_assembled_and_agui() {
+    let tmp = TempDir::new().unwrap();
+    let openapi_src = repo_root().join("examples/walking-skeleton/shop.openapi.json");
+    fs::copy(&openapi_src, tmp.path().join("shop.openapi.json")).unwrap();
+
+    // 1. `laya_candle` wires built-in System-1 into both `Assembled.discovery` and `/ag-ui`.
+    let laya_toml = tmp.path().join("gap-laya.toml");
+    fs::write(
+        &laya_toml,
+        r#"profile = "dev"
+
+[router]
+provider = "laya_candle"
+timeout_ms = 350
+
+[[branches]]
+id = "shop"
+protocol = "openapi"
+trust = "T1"
+
+[branches.openapi]
+spec = "shop.openapi.json"
+base_url = "http://127.0.0.1:9101"
+"#,
+    )
+    .unwrap();
+    let sf_laya = ServerFile::load(&laya_toml).unwrap();
+    let assembled_laya = assemble(&sf_laya, &FakeBranchFactory).await.unwrap();
+    assert!(assembled_laya.discovery.using_s1);
+    assert!(assembled_laya.discovery.router_id().starts_with("s1:"));
+
+    let agui = assembled_laya
+        .app_state
+        .modules
+        .iter()
+        .find(|m| m.module_name() == "ag-ui")
+        .expect("ag-ui http module mounted");
+    let snap = assembled_laya.snapshot_handle.pin();
+    let tenant = TenantId::default_tenant();
+    let principal = Principal::new("agent:agui-test", PrincipalKind::Agent, tenant.clone());
+    let ctx = RequestContext::try_new(
+        Uuid::now_v7(),
+        tenant,
+        principal,
+        Instant::now() + Duration::from_secs(30),
+        Budget::new(100),
+        TraceCtx::generate_root(false),
+        0,
+        None,
+        snap,
+    )
+    .unwrap();
+    let body = serde_json::to_vec(&json!({
+        "threadId": "th-s1-wire",
+        "runId": "r-s1-wire",
+        "messages": [{ "id": "u1", "role": "user", "content": "find customer order tools" }]
+    }))
+    .unwrap();
+    let resp = agui
+        .handle(
+            &ctx,
+            HttpExchangeRequest {
+                method: "POST".to_owned(),
+                path: "/ag-ui".to_owned(),
+                query: None,
+                headers: Vec::new(),
+                body,
+            },
+        )
+        .await
+        .unwrap();
+    assert_eq!(resp.status, 200);
+    let sse_text = std::str::from_utf8(&resp.body).unwrap();
+    assert!(sse_text.contains("RUN_STARTED"));
+    assert!(sse_text.contains("TOOL_CALL_START"));
+    assert!(sse_text.contains("TOOL_CALL_RESULT"));
+    assert!(sse_text.contains("RUN_FINISHED"));
+
+    // 2. `gemini_decision_1` wires its provider id when configured.
+    let gemini_toml = tmp.path().join("gap-gemini.toml");
+    fs::write(
+        &gemini_toml,
+        r#"profile = "dev"
+
+[router]
+provider = "gemini_decision_1"
+endpoint = "http://127.0.0.1:19999"
+timeout_ms = 250
+
+[[branches]]
+id = "shop"
+protocol = "openapi"
+trust = "T1"
+
+[branches.openapi]
+spec = "shop.openapi.json"
+base_url = "http://127.0.0.1:9101"
+"#,
+    )
+    .unwrap();
+    let sf_gemini = ServerFile::load(&gemini_toml).unwrap();
+    let assembled_gemini = assemble(&sf_gemini, &FakeBranchFactory).await.unwrap();
+    assert!(assembled_gemini.discovery.using_s1);
+    assert_eq!(
+        assembled_gemini.discovery.router_id(),
+        "s1:gemini:gemini-decision-1"
+    );
+
+    // 3. `laya_ort` degrades fail-open to baseline with startup warning (`INV-17`).
+    let ort_toml = tmp.path().join("gap-ort.toml");
+    fs::write(
+        &ort_toml,
+        r#"profile = "dev"
+
+[router]
+provider = "laya_ort"
+
+[[branches]]
+id = "shop"
+protocol = "openapi"
+trust = "T1"
+
+[branches.openapi]
+spec = "shop.openapi.json"
+base_url = "http://127.0.0.1:9101"
+"#,
+    )
+    .unwrap();
+    let sf_ort = ServerFile::load(&ort_toml).unwrap();
+    let assembled_ort = assemble(&sf_ort, &FakeBranchFactory).await.unwrap();
+    assert!(!assembled_ort.discovery.using_s1);
+    assert_eq!(assembled_ort.discovery.router_id(), "baseline");
+    assert!(assembled_ort.discovery.degraded_startup_warning.is_some());
 }

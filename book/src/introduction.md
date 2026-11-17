@@ -4,9 +4,9 @@
 
 ## Key Architectural Properties
 
-- **Static Five-Tool MCP Surface (`CMP-002`, `CMP-008`):** Agents see `gap_search`, `gap_describe`, `gap_query`, `gap_mutate`, and `gap_task` in `<= 1,200` tokens across `5..1,000` downstream branches (`G-F1`).
+- **Static Five-Tool MCP Surface & AG-UI `v1.0` (`CMP-002`, `CMP-008`, `CMP-025`..`CMP-028`):** MCP agents see `gap_search`, `gap_describe`, `gap_query`, `gap_mutate`, and `gap_task` in `<= 1,200` tokens across `5..1,000` downstream branches (`G-F1`), while interactive frontends connect via `POST /ag-ui` SSE streams with structured `interrupt` / `resume` approval gates and escaped `<gap:untrusted>` spotlighting.
 - **Wait-Free RCU Snapshots (`INV-01`, `INV-02`):** Every request pins an immutable `Arc<Snapshot>` with zero locks on the hot execution path.
-- **Deterministic Execution & Authorization (`ARC-002`, `INV-04`):** ML models never sit on the execution, authz, planning, or query-execution path. Optional System-1 routing (`gap-s1`) operates solely behind calibrated conformal discovery (`INV-17`).
+- **Deterministic Execution & Pluggable System-1 Routers (`ARC-002`, `INV-04`, `INV-17`, `ADR-028`):** ML models never sit on the execution, authz, planning, or query-execution path. Optional System-1 decision models (`laya_candle`, `@receptron/laya`, TypeSafe `Jev`, and Google `Gemini Decision 1` via `[router]`) operate solely behind calibrated conformal discovery (`RTE-049`, `INV-17`).
 - **Batched Cross-Branch Federation (`INV-18`):** Native batching (`BatchQuery` / `x-gap-in-param`) prevents `O(N)` upstream waterfalls (`VER-040`).
 - **Defense in Depth (`SEC-001`..`SEC-103`, `OPS-005`):** API key BLAKE3 digests, Cedar policy enforcement, SSRF egress pins, `<gap:untrusted>` envelopes (`CMP-007`), BLAKE3 hash-chained audit trails (`SEC-092`), and dual-stack HTTP/2 + HTTP/3 QUIC transport with `0-RTT` disabled.
 

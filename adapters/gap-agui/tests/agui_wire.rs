@@ -34,6 +34,13 @@ impl GraphqlEngine for RecordingEngine {
         Box::pin(async move {
             self.seen.lock().unwrap().push(req.clone());
             let q = req.query.as_deref().unwrap_or("");
+            if q.contains("customer(") {
+                return GraphqlResponse {
+                    data: Some(json!({ "customer": { "id": 1, "name": "Ada Lovelace" } })),
+                    errors: Vec::new(),
+                    extensions: Default::default(),
+                };
+            }
             if q.contains("deleteAccount") {
                 let approved = req
                     .extensions
@@ -378,4 +385,72 @@ async fn agui_spotlights_t2_outputs_and_escapes_closing_tags() {
     assert!(tool_res.ends_with("</gap:untrusted>"));
     assert_eq!(tool_res.matches("</gap:untrusted>").count(), 1);
     assert!(tool_res.contains("\\u003c/gap:untrusted> INJECT_ATTEMPT"));
+}
+
+// spec: CMP-025
+#[tokio::test]
+async fn agui_conformance_fixture_01_lifecycle_and_interrupt_passes() {
+    let fixture_raw = std::fs::read_to_string(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../conformance/agui/01_lifecycle_and_interrupt.json"
+    ))
+    .expect("read conformance/agui/01_lifecycle_and_interrupt.json");
+    let fixture: Value = serde_json::from_str(&fixture_raw).expect("valid fixture JSON");
+    assert_eq!(fixture["class"][0], "Facade-AGUI");
+
+    let query = fixture["request"]["query"]
+        .as_str()
+        .expect("fixture request.query");
+    let expected_status = u16::try_from(
+        fixture["expect"]["status"]
+            .as_u64()
+            .expect("fixture expect.status"),
+    )
+    .expect("u16 status");
+    let expected_errors = fixture["expect"]["errors"]
+        .as_array()
+        .expect("fixture expect.errors")
+        .len();
+
+    let engine = Arc::new(RecordingEngine::default());
+    let facade = AgUiFacade::new(engine);
+    let ctx = make_test_ctx(false);
+
+    let req_body = serde_json::to_vec(&json!({
+        "threadId": "th-conf-01",
+        "runId": "r-conf-01",
+        "forwardedProps": {
+            "graphql": { "query": query }
+        }
+    }))
+    .unwrap();
+    let resp = facade
+        .handle(
+            &ctx,
+            HttpExchangeRequest {
+                method: "POST".to_owned(),
+                path: "/ag-ui".to_owned(),
+                query: None,
+                headers: Vec::new(),
+                body: req_body,
+            },
+        )
+        .await
+        .expect("conformance fixture response");
+    assert_eq!(resp.status, expected_status);
+
+    let events = parse_sse_events(&resp.body);
+    let types: Vec<&str> = events.iter().filter_map(|e| e["type"].as_str()).collect();
+    assert_eq!(types.first().copied(), Some("RUN_STARTED"));
+    assert!(types.contains(&"STATE_SNAPSHOT"));
+    assert_eq!(types.last().copied(), Some("RUN_FINISHED"));
+
+    let snapshot = events
+        .iter()
+        .find(|e| e["type"] == "STATE_SNAPSHOT")
+        .expect("STATE_SNAPSHOT event");
+    assert_eq!(snapshot["snapshot"]["lastData"]["customer"]["id"], 1);
+    let fin = events.last().expect("RUN_FINISHED event");
+    assert_eq!(fin["outcome"]["type"], "success");
+    assert_eq!(fin["metadata"]["errorCount"], expected_errors);
 }

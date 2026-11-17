@@ -2,11 +2,11 @@
 //! (`spec/04-routing.md` §6, `RTE-041`, `RTE-042`, `RTE-044`, `RTE-045`, `INV-17`, `WP-M5-03`).
 
 use std::fmt;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
 
-use gap_core::config::Profile;
+use gap_core::config::{Profile, RouterProviderConfig};
 use gap_core::error::{ErrorCode, GapError, GapResult};
 use gap_core::secret::SecretString;
 use gap_core::traits::{BoxFuture, DiscoveryService, Embedder};
@@ -21,6 +21,8 @@ use gap_s1::{
     RECEPTON_LAYA_DEFAULT_MODEL, ReceptronLayaBackend, ReceptronLayaConfig,
 };
 
+use crate::assemble::{BranchBuildError, ServerFile};
+
 /// Configuration selecting which System-1 (`Laya`) backend `gap-server` wires into discovery
 /// (`RTE-041`, `RTE-044`, `INV-17`).
 #[derive(Debug, Clone, Default)]
@@ -28,10 +30,16 @@ pub enum S1BackendMode {
     /// Disable System-1 inference and route directly via [`BaselineRouter`] (`INV-17`).
     #[default]
     Disabled,
-    /// Use the calibrated built-in in-memory [`LayaCandle`] checkpoint in `precision` (no disk I/O).
+    /// Calibrated built-in [`LayaCandle`] checkpoint in `precision` (no disk I/O).
     CalibratedInMemory {
         /// Tensor storage precision (`F32` or `F16`).
         precision: Precision,
+    },
+    /// ONNX Runtime System-1 backend (`router.provider = "laya_ort"`, degrades fail-open if
+    /// external ONNX checkpoint or runtime feature is absent, `INV-17`).
+    LayaOrt {
+        /// Optional configured model path or identifier.
+        model: Option<String>,
     },
     /// Memory-map an external `.safetensors` checkpoint from `weights_path` (`ARC-003`).
     ///
@@ -140,6 +148,79 @@ impl S1WiringConfig {
             embedder: None,
             visibility_factory: None,
         }
+    }
+
+    /// Derives [`S1WiringConfig`] from a validated [`ServerFile`] (`[router]`, `RTE-049`, `INV-15`).
+    ///
+    /// Resolves any configured `router.api_key_secret` without echoing secret material in errors.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`BranchBuildError::SecretResolution`] when `router.api_key_secret` fails to resolve.
+    pub fn from_server_file(server_file: &ServerFile) -> Result<Self, BranchBuildError> {
+        let cfg = server_file.config();
+        let mut out = Self::from_profile(cfg.profile);
+        out.discovery.s1_timeout_ms = cfg.router.timeout_ms;
+        let allow_loopback = matches!(cfg.profile, Profile::Dev);
+        let api_key = match &cfg.router.api_key_secret {
+            Some(secret_ref) => {
+                Some(server_file.resolve_secret(secret_ref, "router.api_key_secret")?)
+            }
+            None => None,
+        };
+        let trimmed_model = cfg
+            .router
+            .model
+            .as_deref()
+            .map(str::trim)
+            .filter(|s| !s.is_empty());
+
+        out.mode = match cfg.router.provider {
+            RouterProviderConfig::Disabled => S1BackendMode::Disabled,
+            RouterProviderConfig::LayaCandle => match trimmed_model {
+                Some(raw) => {
+                    let p = Path::new(raw);
+                    let weights_path = if p.is_absolute() {
+                        p.to_path_buf()
+                    } else {
+                        server_file.base_dir().join(p)
+                    };
+                    S1BackendMode::Safetensors {
+                        weights_path,
+                        vocab_path: None,
+                        precision: Precision::F16,
+                    }
+                }
+                None => S1BackendMode::CalibratedInMemory {
+                    precision: Precision::F16,
+                },
+            },
+            RouterProviderConfig::LayaOrt => S1BackendMode::LayaOrt {
+                model: trimmed_model.map(ToOwned::to_owned),
+            },
+            RouterProviderConfig::HttpSidecar => S1BackendMode::HttpSidecar {
+                endpoint: cfg.router.endpoint.clone().unwrap_or_default(),
+                allow_loopback,
+            },
+            RouterProviderConfig::ReceptronLaya => S1BackendMode::ReceptronLaya {
+                endpoint: cfg.router.endpoint.clone().unwrap_or_default(),
+                model: trimmed_model.map(ToOwned::to_owned),
+                allow_loopback,
+            },
+            RouterProviderConfig::Jev => S1BackendMode::Jev {
+                endpoint: cfg.router.endpoint.clone().unwrap_or_default(),
+                model: trimmed_model.map(ToOwned::to_owned),
+                api_key,
+                allow_loopback,
+            },
+            RouterProviderConfig::GeminiDecision1 => S1BackendMode::GeminiDecision1 {
+                endpoint: cfg.router.endpoint.clone().unwrap_or_default(),
+                model: trimmed_model.map(ToOwned::to_owned),
+                api_key,
+                allow_loopback,
+            },
+        };
+        Ok(out)
     }
 }
 
@@ -265,6 +346,13 @@ pub fn wire_s1_discovery(cfg: &S1WiringConfig) -> WiredS1Discovery {
         S1BackendMode::Disabled => baseline_fallback(cfg, None),
         S1BackendMode::CalibratedInMemory { precision } => {
             wire_s1_with_backend(LayaCandle::calibrated_default(*precision), cfg)
+        }
+        S1BackendMode::LayaOrt { model } => {
+            let msg = format!(
+                "GAP_DISCOVERY_DEGRADED: router.provider = `laya_ort` (model={model:?}) requires external ONNX runtime checkpoint; falling back to baseline router"
+            );
+            tracing::warn!(model = ?model, "laya_ort runtime unavailable; falling back to BaselineRouter");
+            baseline_fallback(cfg, Some(msg))
         }
         S1BackendMode::Safetensors {
             weights_path,

@@ -53,6 +53,8 @@ use gap_transport::{
 use http::header::{HeaderName, HeaderValue};
 use thiserror::Error;
 
+use crate::wiring_s1::{S1WiringConfig, WiredS1Discovery, wire_s1_discovery};
+
 /// Opaque guard keeping background connector tasks or child processes alive for the lifetime of [`Assembled`].
 pub type BranchKeepAlive = Box<dyn Send + Sync + 'static>;
 
@@ -826,6 +828,8 @@ pub struct Assembled {
     pub snapshot_handle: Arc<SnapshotHandle>,
     /// Inbound MCP `2026-07-28` / `2025-11-25` facade.
     pub facade: McpFacade,
+    /// Wired discovery service and optional System-1 router handle (`RTE-044`, `INV-17`).
+    pub discovery: WiredS1Discovery,
     /// In-process `GraphqlEngine` executing `Operation -> Authz -> Plan -> Exec`.
     pub engine: TransportEngine,
     /// Shared atomic drain flag toggled on first shutdown signal (`RUN-090`).
@@ -860,6 +864,7 @@ impl fmt::Debug for Assembled {
         f.debug_struct("Assembled")
             .field("app_state", &self.app_state)
             .field("generation", &self.snapshot_handle.generation())
+            .field("router_id", &self.discovery.router_id())
             .field("draining", &self.draining)
             .field("warnings", &self.warnings.len())
             .finish_non_exhaustive()
@@ -1037,12 +1042,23 @@ pub async fn assemble(
         .config(facade_cfg)
         .build()?;
 
+    let s1_cfg = S1WiringConfig::from_server_file(server_file)?;
+    let discovery = wire_s1_discovery(&s1_cfg);
+    if let Some(ref warn_msg) = discovery.degraded_startup_warning {
+        tracing::warn!(
+            warning = %warn_msg,
+            "System-1 discovery degraded at startup; serving baseline (`INV-17`)"
+        );
+    }
+
     let agui_cfg = AgUiConfig {
         spotlight: cfg.gateway.facade_spotlight,
         max_request_bytes: max_request_bytes.min(MAX_AGUI_REQUEST_BYTES),
         ..AgUiConfig::default()
     };
-    let agui_facade = AgUiFacade::new(Arc::new(engine.clone())).with_config(agui_cfg);
+    let agui_facade = AgUiFacade::new(Arc::new(engine.clone()))
+        .with_config(agui_cfg)
+        .with_discovery(discovery.as_discovery_service());
 
     let app_state = Arc::new(
         AppState::try_new(
@@ -1092,6 +1108,7 @@ pub async fn assemble(
         app_state,
         snapshot_handle,
         facade,
+        discovery,
         engine,
         draining,
         config: cfg.clone(),

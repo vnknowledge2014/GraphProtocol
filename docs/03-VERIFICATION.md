@@ -9,7 +9,7 @@ Normative IDs `VER-*`. Goal: every claim in `spec/` is backed by a test, a bench
 | Property | parsers, sanitizer, cursor encode/decode, join stitching, plan determinism, tenant scopes | `proptest` (≥ 256 cases PR, 10 000 nightly) | every PR / nightly |
 | Concurrency | publisher/reclaimer/rollback FSM, telemetry counters, breaker windows | `shuttle` (randomized schedules, ≥ 1,000 iterations PR / 100,000 nightly); `loom` only for tiny lock-free structures; ≥ 64-thread stress | PR / nightly |
 | Component | one crate with real dependencies (SQLite, in-process gRPC/HTTP) | `nextest` | PR |
-| Contract / conformance | black-box GAP-QL, NGC, MCP facade, A2A, tasks, security | `gap-conformance` + fixtures | PR (offline subset) / nightly (live) |
+| Contract / conformance | black-box GAP-QL, NGC, MCP facade, A2A, AG-UI, tasks, security, HTTP/3 QUIC | `gap-conformance` + fixtures | PR (offline subset) / nightly (live) |
 | Differential | GAP-QL validator vs graphql-js | node harness | PR |
 | E2E | walking skeleton, real MCP host smoke, multi-node peers | `tests/e2e`, MCP Inspector | PR (scripted) / nightly (real host) |
 | Fuzz | parser, NGC decoders, extractors, sanitizer, cursor, policy inputs | `cargo-fuzz` | 60 s PR smoke / 1 h nightly / 24 h per target before RC |
@@ -26,7 +26,7 @@ Normative IDs `VER-*`. Goal: every claim in `spec/` is backed by a test, a bench
 - **VER-003** The requirement→test matrix is generated (`docs/traceability.md`) and published with each release.
 
 ## 3. Conformance suite
-- **VER-010** Layout `conformance/<class>/<name>.json` (spec/02 §11 format) with fields `name, class[], spec[], schema?, principal?, request|steps, expect`. Classes: Core, Discovery, Federation, Tasks, Secure, Facade-MCP, Facade-A2A, plus `ngc/` connector kit.
+- **VER-010** Layout `conformance/<class>/<name>.json` (spec/02 §11 format) with fields `name, class[], spec[], schema?, principal?, request|steps, expect`. Classes: Core, Discovery, Federation, Tasks, Secure, Facade-MCP, Facade-A2A, Facade-AGUI, plus `ngc/` connector kit.
 - **VER-011** `gap-conformance` modes: `--offline <dir>` (in-process server from fixture schema), `--target <url>` (live), `--spawn <example>` (starts example project), `--connector-kit` (NGC), `--report <path>` (JSON + spec-id coverage).
 - **VER-012** Fixtures are the *protocol*: they MUST NOT depend on Rust internals. A second implementation (even a minimal one in another language) should be able to run them; a TypeScript mock server in `tests/ts-ref/` demonstrates this for Core (post-M1 stretch).
 
@@ -60,7 +60,7 @@ Normative IDs `VER-*`. Goal: every claim in `spec/` is backed by a test, a bench
 
 ## 9. Release gates for 1.0-RC (checklist executed by WP-M7-10; each line needs an evidence link)
 **Functional**
-- [ ] G-1 All conformance classes pass 100% (Core, Discovery, Federation, Tasks, Secure, Facade-MCP, Facade-A2A, NGC kit for every shipped connector).
+- [ ] G-1 All conformance classes pass 100% (Core, Discovery, Federation, Tasks, Secure, Facade-MCP, Facade-A2A, Facade-AGUI, NGC kit for every shipped connector) and dual-stack HTTP/3 QUIC smoke tests pass (`OPS-005`).
 - [ ] G-2 `spec_trace --strict`: 100% of MUST requirements have tests; 20/20 invariant tests exist and pass.
 - [ ] G-3 Walking-skeleton and quickstart run from a clean machine following only the docs (recorded).
 **Quality**

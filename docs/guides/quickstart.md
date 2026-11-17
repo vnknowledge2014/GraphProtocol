@@ -1,8 +1,8 @@
 # 5-Minute Quickstart (Walking Skeleton)
 
-Normative specification: `OPS-001`, `OPS-044`, `CMP-001`, `CMP-009` ([09-compat.md](../../spec/09-compat.md)).
+Normative specification: `OPS-001`, `OPS-005`, `OPS-044`, `CMP-001`, `CMP-009`, `CMP-025` ([09-compat.md](../../spec/09-compat.md)).
 
-Run a complete local GAP supergraph combining two downstream branches (`shop` over OpenAPI REST and `notes` over MCP HTTP) behind one GraphQL endpoint (`POST /graphql`) and one static 5-tool MCP `2026-07-28` facade (`POST /mcp`).
+Run a complete local GAP supergraph combining two downstream branches (`shop` over OpenAPI REST and `notes` over MCP HTTP) behind one GraphQL endpoint (`POST /graphql`), one static 5-tool MCP `2026-07-28` facade (`POST /mcp`), and one AG-UI `v1.0` SSE stream (`POST /ag-ui`).
 
 ## 1. Build and Preflight Check
 
@@ -99,6 +99,30 @@ Or run `gap` over stdio MCP framing (`SEC-004`) when an agent host spawns the ga
 
 ```bash
 ./target/debug/gap serve --stdio --config examples/walking-skeleton/gap.toml
+```
+
+### 4.1 Stream an AG-UI `v1.0` Run (`/ag-ui`, `CMP-025`)
+
+Frontend agent frameworks (such as CopilotKit / AG-UI `HttpAgent`) can negotiate capabilities and stream typed `RUN_STARTED` -> `STATE_SNAPSHOT` -> `RUN_FINISHED` events directly over SSE:
+
+```bash
+curl -sS http://127.0.0.1:8080/ag-ui/capabilities \
+  -H 'Authorization: Bearer gap_dev_skeleton_key_01'
+
+curl -sS -N http://127.0.0.1:8080/ag-ui \
+  -H 'Content-Type: application/json' \
+  -H 'Accept: text/event-stream' \
+  -H 'Authorization: Bearer gap_dev_skeleton_key_01' \
+  -d '{
+    "threadId": "demo-thread",
+    "runId": "demo-run-1",
+    "messages": [],
+    "forwardedProps": {
+      "graphql": {
+        "query": "{ customer(id: 1) { id name tier } customer_notes(customer_id: 1) }"
+      }
+    }
+  }'
 ```
 
 ## 5. Inspect Telemetry Labels (`OPS-020`)
