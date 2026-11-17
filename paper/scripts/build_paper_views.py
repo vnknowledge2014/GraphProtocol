@@ -8,6 +8,7 @@ import json
 import re
 import subprocess
 import sys
+import tempfile
 import textwrap
 from pathlib import Path
 
@@ -367,7 +368,7 @@ def build_html(
 <div class="twocol">
   <h2>5. Rust Implementation &amp; Formal Traceability</h2>
   <p>GAP is built in Rust Edition 2024 (<code>rustc 1.98.1</code>) across 32 crates (<code>L0</code>–<code>L6</code>, including <code>gap-agui</code> and multi-provider <code>gap-s1</code>), forbidding <code>unsafe</code> everywhere outside optional <code>gap-s1</code> and denying <code>unwrap</code>, <code>expect</code>, and <code>panic</code> in non-test paths. BSL dependencies remain strictly behind optional <code>store-surreal</code>. To eliminate every unmaintained/unsound third-party crate from the supply chain, snapshot maps use an owned zero-unsafe AVL <code>OrdMap</code> and PEM parsing uses <code>rustls-pki-types</code> directly, achieving <strong>0 errors</strong> across <code>cargo deny check advisories bans licenses sources</code> (<code>ignore = []</code>).</p>
-  <p>Verification passes end-to-end across <strong>362 specification requirements</strong> (89 <code>MUST</code>, 0 uncovered across 2,511 markers), <strong>135/136</strong> offline/loopback conformance checks, <strong>365</strong> 1,024-case proptests, 10 fuzz targets (34 corpora), chaos, soak, and upgrade/backup drills.</p>
+  <p>Verification passes end-to-end across <strong>362 specification requirements</strong> (89 <code>MUST</code>, 0 uncovered across 2,515 markers), <strong>135/136</strong> offline/loopback conformance checks, <strong>365</strong> 1,024-case proptests, 10 fuzz targets (34 corpora), chaos, soak, and upgrade/backup drills.</p>
 
   <h2>6. Experimental Evaluation &amp; Crossover Analysis</h2>
   <p>Across Table 1 and Figure 3, <code>GAP-Bench</code> demonstrates both massive wins and honest boundaries (<code>ADR-017</code>, <code>ADR-021</code>): at <em>N</em>=1,000, GAP cuts cross-branch join tokens by <strong>99.0%</strong> uncached (<strong>93.5%</strong> cached) and halves turns (4.0 &rarr; 2.0); on <code>code_graph</code> (24 symbols), typed graph walks reduce turns from 11.0 to 1.0 for <strong>119.32x</strong> uncached and <strong>208.68x</strong> cached savings. Conversely, on tiny flat catalogs (<em>N</em>=10 cached: 547.2 vs. 4,691.9 tokens), single-turn Direct-MCP stays smaller, and conditional <code>X-1</code> wire columnarization yielded &lt;20% suite reduction and remains deferred.</p>
@@ -396,7 +397,7 @@ def build_html(
 
 <figure>
   {fig4}
-  <figcaption><strong>Figure 4:</strong> Multi-scale latency spectrum across lock-free RCU/balance primitives (15–94&nbsp;ns), deterministic baseline discovery (0.887&nbsp;ms), live multiplexed HTTP/3 QUIC (1.45&nbsp;ms p95) and HTTP/2 TCP (5.11&nbsp;ms p95) mixed loads, and OS <code>SIGKILL</code> recovery (12.96&nbsp;ms).</figcaption>
+  <figcaption><strong>Figure 4:</strong> Multi-scale latency spectrum across lock-free RCU/balance primitives (15–94&nbsp;ns), deterministic baseline discovery (0.887&nbsp;ms), live multiplexed HTTP/3 QUIC ({h3['p95_ms']:.2f}&nbsp;ms p95) and HTTP/2 TCP ({rt['p95_ms']:.2f}&nbsp;ms p95) mixed loads, and OS <code>SIGKILL</code> recovery ({rt['sigkill_recovery_ready_ms']:.2f}&nbsp;ms).</figcaption>
 </figure>
 
 <div class="twocol">
@@ -510,20 +511,25 @@ def main() -> int:
     chrome_bin = Path("/Applications/Google Chrome.app/Contents/MacOS/Google Chrome")
     if chrome_bin.exists():
         try:
-            subprocess.run(
-                [
-                    str(chrome_bin),
-                    "--headless",
-                    "--disable-gpu",
-                    "--no-pdf-header-footer",
-                    f"--print-to-pdf={pdf_out}",
-                    html_path.resolve().as_uri(),
-                ],
-                capture_output=True,
-                timeout=20,
-                check=True,
-            )
-            if pdf_out.is_file() and pdf_out.read_bytes().startswith(b"%PDF-") and pdf_out.stat().st_size > 10_000:
+            if pdf_out.exists():
+                pdf_out.unlink()
+            with tempfile.TemporaryDirectory(prefix="gap_chrome_") as chrome_prof:
+                subprocess.run(
+                    [
+                        str(chrome_bin),
+                        "--headless=new",
+                        f"--user-data-dir={chrome_prof}",
+                        "--no-first-run",
+                        "--disable-gpu",
+                        "--no-pdf-header-footer",
+                        f"--print-to-pdf={pdf_out}",
+                        html_path.resolve().as_uri(),
+                    ],
+                    capture_output=True,
+                    timeout=45,
+                    check=False,
+                )
+            if pdf_out.is_file() and pdf_out.read_bytes().startswith(b"%PDF-") and pdf_out.stat().st_size > 100_000:
                 print(f"Rendered {html_path} and {pdf_out} via Chrome headless ({pdf_out.stat().st_size} bytes)")
                 return 0
         except Exception as exc:

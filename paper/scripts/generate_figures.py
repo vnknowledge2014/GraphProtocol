@@ -406,6 +406,7 @@ def generate_fig4_runtime_latencies(m3: dict, s1: dict, ga_local: dict) -> tuple
     http2_p95_ms = ga_local["live_runtime_drills"]["p95_ms"]
     http2_rps = ga_local["live_runtime_drills"]["measured_rps"]
     cold_ms = ga_local["live_runtime_drills"]["cold_start_ms"]
+    idle_rss_mib = ga_local["live_runtime_drills"]["idle_rss_mib"]
     recov_ms = ga_local["live_runtime_drills"]["sigkill_recovery_ready_ms"]
     h3 = ga_local["http3_live_drills"]
     http3_p95_ms = h3["p95_ms"]
@@ -421,7 +422,7 @@ def generate_fig4_runtime_latencies(m3: dict, s1: dict, ga_local: dict) -> tuple
         ("HTTP/2 TCP Mixed p95", http2_p95_ms * 1e6, TEAL, f"{http2_p95_ms:.2f} ms ({http2_rps:,.0f} req/s, urllib)"),
         ("SIGKILL Recover /readyz", recov_ms * 1e6, PURPLE, f"{recov_ms:.2f} ms"),
         ("Laya S1 Debiased p95", s1_deb_ms * 1e6, ORANGE, f"{s1_deb_ms:.1f} ms ({s1_deb_top1:.1f}% top-1)"),
-        ("Cold Start /readyz", cold_ms * 1e6, PURPLE, f"{cold_ms:.0f} ms (9.2 MiB RSS)"),
+        ("Cold Start /readyz", cold_ms * 1e6, PURPLE, f"{cold_ms:.0f} ms ({idle_rss_mib:.1f} MiB RSS)"),
     ]
 
     w, h = 880, 448

@@ -1,44 +1,45 @@
 {
   "schema_version": 2,
-  "generated_at_utc": "2026-11-16T12:28:39Z",
-  "git_head_base": "8c92ecd",
+  "generated_at_utc": "2026-11-17T17:01:36Z",
+  "git_head_base": "a83589e",
   "platform": "darwin/x86_64",
   "reproducible_build": {
-    "build_1_sha256": "62224cb5777857467a5819559b1ec6e770401824c50d33c3ba300a289d308acf",
-    "build_2_sha256": "62224cb5777857467a5819559b1ec6e770401824c50d33c3ba300a289d308acf",
-    "binary_bytes": 26902360,
+    "build_1_sha256": "d3220637f90bd3aab56019f3c7e9745836fb015ef601ea44b36bc5bee965d4c2",
+    "build_2_sha256": "d3220637f90bd3aab56019f3c7e9745836fb015ef601ea44b36bc5bee965d4c2",
+    "binary_bytes": 28084064,
     "size_match": true,
     "bit_identical": true
   },
   "live_runtime_drills": {
-    "cold_start_ms": 313.98,
+    "cold_start_ms": 1055.03,
     "cold_start_gate_le_2000ms": true,
-    "idle_rss_mib": 9.24,
-    "post_load_rss_mib": 15.75,
+    "idle_rss_mib": 9.32,
+    "post_load_rss_mib": 16.3,
     "rss_gate_le_600mib": true,
     "mixed_load_requests": 800,
     "concurrency": 8,
-    "elapsed_s": 0.359,
-    "measured_rps": 2227.6,
+    "elapsed_s": 0.752,
+    "measured_rps": 1063.6,
     "errors": 0,
-    "p50_ms": 3.312,
-    "p95_ms": 5.11,
-    "p99_ms": 7.173,
+    "p50_ms": 6.744,
+    "p95_ms": 11.544,
+    "p99_ms": 18.346,
     "sigkill_exit_code": -9,
-    "sigkill_recovery_ready_ms": 12.96,
+    "sigkill_recovery_ready_ms": 28.86,
     "recovery_gate_le_60000ms": true,
-    "clean_sigterm_exit_code": 0
+    "clean_sigterm_exit_code": 0,
+    "agui_live_verified": true
   },
   "http3_live_drills": {
-    "alt_svc_advertised": "h3=\":57575\"; ma=86400",
+    "alt_svc_advertised": "h3=\":55278\"; ma=86400",
     "concurrency": 8,
-    "duration_s": 0.102,
+    "duration_s": 0.16,
     "errors": 0,
-    "measured_rps": 7869.5,
+    "measured_rps": 5013.1,
     "mixed_load_requests": 800,
-    "p50_ms": 1.045,
-    "p95_ms": 1.452,
-    "p99_ms": 1.62,
+    "p50_ms": 1.626,
+    "p95_ms": 2.364,
+    "p99_ms": 2.71,
     "protocol": "HTTP/3 (QUIC RFC 9114)",
     "tls": "TLS 1.3 ALPN h3",
     "zero_rtt_disabled": true
@@ -47,13 +48,13 @@
     "ngc_kit_openapi": {
       "passed": true,
       "summary": [
-        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 1.58s"
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 1.79s"
       ]
     },
     "ngc_kit_mcp": {
       "passed": true,
       "summary": [
-        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 1.52s"
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 1.65s"
       ]
     }
   }

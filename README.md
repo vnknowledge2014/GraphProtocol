@@ -4,7 +4,7 @@
 
 **Graph Agent Protocol (GAP)** is an Apache-2.0 (`Copyright 2026 Mike (vnknowledge2014)`), strongly typed GraphQL-profile gateway and governance layer unifying heterogeneous AI agent backends (OpenAPI REST, GraphQL subgraphs, gRPC, SQL, CLI tools, AST code/doc graphs, external MCP servers, A2A peer tasks, and AG-UI v1.0 frontends) behind **progressive disclosure**, **batched federation**, **dual-stack HTTP/2 + HTTP/3 (QUIC) transport**, **multi-provider System-1 decision models (`Laya`, `Jev`, `gemini-decision-1`)**, **deterministic Cedar authorization**, and **wait-free immutable snapshots**.
 
-**Status (`0.1.0-rc.1` · `2026-11-17`):** **87 / 87 work packages complete (`main`)**, verified end-to-end offline (`362` spec requirements / `89` MUST / `2,511` test markers, `135/136` conformance tests, `32` Rust workspace crates, `0` `RUSTSEC` advisories via owned AVL `OrdMap`). Canonical repo: [`github.com/vnknowledge2014/GraphProtocol`](https://github.com/vnknowledge2014/GraphProtocol) · Live Portal, Promo Videos & Paper: [`vnknowledge2014.github.io/GraphProtocol`](https://vnknowledge2014.github.io/GraphProtocol/) ([`/paper/`](https://vnknowledge2014.github.io/GraphProtocol/paper/) · [English Promo Video](web/media/gap-promo-en.mp4) · [Vietnamese Promo Video](web/media/gap-promo-vi.mp4)).
+**Status (`0.1.0-rc.1` · `2026-11-17`):** **87 / 87 work packages complete (`main`)**, verified end-to-end offline (`362` spec requirements / `89` MUST / `2,515` test markers, `135/136` conformance tests, `32` Rust workspace crates, `0` `RUSTSEC` advisories via owned AVL `OrdMap`). Canonical repo: [`github.com/vnknowledge2014/GraphProtocol`](https://github.com/vnknowledge2014/GraphProtocol) · Live Portal, Promo Videos & Paper: [`vnknowledge2014.github.io/GraphProtocol`](https://vnknowledge2014.github.io/GraphProtocol/) ([`/paper/`](https://vnknowledge2014.github.io/GraphProtocol/paper/) · [English Promo Video](web/media/gap-promo-en.mp4) · [Vietnamese Promo Video](web/media/gap-promo-vi.mp4)).
 
 ---
 
@@ -17,8 +17,8 @@
 | Code-graph traversal (`24` symbols) | **`119.32x`** uncached · **`208.68x`** cached · turns `11 -> 1` | [`bench/results/gapbench/baseline.json`](bench/results/gapbench/baseline.json) |
 | Honest negative crossover (`ADR-017`) | Direct-MCP wins flat `N=10` cached (`547` vs `4,692` tokens) and `N=50` cached (`2,385` vs `4,728`) | [`docs/benchmarks/REPORT.md`](docs/benchmarks/REPORT.md) |
 | Deterministic router vs System-1 (`G-S1`) | Baseline **`95.24%`** test / **`97.22%`** held-out top-1 at **`0.887 ms`** p95 (`INV-17` fallback) | [`docs/decisions/G-S1.md`](docs/decisions/G-S1.md) |
-| Bit-reproducible `--locked` release binary | **`26.9 MB`** (`26,902,360` B), identical double-build SHA-256 (`62224cb5...89d308acf`), **`0` RUSTSEC advisories** | [`bench/results/ga_local/report.json`](bench/results/ga_local/report.json) |
-| Live cold start / RSS / TCP + HTTP/3 QUIC / `SIGKILL` | **`314 ms`** boot · **`9.24 MiB`** idle · **`2,228 req/s`** TCP (`5.11 ms` p95) · **`7,870 req/s`** HTTP/3 QUIC (`1.45 ms` p95, `0-RTT` off, `0` errs) · **`12.96 ms`** `kill -9` recover | [`bench/results/ga_local/report.json`](bench/results/ga_local/report.json) |
+| Bit-reproducible `--locked` release binary | **`28.1 MB`** (`28,084,064` B), identical double-build SHA-256 (`d3220637...ee965d4c2`), **`0` RUSTSEC advisories** | [`bench/results/ga_local/report.json`](bench/results/ga_local/report.json) |
+| Live cold start / RSS / TCP + HTTP/3 QUIC / `SIGKILL` | **`1,055 ms`** boot · **`9.32 MiB`** idle · **`1,064 req/s`** TCP (`11.54 ms` p95) · **`5,013 req/s`** HTTP/3 QUIC (`2.36 ms` p95, `0-RTT` off, `0` errs) · **`28.86 ms`** `kill -9` recover | [`bench/results/ga_local/report.json`](bench/results/ga_local/report.json) |
 
 ---
 

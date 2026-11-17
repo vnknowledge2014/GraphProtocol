@@ -15,7 +15,7 @@ AI agents increasingly interact with heterogeneous backends—REST/OpenAPI servi
 2. A **Three-level progressive discovery plane** (`__metaGraph` -> `__search` -> `__type`) exporting an invariant five-tool MCP `2026-07-28` facade (**`651` tokens** across `N = 10..1,000`), A2A v1.0 tasks, and AG-UI v1.0 (`/ag-ui`) SSE + approval interrupt streams alongside calibrated retrieval (`@receptron/laya`, TypeSafe `Jev`, Google `gemini-decision-1`) with transparent deterministic fallback (`INV-17`, `RTE-044`, `RTE-047`..`049`).
 3. A **Zero-Trust ingestion & snapshot control plane** enforcing propose-not-activate onboarding, SHA-256 description pinning with immediate `BranchStatus::Drift` freeze against rug pulls (`SEC-082`, `INV-08`), DNS-pinned egress SSRF defense (`SEC-075`), sandboxed execution (`SEC-070`), and BLAKE3 hash-chained audit logs (`INV-10`, `SEC-092`).
 
-Implemented across **32 layered Rust crates** (`Edition 2024`, toolchain `1.98.1`) with zero `RUSTSEC` advisories, GAP cuts cross-branch token usage at `N = 1,000` by **99.0%** uncached (**93.5%** cached) and reduces code-graph context by **119.3x–208.7x**, while quantifying the exact crossover regimes (`N <= 50` cached flat RPC) where Direct-MCP retains an advantage. Measured locally on the bit-reproducible `26.9 MB` (`26,902,360 B`) release binary over dual-stack `HTTP/1.1+HTTP/2` TCP and `HTTP/3` QUIC (`RFC 9114`, `0-RTT` disabled per `OPS-005`), GAP cold-starts in **`313.98 ms`** at **`9.24 MiB`** idle RSS, sustains **`2,227.6 req/s`** mixed TCP load (`5.11 ms` p95, `0` errors) and **`7,869.5 req/s`** multiplexed QUIC load (`1.452 ms` p95, `0` errors), and recovers from OS `SIGKILL` (`kill -9`) in **`12.96 ms`**.
+Implemented across **32 layered Rust crates** (`Edition 2024`, toolchain `1.98.1`) with zero `RUSTSEC` advisories, GAP cuts cross-branch token usage at `N = 1,000` by **99.0%** uncached (**93.5%** cached) and reduces code-graph context by **119.3x–208.7x**, while quantifying the exact crossover regimes (`N <= 50` cached flat RPC) where Direct-MCP retains an advantage. Measured locally on the bit-reproducible `28.1 MB` (`28,084,064 B`) release binary over dual-stack `HTTP/1.1+HTTP/2` TCP and `HTTP/3` QUIC (`RFC 9114`, `0-RTT` disabled per `OPS-005`), GAP cold-starts in **`1,055.03 ms`** at **`9.32 MiB`** idle RSS, sustains **`1,063.6 req/s`** mixed TCP load (`11.544 ms` p95, `0` errors) and **`5,013.1 req/s`** multiplexed QUIC load (`2.364 ms` p95, `0` errors), verifies live `AG-UI v1.0` SSE streaming (`/ag-ui`), and recovers from OS `SIGKILL` (`kill -9`) in **`28.86 ms`**.
 
 ---
 
@@ -41,7 +41,7 @@ Every external backend (*branch*) carries an explicit trust tier:
 - **`T1` (Admin-Approved):** Vetted branches with cryptographically pinned schema (`spec_hash`) and sanitized description digests (`desc_hash`, `SEC-061`).
 - **`T2` (Untrusted / External):** Default tier for unverified sources; outputs are length-capped, scrubbed, and isolated inside escaped `<gap:untrusted source="...">...</gap:untrusted>` tags (`SEC-080`, `CMP-007`), while process launches fail closed without OS sandbox support (`SEC-071`).
 
-GAP continuously verifies **20 normative architectural invariants (`INV-01`..`INV-20`)** and **17 security threat controls (`TM-01`..`TM-12`, `TM-15`..`TM-18`, `TM-20`..`TM-22`)** defined across `spec/01-architecture.md` and `spec/07-security.md`, backed by automated static checks (`tools/check_layers.py`) and strict test traceability (`tools/spec_trace.py --strict`: `362` requirements, `89` MUST, `0` uncovered, `2,511` markers).
+GAP continuously verifies **20 normative architectural invariants (`INV-01`..`INV-20`)** and **17 security threat controls (`TM-01`..`TM-12`, `TM-15`..`TM-18`, `TM-20`..`TM-22`)** defined across `spec/01-architecture.md` and `spec/07-security.md`, backed by automated static checks (`tools/check_layers.py`) and strict test traceability (`tools/spec_trace.py --strict`: `362` requirements, `89` MUST, `0` uncovered, `2,515` markers).
 
 ---
 
@@ -116,11 +116,11 @@ GAP continuously verifies **20 normative architectural invariants (`INV-01`..`IN
 | Shipped `laya-candle:f32` (`s1_forward` / `s1_debiased`) | `0.0714` / `0.1429` top-1 (`ECE = 0.0303`) @ `42.3`–`73.9 ms` p95 | `bench/results/routebench/s1_comparison/s1_comparison.json` |
 | `ArcSwap::load` / `ArcSwap::store` (256 readers) | **`15 ns`** / **`22.8 us`** p50 (`59 us` p99) | `docs/00-REVIEW.md` (`docs/evidence/arcswap-bench/`) |
 | Lock-Free `in_flight` / CAS EWMA / P2C `N=2` (`net.p50`) | **`42 ns`** / **`44 ns`** / **`94 ns`** | `bench/results/perf/m3-baseline.json` |
-| Reproducible Binary Parity (`--offline --locked`) | `26,902,360` bytes (`26.9 MB`), identical SHA-256 (`62224cb5...89d308acf`) | `bench/results/ga_local/report.json` |
-| Live Cold Start / Idle RSS / Post-Load RSS (`gap serve`) | **`313.98 ms`** / **`9.24 MiB`** / **`15.75 MiB`** | `bench/results/ga_local/report.json` |
-| Live TCP Mixed Load (`800` reqs, `8` threads, `urllib` -> subprocesses) | **`2,227.6 req/s`**, `0` errors, **`5.11 ms`** p95 (`7.173 ms` p99) | `bench/results/ga_local/report.json` |
-| Live HTTP/3 QUIC Load (`8` mux conns, `800` reqs, `0-RTT` off, in-process fixtures) | **`7,869.5 req/s`**, `0` errors, **`1.452 ms`** p95 (`1.62 ms` p99) | `bench/results/ga_local/report.json` |
-| OS `SIGKILL` (`kill -9`) Crash Recovery to `/readyz` `200 OK` | **`12.96 ms`** (clean `SIGTERM` exit `0`) | `bench/results/ga_local/report.json` |
+| Reproducible Binary Parity (`--offline --locked`) | `28,084,064` bytes (`28.1 MB`), identical SHA-256 (`d3220637...ee965d4c2`) | `bench/results/ga_local/report.json` |
+| Live Cold Start / Idle RSS / Post-Load RSS (`gap serve`) | **`1,055.03 ms`** / **`9.32 MiB`** / **`16.30 MiB`** (`agui_live_verified: true`) | `bench/results/ga_local/report.json` |
+| Live TCP Mixed Load (`800` reqs, `8` threads, `urllib` -> subprocesses) | **`1,063.6 req/s`**, `0` errors, **`11.544 ms`** p95 (`18.346 ms` p99) | `bench/results/ga_local/report.json` |
+| Live HTTP/3 QUIC Load (`8` mux conns, `800` reqs, `0-RTT` off, in-process fixtures) | **`5,013.1 req/s`**, `0` errors, **`2.364 ms`** p95 (`2.710 ms` p99) | `bench/results/ga_local/report.json` |
+| OS `SIGKILL` (`kill -9`) Crash Recovery to `/readyz` `200 OK` | **`28.86 ms`** (clean `SIGTERM` exit `0`) | `bench/results/ga_local/report.json` |
 
 ---
 

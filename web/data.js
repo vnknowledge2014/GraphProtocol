@@ -35,7 +35,7 @@ window.GAP_DATA = {
       title: "Dual-Stack HTTP/2+3, AG-UI v1.0 & P2C",
       crates: "gap-exec, gap-balance, gap-transport, gap-agui",
       invariants: "INV-12, INV-18, OPS-005, CMP-025..028",
-      latency: "7.870 req/s H3 QUIC (1,45 ms p95) · 2.228 req/s TCP",
+      latency: "5.013 req/s H3 QUIC (2,36 ms p95) · 1.064 req/s TCP",
       summary:
         "Tầng truyền tải dual-stack phục vụ đồng thời HTTP/1.1+HTTP/2 TCP (Alt-Svc), HTTP/3 QUIC RFC 9114 (tắt 0-RTT chống replay) và AG-UI v1.0 (/ag-ui SSE + interrupt). Bộ thực thi gom batch DataLoader dập tắt lỗi N+1.",
       details:
@@ -61,7 +61,7 @@ window.GAP_DATA = {
       title: "6 NGC Adapters + SQLite/BLAKE3 Stores",
       crates: "adapters/gap-ngc-*, crates/gap-store",
       invariants: "INV-13, INV-14, INV-19",
-      latency: "Online SQLite backup; SIGKILL recover 12.96 ms",
+      latency: "Online SQLite backup; SIGKILL recover 28.86 ms",
       summary:
         "6 adapter chính thức chuyển đổi OpenAPI, GraphQL, gRPC, SQL, CLI và Code Tree-Sitter về hợp đồng protobuf thống nhất. Toàn bộ state bền vững lưu trong SQLite cô lập theo TenantScope.",
       details:
@@ -244,7 +244,7 @@ window.GAP_DATA = {
       concepts: [
         "Hot-Swap an toàn (INV-01 / INV-16): Thế hệ snapshot mới được pre-warm top-100 plan trước khi đổi con trỏ ArcSwap. Giải phóng bộ nhớ thế hệ cũ được đẩy ra thread nền để không khựng request đang chạy.",
         "Tự động RollbackWatcher theo dõi cửa sổ 60 giây (>= 200 mẫu) và lùi thế hệ ngay khi lỗi tăng quá ngưỡng; ngoài ra có lệnh gap snapshot rollback --to <gen>.",
-        "Kiểm tra thực địa cho thấy binary phát hành 26,9 MB của GAP phục hồi sẵn sàng HTTP 200 /readyz chỉ sau 12.96 ms ngay sau khi nhận lệnh kill -9 (SIGKILL), và chạy hỗn hợp 2.227,6 req/s TCP + 7.869,5 req/s HTTP/3 QUIC (0 lỗi)."
+        "Kiểm tra thực địa cho thấy binary phát hành 28,1 MB của GAP phục hồi sẵn sàng HTTP 200 /readyz chỉ sau 28.86 ms ngay sau khi nhận lệnh kill -9 (SIGKILL), xác thực live /ag-ui và chạy hỗn hợp 1.063,6 req/s TCP + 5.013,1 req/s HTTP/3 QUIC (0 lỗi)."
       ],
       commands: `# Chạy bộ test nâng cấp N-1->N, backup/restore SQLite & thu hồi task sau crash\nCI=1 cargo nextest run --no-pager -j 1 -p gap-server --test upgrade --offline\n\n# Chạy bộ chaos + soak có cấu hình thời gian (mặc định 3s cục bộ, 259200s cho 72h CI)\nCI=1 cargo nextest run --no-pager -j 1 -p gap-server --test soak --test chaos --offline`,
       files: [
@@ -268,7 +268,7 @@ window.GAP_DATA = {
         "Nắm toàn quyền làm chủ kiến trúc 32 crates Rust, đọc hiểu mọi quyết định thiết kế (ADR-001..028), quy trình benchmark tái lập, HTTP/3 QUIC, AG-UI v1.0, Laya/Jev/Gemini Decision 1 và chuẩn ASD-STE100.",
       concepts: [
         "Mọi crate đều phải tuân thủ phân tầng L0 -> L6 và luật ARC-002 (cấm tuyệt đối gap-exec, gap-plan, gap-transport, gap-snapshot, gap-balance phụ thuộc vào crate ML). Supply chain sạch 0 lỗ hổng RUSTSEC nhờ AVL OrdMap tự chủ và rustls-pki-types.",
-        "100% yêu cầu MUST trong spec/00..09 (89 MUST / 362 tổng yêu cầu) đều được gắn thẻ // spec: <ID> trên bài test thực tế và kiểm tra nghiêm ngặt qua tools/spec_trace.py --strict (2.511 markers).",
+        "100% yêu cầu MUST trong spec/00..09 (89 MUST / 362 tổng yêu cầu) đều được gắn thẻ // spec: <ID> trên bài test thực tế và kiểm tra nghiêm ngặt qua tools/spec_trace.py --strict (2.515 markers).",
         "Theo tinh thần ADR-021, toàn bộ số liệu đều kèm đường dẫn tái lập (./bench/results/gapbench/reproduce.sh, python3 dist/verify-ga-local.py) và công khai cả vùng thua cuộc (N<=50 cached, X-1 columnar, S1 f32 fallback)."
       ],
       commands: `# Toàn bộ cổng kiểm chứng kiến trúc & truy vết chuẩn Master\npython3 tools/check_layers.py\npython3 tools/spec_trace.py --strict\npython3 tools/check_refs.py\npython3 dist/check-ste100.py`,
