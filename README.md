@@ -1,8 +1,10 @@
 # GAP — Graph Agent Protocol
 
+> **Languages:** **English** · [Tiếng Việt (README.vi.md)](README.vi.md)
+
 **Graph Agent Protocol (GAP)** is an Apache-2.0 (`Copyright 2026 Mike (vnknowledge2014)`), strongly typed GraphQL-profile gateway and governance layer unifying heterogeneous AI agent backends (OpenAPI REST, GraphQL subgraphs, gRPC, SQL, CLI tools, AST code/doc graphs, external MCP servers, A2A peer tasks, and AG-UI v1.0 frontends) behind **progressive disclosure**, **batched federation**, **dual-stack HTTP/2 + HTTP/3 (QUIC) transport**, **multi-provider System-1 decision models (`Laya`, `Jev`, `gemini-decision-1`)**, **deterministic Cedar authorization**, and **wait-free immutable snapshots**.
 
-**Status (`0.1.0-rc.1` · `2026-11-17`):** **87 / 87 work packages complete (`main`)**, verified end-to-end offline (`362` spec requirements / `89` MUST / `2,511` test markers, `135/136` conformance tests, `32` Rust workspace crates, `0` `RUSTSEC` advisories via owned AVL `OrdMap`). Canonical repo: [`github.com/vnknowledge2014/GraphProtocol`](https://github.com/vnknowledge2014/GraphProtocol) · Live Portal, Promo Videos & Paper: [`vnknowledge2014.github.io/GraphProtocol`](https://vnknowledge2014.github.io/GraphProtocol/) ([`/paper/`](https://vnknowledge2014.github.io/GraphProtocol/paper/) · [English Promo Video](web/media/gap-promo-en.mp4) · [Video Tiếng Việt](web/media/gap-promo-vi.mp4)).
+**Status (`0.1.0-rc.1` · `2026-11-17`):** **87 / 87 work packages complete (`main`)**, verified end-to-end offline (`362` spec requirements / `89` MUST / `2,511` test markers, `135/136` conformance tests, `32` Rust workspace crates, `0` `RUSTSEC` advisories via owned AVL `OrdMap`). Canonical repo: [`github.com/vnknowledge2014/GraphProtocol`](https://github.com/vnknowledge2014/GraphProtocol) · Live Portal, Promo Videos & Paper: [`vnknowledge2014.github.io/GraphProtocol`](https://vnknowledge2014.github.io/GraphProtocol/) ([`/paper/`](https://vnknowledge2014.github.io/GraphProtocol/paper/) · [English Promo Video](web/media/gap-promo-en.mp4) · [Vietnamese Promo Video](web/media/gap-promo-vi.mp4)).
 
 ---
 
@@ -40,18 +42,18 @@ python3 tools/wp.py validate && python3 tools/check_layers.py && python3 tools/s
 
 ---
 
-## Tài liệu, Đặc tả & Bài báo Khoa học
+## Documentation, Specification & Academic Paper
 
-| Mục | Đường dẫn |
+| Resource | Location |
 |---|---|
-| **Website Học Tập & Video Demo EN/VI (Tiếng Việt)** | [`web/README.md`](web/README.md) · [`web/index.html`](web/index.html) · [`gap-promo-en.mp4`](web/media/gap-promo-en.mp4) · [`gap-promo-vi.mp4`](web/media/gap-promo-vi.mp4) · `python3 web/serve.py --port 8787` |
+| **Interactive Learning Portal & Promo Videos (EN / VI)** | [`web/README.md`](web/README.md) · [`web/index.html`](web/index.html) · [`gap-promo-en.mp4`](web/media/gap-promo-en.mp4) · [`gap-promo-vi.mp4`](web/media/gap-promo-vi.mp4) · `python3 web/serve.py --port 8787` |
 | **Academic Paper (LaTeX / HTML / PDF / Markdown)** | [`paper/main.tex`](paper/main.tex) · [`paper/gap-paper.pdf`](paper/gap-paper.pdf) · [`docs/paper/GAP-PAPER.md`](docs/paper/GAP-PAPER.md) |
 | **ASD-STE100 Aircraft Manual (Karpathy Style + Linter)** | [`docs/ste100/README.md`](docs/ste100/README.md) · `python3 dist/check-ste100.py` |
-| **Hướng dẫn Xuất bản arXiv/Zenodo DOI & Chạy GA Linux** | [`docs/paper/PUBLICATION-AND-GA-PLAYBOOK.md`](docs/paper/PUBLICATION-AND-GA-PLAYBOOK.md) · [`dist/set-author.py`](dist/set-author.py) |
-| **Cổng kiểm định 1.0-RC & Traceability Matrix** | [`docs/gates/RC.md`](docs/gates/RC.md) · [`docs/traceability.md`](docs/traceability.md) |
+| **arXiv / Zenodo DOI Publication & Linux GA Playbook** | [`docs/paper/PUBLICATION-AND-GA-PLAYBOOK.md`](docs/paper/PUBLICATION-AND-GA-PLAYBOOK.md) · [`dist/set-author.py`](dist/set-author.py) |
+| **1.0-RC Release Gates & Traceability Matrix** | [`docs/gates/RC.md`](docs/gates/RC.md) · [`docs/traceability.md`](docs/traceability.md) |
 | **Quickstart, Concepts, Connector & Security Guides** | [`docs/guides/quickstart.md`](docs/guides/quickstart.md) · [`docs/guides/concepts.md`](docs/guides/concepts.md) · [`docs/guides/connector-authoring.md`](docs/guides/connector-authoring.md) · [`docs/guides/security-hardening.md`](docs/guides/security-hardening.md) |
-| **Normative Spec (`00`–`09`), ADRs & Review** | [`spec/`](spec/) · [`docs/01-DECISIONS.md`](docs/01-DECISIONS.md) · [`docs/00-REVIEW.md`](docs/00-REVIEW.md) |
-| **Wire Contracts & Work Packages (`87/87 done`)** | [`proto/`](proto/) · [`work/work-packages.toml`](work/work-packages.toml) · [`work/status.toml`](work/status.toml) |
+| **Normative Specification (`00`–`09`), ADRs & Design Review** | [`spec/`](spec/) · [`docs/01-DECISIONS.md`](docs/01-DECISIONS.md) · [`docs/00-REVIEW.md`](docs/00-REVIEW.md) |
+| **Wire Contracts & Work Packages (`87/87` complete)** | [`proto/`](proto/) · [`work/work-packages.toml`](work/work-packages.toml) · [`work/status.toml`](work/status.toml) |
 
 ---
 
