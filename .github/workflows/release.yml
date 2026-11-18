@@ -155,18 +155,16 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
+          pattern: release-*
           path: artifacts
           merge-multiple: true
       - name: Install Sigstore cosign
         uses: sigstore/cosign-installer@v3
       - name: Sign release archives and SBOM with keyless cosign
-        env:
-          COSIGN_YES: 'true'
         run: |
           for file in artifacts/gap-*.tar.gz artifacts/sbom.cdx.json; do
-            cosign sign-blob \
-              --output-signature "${file}.sig" \
-              --output-certificate "${file}.crt" \
+            cosign sign-blob --yes \
+              --bundle "${file}.sigstore.json" \
               "${file}"
           done
       - name: Attest SLSA v1.0 build provenance

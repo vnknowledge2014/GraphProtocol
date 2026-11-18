@@ -9,7 +9,7 @@ Generated mechanically by [`dist/generate-traceability.py`](../dist/generate-tra
 | Total normative requirements | 362 |
 | `MUST` / `MUST NOT` requirements | 89 |
 | Non-`MUST` requirements (`SHOULD`/`MAY`) | 273 |
-| Total test/conformance `spec:` markers | 2515 |
+| Total test/conformance `spec:` markers | 2516 |
 | Uncovered `MUST` requirements | 0 |
 | Unknown `spec:` test markers | 0 |
 
@@ -21,7 +21,7 @@ Generated mechanically by [`dist/generate-traceability.py`](../dist/generate-tra
 | `spec/02-gap-ql.md` | 27 | 15 | 27 | 0 | 369 |
 | `spec/03-ngc.md` | 46 | 30 | 43 | 0 | 424 |
 | `spec/04-routing.md` | 64 | 11 | 55 | 0 | 198 |
-| `spec/05-ingestion.md` | 41 | 15 | 41 | 0 | 317 |
+| `spec/05-ingestion.md` | 41 | 15 | 41 | 0 | 318 |
 | `spec/06-runtime.md` | 47 | 2 | 45 | 0 | 218 |
 | `spec/07-security.md` | 62 | 3 | 40 | 0 | 206 |
 | `spec/08-operations.md` | 14 | 2 | 11 | 0 | 104 |
@@ -225,8 +225,8 @@ Generated mechanically by [`dist/generate-traceability.py`](../dist/generate-tra
 | `ING-003` | 26 | non-MUST | 1 | `crates/gap-ingest/src/proposals/tests.rs:411` |
 | `ING-010` | 42 | `MUST` | 19 | `adapters/gap-ngc-openapi/src/connector.rs:4850`, `adapters/gap-ngc-openapi/src/document.rs:586`, `adapters/gap-ngc-openapi/src/extract.rs:1139`, `adapters/gap-ngc-openapi/src/extract.rs:1217` (+15 more) |
 | `ING-011` | 43 | `MUST` | 2 | `crates/gap-ingest/src/cisg/mod.rs:1297`, `crates/gap-ingest/src/fetch/mod.rs:152` |
-| `ING-012` | 44 | `MUST` | 12 | `adapters/gap-ngc-openapi/src/document.rs:616`, `adapters/gap-ngc-openapi/src/document.rs:670`, `adapters/gap-ngc-openapi/src/document.rs:846`, `crates/gap-ingest/src/cisg/mod.rs:1297` (+8 more) |
-| `ING-020` | 67 | non-MUST | 10 | `crates/gap-ingest/src/cisg/mod.rs:1272`, `crates/gap-ingest/src/extractors/graphql/mod.rs:1656`, `crates/gap-ingest/src/extractors/graphql/mod.rs:1741`, `crates/gap-ingest/src/extractors/grpc/mod.rs:2263` (+6 more) |
+| `ING-012` | 44 | `MUST` | 13 | `adapters/gap-ngc-openapi/src/document.rs:616`, `adapters/gap-ngc-openapi/src/document.rs:670`, `adapters/gap-ngc-openapi/src/document.rs:846`, `crates/gap-ingest/src/cisg/mod.rs:1297` (+9 more) |
+| `ING-020` | 67 | non-MUST | 10 | `crates/gap-ingest/src/cisg/mod.rs:1272`, `crates/gap-ingest/src/extractors/graphql/mod.rs:1661`, `crates/gap-ingest/src/extractors/graphql/mod.rs:1746`, `crates/gap-ingest/src/extractors/grpc/mod.rs:2263` (+6 more) |
 | `ING-021` | 68 | non-MUST | 4 | `crates/gap-ingest/src/cisg/mod.rs:1233`, `crates/gap-ingest/src/extractors/openapi/mod.rs:905`, `crates/gap-ingest/src/extractors/sql/mod.rs:1519`, `crates/gap-ingest/src/extractors/sql/mod.rs:1601` |
 | `ING-030` | 71 | non-MUST | 2 | `crates/gap-ingest/src/enrich/mod.rs:1532`, `crates/gap-ingest/src/enrich/mod.rs:1729` |
 | `ING-031` | 72 | non-MUST | 1 | `crates/gap-ingest/src/enrich/mod.rs:1548` |
@@ -344,7 +344,7 @@ Generated mechanically by [`dist/generate-traceability.py`](../dist/generate-tra
 | `SEC-002` | 38 | non-MUST | 7 | `crates/gap-cli/tests/cli.rs:407`, `crates/gap-core/src/config.rs:977`, `crates/gap-sec/src/authn/tests.rs:431`, `crates/gap-server/tests/e2e.rs:690` (+3 more) |
 | `SEC-003` | 39 | `MUST` | 1 | `crates/gap-sec/src/authn/tests.rs:432` |
 | `SEC-004` | 40 | non-MUST | 6 | `crates/gap-sec/src/authn/tests.rs:103`, `crates/gap-sec/src/authn/tests.rs:433`, `crates/gap-server/src/run.rs:667`, `crates/gap-server/tests/e2e.rs:455` (+2 more) |
-| `SEC-010` | 48 | `MUST` | 20 | `adapters/gap-a2a/src/tests.rs:290`, `crates/gap-conformance/src/offline.rs:442`, `crates/gap-conformance/tests/spawn.rs:117`, `crates/gap-core/src/context.rs:432` (+16 more) |
+| `SEC-010` | 48 | `MUST` | 20 | `adapters/gap-a2a/src/tests.rs:290`, `crates/gap-conformance/src/offline.rs:442`, `crates/gap-conformance/tests/spawn.rs:123`, `crates/gap-core/src/context.rs:432` (+16 more) |
 | `SEC-011` | 49 | `MUST` | 7 | `adapters/gap-a2a/src/tests.rs:548`, `adapters/gap-ngc-graphql/tests/graphql_connector.rs:1023`, `adapters/gap-ngc-grpc/tests/grpc_connector.rs:1038`, `crates/gap-sec/src/authn/tests.rs:396` (+3 more) |
 | `SEC-012` | 50 | non-MUST | 2 | `crates/gap-sec/src/authn/tests.rs:675`, `crates/gap-sec/src/authz/tests.rs:243` |
 | `SEC-020` | 53 | non-MUST | 4 | `crates/gap-cli/src/commands/tests.rs:90`, `crates/gap-cli/src/commands/tests.rs:310`, `crates/gap-sec/src/authz/tests.rs:40`, `crates/gap-sec/src/authz/tests.rs:170` |
@@ -359,8 +359,8 @@ Generated mechanically by [`dist/generate-traceability.py`](../dist/generate-tra
 | `SEC-060` | 80 | non-MUST | 1 | `crates/gap-sec/src/manifest/tests.rs:48` |
 | `SEC-061` | 81 | non-MUST | 6 | `adapters/gap-ngc-cli/src/tests.rs:51`, `crates/gap-sec/src/manifest/tests.rs:48`, `crates/gap-sec/src/manifest/tests.rs:185`, `tests/security/rugpull/rug_pull.rs:2` (+2 more) |
 | `SEC-062` | 82 | non-MUST | 3 | `crates/gap-cli/src/commands/tests.rs:90`, `crates/gap-cli/tests/cli.rs:432`, `crates/gap-sec/src/manifest/tests.rs:48` |
-| `SEC-070` | 85 | non-MUST | 9 | `adapters/gap-ngc-cli/src/tests.rs:51`, `crates/gap-cli/tests/cli.rs:210`, `crates/gap-sec/src/sandbox/tests.rs:46`, `crates/gap-sec/src/sandbox/tests.rs:83` (+5 more) |
-| `SEC-071` | 86 | non-MUST | 4 | `crates/gap-sec/src/sandbox/tests.rs:83`, `tests/security/rugpull/rug_pull.rs:2`, `tests/security/rugpull/rug_pull.rs:205`, `tests/security/sandbox/sandbox_smoke.rs:85` |
+| `SEC-070` | 85 | non-MUST | 9 | `adapters/gap-ngc-cli/src/tests.rs:51`, `crates/gap-cli/tests/cli.rs:210`, `crates/gap-sec/src/sandbox/tests.rs:46`, `crates/gap-sec/src/sandbox/tests.rs:88` (+5 more) |
+| `SEC-071` | 86 | non-MUST | 4 | `crates/gap-sec/src/sandbox/tests.rs:88`, `tests/security/rugpull/rug_pull.rs:2`, `tests/security/rugpull/rug_pull.rs:205`, `tests/security/sandbox/sandbox_smoke.rs:85` |
 | `SEC-072` | 87 | non-MUST | 7 | `crates/gap-cli/src/commands/tests.rs:90`, `crates/gap-cli/tests/cli.rs:262`, `crates/gap-sec/src/egress/tests.rs:328`, `crates/gap-sec/src/sandbox/tests.rs:46` (+3 more) |
 | `SEC-075` | 90 | non-MUST | 9 | `adapters/gap-mcp/tests/outbound/real_http.rs:10`, `crates/gap-sec/src/egress/tests.rs:54`, `crates/gap-sec/src/egress/tests.rs:117`, `crates/gap-sec/src/egress/tests.rs:160` (+5 more) |
 | `SEC-076` | 91 | non-MUST | 6 | `crates/gap-sec/src/egress/tests.rs:54`, `crates/gap-sec/src/egress/tests.rs:117`, `crates/gap-sec/src/egress/tests.rs:218`, `tests/security/ssrf/ssrf_egress.rs:2` (+2 more) |

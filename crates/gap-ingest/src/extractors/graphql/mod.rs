@@ -263,18 +263,24 @@ fn tokenize_graphql(
                             reason: "unterminated escape in GraphQL string".to_string(),
                         });
                     }
-                    let esc = bytes[idx];
-                    idx += 1;
-                    match esc {
-                        b'"' => val.push('"'),
-                        b'\\' => val.push('\\'),
-                        b'/' => val.push('/'),
-                        b'b' => val.push('\u{0008}'),
-                        b'f' => val.push('\u{000C}'),
-                        b'n' => val.push('\n'),
-                        b'r' => val.push('\r'),
-                        b't' => val.push('\t'),
-                        other => val.push(other as char),
+                    let ch =
+                        input[idx..]
+                            .chars()
+                            .next()
+                            .ok_or_else(|| ExtractError::Malformed {
+                                reason: "invalid UTF-8 after escape in GraphQL string".to_string(),
+                            })?;
+                    idx += ch.len_utf8();
+                    match ch {
+                        '"' => val.push('"'),
+                        '\\' => val.push('\\'),
+                        '/' => val.push('/'),
+                        'b' => val.push('\u{0008}'),
+                        'f' => val.push('\u{000C}'),
+                        'n' => val.push('\n'),
+                        'r' => val.push('\r'),
+                        't' => val.push('\t'),
+                        other => val.push(other),
                     }
                     continue;
                 }
@@ -1888,6 +1894,36 @@ type RootSub {
             GraphqlExtractor.extract(
                 &test_handle("file://bad.graphql", b"type Bad { x: }"),
                 &ExtractLimits::default()
+            ),
+            Err(ExtractError::Malformed { .. })
+        ));
+    }
+
+    // spec: ING-012
+    #[test]
+    fn extractor_graphql_escaped_multibyte_utf8_in_string_never_panics() {
+        let escaped_utf8 = "\"\\ढ\" type Query { a: Int }".as_bytes();
+        let cisg = GraphqlExtractor
+            .extract(
+                &test_handle("file://escaped_utf8.graphql", escaped_utf8),
+                &ExtractLimits::default(),
+            )
+            .expect("escaped multibyte UTF-8 description before type should decode cleanly");
+        assert!(cisg.docs.iter().any(|d| d.content.text == "ढ"));
+
+        // Exact crash input discovered by libFuzzer `fuzz_extract_graphql` (`VER-020`).
+        let fuzz_crash: &[u8] = &[
+            91, 34, 95, 34, 95, 95, 115, 99, 104, 101, 109, 97, 34, 58, 32, 58, 32, 34, 116, 121,
+            34, 44, 32, 34, 102, 105, 101, 108, 100, 115, 34, 3, 58, 92, 32, 0, 92, 92, 83, 92,
+            101, 120, 97, 109, 112, 108, 92, 92, 109, 112, 108, 92, 92, 92, 117, 92, 114, 116, 1,
+            0, 0, 0, 0, 0, 0, 24, 110, 92, 117, 92, 114, 116, 1, 0, 0, 0, 0, 0, 0, 24, 110, 92, 92,
+            92, 92, 92, 92, 92, 59, 0, 24, 110, 92, 117, 92, 114, 116, 1, 0, 0, 0, 0, 0, 0, 24,
+            110, 92, 92, 92, 92, 92, 92, 92, 224, 164, 162, 125, 125,
+        ];
+        assert!(matches!(
+            GraphqlExtractor.extract(
+                &test_handle("file://fuzz_crash.graphql", fuzz_crash),
+                &ExtractLimits::default(),
             ),
             Err(ExtractError::Malformed { .. })
         ));

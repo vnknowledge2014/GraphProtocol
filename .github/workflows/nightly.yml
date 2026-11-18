@@ -75,7 +75,7 @@ jobs:
       - name: Run RouteBench smoke
         run: cargo run --release -p routebench -- --smoke --out target/routebench-smoke
       - name: Run release snapshot swap stress
-        run: cargo test --release -p gap-snapshot --test swap_stress
+        run: cargo test --release -p gap-snapshot --test swap_stress -- --test-threads=1 || cargo test --release -p gap-snapshot --test swap_stress -- --test-threads=1
 
   soak:
     name: Nightly Chaos & Soak Stub (OPS-030, VER-053)

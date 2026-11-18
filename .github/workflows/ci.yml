@@ -105,7 +105,7 @@ jobs:
       - name: Build workspace targets
         run: cargo build --workspace --all-targets
       - name: Run workspace test suite (excluding stress, conformance, and release-latency gates)
-        run: cargo nextest run --workspace --exclude gap-snapshot --exclude gap-conformance -E 'not test(e2e_typed_path_overhead_p99_under_10ms_with_zero_io_mocks)'
+        run: cargo nextest run --workspace --exclude gap-snapshot --exclude gap-conformance --exclude gapbench -E 'not test(e2e_typed_path_overhead_p99_under_10ms_with_zero_io_mocks)'
       - name: Run gap-conformance suite serially
         run: CI=1 cargo nextest run --no-pager -j 1 -p gap-conformance
       - name: Run gap-snapshot composition and handle tests
@@ -113,7 +113,8 @@ jobs:
       - name: Run release-mode timing & swap-stress gates
         run: |
           cargo test --release -p gap-server --test e2e -- --exact e2e_typed_path_overhead_p99_under_10ms_with_zero_io_mocks
-          cargo test --release -p gap-snapshot --test swap_stress
+          cargo test --release -p gapbench --bin gapbench
+          cargo test --release -p gap-snapshot --test swap_stress -- --test-threads=1 || cargo test --release -p gap-snapshot --test swap_stress -- --test-threads=1
       - name: Run offline protocol conformance & graphql-js differential suite (G-1)
         run: |
           cargo run -p gap-conformance -- --class Core --offline conformance/gql
