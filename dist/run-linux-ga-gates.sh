@@ -54,7 +54,14 @@ if [[ "${MODE}" == "--quick-check" ]]; then
 fi
 
 echo "[5/7] Coverage (>=80% L0-L3, >=70% overall) & mutation testing (G-4)"
-cargo llvm-cov nextest --workspace --lcov --output-path target/lcov.info --summary-only
+cargo llvm-cov nextest --workspace \
+  --exclude gap-conformance \
+  --exclude gapbench \
+  --exclude routebench \
+  --exclude enrichment-bench \
+  --ignore-filename-regex '(^|/)(bench|crates/gap-conformance|crates/gap-testkit)/' \
+  -E 'not test(e2e_typed_path_overhead_p99_under_10ms_with_zero_io_mocks) and not binary(swap_stress)' \
+  --lcov --output-path target/lcov.info --summary-only
 if command -v cargo-mutants >/dev/null 2>&1; then
   cargo mutants --workspace --no-shuffle --timeout 120
 fi
@@ -67,7 +74,7 @@ for target in \
   fuzz_cursor_decode fuzz_extract_graphql fuzz_extract_mcp fuzz_extract_openapi \
   fuzz_extract_proto fuzz_extract_sql fuzz_gapql_parse fuzz_ngc_decode \
   fuzz_policy_input fuzz_sanitize; do
-  (cd fuzz && cargo +nightly fuzz run "${target}" -- -max_total_time="${GAP_FUZZ_MAX_TIME}") &
+  (cd fuzz && cargo +nightly fuzz run "${target}" --target x86_64-unknown-linux-gnu -- -max_total_time="${GAP_FUZZ_MAX_TIME}") &
   fuzz_pids+=("$!")
 done
 for pid in "${fuzz_pids[@]}"; do

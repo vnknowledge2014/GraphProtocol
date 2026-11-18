@@ -15,9 +15,14 @@ use gap_conformance::spawn::{SpawnError, SpawnSpec};
 use tempfile::TempDir;
 
 const SERVER_PY: &str = r#"
-import http.server, json, os, sys
+import http.server, json, os, socketserver, sys
 port = int(sys.argv[1])
 open("server.pid", "w").write(str(os.getpid()))
+class S(http.server.ThreadingHTTPServer):
+    allow_reuse_address = True
+    def server_bind(self):
+        socketserver.TCPServer.server_bind(self)
+        self.server_name, self.server_port = str(self.server_address[0]), self.server_address[1]
 class H(http.server.BaseHTTPRequestHandler):
     def log_message(self, *a): pass
     def do_GET(self):
@@ -28,7 +33,7 @@ class H(http.server.BaseHTTPRequestHandler):
         body = json.dumps({"data": {"ok": True}, "extensions": {"gap": {"generation": 1}}} if authorized else {"errors": [{"message": "no", "extensions": {"code": "GAP_UNAUTHENTICATED"}}]}).encode()
         self.send_response(200 if authorized else 401)
         self.send_header("Content-Type", "application/json"); self.send_header("Content-Length", str(len(body))); self.end_headers(); self.wfile.write(body)
-srv = http.server.ThreadingHTTPServer(("127.0.0.1", port), H)
+srv = S(("127.0.0.1", port), H)
 print("server listening on", port, flush=True)
 srv.serve_forever()
 "#;

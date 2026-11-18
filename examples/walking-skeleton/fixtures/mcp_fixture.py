@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import socketserver
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 PROTOCOL_VERSION = "2026-07-28"
@@ -244,6 +245,15 @@ class McpNotesHandler(BaseHTTPRequestHandler):
         self._rpc_error(200, req_id, -32601, "method not found")
 
 
+class LocalhostHTTPServer(ThreadingHTTPServer):
+    allow_reuse_address = True
+
+    def server_bind(self) -> None:
+        # Bypass socket.getfqdn() to avoid intermittent mDNS/rDNS stalls on loopback.
+        socketserver.TCPServer.server_bind(self)
+        self.server_name, self.server_port = str(self.server_address[0]), self.server_address[1]
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Run the deterministic GAP notes MCP HTTP fixture.")
     parser.add_argument(
@@ -254,7 +264,7 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    server = ThreadingHTTPServer(("127.0.0.1", args.port), McpNotesHandler)
+    server = LocalhostHTTPServer(("127.0.0.1", args.port), McpNotesHandler)
     bound_port = server.server_address[1]
     print(
         f"mcp_fixture listening on http://127.0.0.1:{bound_port}/mcp (port={bound_port})",

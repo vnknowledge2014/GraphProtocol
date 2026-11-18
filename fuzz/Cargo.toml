@@ -18,11 +18,13 @@ cargo-fuzz = true
 
 [dependencies]
 gap-core = { path = "../crates/gap-core" }
+gap-exec = { path = "../crates/gap-exec" }
 gap-ingest = { path = "../crates/gap-ingest" }
 gap-proto = { path = "../crates/gap-proto" }
 gap-ql = { path = "../crates/gap-ql" }
 gap-route = { path = "../crates/gap-route" }
 gap-sec = { path = "../crates/gap-sec" }
+prost = "0.14.4"
 # Pin from docs/evidence/crate-versions.md (`cargo-fuzz / libfuzzer-sys: 0.13.2 / 0.4.13`);
 # awaits online re-verification by the reviewer.
 libfuzzer-sys = "0.4.13"

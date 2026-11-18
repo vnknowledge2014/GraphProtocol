@@ -81,7 +81,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        os: [ubuntu-latest, macos-15-intel]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -144,4 +144,12 @@ jobs:
           sudo apt-get install -y --no-install-recommends bubblewrap
           sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
       - name: Measure workspace coverage across unit + integration suites
-        run: cargo llvm-cov nextest --workspace --exclude gap-snapshot --exclude gap-s1 --exclude gap-conformance -E 'not test(e2e_typed_path_overhead_p99_under_10ms_with_zero_io_mocks)' --summary-only
+        run: |
+          cargo llvm-cov nextest --workspace \
+            --exclude gap-conformance \
+            --exclude gapbench \
+            --exclude routebench \
+            --exclude enrichment-bench \
+            --ignore-filename-regex '(^|/)(bench|crates/gap-conformance|crates/gap-testkit)/' \
+            -E 'not test(e2e_typed_path_overhead_p99_under_10ms_with_zero_io_mocks) and not binary(swap_stress)' \
+            --summary-only

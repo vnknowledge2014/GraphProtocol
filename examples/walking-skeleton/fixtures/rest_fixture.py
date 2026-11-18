@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import socketserver
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlsplit
 
@@ -120,6 +121,15 @@ class ShopHandler(BaseHTTPRequestHandler):
             self._send_json(400, {"error": str(exc)})
 
 
+class LocalhostHTTPServer(ThreadingHTTPServer):
+    allow_reuse_address = True
+
+    def server_bind(self) -> None:
+        # Bypass socket.getfqdn() to avoid intermittent mDNS/rDNS stalls on loopback.
+        socketserver.TCPServer.server_bind(self)
+        self.server_name, self.server_port = str(self.server_address[0]), self.server_address[1]
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Run the deterministic GAP shop REST fixture.")
     parser.add_argument(
@@ -130,7 +140,7 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    server = ThreadingHTTPServer(("127.0.0.1", args.port), ShopHandler)
+    server = LocalhostHTTPServer(("127.0.0.1", args.port), ShopHandler)
     bound_port = server.server_address[1]
     print(f"rest_fixture listening on http://127.0.0.1:{bound_port} (port={bound_port})", flush=True)
     try:
