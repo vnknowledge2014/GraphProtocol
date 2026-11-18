@@ -1,6 +1,6 @@
 # Graph Agent Protocol (GAP): Unifying Typed Discovery, Batched Federation, and Zero-Trust Governance for AI Agents
 
-**Author:** Mike (vnknowledge2014) (Graph Agent Protocol Project) · `vnknowledge2014@users.noreply.github.com` · ORCID pending registration
+**Author:** Duy Đức Nguyễn (Infinite Agent Labs) · `office@infiniteagentlabs.com` · https://orcid.org/0009-0009-4741-5637
 **Version / Date:** `0.1.0-rc.1` · 2026-11-16 · **Licence:** `Apache-2.0` · **Repository:** `https://github.com/vnknowledge2014/GraphProtocol`
 **LaTeX Source & arXiv Bundle:** [`paper/main.tex`](../../paper/main.tex) · [`paper/references.bib`](../../paper/references.bib) · [`CITATION.cff`](../../CITATION.cff)
 

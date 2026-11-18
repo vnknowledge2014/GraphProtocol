@@ -8,26 +8,21 @@ Tài liệu này hướng dẫn từng bước cụ thể để bạn:
 
 ---
 
-## Bước 1 — Gắn danh tính tác giả thật & ORCID (Làm đầu tiên)
+## Bước 1 — Gắn danh tính tác giả thật & ORCID (ĐÃ HOÀN TẤT)
 
-1. Đăng ký miễn phí mã định danh nhà nghiên cứu toàn cầu tại [https://orcid.org](https://orcid.org) (mất ~2 phút, nhận mã dạng `0000-000X-XXXX-XXXX`).
-2. Chạy đúng 1 lệnh từ thư mục gốc của repo để đồng bộ tên thật, email, đơn vị công tác và ORCID vào cả `CITATION.cff`, `.zenodo.json`, `NOTICE`, `paper/author_config.tex` và `docs/paper/GAP-PAPER.md`:
-   ```bash
-   python3 dist/set-author.py \
-     --given-names "Mike (vnknowledge2014)" \
-     --family-names "" \
-     --affiliation "Graph Agent Protocol Project" \
-     --email "vnknowledge2014@users.noreply.github.com" \
-     --orcid "ORCID pending registration" \
-     --repo-url "https://github.com/vnknowledge2014/GraphProtocol"
-   ```
-3. Kiểm tra lại cấu hình git trước khi commit & push:
-   ```bash
-   git config user.name "Ten Day Du"
-   git config user.email "email-chinh-thuc@domain.com"
-   git add CITATION.cff .zenodo.json NOTICE paper/author_config.tex docs/paper/GAP-PAPER.md
-   git commit -m "chore(citation): set canonical author metadata and ORCID"
-   ```
+Đã gắn danh tính chính thức (`Nguyễn Duy Đức` / `Infinite Agent Labs` / `ORCID: 0009-0009-4741-5637` / `office@infiniteagentlabs.com`) đồng bộ vào `CITATION.cff`, `.zenodo.json`, `NOTICE`, `LICENSE`, `paper/author_config.tex`, `paper/main.tex` và `docs/paper/GAP-PAPER.md` bằng lệnh:
+
+```bash
+python3 dist/set-author.py \
+  --given-names "Duy Đức" \
+  --family-names "Nguyễn" \
+  --affiliation "Infinite Agent Labs" \
+  --email "office@infiniteagentlabs.com" \
+  --orcid "0009-0009-4741-5637" \
+  --repo-url "https://github.com/vnknowledge2014/GraphProtocol"
+```
+
+Nếu cần cập nhật lại trong tương lai, chạy lại `dist/set-author.py` và kiểm tra bằng `python3 dist/set-author.py --check`.
 
 ---
 

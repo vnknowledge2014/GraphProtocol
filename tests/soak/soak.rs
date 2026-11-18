@@ -269,8 +269,11 @@ impl SignatureProber for AllFailProber {
 // spec: OPS-030
 #[tokio::test]
 async fn ops_030_chaos_concurrent_snapshot_swaps_rollback_and_pinning_invariants() {
-    let sf = ServerFile::load(repo_root().join("examples/walking-skeleton/gap.toml"))
-        .expect("load config");
+    let sf = ServerFile::load_with_env(
+        repo_root().join("examples/walking-skeleton/gap.toml"),
+        std::iter::empty::<(&str, &str)>(),
+    )
+    .expect("load config");
     let assembled = assemble(
         &sf,
         &ChaosBranchFactory {
@@ -346,8 +349,11 @@ async fn ops_030_chaos_concurrent_snapshot_swaps_rollback_and_pinning_invariants
 // spec: OPS-030
 #[tokio::test]
 async fn ops_030_chaos_upstream_faults_malformed_json_and_drift_freeze() {
-    let sf = ServerFile::load(repo_root().join("examples/walking-skeleton/gap.toml"))
-        .expect("load config");
+    let sf = ServerFile::load_with_env(
+        repo_root().join("examples/walking-skeleton/gap.toml"),
+        std::iter::empty::<(&str, &str)>(),
+    )
+    .expect("load config");
 
     // 1. Upstream 503 returns clean GraphQL error without leaking raw upstream body secrets.
     let assembled_503 = assemble(
@@ -631,8 +637,11 @@ async fn ops_030_configurable_soak_loop_maintains_bounds_and_zero_task_loss() {
         .unwrap_or(3);
 
     let dir = TempDir::new().expect("soak temp dir");
-    let sf = ServerFile::load(repo_root().join("examples/walking-skeleton/gap.toml"))
-        .expect("load config");
+    let sf = ServerFile::load_with_env(
+        repo_root().join("examples/walking-skeleton/gap.toml"),
+        std::iter::empty::<(&str, &str)>(),
+    )
+    .expect("load config");
     let fault_counter = Arc::new(AtomicU64::new(0));
     let assembled = assemble(
         &sf,

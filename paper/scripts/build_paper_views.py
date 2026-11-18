@@ -21,10 +21,10 @@ CANONICAL_PAGES = "https://vnknowledge2014.github.io/GraphProtocol"
 def read_author_meta() -> dict[str, str]:
     tex = (PAPER_DIR / "author_config.tex").read_text(encoding="utf-8")
     out = {
-        "name": "Mike (vnknowledge2014)",
-        "affiliation": "Graph Agent Protocol Project",
-        "email": "vnknowledge2014@users.noreply.github.com",
-        "orcid": "ORCID pending registration",
+        "name": "Duy Đức Nguyễn",
+        "affiliation": "Infinite Agent Labs",
+        "email": "office@infiniteagentlabs.com",
+        "orcid": "https://orcid.org/0009-0009-4741-5637",
         "repo": CANONICAL_REPO,
     }
     patterns = {
@@ -83,6 +83,8 @@ def build_html(
     author_esc = html.escape(author["name"])
     affil_esc = html.escape(author["affiliation"])
     email_esc = html.escape(author["email"])
+    orcid_esc = html.escape(author["orcid"])
+    orcid_id = html.escape(author["orcid"].removeprefix("https://orcid.org/"))
     repo_esc = html.escape(author["repo"])
 
     doc = f"""<!DOCTYPE html>
@@ -93,6 +95,8 @@ def build_html(
 <title>Graph Agent Protocol (GAP): Unifying Typed Discovery, Batched Federation, and Zero-Trust Governance for AI Agents</title>
 <meta name="citation_title" content="Graph Agent Protocol (GAP): Unifying Typed Discovery, Batched Federation, and Zero-Trust Governance for AI Agents"/>
 <meta name="citation_author" content="{author_esc}"/>
+<meta name="citation_author_email" content="{email_esc}"/>
+<meta name="citation_author_orcid" content="{orcid_id}"/>
 <meta name="citation_publication_date" content="2026/11/16"/>
 <meta name="citation_technical_report_institution" content="{affil_esc}"/>
 <meta name="citation_pdf_url" content="{CANONICAL_PAGES}/paper/gap-paper.pdf"/>
@@ -293,7 +297,7 @@ def build_html(
 <body>
 <header>
   <h1>Graph Agent Protocol (GAP): Unifying Typed Discovery, Batched Federation, and Zero-Trust Governance for AI Agents</h1>
-  <div class="author"><strong>{author_esc}</strong> &middot; {affil_esc} &middot; <code>{email_esc}</code></div>
+  <div class="author"><strong>{author_esc}</strong> &middot; {affil_esc} &middot; <code>{email_esc}</code> &middot; ORCID: <a href="{orcid_esc}">{orcid_id}</a></div>
   <div class="meta-line">
     Reference Release <code>v0.1.0-rc.1</code> &middot; November 16, 2026 &middot; Apache-2.0 &middot;
     Code &amp; Artifacts: <a href="{repo_esc}">{repo_esc}</a>

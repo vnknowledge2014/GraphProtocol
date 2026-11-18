@@ -1,6 +1,6 @@
 \documentclass[10pt,twocolumn]{article}
 
-\usepackage[T1]{fontenc}
+\usepackage[T5,T1]{fontenc}
 \usepackage[utf8]{inputenc}
 \usepackage{lmodern}
 \usepackage{microtype}
@@ -10,7 +10,9 @@
 \usepackage{array}
 \usepackage{tikz}
 \usepackage{listings}
-\usepackage{hyperref}
+\usepackage[unicode]{hyperref}
+
+\input{author_config.tex}
 
 \hypersetup{
   colorlinks=true,
@@ -18,7 +20,7 @@
   citecolor=teal!60!black,
   urlcolor=blue!65!black,
   pdftitle={Graph Agent Protocol (GAP)},
-  pdfauthor={Mike (vnknowledge2014)}
+  pdfauthor={Duy Duc Nguyen (Infinite Agent Labs)}
 }
 
 \lstset{
@@ -29,15 +31,13 @@
   columns=flexible
 }
 
-\input{author_config.tex}
-
 \title{\Large\bfseries Graph Agent Protocol (GAP): Unifying Typed Discovery, Batched Federation, and Zero-Trust Governance for AI Agents}
 
 \author{
-  \GapAuthorFullName \\
+  {\fontencoding{T5}\selectfont \GapAuthorFullName} \\
   \small \GapAuthorAffiliation \\
-  \small \texttt{\GapAuthorEmail} \quad $\cdot$ \quad {\scriptsize \GapAuthorOrcid} \\
-  \small Repository: \texttt{\GapRepoUrl}
+  \small \texttt{\GapAuthorEmail} \quad $\cdot$ \quad {\scriptsize \href{\GapAuthorOrcid}{\texttt{\GapAuthorOrcid}}} \\
+  \small Repository: \href{\GapRepoUrl}{\texttt{\GapRepoUrl}}
 }
 
 \date{November 16, 2026 \quad (Reference Release \texttt{v0.1.0-rc.1})}
@@ -71,9 +71,9 @@ We propose \textbf{Graph Agent Protocol (GAP)}, a unified typed protocol and ref
 \begin{itemize}
   \item \textbf{Three-Plane Typed Agent Gateway Architecture (\S\ref{sec:arch}--\S\ref{sec:proto}):} Formal separation of deterministic hot execution, three-level progressive discovery (\texttt{L0/L1/L2}), and zero-trust snapshot control governed by 20 testable architectural invariants (\texttt{INV-01}--\texttt{INV-20}).
   \item \textbf{Zero-Trust Governance Controls (\S\ref{sec:sec}):} Combine Cedar default-deny policies~\cite{cutler2024cedar}, tenant-keyed isolation across caches/stores/audits, description-hash pinning with fail-closed \texttt{DRIFT} freeze against MCP rug pulls, DNS-pinned SSRF egress defense, OS sandboxing, and tamper-evident BLAKE3 audit chains.
-  \item \textbf{Empirical Router & Conformal Gating Discovery (\S\ref{sec:eval}):} Using \texttt{RouteBench}, we prove why default zero-shot neural System-1 checkpoints fail deployment gates (\textbf{14.29\%} debiased top-1 at 73.85\,ms p95), validating our fail-safe architectural choice to ship deterministic BM25+structural routing (\textbf{95.24\%} test / \textbf{97.22\%} held-out top-1 at \textbf{0.887\,ms} p95) without breaking protocol semantics.
-  \item \textbf{Honest Crossover Benchmarks (\texttt{GAP-Bench}) & Negative Results:} We measure Direct-MCP vs.\ GAP across uncached and 0.10$\times$ prefix-cached regimes for $N \in \{10, 50, 200, 1000\}$ and quantify both massive gains (up to \textbf{95.34$\times$} on joins, \textbf{208.68$\times$} on code graphs) and exact negative crossover cells ($N \le 50$ cached flat RPC; X-1 wire columnarization deferral).
-  \item \textbf{Full Rust Reference System & Verifiable Artifacts (\S\ref{sec:impl}):} 32 layered crates, 6 reference connectors, three-axis inbound/outbound protocol facades (MCP, A2A, AG-UI), 135 verified conformance tests, bit-reproducible release artifacts, and single-command local verification scripts.
+  \item \textbf{Empirical Router \& Conformal Gating Discovery (\S\ref{sec:eval}):} Using \texttt{RouteBench}, we prove why default zero-shot neural System-1 checkpoints fail deployment gates (\textbf{14.29\%} debiased top-1 at 73.85\,ms p95), validating our fail-safe architectural choice to ship deterministic BM25+structural routing (\textbf{95.24\%} test / \textbf{97.22\%} held-out top-1 at \textbf{0.887\,ms} p95) without breaking protocol semantics.
+  \item \textbf{Honest Crossover Benchmarks (\texttt{GAP-Bench}) \& Negative Results:} We measure Direct-MCP vs.\ GAP across uncached and 0.10$\times$ prefix-cached regimes for $N \in \{10, 50, 200, 1000\}$ and quantify both massive gains (up to \textbf{95.34$\times$} on joins, \textbf{208.68$\times$} on code graphs) and exact negative crossover cells ($N \le 50$ cached flat RPC; X-1 wire columnarization deferral).
+  \item \textbf{Full Rust Reference System \& Verifiable Artifacts (\S\ref{sec:impl}):} 32 layered crates, 6 reference connectors, three-axis inbound/outbound protocol facades (MCP, A2A, AG-UI), 136 verified conformance tests, bit-reproducible release artifacts, and single-command local verification scripts.
 \end{itemize}
 
 % ----------------------------------------------------------------------
@@ -134,7 +134,7 @@ Each downstream source implements a uniform gRPC/stdio protobuf contract (\textt
 \subsection{Deterministic Policy Enforcement (Cedar)}
 Authentication verifies HMAC/JWT tokens or BLAKE3-hashed API keys into immutable principal scopes. Every field and mutation checks compiled Cedar policies~\cite{cutler2024cedar} over \texttt{(principal, action, resource, context)} cleanly before planning finishes. To prevent semantic spoofing, downstream MCP annotation hints such as \texttt{readOnlyHint} are ignored at authorization time; mutations without verified \texttt{@sideEffect(level: SAFE\_IDEMPOTENT | REVERSIBLE)} classification default to \texttt{UNKNOWN} and require explicit multi-party approval contexts.
 
-\subsection{Propose-Not-Activate Ingestion & Rug-Pull Freeze}
+\subsection{Propose-Not-Activate Ingestion \& Rug-Pull Freeze}
 New connectors or schema updates never auto-mutate the live graph. Instead, \texttt{gap-ingest} extracts candidate descriptors inside sandboxed workers, scrubs HTML/hidden Unicode and flags imperative prompt-injection lures via the CISG linter, and stores an administrative \texttt{Proposal}. Once approved, GAP records cryptographic hashes (\texttt{spec\_hash}, \texttt{desc\_hash}) per operation. Background polling by \texttt{DriftMonitor} recomputes sanitized description hashes and classifies diffs into \texttt{Cosmetic}, \texttt{SchemaCompatible}, \texttt{SchemaBreaking}, or \texttt{DescriptionChange}. Any breaking schema modification or unapproved description mutation (rug pull) forces the branch immediately into \texttt{BranchStatus::Drift}, freezes active planners onto the previously verified pinned descriptions (\texttt{INV-08}), and triggers operator alerts.
 
 \subsection{Sandboxing, SSRF Egress Guard, and Cryptographic Audit}
@@ -144,20 +144,20 @@ All outbound connector traffic traverses \texttt{EgressGuard}, which resolves DN
 Compiling a new proposal builds an immutable \texttt{Snapshot} generation (supergraph SDL, routing table, visibility bitsets, compiled Cedar policy set) pre-warmed against top plans, atomically published via \texttt{ArcSwap}. Snapshot destruction is offloaded off the swapper thread (\texttt{docs/00-REVIEW.md} F-01), keeping swap latency in the tens of microseconds while busy reader requests observe zero locks or torn views. A post-promotion \texttt{RollbackWatcher} monitors generation-attributable error ratios against baseline over a 60\,s window ($\ge 200$ samples, $> \max(2\times\text{baseline}, \text{baseline} + 2\text{pp})$), triggering automatic one-shot rollback and quarantine of faulty generations.
 
 % ----------------------------------------------------------------------
-\section{Reference Implementation & Verification Rigor}
+\section{Reference Implementation \& Verification Rigor}
 \label{sec:impl}
 
 GAP is implemented in \textbf{Rust (Edition 2024, pinned toolchain \texttt{1.98.1})} across \textbf{32 workspace crates} arranged strictly into layers \texttt{L0}--\texttt{L6}:
 \begin{itemize}
-  \item \textbf{Core & Durability (\texttt{L0}--\texttt{L1}):} \texttt{gap-core}, \texttt{gap-proto} (pure-Rust \texttt{protox} compilation without external \texttt{protoc} runtime risk), \texttt{gap-store} (SQLite context/tasks/audit/idempotency stores with online \texttt{backup\_to}/\texttt{restore\_from} plus opt-in \texttt{store-surreal} isolation keeping BSL crates completely out of default \texttt{Cargo.lock}), \texttt{gap-index}, \texttt{gap-sec}, \texttt{gap-models}.
-  \item \textbf{Protocol, Routing & Adapters (\texttt{L2}--\texttt{L4}):} \texttt{gap-ql}, \texttt{gap-plan}, \texttt{gap-exec}, \texttt{gap-route}, \texttt{gap-s1} (isolated \texttt{unsafe}-scoped Candle adapter plus \texttt{receptron-laya}, \texttt{jev}, and \texttt{gemini-decision-1} providers), \texttt{gap-balance}, \texttt{gap-snapshot}, \texttt{gap-ingest}, \texttt{gap-ngc-sdk}, plus six shipped adapters (\texttt{OpenAPI}, \texttt{GraphQL}, \texttt{gRPC}, \texttt{SQL}, \texttt{CLI}, \texttt{Code Graph} using \texttt{tree-sitter}) and inbound/outbound \texttt{gap-mcp}, \texttt{gap-a2a}, and \texttt{gap-agui}.
-  \item \textbf{Server, Conformance & CLI (\texttt{L5}--\texttt{L6}):} \texttt{gap-transport} (dual-stack \texttt{HTTP/1.1}+\texttt{HTTP/2} TCP + \texttt{HTTP/3} QUIC via \texttt{quinn} and \texttt{h3}), \texttt{gap-server}, \texttt{gap-conformance}, \texttt{gap-cli} (\texttt{gap} executable supporting 15 operational subcommands including \texttt{serve}, \texttt{doctor}, \texttt{config}, \texttt{models}, \texttt{proposals}, \texttt{snapshot}, \texttt{policy}, \texttt{audit}, \texttt{calibrate}, \texttt{tasks}, and \texttt{purge}).
+  \item \textbf{Core \& Durability (\texttt{L0}--\texttt{L1}):} \texttt{gap-core}, \texttt{gap-proto} (pure-Rust \texttt{protox} compilation without external \texttt{protoc} runtime risk), \texttt{gap-store} (SQLite context/tasks/audit/idempotency stores with online \texttt{backup\_to}/\texttt{restore\_from} plus opt-in \texttt{store-surreal} isolation keeping BSL crates completely out of default \texttt{Cargo.lock}), \texttt{gap-index}, \texttt{gap-sec}, \texttt{gap-models}.
+  \item \textbf{Protocol, Routing \& Adapters (\texttt{L2}--\texttt{L4}):} \texttt{gap-ql}, \texttt{gap-plan}, \texttt{gap-exec}, \texttt{gap-route}, \texttt{gap-s1} (isolated \texttt{unsafe}-scoped Candle adapter plus \texttt{receptron-laya}, \texttt{jev}, and \texttt{gemini-decision-1} providers), \texttt{gap-balance}, \texttt{gap-snapshot}, \texttt{gap-ingest}, \texttt{gap-ngc-sdk}, plus six shipped adapters (\texttt{OpenAPI}, \texttt{GraphQL}, \texttt{gRPC}, \texttt{SQL}, \texttt{CLI}, \texttt{Code Graph} using \texttt{tree-sitter}) and inbound/outbound \texttt{gap-mcp}, \texttt{gap-a2a}, and \texttt{gap-agui}.
+  \item \textbf{Server, Conformance \& CLI (\texttt{L5}--\texttt{L6}):} \texttt{gap-transport} (dual-stack \texttt{HTTP/1.1}+\texttt{HTTP/2} TCP + \texttt{HTTP/3} QUIC via \texttt{quinn} and \texttt{h3}), \texttt{gap-server}, \texttt{gap-conformance}, \texttt{gap-cli} (\texttt{gap} executable supporting 15 operational subcommands including \texttt{serve}, \texttt{doctor}, \texttt{config}, \texttt{models}, \texttt{proposals}, \texttt{snapshot}, \texttt{policy}, \texttt{audit}, \texttt{calibrate}, \texttt{tasks}, and \texttt{purge}).
 \end{itemize}
 
 Every non-test crate denies \texttt{unwrap\_used}, \texttt{expect\_used}, \texttt{panic}, \texttt{todo}, and \texttt{unimplemented}, with \texttt{unsafe} code isolated strictly to optional \texttt{gap-s1}. Snapshot trees use an owned zero-\texttt{unsafe} persistent AVL \texttt{OrdMap}, and TLS PEM parsing uses \texttt{rustls-pki-types} directly, yielding zero errors across \texttt{cargo deny check advisories bans licenses sources} (\texttt{ignore = []}). Specification-to-code traceability checks (\texttt{tools/spec\_trace.py --strict}) validate \textbf{362 normative requirements} (\textbf{89 MUST}, \textbf{0 uncovered}) mapped to \textbf{2,515 test markers}. Offline verification passes across:
 \begin{itemize}
   \item \textbf{Conformance:} \texttt{133 passed} batch offline conformance tests plus \texttt{2 passed} loopback NGC socket drills (\texttt{135/136}; the sole external differential JS check requires an external \texttt{node}/\texttt{graphql} 16.x directory).
-  \item \textbf{Property & Hardening Suites:} \texttt{365/365} tests passing at \texttt{PROPTEST\_CASES=1024} across 9 crates, 10 fuzz targets with 34 checked-in seed corpora, \texttt{4/4} network-partition/breaker/cancellation chaos tests, \texttt{4/4} soak/rug-pull/quota/two-stage-shutdown tests, and \texttt{3/3} $N-1 \rightarrow N$ SQLite migration + backup/restore drills.
+  \item \textbf{Property \& Hardening Suites:} \texttt{365/365} tests passing at \texttt{PROPTEST\_CASES=1024} across 9 crates, 10 fuzz targets with 34 checked-in seed corpora, \texttt{4/4} network-partition/breaker/cancellation chaos tests, \texttt{4/4} soak/rug-pull/quota/two-stage-shutdown tests, and \texttt{3/3} $N-1 \rightarrow N$ SQLite migration + backup/restore drills.
 \end{itemize}
 
 % ----------------------------------------------------------------------
@@ -236,7 +236,7 @@ Router & Test Top-1 & Held Top-1 & Test $\text{ECE}_{15}$ & p95 (ms) \\
 
 Table~\ref{tab:routebench} demonstrates why separating ML discovery from core protocol guarantees is essential. Un-finetuned \texttt{laya-candle:f32} weights calibrate well under PMI debiasing ($\text{ECE}_{15}=0.0303 \le 0.05$) yet score only \textbf{14.29\%} top-1 accuracy at 73.85\,ms p95, whereas GAP's deterministic lexical/structural baseline hits \textbf{95.24\%} test top-1 (\textbf{97.22\%} held-out) in \textbf{0.887\,ms}. Under gate \texttt{G-S1}, GAP ships safely in \texttt{BASELINE\_FALLBACK} mode while exposing calibration CLI tooling for domain-finetuned S1 deployment.
 
-\subsection{Runtime Microbenchmarks & Live Server Crash Drills}
+\subsection{Runtime Microbenchmarks \& Live Server Crash Drills}
 
 \begin{figure}[t]
   \centering
@@ -248,14 +248,14 @@ Table~\ref{tab:routebench} demonstrates why separating ML discovery from core pr
 Figure~\ref{fig:latency} summarizes low-level and live end-to-end runtime timings:
 \begin{itemize}
   \item \textbf{Lock-Free Hot Path Primitives:} \texttt{ArcSwap::load} runs in \textbf{15\,ns} (256-reader store median \textbf{22.8\,$\mu$s}, p99 59\,$\mu$s); RAII \texttt{in\_flight} guards take \textbf{42\,ns}, CAS EWMA updates \textbf{44\,ns}, and Power-of-Two-Choices $N=2$ selection \textbf{94\,ns} net median.
-  \item \textbf{Bit-Reproducible Release, Dual-Stack HTTP/2 + HTTP/3 Load & Crash Drills:} Clean offline rebuilds of the 28.1\,MB \texttt{gap} binary (\texttt{28,084,064\,B}) produced identical SHA-256 hashes (\texttt{d3220637...ee965d4c2}). Against live REST+MCP subprocesses over TCP (\texttt{gap serve}, with live \texttt{GET /ag-ui/capabilities} and \texttt{POST /ag-ui} SSE verified), cold startup reached HTTP 200 \texttt{/readyz} in \textbf{1,055.03\,ms} ($\le 2,000$\,ms gate) with \textbf{9.32\,MiB} idle RSS (\textbf{16.30\,MiB} post-load, well under 600\,MiB); across 800 mixed HTTP/1.1 requests (8 threads; 60\% single read, 25\% joined read, 10\% MCP discovery, 5\% probes), GAP sustained \textbf{1,063.6 req/s} with \textbf{0 errors} at 6.744\,ms p50 / \textbf{11.544\,ms} p95 / 18.346\,ms p99. Over native HTTP/3 QUIC (8 multiplexed connections, 800 mixed requests, TLS 1.3 ALPN \texttt{h3}, \texttt{0-RTT} disabled, \texttt{Alt-Svc} advertised) against in-process fixtures, GAP sustained \textbf{5,013.1 req/s} with \textbf{0 errors} at 1.626\,ms p50 / \textbf{2.364\,ms} p95 / 2.710\,ms p99. Following immediate OS \texttt{SIGKILL} (\texttt{-9}), gateway restart served verified queries on \texttt{/readyz} in \textbf{28.86\,ms}.
+  \item \textbf{Bit-Reproducible Release, Dual-Stack HTTP/2 + HTTP/3 Load \& Crash Drills:} Clean offline rebuilds of the 28.1\,MB \texttt{gap} binary (\texttt{28,084,064\,B}) produced identical SHA-256 hashes (\texttt{d3220637...ee965d4c2}). Against live REST+MCP subprocesses over TCP (\texttt{gap serve}, with live \texttt{GET /ag-ui/capabilities} and \texttt{POST /ag-ui} SSE verified), cold startup reached HTTP 200 \texttt{/readyz} in \textbf{1,055.03\,ms} ($\le 2,000$\,ms gate) with \textbf{9.32\,MiB} idle RSS (\textbf{16.30\,MiB} post-load, well under 600\,MiB); across 800 mixed HTTP/1.1 requests (8 threads; 60\% single read, 25\% joined read, 10\% MCP discovery, 5\% probes), GAP sustained \textbf{1,063.6 req/s} with \textbf{0 errors} at 6.744\,ms p50 / \textbf{11.544\,ms} p95 / 18.346\,ms p99. Over native HTTP/3 QUIC (8 multiplexed connections, 800 mixed requests, TLS 1.3 ALPN \texttt{h3}, \texttt{0-RTT} disabled, \texttt{Alt-Svc} advertised) against in-process fixtures, GAP sustained \textbf{5,013.1 req/s} with \textbf{0 errors} at 1.626\,ms p50 / \textbf{2.364\,ms} p95 / 2.710\,ms p99. Following immediate OS \texttt{SIGKILL} (\texttt{-9}), gateway restart served verified queries on \texttt{/readyz} in \textbf{28.86\,ms}.
 \end{itemize}
 
 % ----------------------------------------------------------------------
 \section{Related Work}
 \label{sec:related}
 
-\paragraph{Agent Tool & Agent-to-Agent Protocols.}
+\paragraph{Agent Tool \& Agent-to-Agent Protocols.}
 Early tool-augmented LLMs such as Gorilla~\cite{patil2023gorilla} and ToolLLM~\cite{qin2023toolllm} showed retriever-assisted API synthesis and multi-step decision trees across thousands of REST endpoints, yet left multi-tenant authorization, schema drift pinning, and server-side joins out of scope. Anthropic's MCP~\cite{anthropic2024mcp} unified client-tool messaging, while Google's A2A~\cite{google2025a2a} standardized cross-agent tasks and security patterns~\cite{arxiv2504_16902}. Concurrently, academic audits~\cite{song2025beyond,wang2025mcptox,arxiv2512_06556} documented descriptor tool poisoning and rug pulls in naive MCP hosts. Industry MCP GraphQL servers~\cite{apollo_mcp_grafbase} validated progressive schema discovery over GraphQL; GAP generalizes that idea across heterogeneous protocols (OpenAPI, gRPC, SQL, CLI, Code, MCP) inside an auditable, zero-trust Rust gateway with formal cross-branch joins and A2A task integration.
 
 \paragraph{GraphQL Semantics, Policy Engines, and Calibration.}

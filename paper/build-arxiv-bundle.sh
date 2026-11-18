@@ -17,6 +17,16 @@ mkdir -p "${STAGE_DIR}/figures"
 cp paper/main.tex paper/author_config.tex paper/references.bib "${STAGE_DIR}/"
 cp paper/figures/*.tex "${STAGE_DIR}/figures/"
 
-(cd "${STAGE_DIR}" && COPYFILE_DISABLE=1 tar -czf "${OUT_TAR}" .)
+python3 - "${STAGE_DIR}" "${OUT_TAR}" <<'PY'
+import os, sys, tarfile
+stage, out_tar = sys.argv[1], sys.argv[2]
+with tarfile.open(out_tar, "w:gz", format=tarfile.USTAR_FORMAT) as tf:
+    for root, dirs, files in os.walk(stage):
+        dirs.sort()
+        for f in sorted(files):
+            full = os.path.join(root, f)
+            rel = os.path.relpath(full, stage)
+            tf.add(full, arcname=rel, recursive=False)
+PY
 echo "Created arXiv submission archive: ${OUT_TAR}"
 tar -ztvf "${OUT_TAR}"

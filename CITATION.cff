@@ -24,19 +24,21 @@ keywords:
 - Rust
 - Cedar
 authors:
-- given-names: Mike
-  family-names: (vnknowledge2014)
-  affiliation: Graph Agent Protocol Project
-  email: vnknowledge2014@users.noreply.github.com
+- given-names: Duy Đức
+  family-names: Nguyễn
+  affiliation: Infinite Agent Labs
+  email: office@infiniteagentlabs.com
+  orcid: https://orcid.org/0009-0009-4741-5637
 preferred-citation:
   type: article
   title: 'Graph Agent Protocol (GAP): Unifying Typed Discovery, Batched Federation,
     and Zero-Trust Runtime Governance for AI Agents'
   year: 2026
   authors:
-  - given-names: Mike
-    family-names: (vnknowledge2014)
-    affiliation: Graph Agent Protocol Project
-    email: vnknowledge2014@users.noreply.github.com
+  - given-names: Duy Đức
+    family-names: Nguyễn
+    affiliation: Infinite Agent Labs
+    email: office@infiniteagentlabs.com
+    orcid: https://orcid.org/0009-0009-4741-5637
   notes: Preprint manuscript and GAP-Bench/RouteBench reproducible artifacts in paper/
     and bench/results/.

@@ -2,7 +2,7 @@
 
 > **Ngôn ngữ:** [English (README.md)](README.md) · **Tiếng Việt**
 
-**Graph Agent Protocol (GAP)** là cổng gateway định kiểu chặt chẽ theo profile GraphQL kèm tầng quản trị an toàn (giấy phép Apache-2.0, `Copyright 2026 Mike (vnknowledge2014)`), giúp hợp nhất các backend AI Agent không đồng nhất (OpenAPI REST, GraphQL subgraph, gRPC, SQL, CLI tool, AST code/doc graph, MCP server ngoài, tác vụ ngang hàng A2A và giao diện AG-UI v1.0) phía sau **khám phá lũy tiến (progressive disclosure)**, **liên kết gom lô (batched federation)**, **tầng truyền tải dual-stack HTTP/2 + HTTP/3 (QUIC)**, **mô hình quyết định System-1 đa nhà cung cấp (`Laya`, `Jev`, `gemini-decision-1`)**, **phân quyền tất định Cedar**, và **bản chụp snapshot bất biến không khóa**.
+**Graph Agent Protocol (GAP)** là cổng gateway định kiểu chặt chẽ theo profile GraphQL kèm tầng quản trị an toàn (giấy phép Apache-2.0, `Copyright 2026 Nguyễn Duy Đức (Infinite Agent Labs)`), giúp hợp nhất các backend AI Agent không đồng nhất (OpenAPI REST, GraphQL subgraph, gRPC, SQL, CLI tool, AST code/doc graph, MCP server ngoài, tác vụ ngang hàng A2A và giao diện AG-UI v1.0) phía sau **khám phá lũy tiến (progressive disclosure)**, **liên kết gom lô (batched federation)**, **tầng truyền tải dual-stack HTTP/2 + HTTP/3 (QUIC)**, **mô hình quyết định System-1 đa nhà cung cấp (`Laya`, `Jev`, `gemini-decision-1`)**, **phân quyền tất định Cedar**, và **bản chụp snapshot bất biến không khóa**.
 
 **Trạng thái (`0.1.0-rc.1` · `2026-11-17`):** **87 / 87 work packages hoàn tất (`main`)**, đã kiểm chứng offline đầu-cuối (`362` yêu cầu đặc tả / `89` MUST / `2.515` test markers, `135/136` conformance tests, `32` crates Rust trong workspace, `0` lỗ hổng `RUSTSEC` với cấu trúc AVL `OrdMap` tự sở hữu). Kho mã nguồn chính thức: [`github.com/vnknowledge2014/GraphProtocol`](https://github.com/vnknowledge2014/GraphProtocol) · Cổng học tập, video & bài báo trực tuyến: [`vnknowledge2014.github.io/GraphProtocol`](https://vnknowledge2014.github.io/GraphProtocol/) ([`/paper/`](https://vnknowledge2014.github.io/GraphProtocol/paper/) · [Video Giới thiệu Tiếng Việt](web/media/gap-promo-vi.mp4) · [Video Giới thiệu Tiếng Anh](web/media/gap-promo-en.mp4)).
 
@@ -65,4 +65,4 @@ Siêu dữ liệu trích dẫn chuẩn cho phần mềm và bài báo nằm tron
 python3 dist/set-author.py --check
 ```
 
-`Copyright 2026 Mike (vnknowledge2014)` · Giấy phép: [Apache-2.0](LICENSE) · Thông báo Bản quyền & Thành phần Bên thứ ba: [`NOTICE`](NOTICE)
+`Copyright 2026 Nguyễn Duy Đức (Infinite Agent Labs)` · Giấy phép: [Apache-2.0](LICENSE) · Thông báo Bản quyền & Thành phần Bên thứ ba: [`NOTICE`](NOTICE)
