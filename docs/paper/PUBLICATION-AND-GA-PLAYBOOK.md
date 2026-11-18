@@ -38,12 +38,8 @@ Ngay sau khi đẩy repo lên GitHub ở chế độ Public:
 1. **CERN Zenodo DOI (Miễn phí, vĩnh viễn):**
    - Đăng nhập [https://zenodo.org](https://zenodo.org) bằng tài khoản GitHub → mục **GitHub** → gạt bật repository `GraphProtocol` (file `.zenodo.json` đã tạo sẵn metadata chuẩn).
    - Khi tạo Release đầu tiên trên GitHub, Zenodo tự động lưu trữ mã nguồn và cấp **DOI khoa học chính thức**.
-2. **Sigstore Rekor Transparency Log (Bất biến bằng mật mã học):**
-   - Khi bạn chạy:
-     ```bash
-     git tag v0.1.0-rc.1 && git push origin v0.1.0-rc.1
-     ```
-     Workflow [`.github/workflows/release.yml`](../../.github/workflows/release.yml) sẽ chạy **OIDC keyless `cosign sign-blob`** và **SLSA v1.0 attestation**, ghi cố định danh tính GitHub + mã băm SHA-256 của GAP lên sổ cái công khai Rekor của Linux Foundation.
+2. **Sigstore Rekor Transparency Log & SLSA v1.0 (Bất biến bằng mật mã học — ĐÃ HOÀN TẤT trên `v0.1.0-rc.1`):**
+   - Workflow [`.github/workflows/release.yml`](../../.github/workflows/release.yml) ([Run `44233037780`](https://github.com/vnknowledge2014/GraphProtocol/actions/runs/44233037780)) đã tự động ký **OIDC keyless `cosign sign-blob --bundle`** (tạo file `.sigstore.json` với log indices Rekor `3960581407`, `3960581618`, `3960581821`) và cấp chứng thực **SLSA v1.0 provenance** (`https://github.com/vnknowledge2014/GraphProtocol/attestations/68950887`, Rekor `3960582357`) gắn vĩnh viễn danh tính repo + mã SHA-256 trên sổ cái công khai Rekor của Linux Foundation. Khi chốt `v1.0.0` chỉ cần đẩy tag mới `git tag v1.0.0 && git push origin v1.0.0`.
 3. **Software Heritage Archive:**
    - Gửi URL repository vào [https://archive.softwareheritage.org/save](https://archive.softwareheritage.org/save) để lưu trữ mã nguồn dài hạn ở châu Âu.
 
@@ -68,16 +64,21 @@ Kho bài báo LaTeX hoàn chỉnh đã được đóng gói sẵn tại:
 
 ---
 
-## Bước 4 — Chạy Nốt Cổng GA `v1.0.0` trên Máy Linux Cloud (`OPS-030`, `VER-053`)
+## Bước 4 — Chạy Nốt Cổng GA `v1.0.0` ngay trên Máy 64 GB (`Colima`) + GitHub Actions Miễn phí (`OPS-030`, `VER-053`)
 
-Mọi kiểm tra trên máy macOS local đã được chạy và lưu bằng chứng tại [`bench/results/ga_local/report.json`](../../bench/results/ga_local/report.json). Để đóng nốt các cổng hạ tầng Linux/CI (`G-4`, `G-5`, `G-10`, `G-11`, `G-14`, `G-15`, `G-20`):
+Không cần thuê máy ảo cloud trả phí. Toàn bộ các cổng Linux/CI có thể xác minh tự động đã chạy xanh qua **GitHub Actions miễn phí** (`CI` [`44233030991`](https://github.com/vnknowledge2014/GraphProtocol/actions/runs/44233030991) với coverage `81.26%` regions / `80.08%` lines và `136/136` conformance, `Release` [`44233037780`](https://github.com/vnknowledge2014/GraphProtocol/actions/runs/44233037780) với Distroless `nonroot` `19.4 MB` + `Cosign` + `SLSA v1.0`, `Nightly` [`44233039093`](https://github.com/vnknowledge2014/GraphProtocol/actions/runs/44233039093) với `10/10` fuzzers `libFuzzer` + `ASan`) kết hợp với **Colima Linux Ubuntu 24.04 (`x86_64`)** ngay trên máy Mac 64 GB (`Bubblewrap 0.9.0`, `promtool 16 rules`, `graphql-js 16.13.2`, container `gap:ci`).
 
-1. Thuê 1 máy Linux Ubuntu 24.04 (tối thiểu 8 vCPU, 32 GB RAM) và cài Docker, `promtool`, `cargo-llvm-cov`, toolchain `nightly` + `cargo-fuzz`.
-2. Chạy kiểm tra nhanh trên Linux trước:
+Nếu muốn chạy trọn vẹn pha thử bền kéo dài theo thời gian thực (`72 h` soak `G-11` = `259200 s` và `24 h`/target fuzzing `G-14` = `86400 s` + `cargo-mutants`) trước khi đổi tên tag từ `v0.1.0-rc.1` sang `v1.0.0`:
+
+1. Bật VM Linux trên máy Mac 64 GB qua Colima:
+   ```bash
+   colima start --cpu 8 --memory 24 --disk 80
+   ```
+2. Chạy kiểm tra nhanh trên Linux trước (hoặc trong container Ubuntu 24.04):
    ```bash
    ./dist/run-linux-ga-gates.sh --quick-check
    ```
-3. Chạy bộ kiểm chứng phát hành GA đầy đủ (`llvm-cov`, `cargo-mutants`, soak `72 h`, fuzz `24 h` / target):
+3. Chạy bộ thử bền đầy đủ (`llvm-cov`, `cargo-mutants`, soak `72 h`, song song `10` fuzzer `24 h`/target):
    ```bash
    ./dist/run-linux-ga-gates.sh --full-release
    ```
@@ -85,7 +86,7 @@ Mọi kiểm tra trên máy macOS local đã được chạy và lưu bằng ch�
    ```bash
    cargo run --release -p gapbench -- --llm-endpoint <URL> --api-key-env <ENV> --out bench/results/gapbench-live
    ```
-5. Cập nhật kết quả vào [`docs/gates/RC.md`](../gates/RC.md), chuyển tag sang `v1.0.0` và phát hành Release GA.
+5. Dừng Colima để giải phóng 24 GB RAM khi xong (`colima stop`), cập nhật log vào [`docs/gates/RC.md`](../gates/RC.md), chuyển tag sang `v1.0.0` và phát hành Release GA.
 
 ---
 
