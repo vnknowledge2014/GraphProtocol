@@ -1,0 +1,16 @@
+GAP (Graph Agent Protocol)
+Copyright 2026 Duy Đức Nguyễn (Infinite Agent Labs) and GAP Contributors
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this project except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+This product includes specification documents and software developed for the
+Graph Agent Protocol (GAP) reference implementation.
+
+Third-party specifications and checksummed excerpts vendored for conformance
+testing are catalogued with provenance and licence metadata in
+`third_party/MANIFEST.toml`. Rust crate dependency licences are verified by
+`cargo deny` (`deny.toml`).
