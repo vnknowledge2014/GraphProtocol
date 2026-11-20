@@ -4,7 +4,7 @@
 
 **Graph Agent Protocol (GAP)** là cổng gateway định kiểu chặt chẽ theo profile GraphQL kèm tầng quản trị an toàn (giấy phép Apache-2.0, `Copyright 2026 Nguyễn Duy Đức (Infinite Agent Labs)`), giúp hợp nhất các backend AI Agent không đồng nhất (OpenAPI REST, GraphQL subgraph, gRPC, SQL, CLI tool, AST code/doc graph, MCP server ngoài, tác vụ ngang hàng A2A và giao diện AG-UI v1.0) phía sau **khám phá lũy tiến (progressive disclosure)**, **liên kết gom lô (batched federation)**, **tầng truyền tải dual-stack HTTP/2 + HTTP/3 (QUIC)**, **mô hình quyết định System-1 đa nhà cung cấp (`Laya`, `Jev`, `gemini-decision-1`)**, **phân quyền tất định Cedar**, và **bản chụp snapshot bất biến không khóa**.
 
-**Trạng thái (`0.1.0-rc.1` · `2026-11-17`):** **87 / 87 work packages hoàn tất (`main`)**, đã kiểm chứng offline đầu-cuối (`362` yêu cầu đặc tả / `89` MUST / `2.515` test markers, `135/136` conformance tests, `32` crates Rust trong workspace, `0` lỗ hổng `RUSTSEC` với cấu trúc AVL `OrdMap` tự sở hữu). Kho mã nguồn chính thức: [`github.com/vnknowledge2014/GraphProtocol`](https://github.com/vnknowledge2014/GraphProtocol) · Cổng học tập, video & bài báo trực tuyến: [`vnknowledge2014.github.io/GraphProtocol`](https://vnknowledge2014.github.io/GraphProtocol/) ([`/paper/`](https://vnknowledge2014.github.io/GraphProtocol/paper/) · [Video Giới thiệu Tiếng Việt](web/media/gap-promo-vi.mp4) · [Video Giới thiệu Tiếng Anh](web/media/gap-promo-en.mp4)).
+**Trạng thái (`0.1.0-rc.1` · `2026-11-20`):** **87 / 87 work packages hoàn tất (`main`)**, đã kiểm chứng đầu-cuối (`362` yêu cầu đặc tả / `89` MUST / `2.516` test markers, `136/136` conformance tests kèm `graphql-js 16.13.2`, `32` crates Rust trong workspace, `0` lỗ hổng `RUSTSEC` với cấu trúc AVL `OrdMap` tự sở hữu). Kho mã nguồn chính thức: [`github.com/vnknowledge2014/GraphProtocol`](https://github.com/vnknowledge2014/GraphProtocol) · Cổng học tập (VI / EN), video & bài báo trực tuyến: [Cổng Tiếng Việt](https://vnknowledge2014.github.io/GraphProtocol/vi.html) · [Cổng Tiếng Anh](https://vnknowledge2014.github.io/GraphProtocol/) · [`/paper/`](https://vnknowledge2014.github.io/GraphProtocol/paper/) · [Video Tiếng Việt](web/media/gap-promo-vi.mp4) · [Video Tiếng Anh](web/media/gap-promo-en.mp4).
 
 ---
 
@@ -46,7 +46,7 @@ python3 tools/wp.py validate && python3 tools/check_layers.py && python3 tools/s
 
 | Hạng mục | Đường dẫn |
 |---|---|
-| **Website Học tập Tương tác & Video Demo EN/VI** | [`web/README.md`](web/README.md) · [`web/index.html`](web/index.html) · [`gap-promo-vi.mp4`](web/media/gap-promo-vi.mp4) · [`gap-promo-en.mp4`](web/media/gap-promo-en.mp4) · `python3 web/serve.py --port 8787` |
+| **Website Học tập Tương tác & Video Demo EN/VI** | [`web/README.vi.md`](web/README.vi.md) · [`web/vi.html`](web/vi.html) (VI) · [`web/index.html`](web/index.html) (EN) · [`gap-promo-vi.mp4`](web/media/gap-promo-vi.mp4) · [`gap-promo-en.mp4`](web/media/gap-promo-en.mp4) · `python3 web/serve.py --port 8787` |
 | **Bài báo Khoa học (LaTeX / HTML / PDF / Markdown)** | [`paper/main.tex`](paper/main.tex) · [`paper/gap-paper.pdf`](paper/gap-paper.pdf) · [`docs/paper/GAP-PAPER.md`](docs/paper/GAP-PAPER.md) |
 | **Sổ tay Kỹ thuật Chuẩn ASD-STE100 (Kèm Linter)** | [`docs/ste100/README.md`](docs/ste100/README.md) · `python3 dist/check-ste100.py` |
 | **Hướng dẫn Nộp arXiv / Zenodo DOI & Chạy GA Linux** | [`docs/paper/PUBLICATION-AND-GA-PLAYBOOK.md`](docs/paper/PUBLICATION-AND-GA-PLAYBOOK.md) · [`dist/set-author.py`](dist/set-author.py) |

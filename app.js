@@ -1,10 +1,10 @@
-// Client logic tuân thủ modern-web-guidance:
-// dark-mode-toggle, tabs, scrollspy, accordion, interactive lab & live gap serve hooks.
+// Shared client logic compliant with modern-web-guidance (accessibility, html,
+// dark-mode-toggle, tabs, scrollspy, accordion, interactive lab & live gap serve hooks).
 "use strict";
 
 (function () {
   const D = window.GAP_DATA;
-  if (!D) return;
+  if (!D || !D.ui) return;
 
   const esc = (s) =>
     String(s)
@@ -62,7 +62,7 @@
     }
   });
 
-  // Note: Do NOT delete localStorage override inside matchMedia change listener (dark-mode-toggle rule).
+  // Do NOT delete localStorage override inside matchMedia change listener (dark-mode-toggle rule).
   osDarkQuery.addEventListener("change", () => {});
 
   // ------------------------------------------------------------------
@@ -124,9 +124,9 @@
       <p style="margin:0.35rem 0;">${esc(node.summary)}</p>
       <p style="margin:0.35rem 0;color:var(--muted);">${esc(node.details)}</p>
       <div style="font-size:0.84rem;margin-top:0.5rem;">
-        <strong>Crates:</strong> <code>${esc(node.crates)}</code> ·
-        <strong>Invariants:</strong> <code>${esc(node.invariants)}</code> ·
-        <strong>Mã nguồn:</strong> ${node.files.map((f) => `<code>${esc(f)}</code>`).join(" ")}
+        <strong>${esc(D.ui.cratesLabel)}:</strong> <code>${esc(node.crates)}</code> ·
+        <strong>${esc(D.ui.invariantsLabel)}:</strong> <code>${esc(node.invariants)}</code> ·
+        <strong>${esc(D.ui.sourceFilesLabel)}:</strong> ${node.files.map((f) => `<code>${esc(f)}</code>`).join(" ")}
       </div>
     `;
   }
@@ -227,12 +227,12 @@
           <h3 style="margin:0;">${esc(lv.title)}</h3>
           <span class="pill">${esc(lv.badge)}</span>
         </div>
-        <p><strong>Mục tiêu:</strong> ${esc(lv.goal)}</p>
+        <p><strong>${esc(D.ui.levelGoalLabel)}:</strong> ${esc(lv.goal)}</p>
         <ul>${lv.concepts.map((c) => `<li>${esc(c)}</li>`).join("")}</ul>
-        <div><strong>Lệnh thực hành:</strong></div>
-        <pre><code>${esc(lv.commands)}</code></pre>
-        <div style="font-size:0.86rem;"><strong>Tệp nên đọc trong repo:</strong> ${lv.files.map((f) => `<code>${esc(f)}</code>`).join(" ")}</div>
-        <h4 style="margin:0.9rem 0 0.2rem 0;">Checklist tự luyện cấp độ này:</h4>
+        <div><strong>${esc(D.ui.levelCommandsLabel)}:</strong></div>
+        <pre role="region" aria-label="${esc(D.ui.levelCommandsAria)} ${esc(lv.tabLabel)}" tabindex="0"><code>${esc(lv.commands)}</code></pre>
+        <div style="font-size:0.86rem;"><strong>${esc(D.ui.levelFilesLabel)}:</strong> ${lv.files.map((f) => `<code>${esc(f)}</code>`).join(" ")}</div>
+        <h4 style="margin:0.9rem 0 0.2rem 0;">${esc(D.ui.levelChecklistHeading)}:</h4>
         <ul class="step-checklist">${itemsHtml}</ul>
       </div>
     `;
@@ -326,24 +326,24 @@
 
     let verdict = "";
     if (gapWins) {
-      verdict = `<strong style="color:var(--ok);">GAP thắng (${(1 / ratio).toFixed(2)}x ít token hơn · tiết kiệm ${pctSaved}%)</strong> — nên dùng GAP Facade ngay.`;
+      verdict = `<strong style="color:var(--ok);">${esc(D.ui.gapWinsPrefix)} (${(1 / ratio).toFixed(2)}x ${esc(D.ui.gapWinsMiddle)} ${pctSaved}%)</strong> — ${esc(D.ui.gapWinsSuffix)}`;
     } else {
-      verdict = `<strong style="color:var(--warn);">Direct-MCP tốn ít token hơn (${ratio.toFixed(2)}x)</strong> — ở cấu hình nhỏ bật Prompt Cache này, chỉ nên bật GAP vì lý do bảo mật (Cedar, chống rug-pull, SSRF guard).`;
+      verdict = `<strong style="color:var(--warn);">${esc(D.ui.directWinsPrefix)} (${ratio.toFixed(2)}x)</strong> — ${esc(D.ui.directWinsSuffix)}`;
     }
 
     calcOutput.innerHTML = `
       <div class="bar-row">
         <span>Direct-MCP:</span>
         <div class="bar-track"><div class="bar-fill direct" style="inline-size:${Math.round((directTok * 100) / maxTok)}%"></div></div>
-        <strong>${directTok.toLocaleString("vi-VN")} tok</strong>
+        <strong>${directTok.toLocaleString(D.ui.locale)} tok</strong>
       </div>
       <div class="bar-row">
         <span>GAP Facade:</span>
         <div class="bar-track"><div class="bar-fill" style="inline-size:${Math.round((gapTok * 100) / maxTok)}%"></div></div>
-        <strong>${gapTok.toLocaleString("vi-VN")} tok</strong>
+        <strong>${gapTok.toLocaleString(D.ui.locale)} tok</strong>
       </div>
       <div style="font-size:0.86rem;margin-top:0.55rem;">
-        <div><strong>Schema <code>tools/list</code>:</strong> Direct ${row.dTools.toLocaleString("vi-VN")} vs GAP <strong>${row.gTools} tokens</strong> · <strong>Số lượt LLM:</strong> Direct ${row.dTurns} vs GAP <strong>${row.gTurns}</strong></div>
+        <div><strong>${esc(D.ui.schemaCostLabel)}:</strong> Direct ${row.dTools.toLocaleString(D.ui.locale)} vs GAP <strong>${row.gTools} tokens</strong> · <strong>${esc(D.ui.turnsLabel)}:</strong> Direct ${row.dTurns} vs GAP <strong>${row.gTurns}</strong></div>
         <div style="margin-top:0.35rem;">${verdict}</div>
       </div>
     `;
@@ -383,7 +383,7 @@
     playEndpoint.textContent = sc.endpoint;
     playRequest.textContent = JSON.stringify(sc.requestJson, null, 2);
     playResponse.textContent = JSON.stringify(sc.simulatedResponse, null, 2);
-    playMeta.textContent = demoRunning && sc.liveSupported ? "Sẵn sàng gửi tới `gap serve` thật" : "Dữ liệu mẫu chuẩn hóa";
+    playMeta.textContent = demoRunning && sc.liveSupported ? D.ui.playMetaReadyLive : D.ui.playMetaSimulated;
   }
   playSelect.addEventListener("change", updateScenarioView);
   updateScenarioView();
@@ -391,7 +391,7 @@
   async function pollServerStatus() {
     if (window.location.protocol === "file:" || window.location.hostname.endsWith(".github.io")) {
       if (window.location.hostname.endsWith(".github.io")) {
-        statusPillText.textContent = "GitHub Pages (Mô phỏng tương tác)";
+        statusPillText.textContent = D.ui.statusGithubPages;
       }
       return;
     }
@@ -403,12 +403,12 @@
       demoRunning = Boolean(st.demo_running);
       statusPillDot.classList.toggle("live", demoRunning);
       statusPillText.textContent = demoRunning
-        ? `Lab sống đang chạy (: ${st.gap_port})`
+        ? `${D.ui.statusLiveRunningPrefix}${st.gap_port})`
         : st.binary_found
-          ? "Kết nối máy chủ web (Lab chưa bật)"
-          : "Máy chủ web sẵn (chưa build gap)";
-      demoBadge.textContent = demoRunning ? `Đang chạy port ${st.gap_port}` : "Chế độ Mô phỏng";
-      btnToggleDemo.textContent = demoRunning ? "Tắt Lab Thực Hành" : "Bật Lab Thực Hành (gap serve)";
+          ? D.ui.statusWebReadyIdle
+          : D.ui.statusWebNoBin;
+      demoBadge.textContent = demoRunning ? `${D.ui.demoBadgeRunningPrefix}${st.gap_port}` : D.ui.demoBadgeSimulated;
+      btnToggleDemo.textContent = demoRunning ? D.ui.btnStopLab : D.ui.btnStartLab;
       updateScenarioView();
     } catch (_e) {}
   }
@@ -416,7 +416,7 @@
 
   btnToggleDemo.addEventListener("click", async () => {
     if (!serverAvailable) {
-      playMeta.textContent = "Hãy chạy `python3 web/serve.py` để bật Lab tiến trình thật.";
+      playMeta.textContent = D.ui.playNeedServePy;
       return;
     }
     btnToggleDemo.disabled = true;
@@ -425,7 +425,7 @@
       const resp = await fetch(endpoint, { method: "POST" });
       const data = await resp.json();
       if (!resp.ok) {
-        playMeta.textContent = `Lỗi: ${data.error || resp.status}`;
+        playMeta.textContent = `${D.ui.playErrorPrefix}${data.error || resp.status}`;
       }
       await pollServerStatus();
     } finally {
@@ -444,32 +444,32 @@
           body: JSON.stringify({ scenario_id: sc.id })
         });
         const out = await resp.json();
-        playMeta.textContent = `Phản hồi thật từ gap serve · HTTP ${out.http_status} · ${out.latency_ms} ms`;
+        playMeta.textContent = `${D.ui.playLivePrefix} · HTTP ${out.http_status} · ${out.latency_ms} ms`;
         playResponse.textContent = JSON.stringify(out.body, null, 2);
       } catch (err) {
-        playMeta.textContent = `Lỗi gọi live: ${err}`;
+        playMeta.textContent = `${D.ui.playLiveErrorPrefix}${err}`;
       } finally {
         btnRunPlay.disabled = false;
       }
     } else {
-      playMeta.textContent = "Kết quả mô phỏng chuẩn xác từ fixture repo (bấm Bật Lab nếu muốn gọi socket thật).";
+      playMeta.textContent = D.ui.playSimulatedNote;
       playResponse.textContent = JSON.stringify(sc.simulatedResponse, null, 2);
     }
   });
 
   // ------------------------------------------------------------------
-  // 7. 31-Crate Architecture Grid Filter
+  // 7. 32-Crate Architecture Grid Filter
   // ------------------------------------------------------------------
   const layerChips = document.getElementById("layer-chips");
   const cratesGrid = document.getElementById("crates-grid");
-  const layers = ["Tất cả", "L0", "L1", "L2", "L3", "L4", "L5", "L6", "Dev"];
-  let activeLayer = "Tất cả";
+  const layers = ["ALL", "L0", "L1", "L2", "L3", "L4", "L5", "L6", "Dev"];
+  let activeLayer = "ALL";
 
   function renderCrates() {
     for (const chip of layerChips.querySelectorAll(".chip")) {
       chip.setAttribute("aria-pressed", chip.dataset.layer === activeLayer ? "true" : "false");
     }
-    const items = activeLayer === "Tất cả" ? D.crates : D.crates.filter((c) => c.layer === activeLayer);
+    const items = activeLayer === "ALL" ? D.crates : D.crates.filter((c) => c.layer === activeLayer);
     cratesGrid.innerHTML = items
       .map(
         (c) => `
@@ -487,7 +487,7 @@
     btn.type = "button";
     btn.className = "chip";
     btn.dataset.layer = l;
-    btn.textContent = l;
+    btn.textContent = l === "ALL" ? D.ui.allLayersLabel : l;
     btn.addEventListener("click", () => {
       activeLayer = l;
       renderCrates();
@@ -506,8 +506,8 @@
       <summary><code>gap ${esc(c.sub)}</code></summary>
       <div class="details-body">
         <p>${esc(c.summary)}</p>
-        <button type="button" class="btn btn-sm cli-help-btn" data-sub="${esc(c.sub)}">Chạy <code>gap ${esc(c.sub)} --help</code></button>
-        <pre class="cli-help-out" hidden><code></code></pre>
+        <button type="button" class="btn btn-sm cli-help-btn" data-sub="${esc(c.sub)}">${esc(D.ui.cliRunPrefix)} <code>gap ${esc(c.sub)} --help</code></button>
+        <pre class="cli-help-out" role="region" aria-label="${esc(D.ui.cliHelpAriaPrefix)} gap ${esc(c.sub)}" tabindex="0" hidden><code></code></pre>
       </div>
     `;
     cliList.appendChild(det);
@@ -520,14 +520,14 @@
     const code = pre.querySelector("code");
     pre.hidden = false;
     if (!serverAvailable) {
-      code.textContent = `$ ./target/dist/gap ${btn.dataset.sub} --help\n(Hãy chạy qua \`python3 web/serve.py\` để thực thi trực tiếp từ binary \`gap\`)`;
+      code.textContent = `$ ./target/dist/gap ${btn.dataset.sub} --help\n(${D.ui.cliOfflineHint})`;
       return;
     }
-    code.textContent = "Đang gọi ./target/dist/gap ...";
+    code.textContent = D.ui.cliLoading;
     try {
       const resp = await fetch(`/api/cli-help?sub=${encodeURIComponent(btn.dataset.sub)}`);
       const res = await resp.json();
-      code.textContent = res.output || res.error || "(trống)";
+      code.textContent = res.output || res.error || D.ui.cliEmpty;
     } catch (e) {
       code.textContent = String(e);
     }
@@ -541,8 +541,8 @@
     det.innerHTML = `
       <summary><span>${esc(rb.id)}</span> <span class="pill" style="margin-inline-start:auto;">${esc(rb.severity)}</span></summary>
       <div class="details-body">
-        <p><strong>Điều kiện kích hoạt:</strong> ${esc(rb.trigger)}</p>
-        <p><strong>Cách xử lý:</strong> ${esc(rb.action)}</p>
+        <p><strong>${esc(D.ui.runbookTriggerLabel)}:</strong> ${esc(rb.trigger)}</p>
+        <p><strong>${esc(D.ui.runbookActionLabel)}:</strong> ${esc(rb.action)}</p>
       </div>
     `;
     runbooksAcc.appendChild(det);
@@ -644,10 +644,10 @@
     btn.classList.add(isOk ? "correct" : "wrong");
     quizState[qIdx] = isOk;
     qEl.querySelector(".quiz-explain").textContent = isOk
-      ? `Chính xác! ${item.explain}`
-      : `Chưa đúng. Gợi ý: ${item.explain}`;
+      ? `${D.ui.quizCorrectPrefix} ${item.explain}`
+      : `${D.ui.quizWrongPrefix} ${item.explain}`;
     const totalOk = Object.values(quizState).filter(Boolean).length;
-    quizScore.textContent = `Điểm hiện tại: ${totalOk} / ${D.quiz.length}`;
+    quizScore.textContent = `${D.ui.quizScorePrefix}: ${totalOk} / ${D.quiz.length}`;
   });
 
   // ------------------------------------------------------------------
@@ -656,11 +656,11 @@
   const searchInput = document.getElementById("global-search");
   const searchResults = document.getElementById("search-results");
   const searchIndex = [
-    ...D.architectureNodes.map((n) => ({ label: `Kiến trúc: ${n.title}`, href: "#tong-quan", action: () => renderInspector(n.id) })),
-    ...D.levels.map((l, i) => ({ label: `Lộ trình: ${l.tabLabel}`, href: "#lo-trinh-6-cap", action: () => selectLevelTab(allTabs[i]) })),
-    ...D.crates.map((c) => ({ label: `Crate ${c.layer}: ${c.name} — ${c.role}`, href: "#ban-do-crates", action: () => { activeLayer = c.layer; renderCrates(); } })),
-    ...D.cliSubcommands.map((c) => ({ label: `CLI: gap ${c.sub} — ${c.summary}`, href: "#cli-va-runbooks" })),
-    ...D.invariants.map((i) => ({ label: `${i.id}: ${i.req}`, href: "#bat-bien-va-tu-dien" }))
+    ...D.architectureNodes.map((n) => ({ label: `${D.ui.searchArchPrefix}: ${n.title}`, href: D.ui.anchors.overview, action: () => renderInspector(n.id) })),
+    ...D.levels.map((l, i) => ({ label: `${D.ui.searchLevelPrefix}: ${l.tabLabel}`, href: D.ui.anchors.levels, action: () => selectLevelTab(allTabs[i]) })),
+    ...D.crates.map((c) => ({ label: `${D.ui.searchCratePrefix} ${c.layer}: ${c.name} — ${c.role}`, href: D.ui.anchors.crates, action: () => { activeLayer = c.layer; renderCrates(); } })),
+    ...D.cliSubcommands.map((c) => ({ label: `${D.ui.searchCliPrefix}: gap ${c.sub} — ${c.summary}`, href: D.ui.anchors.cli })),
+    ...D.invariants.map((i) => ({ label: `${i.id}: ${i.req}`, href: D.ui.anchors.inv }))
   ];
 
   searchInput.addEventListener("input", () => {
@@ -671,7 +671,7 @@
     }
     const hits = searchIndex.filter((x) => x.label.toLowerCase().includes(q)).slice(0, 8);
     if (!hits.length) {
-      searchResults.innerHTML = `<div style="padding:0.5rem;color:var(--muted);font-size:0.86rem;">Không tìm thấy mục phù hợp.</div>`;
+      searchResults.innerHTML = `<div style="padding:0.5rem;color:var(--muted);font-size:0.86rem;">${esc(D.ui.searchNoHits)}</div>`;
     } else {
       searchResults.innerHTML = "";
       hits.forEach((h) => {

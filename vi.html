@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Học Graph Agent Protocol (GAP) — Từ Novice đến Master</title>
+  <link rel="alternate" hreflang="en" href="./index.html" />
+  <link rel="alternate" hreflang="vi" href="./vi.html" />
+  <!-- MANDATORY (modern-web-guidance: dark-mode): Khai bao ca 2 theme + inline script chong FOUC -->
+  <meta name="color-scheme" content="light dark" />
+  <script>
+    try {
+      var savedScheme = localStorage.getItem("gap-color-scheme");
+      if (savedScheme === "light" || savedScheme === "dark") {
+        document.querySelector('meta[name="color-scheme"]').content = savedScheme;
+      }
+    } catch (_e) {}
+  </script>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <a href="#portal-heading" class="skip-link visually-hidden">Chuyển tới nội dung chính</a>
+
+  <header class="topbar">
+    <div class="topbar-inner">
+      <div class="brand">
+        <span class="brand-badge">GAP 0.1.0-RC.1</span>
+        <span>Học Graph Agent Protocol (Tiếng Việt)</span>
+      </div>
+      <div class="topbar-controls">
+        <nav class="lang-switch" aria-label="Ngôn ngữ">
+          <a class="lang-link" href="./index.html" lang="en" hreflang="en">EN</a>
+          <a class="lang-link" href="./vi.html" aria-current="page">Tiếng Việt</a>
+        </nav>
+        <search class="search-box">
+          <label for="global-search" class="visually-hidden">Tìm kiếm nội dung học GAP (crate, INV, lệnh CLI)</label>
+          <input id="global-search" type="search" placeholder="Tìm nhanh crate, INV, CLI... [/]" autocomplete="off" />
+          <div id="search-results" class="search-results" hidden></div>
+        </search>
+        <span id="server-status-pill" class="pill">
+          <span id="server-status-dot" class="dot"></span>
+          <span id="server-status-text">Chế độ Offline (HTML tĩnh)</span>
+        </span>
+        <button id="theme-toggle-btn" type="button" class="btn theme-toggle" aria-label="Chuyển đổi giao diện Sáng / Tối">
+          <span class="icon-to-dark" aria-hidden="true">&#9790;</span>
+          <span class="label-to-dark">Chế độ Tối</span>
+          <span class="icon-to-light" aria-hidden="true">&#9728;</span>
+          <span class="label-to-light">Chế độ Sáng</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <div class="shell">
+    <aside class="sidebar">
+      <h2>Mục lục lộ trình</h2>
+      <!-- modern-web-guidance: scrollspy (scroll-target-group: auto + Fallback IntersectionObserver) -->
+      <nav id="toc-nav" class="toc-nav" aria-label="Mục lục trang">
+        <a href="#tong-quan">1. Tổng quan &amp; 3 Mặt phẳng</a>
+        <a href="#lo-trinh-6-cap">2. Lộ trình 6 Cấp độ (Novice &rarr; Master)</a>
+        <a href="#phong-thi-nghiem">3. Bộ tính Crossover &amp; Lab Thực hành</a>
+        <a href="#ban-do-crates">4. Bản đồ 32 Crates (L0&ndash;L6)</a>
+        <a href="#cli-va-runbooks">5. 15 Lệnh CLI &amp; 9 Runbooks</a>
+        <a href="#bat-bien-va-tu-dien">6. 20 Bất biến, STE-100 &amp; Quiz</a>
+      </nav>
+
+      <div class="progress-box">
+        <div><strong>Tiến độ thực hành:</strong> <span id="progress-text">0 / 18</span> bài</div>
+        <div class="progress-track" role="progressbar" aria-valuemin="0" aria-valuemax="18" aria-valuenow="0" aria-label="Tiến độ thực hành" id="progress-bar-wrap">
+          <div id="progress-fill" class="progress-fill"></div>
+        </div>
+        <small class="section-lead">Tự động lưu trên trình duyệt của bạn.</small>
+      </div>
+    </aside>
+
+    <main>
+      <!-- SECTION 1: TONG QUAN -->
+      <section id="tong-quan" class="card">
+        <h1 id="portal-heading" class="portal-title" tabindex="-1">1. Tổng quan &amp; Kiến trúc 3 Mặt phẳng</h1>
+        <p class="section-lead">
+          <strong>Graph Agent Protocol (GAP)</strong> giải quyết bài toán cốt lõi khi đưa AI Agent vào sản xuất: làm sao kết nối hàng trăm API, cơ sở dữ liệu SQL, kho mã nguồn, MCP server và các agent A2A khác mà <strong>không làm phình ngữ cảnh LLM</strong>, <strong>không dính N+1 vòng lặp</strong> và <strong>không mất kiểm soát bảo mật</strong>.
+        </p>
+
+        <div class="kpi-grid">
+          <div class="kpi">
+            <div class="val">651 tokens</div>
+            <div class="lbl">MCP <code>tools/list</code> cố định từ N=10 tới 1.000 tools (Direct-MCP: 203.421)</div>
+          </div>
+          <div class="kpi">
+            <div class="val">5.013 / 1.064 req/s</div>
+            <div class="lbl">HTTP/3 QUIC (2,36 ms p95, 0-RTT tắt) &amp; TCP HTTP/2 (11,54 ms p95, binary 28,1 MB)</div>
+          </div>
+          <div class="kpi">
+            <div class="val">99.0% / 208.7x</div>
+            <div class="lbl">Tiết kiệm token join ở N=1000 &amp; duyệt Code Graph (24 symbols)</div>
+          </div>
+          <div class="kpi">
+            <div class="val">28.86 ms</div>
+            <div class="lbl">Phục hồi /readyz sau sập nóng SIGKILL (kill -9) · 0 lỗ hổng RUSTSEC</div>
+          </div>
+          <div class="kpi">
+            <div class="val">87 / 87 WP</div>
+            <div class="lbl">Hoàn tất 100% kế hoạch · 32 crates · 2.516 markers truy vết · Apache-2.0</div>
+          </div>
+        </div>
+
+        <div class="hero-actions">
+          <a class="btn btn-primary" href="./paper/" target="_blank" rel="noopener">Đọc Bài báo Khoa học (HTML)</a>
+          <a class="btn" href="./paper/gap-paper.pdf" target="_blank" rel="noopener">Tải Bài báo PDF (Camera-Ready)</a>
+          <a class="btn" href="https://github.com/vnknowledge2014/GraphProtocol" target="_blank" rel="noopener">Kho mã nguồn GitHub</a>
+          <a class="btn" href="./index.html" hreflang="en">Bản Tiếng Anh (<span lang="en">English</span>)</a>
+        </div>
+
+        <div class="lab-grid videos-grid">
+          <div class="subcard">
+            <h2 class="video-heading">Video Giới Thiệu (Tiếng Việt · 1080p)</h2>
+            <video class="promo-video" controls preload="metadata" playsinline width="1920" height="1080">
+              <source src="./media/gap-promo-vi.mp4" type="video/mp4" />
+              Trình duyệt của bạn không hỗ trợ phát video MP4 (<a href="./media/gap-promo-vi.mp4">tải video Tiếng Việt</a>).
+            </video>
+          </div>
+          <div class="subcard">
+            <h2 class="video-heading">Video Giới Thiệu (Thuyết minh Tiếng Anh · 1080p)</h2>
+            <video class="promo-video" controls preload="metadata" playsinline width="1920" height="1080">
+              <source src="./media/gap-promo-en.mp4" type="video/mp4" />
+              Trình duyệt của bạn không hỗ trợ phát video MP4 (<a href="./media/gap-promo-en.mp4">tải video Tiếng Anh</a>).
+            </video>
+          </div>
+        </div>
+
+        <p><strong>Bấm vào từng khối kiến trúc bên dưới</strong> để xem vai trò, bất biến bảo vệ và vị trí mã nguồn Rust:</p>
+        <div id="planes-grid" class="planes-grid"></div>
+        <div id="arch-inspector" class="inspector-panel" aria-live="polite"></div>
+      </section>
+
+      <!-- SECTION 2: LO TRINH 6 CAP DO (modern-web-guidance: tabs) -->
+      <section id="lo-trinh-6-cap" class="card" tabindex="-1">
+        <h2>2. Lộ trình Học từ Novice &rarr; Master (6 Cấp độ)</h2>
+        <p class="section-lead">
+          Chọn từng tab theo thứ tự từ trái sang phải. Hỗ trợ phím mũi tên &larr; / &rarr; (pattern <code>focusgroup</code>), tìm kiếm Ctrl/Cmd+F cả khi tab đang ẩn (<code>hidden="until-found"</code>), và tự động lưu các bước bạn đã làm xong.
+        </p>
+
+        <div id="levels-tablist" class="tablist" focusgroup="tablist nomemory" aria-label="6 cấp độ học GAP"></div>
+        <div id="levels-tabpanels" class="tabpanels"></div>
+      </section>
+
+      <!-- SECTION 3: PHONG THI NGHIEM & CROSSOVER -->
+      <section id="phong-thi-nghiem" class="card" tabindex="-1">
+        <h2>3. Bộ tính Crossover &amp; Phòng thí nghiệm Trực tiếp</h2>
+        <p class="section-lead">
+          Thực nghiệm trực quan định luật giao cắt từ <code>GAP-Bench</code> và gửi thử truy vấn <code>GAP-QL</code> / <code>MCP</code> thật nếu bạn đang bật máy chủ <code>python3 web/serve.py</code>.
+        </p>
+
+        <div class="lab-grid">
+          <div class="subcard">
+            <h3>3A. Bộ tính Hiệu quả Token (Số liệu đo thật ADR-021)</h3>
+            <div class="control-row">
+              <label for="calc-suite">Tác vụ:</label>
+              <select id="calc-suite">
+                <option value="cross_branch_join">cross_branch_join (Truy vấn gộp liên nhánh)</option>
+                <option value="api_lookup">api_lookup (Gọi 1 API đơn lẻ)</option>
+                <option value="code_graph">code_graph (Hiểu kho mã nguồn, 24 symbols)</option>
+              </select>
+            </div>
+            <div class="control-row">
+              <label for="calc-n">Quy mô N:</label>
+              <select id="calc-n">
+                <option value="10">N = 10 tools (2 nhánh)</option>
+                <option value="50">N = 50 tools (5 nhánh)</option>
+                <option value="200">N = 200 tools (20 nhánh)</option>
+                <option value="1000" selected>N = 1000 tools (100 nhánh)</option>
+              </select>
+              <label><input id="calc-cached" type="checkbox" checked /> Bật Prompt Cache (0.10x)</label>
+            </div>
+            <div id="calc-output"></div>
+          </div>
+
+          <div class="subcard">
+            <h3>3B. Playground GAP-QL &amp; MCP 2026-07-28</h3>
+            <div class="control-row">
+              <button id="btn-toggle-demo" type="button" class="btn btn-primary">Bật Lab Thực Hành (gap serve)</button>
+              <span id="demo-badge" class="pill">Mô phỏng sẵn</span>
+            </div>
+            <div class="control-row">
+              <label for="play-scenario">Kịch bản:</label>
+              <select id="play-scenario"></select>
+            </div>
+            <p id="play-note" class="section-lead"></p>
+            <div><strong>Request gửi tới <code id="play-endpoint"></code>:</strong></div>
+            <pre role="region" aria-label="Payload request mẫu" tabindex="0"><code id="play-request"></code></pre>
+            <div class="control-row">
+              <button id="btn-run-play" type="button" class="btn btn-primary">Chạy thử kịch bản</button>
+              <span id="play-meta" class="section-lead"></span>
+            </div>
+            <div><strong>Kết quả phản hồi:</strong></div>
+            <pre role="region" aria-label="Kết quả phản hồi" tabindex="0"><code id="play-response"></code></pre>
+          </div>
+        </div>
+      </section>
+
+      <!-- SECTION 4: BAN DO 32 CRATES -->
+      <section id="ban-do-crates" class="card" tabindex="-1">
+        <h2>4. Bản đồ Kiến trúc 32 Crates Rust (Phân tầng L0&ndash;L6)</h2>
+        <p class="section-lead">
+          Mỗi crate ở tầng cao hơn chỉ được phép phụ thuộc vào tầng thấp hơn (<code>tools/check_layers.py</code>). Đặc biệt, 5 crate đường nóng (<code>gap-exec</code>, <code>gap-plan</code>, <code>gap-transport</code>, <code>gap-snapshot</code>, <code>gap-balance</code>) bị cấm tuyệt đối phụ thuộc vào mã ML (<code>ARC-002</code>).
+        </p>
+        <div id="layer-chips" class="chip-group" role="group" aria-label="Lọc crate theo tầng kiến trúc"></div>
+        <div id="crates-grid" class="crates-grid"></div>
+      </section>
+
+      <!-- SECTION 5: CLI VA RUNBOOKS (modern-web-guidance: accordion) -->
+      <section id="cli-va-runbooks" class="card" tabindex="-1">
+        <h2>5. 15 Lệnh CLI &amp; 9 Runbooks Xử lý Sự cố</h2>
+        <p class="section-lead">
+          Nhấn vào từng lệnh <code>gap</code> hoặc từng Runbook để xem cách dùng. Mã thoát chuẩn (<code>OPS-044</code>): <code>0</code> thành công · <code>1</code> lỗi runtime · <code>2</code> sai cấu hình · <code>3</code> từ chối bảo mật/audit · <code>4</code> không tìm thấy.
+        </p>
+
+        <div class="lab-grid">
+          <div class="subcard">
+            <h3>15 Lệnh con của Binary <code>gap</code></h3>
+            <div id="cli-list" class="accordion"></div>
+          </div>
+
+          <div class="subcard">
+            <div class="accordion-header">
+              <h3>9 Runbooks Vận hành (Prometheus Alerts)</h3>
+              <button id="btn-toggle-all-runbooks" type="button" class="btn btn-sm" commandfor="runbooks-accordion" command="--toggle-all" aria-expanded="false">
+                <span class="expand">Mở tất cả</span>
+                <span class="collapse">Thu gọn tất cả</span>
+              </button>
+            </div>
+            <section id="runbooks-accordion" class="accordion" aria-label="Danh sách 9 Runbook xử lý sự cố"></section>
+          </div>
+        </div>
+      </section>
+
+      <!-- SECTION 6: 20 BAT BIEN, STE-100 & QUIZ (modern-web-guidance: responsive-table) -->
+      <section id="bat-bien-va-tu-dien" class="card" tabindex="-1">
+        <h2>6. 20 Bất biến Kiến trúc, Từ điển STE-100 &amp; Quiz Kiểm tra</h2>
+        <p class="section-lead">
+          Các bảng bên dưới tự động cố định tiêu đề (sticky header/column) khi cuộn và tự chuyển thành dạng thẻ (card) khi khung chứa hẹp hơn 640px (<code>@container</code> query).
+        </p>
+
+        <h3>6A. Bảng 20 Bất biến Kiến trúc (INV-01 &ndash; INV-20)</h3>
+        <div tabindex="0" role="region" aria-labelledby="cap-inv" class="table-wrapper">
+          <table class="data-table inv-table">
+            <caption id="cap-inv">20 bất biến chuẩn tắc được kiểm tra tự động trong GAP</caption>
+            <thead>
+              <tr>
+                <th scope="col">Mã</th>
+                <th scope="col">Tên &amp; Yêu cầu</th>
+                <th scope="col">Mặt phẳng / Crate thực thi</th>
+                <th scope="col">Trạng thái kiểm chứng</th>
+              </tr>
+            </thead>
+            <tbody id="inv-tbody"></tbody>
+          </table>
+        </div>
+
+        <h3 class="section-subhead">6B. Từ điển Kiểm soát Chuẩn ASD-STE100 (Phong cách Andrej Karpathy)</h3>
+        <p class="section-lead">
+          Để tài liệu và prompt agent rõ nghĩa 100% không bị LLM tự bịa từ đồng nghĩa, bộ <code>docs/ste100/</code> và <code>dist/check-ste100.py</code> cưỡng chế mỗi khái niệm chỉ mang duy nhất một tên chuẩn:
+        </p>
+        <div tabindex="0" role="region" aria-labelledby="cap-dict" class="table-wrapper">
+          <table class="data-table dict-table">
+            <caption id="cap-dict">Thuật ngữ chuẩn ASD-STE100 trong GAP</caption>
+            <thead>
+              <tr>
+                <th scope="col">Thuật ngữ chuẩn</th>
+                <th scope="col">Nghĩa trong GAP</th>
+                <th scope="col">Từ cấm (không dùng thay thế)</th>
+              </tr>
+            </thead>
+            <tbody id="dict-tbody"></tbody>
+          </table>
+        </div>
+
+        <h3 class="section-subhead">6C. Tự kiểm tra Kiến thức (6 câu hỏi cốt lõi)</h3>
+        <div id="quiz-container"></div>
+        <div id="quiz-score" class="pill">Điểm hiện tại: 0 / 6</div>
+      </section>
+    </main>
+  </div>
+
+  <footer class="site-footer">
+    <strong>Graph Agent Protocol (GAP v0.1.0-rc.1)</strong> · Copyright 2026 Duy Đức Nguyễn (Infinite Agent Labs) · Apache-2.0 ·
+    <a href="https://github.com/vnknowledge2014/GraphProtocol" target="_blank" rel="noopener">GitHub</a> ·
+    <a href="./paper/" target="_blank" rel="noopener">Bài báo HTML</a> ·
+    <a href="./paper/gap-paper.pdf" target="_blank" rel="noopener">PDF</a> ·
+    <a href="./index.html" lang="en" hreflang="en">English</a> ·
+    Tài liệu học tập tương tác tiếng Việt dựa 100% trên mã nguồn, spec <code>00–09</code> và kết quả đo thật trong repository.
+  </footer>
+
+  <script src="data.vi.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
