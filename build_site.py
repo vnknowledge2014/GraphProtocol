@@ -14,6 +14,7 @@ from pathlib import Path
 import posixpath
 import re
 import sys
+import xml.etree.ElementTree as ET
 
 WEB_DIR = Path(__file__).resolve().parent
 REPO_ROOT = WEB_DIR.parent
@@ -34,6 +35,8 @@ from site_src.nav import (  # noqa: E402
     page_out_path,
     prev_next,
 )
+from site_src.pages_academy_en import build_academy_en  # noqa: E402
+from site_src.pages_academy_vi import build_academy_vi  # noqa: E402
 from site_src.pages_en import build_en_part1  # noqa: E402
 from site_src.pages_en_part2 import build_en_part2  # noqa: E402
 from site_src.pages_vi import build_vi_part1  # noqa: E402
@@ -48,6 +51,8 @@ INTERACTIVE_SLUGS = {
 }
 
 EXPECTED_PAGE_IDS = {
+    "learn-graphql-and-gap": {"query-builder-widget", "qb-graphql-code", "qb-json-code"},
+    "academy-hub": {"academy-hub-progress", "academy-total-count", "academy-total-fill"},
     "architecture": {"planes-grid", "arch-inspector"},
     "playground": {"calc-suite", "levels-tablist", "quiz-container"},
     "cli-and-ops": {"cli-list", "runbooks-accordion", "layer-chips", "crates-grid"},
@@ -369,7 +374,7 @@ def render_vi_redirect() -> str:
 <body class="redirect-body">
   <main class="redirect-main">
     <h1>Tài liệu GAP Tiếng Việt</h1>
-    <p>Cổng tài liệu tiếng Việt đã được chuyển sang <a href="./vi/index.html">vi/index.html</a> với đầy đủ 13 trang hướng dẫn theo chủ đề.</p>
+    <p>Cổng tài liệu tiếng Việt đã được chuyển sang <a href="./vi/index.html">vi/index.html</a> với đầy đủ 20 trang hướng dẫn, Kiến thức Nền &amp; Học viện GAP.</p>
     <p><a class="btn btn-primary" href="./vi/index.html">Mở Tài liệu GAP Tiếng Việt</a> <a class="btn" href="./index.html" hreflang="en" lang="en">English Docs</a></p>
   </main>
   <script>location.replace("./vi/index.html");</script>
@@ -494,12 +499,12 @@ class HtmlAuditParser(HTMLParser):
 
 def write_site() -> int:
     """Generate all static HTML pages, search indices, redirect, and `llms.txt`."""
-    data_en = build_en_part1() | build_en_part2()
-    data_vi = build_vi_part1() | build_vi_part2()
+    data_en = build_en_part1() | build_academy_en() | build_en_part2()
+    data_vi = build_vi_part1() | build_academy_vi() | build_vi_part2()
 
     expected_slugs = [p[0] for p in PAGES]
-    assert list(data_en.keys()) == expected_slugs, "EN page keys mismatch"
-    assert list(data_vi.keys()) == expected_slugs, "VI page keys mismatch"
+    assert set(data_en.keys()) == set(expected_slugs), f"EN page keys mismatch: {set(data_en.keys()) ^ set(expected_slugs)}"
+    assert set(data_vi.keys()) == set(expected_slugs), f"VI page keys mismatch: {set(data_vi.keys()) ^ set(expected_slugs)}"
 
     written = 0
     for lang, pdata in (("en", data_en), ("vi", data_vi)):
@@ -522,6 +527,73 @@ def write_site() -> int:
     (WEB_DIR / "llms.txt").write_text(render_llms_txt(), encoding="utf-8")
     written += 2
     return written
+
+
+def audit_svg_geometry(html_text: str, rel_disp: str) -> list[str]:
+    """Verify inline SVG diagram `<text>` bounding boxes never overflow their `viewBox` or container `<rect>`."""
+    issues: list[str] = []
+    for raw_svg in re.findall(r"<svg\b[^>]*>.*?</svg>", html_text, flags=re.S):
+        try:
+            root = ET.fromstring(raw_svg)
+        except ET.ParseError as exc:
+            issues.append(f"{rel_disp}: invalid SVG markup ({exc})")
+            continue
+        vb = root.attrib.get("viewBox", "")
+        parts = vb.split()
+        if len(parts) != 4:
+            continue
+        vb_x, _vb_y, vb_w, _vb_h = [float(p) for p in parts]
+        if vb_w <= 48:
+            continue
+
+        rects: list[tuple[float, float, float, float]] = []
+        for el in root.iter():
+            if el.tag.endswith("rect") and all(k in el.attrib for k in ("x", "y", "width", "height")):
+                rects.append(
+                    (
+                        float(el.attrib["x"]),
+                        float(el.attrib["y"]),
+                        float(el.attrib["width"]),
+                        float(el.attrib["height"]),
+                    )
+                )
+
+        for el in root.iter():
+            if not el.tag.endswith("text"):
+                continue
+            txt = "".join(el.itertext()).strip()
+            if not txt:
+                continue
+            tx = float(el.attrib.get("x", 0))
+            ty = float(el.attrib.get("y", 0))
+            fs = float(el.attrib.get("font-size", 12))
+            anchor = el.attrib.get("text-anchor", "start")
+            est_w = len(txt) * fs * 0.58
+            if anchor == "middle":
+                x_left, x_right = tx - est_w / 2.0, tx + est_w / 2.0
+            elif anchor == "end":
+                x_left, x_right = tx - est_w, tx
+            else:
+                x_left, x_right = tx, tx + est_w
+
+            if x_left < vb_x or x_right > vb_x + vb_w:
+                issues.append(
+                    f"{rel_disp}: SVG text {txt!r} ([{x_left:.1f}, {x_right:.1f}]) exceeds viewBox [0, {vb_w:.0f}]"
+                )
+                continue
+
+            enclosing = [
+                (rx, ry, rw, rh)
+                for (rx, ry, rw, rh) in rects
+                if rx <= tx <= rx + rw and ry <= ty <= ry + rh
+            ]
+            if enclosing:
+                rx, _ry, rw, _rh = min(enclosing, key=lambda r: r[2] * r[3])
+                if x_left < rx + 2.0 or x_right > rx + rw - 2.0:
+                    issues.append(
+                        f"{rel_disp}: SVG text {txt!r} ([{x_left:.1f}, {x_right:.1f}]) overflows rect [{rx:.1f}, {rx + rw:.1f}]"
+                    )
+    return issues
 
 
 def validate_site() -> list[str]:
@@ -577,6 +649,8 @@ def validate_site() -> list[str]:
         if "`" in stripped_text:
             errors.append(f"{rel_disp}: stray backtick character found outside <code>/<pre>")
 
+        errors.extend(audit_svg_geometry(html_text, rel_disp))
+
     # Second pass: resolve every relative href/src and optional #fragment
     for fpath, _lang, _slug in files_to_check:
         if fpath not in parsed_cache:
@@ -624,8 +698,8 @@ def validate_site() -> list[str]:
             errors.append(f"Missing generated asset: web/{aux}")
 
     # Verify exported Markdown blocks do not contain broken relative *.md links (docs pages use *.html)
-    data_en = build_en_part1() | build_en_part2()
-    data_vi = build_vi_part1() | build_vi_part2()
+    data_en = build_en_part1() | build_academy_en() | build_en_part2()
+    data_vi = build_vi_part1() | build_academy_vi() | build_vi_part2()
     for lcode, dset in (("en", data_en), ("vi", data_vi)):
         for slug, pdata in dset.items():
             md = pdata.get("markdown", "")
@@ -650,7 +724,7 @@ def main() -> int:
         for e in errs:
             print(f"  - {e}", file=sys.stderr)
         return 1
-    print("Validation PASSED: 26 bilingual pages + vi.html + search indices + llms.txt verified (0 errors).")
+    print(f"Validation PASSED: {len(PAGES) * 2} bilingual pages + vi.html + search indices + llms.txt + SVG geometry verified (0 errors).")
     return 0
 
 

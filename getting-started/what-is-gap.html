@@ -39,13 +39,13 @@
       </div>
 
       <nav class="top-nav" aria-label="Primary sections">
-        <a href="what-is-gap.html" aria-current="true" class="top-link is-active">Get Started</a><a href="../concepts/architecture.html" class="top-link">Architecture</a><a href="../connectors/overview.html" class="top-link">Connectors</a><a href="../security/zero-trust.html" class="top-link">Security</a><a href="../lab/playground.html" class="top-link">Interactive Lab</a><a href="../reference/cli-and-ops.html" class="top-link">Reference</a>
+        <a href="what-is-gap.html" aria-current="true" class="top-link is-active">Get Started</a><a href="../learn/graphql-and-gap-basics.html" class="top-link">Learn</a><a href="../academy/index.html" class="top-link">Academy</a><a href="../concepts/architecture.html" class="top-link">Architecture</a><a href="../security/zero-trust.html" class="top-link">Security</a><a href="../lab/playground.html" class="top-link">Lab</a><a href="../reference/cli-and-ops.html" class="top-link">Reference</a>
       </nav>
 
       <div class="topbar-controls">
         <search class="search-wrap">
           <label class="visually-hidden" for="global-search">Search GAP documentation across all guides</label>
-          <input id="global-search" type="search" placeholder="Search docs, INV, CLI... [/]" autocomplete="off" />
+          <input id="global-search" type="search" placeholder="Search docs, Academy, INV... [/]" autocomplete="off" />
           <div id="search-results" class="search-results scroller" role="region" aria-live="polite" hidden></div>
         </search>
         <nav class="lang-switch" aria-label="Language">
@@ -70,6 +70,18 @@
   <p class="nav-group-title" id="drawer-start-here">Start Here</p>
   <ul aria-labelledby="drawer-start-here">
     <li><a class="nav-link" href="../index.html">GAP Documentation Hub</a></li><li><a class="nav-link is-active" href="what-is-gap.html" aria-current="page">What is GAP?</a></li><li><a class="nav-link" href="quickstart.html">10-Minute Quickstart</a></li>
+  </ul>
+</div>
+<div class="nav-group" data-section-id="learn">
+  <p class="nav-group-title" id="drawer-learn">Learn Basics</p>
+  <ul aria-labelledby="drawer-learn">
+    <li><a class="nav-link" href="../learn/graphql-and-gap-basics.html">GraphQL &amp; GAP Basics</a></li><li><a class="nav-link" href="../learn/queries-mutations-joins.html">Arguments, Mutations &amp; Joins</a></li>
+  </ul>
+</div>
+<div class="nav-group" data-section-id="academy">
+  <p class="nav-group-title" id="drawer-academy">GAP Academy (Courses)</p>
+  <ul aria-labelledby="drawer-academy">
+    <li><a class="nav-link" href="../academy/index.html">GAP Academy — Hands-On Courses</a></li><li><a class="nav-link" href="../academy/liftoff-first-supergraph.html">Course 1: Lift-Off — First Supergraph</a></li><li><a class="nav-link" href="../academy/mcp-and-ai-assistants.html">Course 2: MCP, AG-UI &amp; AI Assistants</a></li><li><a class="nav-link" href="../academy/connectors-and-batching.html">Course 3: REST, SQL &amp; N+1 Batching</a></li><li><a class="nav-link" href="../academy/enterprise-zero-trust.html">Course 4: Zero-Trust, Cedar &amp; HTTP/3</a></li>
   </ul>
 </div>
 <div class="nav-group" data-section-id="concepts">
@@ -119,6 +131,18 @@
   <p class="nav-group-title" id="side-start-here">Start Here</p>
   <ul aria-labelledby="side-start-here">
     <li><a class="nav-link" href="../index.html">GAP Documentation Hub</a></li><li><a class="nav-link is-active" href="what-is-gap.html" aria-current="page">What is GAP?</a></li><li><a class="nav-link" href="quickstart.html">10-Minute Quickstart</a></li>
+  </ul>
+</div>
+<div class="nav-group" data-section-id="learn">
+  <p class="nav-group-title" id="side-learn">Learn Basics</p>
+  <ul aria-labelledby="side-learn">
+    <li><a class="nav-link" href="../learn/graphql-and-gap-basics.html">GraphQL &amp; GAP Basics</a></li><li><a class="nav-link" href="../learn/queries-mutations-joins.html">Arguments, Mutations &amp; Joins</a></li>
+  </ul>
+</div>
+<div class="nav-group" data-section-id="academy">
+  <p class="nav-group-title" id="side-academy">GAP Academy (Courses)</p>
+  <ul aria-labelledby="side-academy">
+    <li><a class="nav-link" href="../academy/index.html">GAP Academy — Hands-On Courses</a></li><li><a class="nav-link" href="../academy/liftoff-first-supergraph.html">Course 1: Lift-Off — First Supergraph</a></li><li><a class="nav-link" href="../academy/mcp-and-ai-assistants.html">Course 2: MCP, AG-UI &amp; AI Assistants</a></li><li><a class="nav-link" href="../academy/connectors-and-batching.html">Course 3: REST, SQL &amp; N+1 Batching</a></li><li><a class="nav-link" href="../academy/enterprise-zero-trust.html">Course 4: Zero-Trust, Cedar &amp; HTTP/3</a></li>
   </ul>
 </div>
 <div class="nav-group" data-section-id="concepts">
@@ -174,7 +198,7 @@
   </ol>
 </nav>
         <div class="article-meta-bar">
-          <span class="read-time">5 min read</span>
+          <span class="read-time">5 min</span>
           <span class="copy copy-md-wrap">
             <button type="button" class="copy-button copy-md-btn" command="--copy" commandfor="page-markdown-src">
               <span class="icon" aria-hidden="true"></span>
@@ -216,7 +240,7 @@ At N &lt;= 50 flat lookups with prompt caching warm, Direct-MCP uses fewer raw t
   <li><strong>Mutable Descriptions (Rug Pulls):</strong> If an untrusted upstream edits a tool description after approval to inject hidden instructions, flat clients forward the poisoned text straight to the LLM.</li>
   <li><strong>Probabilistic Authorization Leaks:</strong> Letting an LLM or neural classifier enforce access control introduces bypass risk. Access decisions must be deterministic code.</li>
 </ul><figure class="diagram-frame">
-  <svg role="img" aria-label="Comparison of flat Direct-MCP vs Unified GAP Supergraph" viewBox="0 0 760 270" width="760" height="270" xmlns="http://www.w3.org/2000/svg">
+  <svg role="img" aria-label="Comparison of flat Direct-MCP vs Unified GAP Supergraph" viewBox="0 0 860 304" width="860" height="304" xmlns="http://www.w3.org/2000/svg">
     <title>Comparison of flat Direct-MCP vs Unified GAP Supergraph</title>
     <defs>
       <marker id="mm-arr-warn" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
@@ -226,28 +250,31 @@ At N &lt;= 50 flat lookups with prompt caching warm, Direct-MCP uses fewer raw t
         <path d="M 0 1.5 L 9 5 L 0 8.5 z" fill="var(--ok)"/>
       </marker>
     </defs>
-    <rect x="8" y="8" width="356" height="254" rx="12" fill="var(--surface-alt)" stroke="var(--warn)" stroke-width="1.5"/>
-    <text x="26" y="36" fill="var(--warn)" font-size="14" font-weight="700">Without GAP (Flat Direct-MCP)</text>
-    <rect x="26" y="54" width="320" height="52" rx="8" fill="var(--surface)" stroke="var(--border)"/>
-    <text x="186" y="77" text-anchor="middle" fill="var(--text)" font-size="13" font-weight="700">203,421 Token Prompt Bloat</text>
-    <text x="186" y="96" text-anchor="middle" fill="var(--muted)" font-size="12">1,000 raw tool schemas up front</text>
-    <line x1="186" y1="106" x2="186" y2="146" stroke="var(--warn)" stroke-width="2" stroke-dasharray="4 3" marker-end="url(#mm-arr-warn)"/>
-    <text x="196" y="131" text-anchor="start" fill="var(--warn)" font-size="11.5" font-weight="600">Agent-orchestrated N+1 loop (4 turns)</text>
-    <rect x="26" y="150" width="320" height="90" rx="8" fill="var(--surface)" stroke="var(--border)"/>
-    <text x="186" y="185" text-anchor="middle" fill="var(--text)" font-size="13" font-weight="600">Mutable descriptions (Rug-Pull risk)</text>
-    <text x="186" y="214" text-anchor="middle" fill="var(--muted)" font-size="12">REST  |  SQL  |  gRPC  |  MCP  |  Code AST</text>
+    <rect x="12" y="10" width="406" height="284" rx="12" fill="var(--surface-alt)" stroke="var(--warn)" stroke-width="1.5"/>
+    <text x="215" y="38" text-anchor="middle" fill="var(--warn)" font-size="14" font-weight="700">Without GAP (Flat Direct-MCP)</text>
+    <rect x="30" y="54" width="370" height="54" rx="8" fill="var(--surface)" stroke="var(--border)"/>
+    <text x="215" y="77" text-anchor="middle" fill="var(--text)" font-size="13" font-weight="700">203,421-Token Prompt Bloat</text>
+    <text x="215" y="96" text-anchor="middle" fill="var(--muted)" font-size="11.5">1,000 raw tool schemas up front</text>
+    <line x1="215" y1="108" x2="215" y2="162" stroke="var(--warn)" stroke-width="2" stroke-dasharray="4 3" marker-end="url(#mm-arr-warn)"/>
+    <rect x="55" y="121" width="320" height="26" rx="13" fill="var(--surface)" stroke="var(--warn)"/>
+    <text x="215" y="138" text-anchor="middle" fill="var(--warn)" font-size="11.5" font-weight="700">Agent N+1 loop (4 turns)</text>
+    <rect x="30" y="168" width="370" height="106" rx="8" fill="var(--surface)" stroke="var(--border)"/>
+    <text x="215" y="210" text-anchor="middle" fill="var(--text)" font-size="13" font-weight="600">Mutable descriptions (Rug-Pull risk)</text>
+    <text x="215" y="240" text-anchor="middle" fill="var(--muted)" font-size="12">REST  |  SQL  |  gRPC  |  MCP  |  Code AST</text>
 
-    <rect x="396" y="8" width="356" height="254" rx="12" fill="var(--surface-alt)" stroke="var(--accent)" stroke-width="2"/>
-    <text x="414" y="36" fill="var(--accent)" font-size="14" font-weight="700">With GAP (Typed Supergraph)</text>
-    <rect x="414" y="54" width="320" height="52" rx="8" fill="var(--surface)" stroke="var(--accent)"/>
-    <text x="574" y="77" text-anchor="middle" fill="var(--accent)" font-size="13" font-weight="700">5 Static MCP Tools (651 tok)</text>
-    <text x="574" y="96" text-anchor="middle" fill="var(--muted)" font-size="12">L0 -&gt; L1 -&gt; L2 Discovery + Cedar AuthZ</text>
-    <line x1="574" y1="106" x2="574" y2="146" stroke="var(--ok)" stroke-width="2" marker-end="url(#mm-arr-ok)"/>
-    <text x="584" y="131" text-anchor="start" fill="var(--ok)" font-size="11.5" font-weight="600">DataLoader Batching + ArcSwap (2 turns)</text>
-    <rect x="414" y="150" width="320" height="90" rx="8" fill="var(--surface)" stroke="var(--ok)"/>
-    <text x="574" y="185" text-anchor="middle" fill="var(--ok)" font-size="13" font-weight="700">6 NGC Branches · SSRF &amp; Drift Guard</text>
-    <text x="574" y="214" text-anchor="middle" fill="var(--muted)" font-size="12">HTTP/3 QUIC  ·  MCP  ·  A2A v1.0  ·  AG-UI</text>
+    <rect x="442" y="10" width="406" height="284" rx="12" fill="var(--surface-alt)" stroke="var(--accent)" stroke-width="2"/>
+    <text x="645" y="38" text-anchor="middle" fill="var(--accent)" font-size="14" font-weight="700">With GAP (Typed Supergraph)</text>
+    <rect x="460" y="54" width="370" height="54" rx="8" fill="var(--surface)" stroke="var(--accent)"/>
+    <text x="645" y="77" text-anchor="middle" fill="var(--accent)" font-size="13" font-weight="700">5 Static MCP Tools (Fixed 651 tok)</text>
+    <text x="645" y="96" text-anchor="middle" fill="var(--muted)" font-size="11.5">L0 -&gt; L1 -&gt; L2 Discovery + Cedar AuthZ</text>
+    <line x1="645" y1="108" x2="645" y2="162" stroke="var(--ok)" stroke-width="2" marker-end="url(#mm-arr-ok)"/>
+    <rect x="485" y="121" width="320" height="26" rx="13" fill="var(--surface)" stroke="var(--ok)"/>
+    <text x="645" y="138" text-anchor="middle" fill="var(--ok)" font-size="11.5" font-weight="700">DataLoader Batch + ArcSwap (2 turns)</text>
+    <rect x="460" y="168" width="370" height="106" rx="8" fill="var(--surface)" stroke="var(--ok)"/>
+    <text x="645" y="210" text-anchor="middle" fill="var(--ok)" font-size="13" font-weight="700">6 NGC Branches · SSRF &amp; Drift Guard</text>
+    <text x="645" y="240" text-anchor="middle" fill="var(--muted)" font-size="12">HTTP/3 QUIC  ·  MCP  ·  A2A v1.0  ·  AG-UI</text>
   </svg>
+  <figcaption class="diagram-caption">Comparison of flat Direct-MCP vs Unified GAP Supergraph</figcaption>
 </figure>
 </section><section id="key-terminology" tabindex="-1" class="doc-section">
   <h2>Five Terms You Need to Know</h2>
@@ -275,7 +302,7 @@ At N &lt;= 50 flat lookups with prompt caching warm, Direct-MCP uses fewer raw t
       </article>
 
       <footer class="doc-footer">
-        <p class="footer-note">Documentation portal grounded 100% in repository source code, specs 00-09, and ADR-021 measurements.</p>
+        <p class="footer-note">Documentation, Learn &amp; Academy grounded 100% in repository source code, specs 00-09, and ADR-021 measurements.</p>
         <div class="footer-links">
           <a href="../paper/gap-paper.html">Paper (HTML)</a>
           <a href="../paper/gap-paper.pdf">PDF</a>

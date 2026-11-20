@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="color-scheme" content="light dark" />
+  <script>
+    try {
+      var s = localStorage.getItem("gap-color-scheme");
+      if (s === "light" || s === "dark") {
+        document.querySelector('meta[name="color-scheme"]').content = s;
+      }
+    } catch (_e) {}
+  </script>
+  <title>Khóa 1: Lift-Off — Siêu đồ thị Đầu tiên — Tài liệu GAP</title>
+  <meta name="description" content="4 bài thực hành: khởi tạo bằng gap init, nối OpenAPI + MCP, kiểm tra /readyz và gửi truy vấn gộp liên nhánh đầu tiên." />
+  <link rel="canonical" href="https://vnknowledge2014.github.io/GraphProtocol/vi/academy/liftoff-first-supergraph.html" />
+  <link rel="alternate" hreflang="en" href="../../academy/liftoff-first-supergraph.html" />
+  <link rel="alternate" hreflang="vi" href="liftoff-first-supergraph.html" />
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns=&#x27;http://www.w3.org/2000/svg&#x27; viewBox=&#x27;0 0 32 32&#x27;%3E%3Crect width=&#x27;32&#x27; height=&#x27;32&#x27; rx=&#x27;8&#x27; fill=&#x27;%230f4c81&#x27;/%3E%3Ctext x=&#x27;16&#x27; y=&#x27;22&#x27; text-anchor=&#x27;middle&#x27; font-family=&#x27;system-ui,sans-serif&#x27; font-weight=&#x27;800&#x27; font-size=&#x27;18&#x27; fill=&#x27;%23ffffff&#x27;%3EG%3C/text%3E%3C/svg%3E" />
+  <link rel="stylesheet" href="../../styles.css" />
+</head>
+<body data-slug="course-liftoff" data-lang="vi" data-section="academy" data-web-root="../../">
+  <a class="skip-link" href="#article-title">Chuyển tới nội dung bài viết</a>
+
+  <header class="topbar">
+    <div class="topbar-inner">
+      <div class="topbar-left">
+        <button type="button" id="drawer-open" class="drawer-open-btn" aria-label="Mở danh mục tài liệu" aria-controls="docs-drawer">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+            <path d="M4 6h16M4 12h16M4 18h16" />
+          </svg>
+        </button>
+        <a class="brand-link" href="../index.html">
+          <span class="brand-mark" aria-hidden="true">G</span>
+          <span class="brand-text"><strong>GAP</strong> <span class="brand-sub">Tài liệu GAP</span></span>
+          <span class="badge-ver">v0.1.0-rc.1</span>
+        </a>
+      </div>
+
+      <nav class="top-nav" aria-label="Nhóm tài liệu chính">
+        <a href="../getting-started/what-is-gap.html" class="top-link">Bắt đầu</a><a href="../learn/graphql-and-gap-basics.html" class="top-link">Kiến thức Nền</a><a href="index.html" aria-current="true" class="top-link is-active">Học viện</a><a href="../concepts/architecture.html" class="top-link">Kiến trúc</a><a href="../security/zero-trust.html" class="top-link">Bảo mật</a><a href="../lab/playground.html" class="top-link">Phòng Lab</a><a href="../reference/cli-and-ops.html" class="top-link">Tra cứu</a>
+      </nav>
+
+      <div class="topbar-controls">
+        <search class="search-wrap">
+          <label class="visually-hidden" for="global-search">Tìm kiếm trên toàn bộ tài liệu và Học viện GAP</label>
+          <input id="global-search" type="search" placeholder="Tìm tài liệu, Học viện, INV... [/]" autocomplete="off" />
+          <div id="search-results" class="search-results scroller" role="region" aria-live="polite" hidden></div>
+        </search>
+        <nav class="lang-switch" aria-label="Ngôn ngữ">
+          <span class="lang-current" aria-current="true">VI</span>
+          <a class="lang-alt" href="../../academy/liftoff-first-supergraph.html" hreflang="en" lang="en">EN</a>
+        </nav>
+        <button type="button" id="theme-toggle-btn" class="theme-toggle" aria-label="Chuyển giao diện Sáng / Tối">
+          <span class="icon-to-dark" aria-hidden="true">☽</span>
+          <span class="icon-to-light" aria-hidden="true">☀</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <dialog class="Drawer scroller" id="docs-drawer" aria-label="Ngăn điều hướng tài liệu">
+    <nav class="Drawer-nav scroller" aria-label="Danh mục tài liệu">
+      <div class="Drawer-head">
+        <span class="Drawer-brand"><strong>GAP</strong> Tài liệu GAP</span>
+        <button type="button" id="drawer-close" class="drawer-close-btn" aria-label="Đóng danh mục tài liệu">&times;</button>
+      </div>
+      <div class="nav-group" data-section-id="start-here">
+  <p class="nav-group-title" id="drawer-start-here">Bắt đầu</p>
+  <ul aria-labelledby="drawer-start-here">
+    <li><a class="nav-link" href="../index.html">Trang chủ Tài liệu GAP</a></li><li><a class="nav-link" href="../getting-started/what-is-gap.html">GAP là gì?</a></li><li><a class="nav-link" href="../getting-started/quickstart.html">Khởi chạy Nhanh (10 phút)</a></li>
+  </ul>
+</div>
+<div class="nav-group" data-section-id="learn">
+  <p class="nav-group-title" id="drawer-learn">Kiến thức Nền tảng</p>
+  <ul aria-labelledby="drawer-learn">
+    <li><a class="nav-link" href="../learn/graphql-and-gap-basics.html">Nhập môn GraphQL &amp; GAP</a></li><li><a class="nav-link" href="../learn/queries-mutations-joins.html">Tham số, Mutation &amp; Nối nhánh</a></li>
+  </ul>
+</div>
+<div class="nav-group" data-section-id="academy">
+  <p class="nav-group-title" id="drawer-academy">Học viện GAP (Thực chiến)</p>
+  <ul aria-labelledby="drawer-academy">
+    <li><a class="nav-link" href="index.html">Học viện GAP — Khóa học Thực chiến</a></li><li><a class="nav-link is-active" href="liftoff-first-supergraph.html" aria-current="page">Khóa 1: Lift-Off — Siêu đồ thị Đầu tiên</a></li><li><a class="nav-link" href="mcp-and-ai-assistants.html">Khóa 2: MCP, AG-UI &amp; Trợ lý AI</a></li><li><a class="nav-link" href="connectors-and-batching.html">Khóa 3: REST, SQL &amp; Gom lô N+1</a></li><li><a class="nav-link" href="enterprise-zero-trust.html">Khóa 4: Zero-Trust, Cedar &amp; HTTP/3</a></li>
+  </ul>
+</div>
+<div class="nav-group" data-section-id="concepts">
+  <p class="nav-group-title" id="drawer-concepts">Kiến trúc Cốt lõi</p>
+  <ul aria-labelledby="drawer-concepts">
+    <li><a class="nav-link" href="../concepts/architecture.html">Kiến trúc 3 Mặt phẳng</a></li><li><a class="nav-link" href="../concepts/progressive-disclosure.html">Khám phá Lũy tiến (651 Tokens)</a></li><li><a class="nav-link" href="../concepts/gap-ql-and-joins.html">GAP-QL &amp; Gom Lô Join</a></li>
+  </ul>
+</div>
+<div class="nav-group" data-section-id="connectors">
+  <p class="nav-group-title" id="drawer-connectors">Kết nối Dữ liệu (NGC)</p>
+  <ul aria-labelledby="drawer-connectors">
+    <li><a class="nav-link" href="../connectors/overview.html">Kết nối Dữ liệu (NGC)</a></li>
+  </ul>
+</div>
+<div class="nav-group" data-section-id="agents">
+  <p class="nav-group-title" id="drawer-agents">Tích hợp AI Agent</p>
+  <ul aria-labelledby="drawer-agents">
+    <li><a class="nav-link" href="../agents/facades-and-hosts.html">Tích hợp MCP, A2A &amp; AG-UI</a></li><li><a class="nav-link" href="../agents/routers-and-http3.html">Định tuyến System-1 &amp; HTTP/3 QUIC</a></li>
+  </ul>
+</div>
+<div class="nav-group" data-section-id="security">
+  <p class="nav-group-title" id="drawer-security">Bảo mật Zero-Trust</p>
+  <ul aria-labelledby="drawer-security">
+    <li><a class="nav-link" href="../security/zero-trust.html">Bảo mật Zero-Trust &amp; Cedar</a></li>
+  </ul>
+</div>
+<div class="nav-group" data-section-id="lab">
+  <p class="nav-group-title" id="drawer-lab">Phòng Lab Thực hành</p>
+  <ul aria-labelledby="drawer-lab">
+    <li><a class="nav-link" href="../lab/playground.html">Phòng Lab &amp; Bộ tính Token</a></li>
+  </ul>
+</div>
+<div class="nav-group" data-section-id="reference">
+  <p class="nav-group-title" id="drawer-reference">Vận hành &amp; Tra cứu</p>
+  <ul aria-labelledby="drawer-reference">
+    <li><a class="nav-link" href="../reference/cli-and-ops.html">Tra cứu CLI, Runbooks &amp; 32 Crates</a></li><li><a class="nav-link" href="../reference/invariants-and-glossary.html">20 Bất biến, STE-100 &amp; Bài báo</a></li>
+  </ul>
+</div>
+    </nav>
+    <button type="button" id="drawer-backdrop-close" class="Drawer-backdrop" aria-label="Đóng danh mục tài liệu"></button>
+  </dialog>
+
+  <div class="docs-shell">
+    <aside class="sidebar scroller" aria-label="Danh mục tài liệu">
+      <nav aria-label="Danh mục tài liệu">
+        <div class="nav-group" data-section-id="start-here">
+  <p class="nav-group-title" id="side-start-here">Bắt đầu</p>
+  <ul aria-labelledby="side-start-here">
+    <li><a class="nav-link" href="../index.html">Trang chủ Tài liệu GAP</a></li><li><a class="nav-link" href="../getting-started/what-is-gap.html">GAP là gì?</a></li><li><a class="nav-link" href="../getting-started/quickstart.html">Khởi chạy Nhanh (10 phút)</a></li>
+  </ul>
+</div>
+<div class="nav-group" data-section-id="learn">
+  <p class="nav-group-title" id="side-learn">Kiến thức Nền tảng</p>
+  <ul aria-labelledby="side-learn">
+    <li><a class="nav-link" href="../learn/graphql-and-gap-basics.html">Nhập môn GraphQL &amp; GAP</a></li><li><a class="nav-link" href="../learn/queries-mutations-joins.html">Tham số, Mutation &amp; Nối nhánh</a></li>
+  </ul>
+</div>
+<div class="nav-group" data-section-id="academy">
+  <p class="nav-group-title" id="side-academy">Học viện GAP (Thực chiến)</p>
+  <ul aria-labelledby="side-academy">
+    <li><a class="nav-link" href="index.html">Học viện GAP — Khóa học Thực chiến</a></li><li><a class="nav-link is-active" href="liftoff-first-supergraph.html" aria-current="page">Khóa 1: Lift-Off — Siêu đồ thị Đầu tiên</a></li><li><a class="nav-link" href="mcp-and-ai-assistants.html">Khóa 2: MCP, AG-UI &amp; Trợ lý AI</a></li><li><a class="nav-link" href="connectors-and-batching.html">Khóa 3: REST, SQL &amp; Gom lô N+1</a></li><li><a class="nav-link" href="enterprise-zero-trust.html">Khóa 4: Zero-Trust, Cedar &amp; HTTP/3</a></li>
+  </ul>
+</div>
+<div class="nav-group" data-section-id="concepts">
+  <p class="nav-group-title" id="side-concepts">Kiến trúc Cốt lõi</p>
+  <ul aria-labelledby="side-concepts">
+    <li><a class="nav-link" href="../concepts/architecture.html">Kiến trúc 3 Mặt phẳng</a></li><li><a class="nav-link" href="../concepts/progressive-disclosure.html">Khám phá Lũy tiến (651 Tokens)</a></li><li><a class="nav-link" href="../concepts/gap-ql-and-joins.html">GAP-QL &amp; Gom Lô Join</a></li>
+  </ul>
+</div>
+<div class="nav-group" data-section-id="connectors">
+  <p class="nav-group-title" id="side-connectors">Kết nối Dữ liệu (NGC)</p>
+  <ul aria-labelledby="side-connectors">
+    <li><a class="nav-link" href="../connectors/overview.html">Kết nối Dữ liệu (NGC)</a></li>
+  </ul>
+</div>
+<div class="nav-group" data-section-id="agents">
+  <p class="nav-group-title" id="side-agents">Tích hợp AI Agent</p>
+  <ul aria-labelledby="side-agents">
+    <li><a class="nav-link" href="../agents/facades-and-hosts.html">Tích hợp MCP, A2A &amp; AG-UI</a></li><li><a class="nav-link" href="../agents/routers-and-http3.html">Định tuyến System-1 &amp; HTTP/3 QUIC</a></li>
+  </ul>
+</div>
+<div class="nav-group" data-section-id="security">
+  <p class="nav-group-title" id="side-security">Bảo mật Zero-Trust</p>
+  <ul aria-labelledby="side-security">
+    <li><a class="nav-link" href="../security/zero-trust.html">Bảo mật Zero-Trust &amp; Cedar</a></li>
+  </ul>
+</div>
+<div class="nav-group" data-section-id="lab">
+  <p class="nav-group-title" id="side-lab">Phòng Lab Thực hành</p>
+  <ul aria-labelledby="side-lab">
+    <li><a class="nav-link" href="../lab/playground.html">Phòng Lab &amp; Bộ tính Token</a></li>
+  </ul>
+</div>
+<div class="nav-group" data-section-id="reference">
+  <p class="nav-group-title" id="side-reference">Vận hành &amp; Tra cứu</p>
+  <ul aria-labelledby="side-reference">
+    <li><a class="nav-link" href="../reference/cli-and-ops.html">Tra cứu CLI, Runbooks &amp; 32 Crates</a></li><li><a class="nav-link" href="../reference/invariants-and-glossary.html">20 Bất biến, STE-100 &amp; Bài báo</a></li>
+  </ul>
+</div>
+      </nav>
+      <div class="sidebar-status" role="status" aria-live="polite">
+        <span id="server-status-dot" class="status-dot" aria-hidden="true"></span>
+        <span id="server-status-text">Chế độ Tĩnh (HTML)</span>
+      </div>
+    </aside>
+
+    <main id="main-content" class="doc-main">
+      <article class="doc-article">
+        <nav class="breadcrumb" aria-label="Đường dẫn vị trí">
+  <ol>
+    <li><a href="../index.html">Tài liệu</a></li>
+    <li><a href="index.html">Học viện GAP (Thực chiến)</a></li>
+    <li><a href="liftoff-first-supergraph.html" aria-current="page">Khóa 1: Lift-Off — Siêu đồ thị Đầu tiên</a></li>
+  </ol>
+</nav>
+        <div class="article-meta-bar">
+          <span class="read-time">20 phút</span>
+          <span class="copy copy-md-wrap">
+            <button type="button" class="copy-button copy-md-btn" command="--copy" commandfor="page-markdown-src">
+              <span class="icon" aria-hidden="true"></span>
+              <span class="btn-label">Sao chép Markdown</span>
+            </button>
+            <span class="tip" role="status"></span>
+          </span>
+        </div>
+
+        <textarea id="page-markdown-src" class="visually-hidden" readonly tabindex="-1" aria-hidden="true"># Khóa 1: Lift-Off — Siêu đồ thị Đầu tiên
+
+1. `gap init` khởi tạo dự án mẫu và băm khóa API bằng BLAKE3 (`INV-15`).
+2. `gap config check` và `gap doctor` kiểm tra chặt trước khi mở cổng.
+3. `/readyz` chỉ trả lời sẵn sàng khi Snapshot thế hệ 1 biên dịch thành công.
+4. Một câu truy vấn lấy song song Object OpenAPI (`{ id name }`) và scalar MCP `JSON` (`customer_notes(customer_id: 1)`).</textarea>
+
+        <h1 id="article-title" tabindex="-1">Khóa 1: Lift-Off — Siêu đồ thị Đầu tiên</h1>
+        <p class="article-lead">Khóa 1 đưa bạn từ màn hình terminal trống tới một siêu đồ thị chạy thật gồm hai nhánh: cửa hàng REST OpenAPI (shop) và máy chủ MCP (notes) sau cổng <code>/graphql</code> và <code>/mcp</code>.</p>
+
+        <section class="learn-card" aria-labelledby="learn-heading">
+  <h2 id="learn-heading">Bạn sẽ nắm được gì</h2>
+  <ul><li>Khởi tạo bộ khung dự án mẫu bằng <code>./target/dist/gap init</code> và hiểu cơ chế băm khóa BLAKE3.</li><li>Chạy kiểm định cấu hình chặt fail-closed (<code>gap config check</code> và <code>gap doctor</code>) trước khi mở cổng.</li><li>Truy vấn gộp Object OpenAPI và scalar <code>JSON</code> MCP mà không dính lỗi <code>GAP_UNKNOWN_FIELD</code>.</li></ul>
+</section>
+        <details class="toc-inline"><summary>Trong trang này</summary><nav class="toc-inline-links" aria-label="Mục lục bài viết"><a class="toc-inline-link" href="#liftoff-lesson-1">Bài 1: Khởi tạo Workspace Mới (<code>gap init</code>)</a><a class="toc-inline-link" href="#liftoff-lesson-2">Bài 2: Kết nối Nhánh OpenAPI &amp; MCP (<code>gap config check</code> &amp; <code>doctor</code>)</a><a class="toc-inline-link" href="#liftoff-lesson-3">Bài 3: Khởi động Dịch vụ Upstream &amp; Kiểm tra <code>/readyz</code></a><a class="toc-inline-link" href="#liftoff-lesson-4">Bài 4: Truy vấn Gộp Liên Nhánh Đầu Tiên &amp; Thực hành Điền mã</a></nav></details>
+
+        <section id="liftoff-lesson-1" tabindex="-1" class="doc-section">
+  <h2>Bài 1: Khởi tạo Workspace Mới (<code>gap init</code>)</h2>
+  <div class="course-banner" data-course-id="liftoff">
+  <div class="course-banner-top">
+    <span><strong>Khóa 1: Lift-Off</strong> · 20 phút · 4 bài học</span>
+    <span class="pill" data-course-progress="liftoff">0 / 4 hoàn thành</span>
+  </div>
+  <nav class="lesson-stepper" aria-label="Danh sách bài học trong khóa"><a class="lesson-step-pill" href="#liftoff-lesson-1" data-lesson-pill="liftoff-1"><span class="step-num">1</span><span>Khởi tạo</span></a><a class="lesson-step-pill" href="#liftoff-lesson-2" data-lesson-pill="liftoff-2"><span class="step-num">2</span><span>Config &amp; Doctor</span></a><a class="lesson-step-pill" href="#liftoff-lesson-3" data-lesson-pill="liftoff-3"><span class="step-num">3</span><span>Bật &amp; Kiểm tra</span></a><a class="lesson-step-pill" href="#liftoff-lesson-4" data-lesson-pill="liftoff-4"><span class="step-num">4</span><span>Truy vấn Gộp</span></a></nav>
+</div><p>Trong thực tế triển khai, bạn không cần tự gõ cấu hình TOML từ đầu. Lệnh <code>gap init</code> tạo ngay bộ khung 5 tệp tiêu chuẩn gồm <code>gap.toml</code>, đặc tả OpenAPI mẫu, kịch bản fixture giả lập và mã khóa Bearer phát triển băm sẵn bằng <strong>BLAKE3-256</strong>:</p><figure class="code-figure">
+  <div class="code-toolbar">
+    <div class="code-meta">
+      <span class="code-lang">terminal</span>
+      <span class="code-title">Terminal — Khởi tạo Cổng Gateway Mẫu</span>
+    </div>
+    <span class="copy">
+      <button type="button" class="copy-button" command="--copy" commandfor="c1-l1-init" aria-label="Sao chép đoạn mã terminal (Terminal — Khởi tạo Cổng Gateway Mẫu)">
+        <span class="icon" aria-hidden="true"></span>
+      </button>
+      <span class="tip" role="status"></span>
+    </span>
+  </div>
+  <pre role="region" aria-label="Terminal — Khởi tạo Cổng Gateway Mẫu" tabindex="0"><code id="c1-l1-init" class="language-terminal">./target/dist/gap init my-shop-gateway
+ls -la my-shop-gateway</code></pre>
+</figure><aside class="callout callout-note">
+  <p class="callout-title">Không bao giờ lưu Secret gốc trong Cấu hình</p>
+  <div class="callout-body"><p>Tệp <code>gap.toml</code> chỉ chứa <code>key_hash = "8a7d..."</code> (ứng với khóa dev <code>gap_dev_skeleton_key_01</code> trong Walking Skeleton). Cổng GAP kiểm chứng header <code>Authorization: Bearer ...</code> bằng phép so khớp BLAKE3 hằng thời gian và tự động che mọi bí mật (<code>INV-15</code>).</p></div>
+</aside><div class="takeaways-box">
+  <div class="takeaways-head">
+    <h3>Điểm Cốt lõi Cần Nhớ</h3>
+    <button type="button" class="btn lesson-complete-btn" data-lesson-key="liftoff-1" aria-pressed="false">Đánh dấu Hoàn thành Bài học</button>
+  </div>
+  <ul><li><code>gap init &lt;dir&gt;</code> sinh bộ dự án mẫu đầy đủ chỉ trong 1 giây.</li><li><code>gap.toml</code> chỉ lưu giá trị băm BLAKE3 (<code>key_hash</code>), tuyệt đối không chứa token thô ở bản production.</li></ul>
+</div>
+</section><section id="liftoff-lesson-2" tabindex="-1" class="doc-section">
+  <h2>Bài 2: Kết nối Nhánh OpenAPI &amp; MCP (<code>gap config check</code> &amp; <code>doctor</code>)</h2>
+  <p>Hãy mở <code>examples/walking-skeleton/gap.toml</code>. Bạn sẽ thấy hai khối <code>[[branches]]</code>: <code>id = "shop"</code> (OpenAPI 3.0 chạy ở cổng <code>9101</code>) và <code>id = "notes"</code> (MCP HTTP tại cổng <code>9102/mcp</code>). Kiểm tra cú pháp cấu hình và điều kiện môi trường trước khi chạy:</p><figure class="code-figure">
+  <div class="code-toolbar">
+    <div class="code-meta">
+      <span class="code-lang">terminal</span>
+      <span class="code-title">Terminal — Kiểm tra Cấu hình &amp; Chẩn đoán Hệ thống</span>
+    </div>
+    <span class="copy">
+      <button type="button" class="copy-button" command="--copy" commandfor="c1-l2-doc" aria-label="Sao chép đoạn mã terminal (Terminal — Kiểm tra Cấu hình &amp; Chẩn đoán Hệ thống)">
+        <span class="icon" aria-hidden="true"></span>
+      </button>
+      <span class="tip" role="status"></span>
+    </span>
+  </div>
+  <pre role="region" aria-label="Terminal — Kiểm tra Cấu hình &amp; Chẩn đoán Hệ thống" tabindex="0"><code id="c1-l2-doc" class="language-terminal">./target/dist/gap config check examples/walking-skeleton/gap.toml
+./target/dist/gap doctor --config examples/walking-skeleton/gap.toml</code></pre>
+</figure><figure class="code-figure">
+  <div class="code-toolbar">
+    <div class="code-meta">
+      <span class="code-lang">text</span>
+      <span class="code-title">Kết quả Chẩn đoán Chuẩn</span>
+    </div>
+    <span class="copy">
+      <button type="button" class="copy-button" command="--copy" commandfor="c1-l2-out" aria-label="Sao chép đoạn mã text (Kết quả Chẩn đoán Chuẩn)">
+        <span class="icon" aria-hidden="true"></span>
+      </button>
+      <span class="tip" role="status"></span>
+    </span>
+  </div>
+  <pre role="region" aria-label="Kết quả Chẩn đoán Chuẩn" tabindex="0"><code id="c1-l2-out" class="language-text">ok: examples/walking-skeleton/gap.toml (profile=dev, branches=2, api_keys=1)
+[ok] config.parse: parsed examples/walking-skeleton/gap.toml (profile=dev)
+[ok] config.files: all referenced branch files exist and are readable
+[ok] server.listen: valid socket address 127.0.0.1:8080
+[ok] auth.api_keys: 1 API key(s) configured</code></pre>
+</figure><div class="takeaways-box">
+  <div class="takeaways-head">
+    <h3>Điểm Cốt lõi Cần Nhớ</h3>
+    <button type="button" class="btn lesson-complete-btn" data-lesson-key="liftoff-2" aria-pressed="false">Đánh dấu Hoàn thành Bài học</button>
+  </div>
+  <ul><li><code>gap config check</code> từ chối khởi động ngay nếu phát hiện cấu hình, cổng mạng hoặc đường dẫn tệp sai.</li><li><code>gap doctor</code> kiểm tra toàn diện socket, quyền đọc nhánh, API key và trạng thái sandbox hệ điều hành.</li></ul>
+</div>
+</section><section id="liftoff-lesson-3" tabindex="-1" class="doc-section">
+  <h2>Bài 3: Khởi động Dịch vụ Upstream &amp; Kiểm tra <code>/readyz</code></h2>
+  <p>Chạy hai tiến trình giả lập upstream bằng Python trước, rồi bật <code>gap serve</code> và thăm dò trạng thái <code>/healthz</code> cùng <code>/readyz</code>:</p><figure class="code-figure">
+  <div class="code-toolbar">
+    <div class="code-meta">
+      <span class="code-lang">terminal</span>
+      <span class="code-title">Terminal — Chạy Upstream, Gateway &amp; Kiểm tra /readyz</span>
+    </div>
+    <span class="copy">
+      <button type="button" class="copy-button" command="--copy" commandfor="c1-l3-boot" aria-label="Sao chép đoạn mã terminal (Terminal — Chạy Upstream, Gateway &amp; Kiểm tra /readyz)">
+        <span class="icon" aria-hidden="true"></span>
+      </button>
+      <span class="tip" role="status"></span>
+    </span>
+  </div>
+  <pre role="region" aria-label="Terminal — Chạy Upstream, Gateway &amp; Kiểm tra /readyz" tabindex="0"><code id="c1-l3-boot" class="language-terminal">python3 examples/walking-skeleton/fixtures/rest_fixture.py --port 9101 &amp;
+python3 examples/walking-skeleton/fixtures/mcp_fixture.py --port 9102 &amp;
+./target/dist/gap serve --config examples/walking-skeleton/gap.toml &amp;
+curl -sS http://127.0.0.1:8080/readyz</code></pre>
+</figure><p>Điểm cuối <code>/readyz</code> chỉ trả về <code>&#123;"status":"ready","generation":1&#125;</code> sau khi Snapshot thế hệ 1 biên dịch hoàn tất và nạp nguyên tử vào con trỏ không khóa <code>ArcSwap</code>.</p><div class="takeaways-box">
+  <div class="takeaways-head">
+    <h3>Điểm Cốt lõi Cần Nhớ</h3>
+    <button type="button" class="btn lesson-complete-btn" data-lesson-key="liftoff-3" aria-pressed="false">Đánh dấu Hoàn thành Bài học</button>
+  </div>
+  <ul><li><code>/healthz</code> báo tiến trình còn sống; <code>/readyz</code> chỉ xanh khi Snapshot generation &gt;= 1 đã biên dịch xong.</li><li>Bạn cũng có thể bấm nút Bật Lab Thực Hành trong trang Phòng Lab để khởi chạy tự động cả 3 tiến trình.</li></ul>
+</div>
+</section><section id="liftoff-lesson-4" tabindex="-1" class="doc-section">
+  <h2>Bài 4: Truy vấn Gộp Liên Nhánh Đầu Tiên &amp; Thực hành Điền mã</h2>
+  <p>Bây giờ hãy gửi một yêu cầu <code>POST /graphql</code> duy nhất vừa lấy khách hàng số <code>1</code> và các đơn hàng từ nhánh REST <code>shop</code>, vừa đọc ghi chú từ nhánh MCP <code>notes</code>:</p><figure class="code-figure">
+  <div class="code-toolbar">
+    <div class="code-meta">
+      <span class="code-lang">terminal</span>
+      <span class="code-title">Terminal — Gộp Dữ liệu REST shop + MCP notes Trong 1 Lượt</span>
+    </div>
+    <span class="copy">
+      <button type="button" class="copy-button" command="--copy" commandfor="c1-l4-curl" aria-label="Sao chép đoạn mã terminal (Terminal — Gộp Dữ liệu REST shop + MCP notes Trong 1 Lượt)">
+        <span class="icon" aria-hidden="true"></span>
+      </button>
+      <span class="tip" role="status"></span>
+    </span>
+  </div>
+  <pre role="region" aria-label="Terminal — Gộp Dữ liệu REST shop + MCP notes Trong 1 Lượt" tabindex="0"><code id="c1-l4-curl" class="language-terminal">curl -sS http://127.0.0.1:8080/graphql \
+  -H &quot;Content-Type: application/json&quot; \
+  -H &quot;Authorization: Bearer gap_dev_skeleton_key_01&quot; \
+  -d &#x27;{&quot;query&quot;: &quot;{ customer(id: 1) { id name tier } orders(customer_id: 1) { id status total_cents } customer_notes(customer_id: 1) }&quot;}&#x27;</code></pre>
+</figure><div class="challenge-box" id="chal-c1-leaf" data-answers="customer_id" data-explain="Trong examples/walking-skeleton/fixtures/mcp_fixture.py, tool MCP nhận đối số customer_id và trả về giá trị scalar JSON (không mở ngoặc chọn trường con).">
+  <div class="chal-head">
+    <span class="chal-badge">Thử thách Điền mã</span>
+    <h3>Hoàn thiện Tên Tham số Truy vấn MCP</h3>
+  </div>
+  <div class="chal-prompt"><p>Điền đúng tên tham số vào <code>customer_notes(____: 1)</code> để khớp hợp đồng của nhánh MCP <code>notes</code> (lưu ý: <code>customer_notes</code> trả về scalar lá <code>JSON</code>):</p></div>
+  <pre class="chal-code"><code>query {
+  customer(id: 1) { id name tier }
+  customer_notes(____: 1)
+}</code></pre>
+  <div class="chal-input-row">
+    <label for="chal-input-c1-leaf">Nhập từ khóa / trường còn thiếu:</label>
+    <input id="chal-input-c1-leaf" type="text" class="chal-input" placeholder="Điền vào chỗ ____" autocomplete="off" spellcheck="false" />
+    <button type="button" class="btn btn-primary chal-check-btn">Kiểm tra Đáp án</button>
+  </div>
+  <div class="chal-hints"><span>Gợi ý nhanh:</span> <button type="button" class="chal-hint-chip" data-fill="customer_id"><code>customer_id</code></button><button type="button" class="chal-hint-chip" data-fill="id"><code>id</code></button><button type="button" class="chal-hint-chip" data-fill="cust_id"><code>cust_id</code></button></div>
+  <p class="chal-feedback" role="status" aria-live="polite"></p>
+</div><div class="practice-box" id="prac-c1-q1" data-correct="0" data-explain="Kiểu Scalar là điểm dừng cuối cùng của cây chọn trường trong GraphQL. Chỉ Object/Interface/Union mới mở ngoặc nhọn { ... }.">
+  <span class="chal-badge">Kiểm tra Nhanh</span>
+  <h3>Vì sao trình xác thực GAP từ chối câu truy vấn <code>customer_notes(customer_id: 1) { notes }</code>?</h3>
+  <div class="practice-options"><button type="button" class="practice-opt" data-idx="0">Vì <code>customer_notes</code> trả về kiểu scalar lá <code>JSON</code>, mà scalar trong GraphQL không thể mở ngoặc <code>{ ... }</code> để chọn trường con.</button><button type="button" class="practice-opt" data-idx="1">Vì GAP không cho phép gọi nhánh MCP từ cổng <code>POST /graphql</code>.</button><button type="button" class="practice-opt" data-idx="2">Vì chỉ thao tác <code>mutation</code> mới truy vấn được nhánh MCP.</button></div>
+  <p class="practice-feedback" role="status" aria-live="polite"></p>
+</div><div class="takeaways-box">
+  <div class="takeaways-head">
+    <h3>Điểm Cốt lõi Cần Nhớ</h3>
+    <button type="button" class="btn lesson-complete-btn" data-lesson-key="liftoff-4" aria-pressed="false">Đánh dấu Hoàn thành Bài học</button>
+  </div>
+  <ul><li>Một request <code>POST /graphql</code> duy nhất chạy đồng thời sang cả nhánh REST và MCP.</li><li>Chuyển tiếp sang Khóa 2: MCP, AG-UI &amp; Trợ lý AI ở bài kế tiếp.</li></ul>
+</div>
+</section>
+
+        <nav class="doc-pager" aria-label="Chuyển bài trước / tiếp"><a class="pager-card pager-prev" href="index.html"><span class="pager-dir">&larr; Bài trước</span><span class="pager-title">Học viện GAP — Khóa học Thực chiến</span></a><a class="pager-card pager-next" href="mcp-and-ai-assistants.html"><span class="pager-dir">Tiếp theo &rarr;</span><span class="pager-title">Khóa 2: MCP, AG-UI &amp; Trợ lý AI</span></a></nav>
+      </article>
+
+      <footer class="doc-footer">
+        <p class="footer-note">Tài liệu, Kiến thức Nền &amp; Học viện dựa 100% trên mã nguồn Rust, đặc tả 00-09 và số liệu đo thật ADR-021.</p>
+        <div class="footer-links">
+          <a href="../../paper/gap-paper.html">Bài báo (HTML)</a>
+          <a href="../../paper/gap-paper.pdf">PDF</a>
+          <a href="../../llms.txt">llms.txt</a>
+          <a href="../../academy/liftoff-first-supergraph.html" hreflang="en" lang="en">English</a>
+        </div>
+      </footer>
+    </main>
+
+    <aside class="toc-right" aria-label="Mục lục bài viết">
+      <div class="toc-sticky scroller">
+        <p class="toc-title">Trong trang này</p>
+        <nav id="on-this-page-nav" class="toc-links" aria-label="Mục lục bài viết">
+          <a class="toc-link" href="#liftoff-lesson-1">Bài 1: Khởi tạo Workspace Mới (<code>gap init</code>)</a><a class="toc-link" href="#liftoff-lesson-2">Bài 2: Kết nối Nhánh OpenAPI &amp; MCP (<code>gap config check</code> &amp; <code>doctor</code>)</a><a class="toc-link" href="#liftoff-lesson-3">Bài 3: Khởi động Dịch vụ Upstream &amp; Kiểm tra <code>/readyz</code></a><a class="toc-link" href="#liftoff-lesson-4">Bài 4: Truy vấn Gộp Liên Nhánh Đầu Tiên &amp; Thực hành Điền mã</a>
+        </nav>
+      </div>
+    </aside>
+  </div>
+
+  <script src="../../search-index.vi.js"></script>
+  <script src="../../app.js"></script>
+</body>
+</html>

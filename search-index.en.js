@@ -11,8 +11,8 @@ window.GAP_SEARCH_INDEX = [
     "title": "Choose Your Starting Path — GAP Documentation Hub",
     "section": "Start Here",
     "href": "index.html#get-started-paths",
-    "snippet": "Pick the path that fits your goal today. Each guide explains one focused concept cleanly before showing real commands from the repository. Concept · 5 min New to GAP? Start Here Learn the 3 ",
-    "keywords": "Choose Your Starting Path GAP Documentation Hub Pick the path that fits your goal today. Each guide explains one focused concept cleanly before showing real commands from the repository. Concept · 5 min New to GAP? Start Here Learn the 3 core problems GAP solves, how a supergraph organizes branches, and when Direct-MCP is still simpler. Tutorial · 10 min 10-Minute Quickstart Validate gap.toml , run the Walking Skeleton REST + MCP fixtures, and execute your first federated query. Hands-On Lab I"
+    "snippet": "Pick the path that fits your goal today. Each guide explains one focused concept cleanly before showing real commands from the repository. Learn Basics · 8 min New to GraphQL or GAP? Start H",
+    "keywords": "Choose Your Starting Path GAP Documentation Hub Pick the path that fits your goal today. Each guide explains one focused concept cleanly before showing real commands from the repository. Learn Basics · 8 min New to GraphQL or GAP? Start Here Zero-jargon foundations: Supergraph analogy, Types &amp; Scalars, ! guarantees, and interactive Query-to-JSON Builder. Academy · 4 Courses GAP Academy (16 Lessons) Hands-on Odyssey-style courses: Lift-Off Supergraph, MCP/AG-UI Assistants, REST/SQL Batching"
   },
   {
     "title": "Explore Core Platform Capabilities — GAP Documentation Hub",
@@ -92,6 +92,223 @@ window.GAP_SEARCH_INDEX = [
     "keywords": "Step 5: Connect MCP Hosts or Stream AG-UI Events 10-Minute Quickstart Rather than exposing every REST endpoint individually, attach your AI client to GAP's fixed 5-tool MCP 2026-07-28 server over stdio or HTTP, or stream AG-UI v1.0 events over SSE. Read full host details on MCP, A2A &amp; AG-UI Facades . json mcp_servers.json — Stdio Client Config terminal Terminal — Live AG-UI v1.0 SSE Stream"
   },
   {
+    "title": "GraphQL & GAP Basics",
+    "section": "Learn Basics",
+    "href": "learn/graphql-and-gap-basics.html",
+    "snippet": "Zero-jargon foundations: unified supergraph analogy, types, scalars, nullability (!), and interactive 1:1 query-to-JSON explorer.",
+    "keywords": "GraphQL & GAP Basics Zero-jargon foundations: unified supergraph analogy, types, scalars, nullability (!), and interactive 1:1 query-to-JSON explorer. New to GraphQL or agent gateways? This zero-jargon guide builds your intuition from scratch: why AI agents benefit from one unified menu, how Types work like labeled boxes, and how a query mirrors JSON 1:1."
+  },
+  {
+    "title": "Mental Model: One Order Counter vs. Twenty Separate Vendors — GraphQL & GAP Basics",
+    "section": "Learn Basics",
+    "href": "learn/graphql-and-gap-basics.html#what-is-a-supergraph",
+    "snippet": "Imagine an AI assistant is a dinner guest arriving at a busy food court with twenty specialized kitchens: one serves customer profiles (REST API), another tracks shipping orders (SQL databas",
+    "keywords": "Mental Model: One Order Counter vs. Twenty Separate Vendors GraphQL & GAP Basics Imagine an AI assistant is a dinner guest arriving at a busy food court with twenty specialized kitchens: one serves customer profiles (REST API), another tracks shipping orders (SQL database), and a third keeps support notes (MCP server). Without GAP (Flat Direct-MCP): Before taking a single order, the host hands the agent every binder from all 20 kitchens at once—hundreds of thousands of tokens of repetitive JSON schemas. Worse, combining a cus"
+  },
+  {
+    "title": "Types Are Labeled Shipping Boxes (! Means Guaranteed) — GraphQL & GAP Basics",
+    "section": "Learn Basics",
+    "href": "learn/graphql-and-gap-basics.html#types-scalars-nullability",
+    "snippet": "Every GraphQL and GAP schema is just a contract describing which labeled boxes exist and what fits inside each box: Schema building blocks illustrated with Walking Skeleton examples Building",
+    "keywords": "Types Are Labeled Shipping Boxes (! Means Guaranteed) GraphQL & GAP Basics Every GraphQL and GAP schema is just a contract describing which labeled boxes exist and what fits inside each box: Schema building blocks illustrated with Walking Skeleton examples Building Block Schema Example Plain Meaning Object Type type shop_CustomersResult &#123; id: Int! name: String! tier: ... &#125; A structured record representing one domain entity (like a customer row from OpenAPI). Scalar Int , String , Boolean , JSON A leaf value wh"
+  },
+  {
+    "title": "How a Query Mirrors Its JSON 1:1 (Interactive Builder) — GraphQL & GAP Basics",
+    "section": "Learn Basics",
+    "href": "learn/graphql-and-gap-basics.html#query-mirrors-json",
+    "snippet": "Unlike REST URLs where the server guesses which 40 fields you want, a GAP-QL query acts like a fillable JSON template: every field you ask for comes back in the exact same nesting shape, and",
+    "keywords": "How a Query Mirrors Its JSON 1:1 (Interactive Builder) GraphQL & GAP Basics Unlike REST URLs where the server guesses which 40 fields you want, a GAP-QL query acts like a fillable JSON template: every field you ask for comes back in the exact same nesting shape, and unrequested fields stay off the wire . A GAP-QL Query Mirrors Its Returned JSON Shape 1:1 1. Query Shape You Ask For query { customer(id: 1) { id name tier } customer_notes(customer_id: 1) } Typed Execution 1 HTTP Request 2. Exact 1:1 JSON Returned { \"data\": "
+  },
+  {
+    "title": "Arguments, Mutations & Joins",
+    "section": "Learn Basics",
+    "href": "learn/queries-mutations-joins.html",
+    "snippet": "Filter with variables, run safe @sideEffect dry-run mutations, traverse cross-branch edges, and translate REST/MCP habits to GAP.",
+    "keywords": "Arguments, Mutations & Joins Filter with variables, run safe @sideEffect dry-run mutations, traverse cross-branch edges, and translate REST/MCP habits to GAP. Master filtering with variables, writing safely via `@sideEffect` mutations, resolving cross-branch joins in batches, and translating REST or Direct-MCP habits into clean GAP workflows."
+  },
+  {
+    "title": "Arguments & Parameterized Variables (PlanCache Reuse) — Arguments, Mutations & Joins",
+    "section": "Learn Basics",
+    "href": "learn/queries-mutations-joins.html#arguments-and-variables",
+    "snippet": "Just like query parameters in a REST URL, GraphQL fields accept typed arguments such as customer(id: 1) or orders(customer_id: 1) . Never concatenate user or LLM inputs directly into query t",
+    "keywords": "Arguments & Parameterized Variables (PlanCache Reuse) Arguments, Mutations & Joins Just like query parameters in a REST URL, GraphQL fields accept typed arguments such as customer(id: 1) or orders(customer_id: 1) . Never concatenate user or LLM inputs directly into query text—declare strongly typed variables ( $cid: Int! ): graphql Parameterized Query + Variables Zero Injection: Typed variables prevent syntax smuggling inside query strings. Hot Cache Hits: Because the query text stays identical across customers, GAP reuses the "
+  },
+  {
+    "title": "Mutations & @sideEffect Safety Rails — Arguments, Mutations & Joins",
+    "section": "Learn Basics",
+    "href": "learn/queries-mutations-joins.html#mutations-and-side-effects",
+    "snippet": "While query operations read data cleanly across snapshots, state-changing actions must use mutation (or MCP tool gap_mutate ) annotated with @sideEffect : GAP @sideEffect levels from spec/02",
+    "keywords": "Mutations & @sideEffect Safety Rails Arguments, Mutations & Joins While query operations read data cleanly across snapshots, state-changing actions must use mutation (or MCP tool gap_mutate ) annotated with @sideEffect : GAP @sideEffect levels from spec/02-gap-ql.md §5 and Cedar enforcement SideEffectLevel Meaning Default Cedar Policy Behavior NONE Read-only lookup with no state change. Permitted for authorized Read principals. REVERSIBLE Draft update or compensating write (can undo). Allowed with Mutate permis"
+  },
+  {
+    "title": "GAP for REST & Direct-MCP Developers (Translation Table) — Arguments, Mutations & Joins",
+    "section": "Learn Basics",
+    "href": "learn/queries-mutations-joins.html#joins-and-mental-model-map",
+    "snippet": "You do not throw away your existing REST APIs or MCP servers to adopt GAP—you keep them running unchanged and mount them as declarative NGC branches. Translating REST and Direct-MCP engineer",
+    "keywords": "GAP for REST & Direct-MCP Developers (Translation Table) Arguments, Mutations & Joins You do not throw away your existing REST APIs or MCP servers to adopt GAP—you keep them running unchanged and mount them as declarative NGC branches. Translating REST and Direct-MCP engineering habits to GAP What You Know (REST / Direct-MCP) Exact GAP Counterpart Key Engineering Upgrade Separate HTTP base URLs / multiple MCP configs Single gateway URL ( /graphql , /mcp , /ag-ui ) One auth layer, TLS 1.3 QUIC transport, and snapshot boundary. Fetc"
+  },
+  {
+    "title": "GAP Academy — Hands-On Courses",
+    "section": "GAP Academy (Courses)",
+    "href": "academy/index.html",
+    "snippet": "Structured Odyssey-style tracks combining theory, real CLI drills, fill-in-the-blank challenges, and persistent progress tracking.",
+    "keywords": "GAP Academy — Hands-On Courses Structured Odyssey-style tracks combining theory, real CLI drills, fill-in-the-blank challenges, and persistent progress tracking. Welcome to GAP Academy — structured, multi-lesson hands-on courses modeled on Apollo Odyssey. Combine protocol theory with real CLI commands, complete fill-in-the-blank challenges, pass knowledge checks, and track mastery across all 16 lessons."
+  },
+  {
+    "title": "Your Academy Progress — GAP Academy — Hands-On Courses",
+    "section": "GAP Academy (Courses)",
+    "href": "academy/index.html#academy-progress",
+    "snippet": "Overall Academy Mastery: 0 / 16 lessons completed Reset Progress New to schemas and JSON mirroring? Complete GraphQL &amp; GAP Basics first, then start Course 1 below.",
+    "keywords": "Your Academy Progress GAP Academy — Hands-On Courses Overall Academy Mastery: 0 / 16 lessons completed Reset Progress New to schemas and JSON mirroring? Complete GraphQL &amp; GAP Basics first, then start Course 1 below."
+  },
+  {
+    "title": "Choose Your Hands-On Course (4 Tracks · 16 Lessons) — GAP Academy — Hands-On Courses",
+    "section": "GAP Academy (Courses)",
+    "href": "academy/index.html#course-catalog",
+    "snippet": "Beginner · 20 min · 4 lessons 0 / 4 lessons Course 1: Lift-Off — Build Your First Supergraph Scaffold a workspace with gap init , connect OpenAPI shop and MCP notes fixtures, verify health w",
+    "keywords": "Choose Your Hands-On Course (4 Tracks · 16 Lessons) GAP Academy — Hands-On Courses Beginner · 20 min · 4 lessons 0 / 4 lessons Course 1: Lift-Off — Build Your First Supergraph Scaffold a workspace with gap init , connect OpenAPI shop and MCP notes fixtures, verify health with gap doctor , and execute a cross-branch GraphQL query. Start Course 1 &rarr; AI Agents · 20 min · 4 lessons 0 / 4 lessons Course 2: MCP, AG-UI &amp; AI Assistants Replace 203,421 -token tool dumps with 651 -token progressive discovery ( L0 -&gt; L1 -&gt; L"
+  },
+  {
+    "title": "Course 1: Lift-Off — First Supergraph",
+    "section": "GAP Academy (Courses)",
+    "href": "academy/liftoff-first-supergraph.html",
+    "snippet": "4 hands-on lessons: scaffold with gap init, wire OpenAPI + MCP branches, verify /readyz, and run your first cross-branch query.",
+    "keywords": "Course 1: Lift-Off — First Supergraph 4 hands-on lessons: scaffold with gap init, wire OpenAPI + MCP branches, verify /readyz, and run your first cross-branch query. Course 1 takes you from an empty terminal to a live two-branch supergraph combining an OpenAPI shop service and an MCP notes server behind `/graphql` and `/mcp`."
+  },
+  {
+    "title": "Lesson 1: Scaffolding a Workspace (gap init) — Course 1: Lift-Off — First Supergraph",
+    "section": "GAP Academy (Courses)",
+    "href": "academy/liftoff-first-supergraph.html#liftoff-lesson-1",
+    "snippet": "Course 1: Lift-Off · 20 min · 4 lessons 0 / 4 completed 1 Scaffold 2 Config &amp; Doctor 3 Boot &amp; Probe 4 Joined Query In real production setups, you never hand-write TOML boilerplate fr",
+    "keywords": "Lesson 1: Scaffolding a Workspace (gap init) Course 1: Lift-Off — First Supergraph Course 1: Lift-Off · 20 min · 4 lessons 0 / 4 completed 1 Scaffold 2 Config &amp; Doctor 3 Boot &amp; Probe 4 Joined Query In real production setups, you never hand-write TOML boilerplate from scratch. Running gap init creates a ready-to-edit 5-file starter layout containing gap.toml , a sample OpenAPI spec, fixture scripts, and a development bearer token hashed with BLAKE3-256 : terminal Terminal — Scaffold Starter Gateway Zero Raw Keys in Confi"
+  },
+  {
+    "title": "Lesson 2: Wiring OpenAPI & MCP Branches (gap config check & doctor) — Course 1: Lift-Off — First Supergraph",
+    "section": "GAP Academy (Courses)",
+    "href": "academy/liftoff-first-supergraph.html#liftoff-lesson-2",
+    "snippet": "Open examples/walking-skeleton/gap.toml . Notice two [[branches]] entries: id = \"shop\" (OpenAPI 3.0 on port 9101 ) and id = \"notes\" (MCP HTTP on port 9102/mcp ). Validate both files and OS r",
+    "keywords": "Lesson 2: Wiring OpenAPI & MCP Branches (gap config check & doctor) Course 1: Lift-Off — First Supergraph Open examples/walking-skeleton/gap.toml . Notice two [[branches]] entries: id = \"shop\" (OpenAPI 3.0 on port 9101 ) and id = \"notes\" (MCP HTTP on port 9102/mcp ). Validate both files and OS readiness before running traffic: terminal Terminal — Validate Config &amp; Run Diagnostics text Expected Diagnostic Output Key Takeaways Mark Lesson Complete gap config check fails closed on invalid schemas, ports, or missing files. gap doctor audits sockets, "
+  },
+  {
+    "title": "Lesson 3: Booting Fixtures & Probing /readyz — Course 1: Lift-Off — First Supergraph",
+    "section": "GAP Academy (Courses)",
+    "href": "academy/liftoff-first-supergraph.html#liftoff-lesson-3",
+    "snippet": "Start the two lightweight Python upstream fixtures first, then launch gap serve and inspect /healthz and /readyz : terminal Terminal — Launch Fixtures, Gateway &amp; Probe /readyz /readyz re",
+    "keywords": "Lesson 3: Booting Fixtures & Probing /readyz Course 1: Lift-Off — First Supergraph Start the two lightweight Python upstream fixtures first, then launch gap serve and inspect /healthz and /readyz : terminal Terminal — Launch Fixtures, Gateway &amp; Probe /readyz /readyz returns &#123;\"status\":\"ready\",\"generation\":1&#125; only after snapshot generation 1 compiles and binds into the lock-free ArcSwap pointer. Key Takeaways Mark Lesson Complete /healthz tracks process liveness; /readyz turns ready only once Snapshot generation &gt"
+  },
+  {
+    "title": "Lesson 4: First Cross-Branch Query & Hands-On Check — Course 1: Lift-Off — First Supergraph",
+    "section": "GAP Academy (Courses)",
+    "href": "academy/liftoff-first-supergraph.html#liftoff-lesson-4",
+    "snippet": "Now send one authenticated POST /graphql request querying customer 1 from the REST branch, their orders from REST, and support notes from the MCP branch simultaneously: terminal Terminal — Q",
+    "keywords": "Lesson 4: First Cross-Branch Query & Hands-On Check Course 1: Lift-Off — First Supergraph Now send one authenticated POST /graphql request querying customer 1 from the REST branch, their orders from REST, and support notes from the MCP branch simultaneously: terminal Terminal — Query REST shop + MCP notes in One Request Code Challenge Fix the Query Parameter Name Complete the cross-branch query so both shop customer #1 and MCP notes for customer #1 resolve together (remember: customer_notes is a JSON scalar!). What argument name goes "
+  },
+  {
+    "title": "Course 2: MCP, AG-UI & AI Assistants",
+    "section": "GAP Academy (Courses)",
+    "href": "academy/mcp-and-ai-assistants.html",
+    "snippet": "4 lessons: defeat 203,421-token prompt bloat, master L0->L1->L2 discovery, wire Claude/Cursor --stdio, and stream AG-UI SSE.",
+    "keywords": "Course 2: MCP, AG-UI & AI Assistants 4 lessons: defeat 203,421-token prompt bloat, master L0->L1->L2 discovery, wire Claude/Cursor --stdio, and stream AG-UI SSE. Course 2 shows you how AI assistants interact with hundreds of capabilities without overflowing their context window—using MCP 2026-07-28 progressive discovery (`L0 -> L1 -> L2`) and AG-UI v1.0 live SSE streaming."
+  },
+  {
+    "title": "Lesson 1: Stopping 203,421-Token Prompt Bloat (tools/list = 651 Tokens) — Course 2: MCP, AG-UI & AI Assistants",
+    "section": "GAP Academy (Courses)",
+    "href": "academy/mcp-and-ai-assistants.html#mcp-lesson-1",
+    "snippet": "Course 2: MCP &amp; AI Assistants · 20 min · 4 lessons 0 / 4 completed 1 651-Token Surface 2 L0 -&gt; L1 -&gt; L2 3 --stdio Hosts 4 AG-UI SSE In standard flat MCP integrations, connecting 10",
+    "keywords": "Lesson 1: Stopping 203,421-Token Prompt Bloat (tools/list = 651 Tokens) Course 2: MCP, AG-UI & AI Assistants Course 2: MCP &amp; AI Assistants · 20 min · 4 lessons 0 / 4 completed 1 651-Token Surface 2 L0 -&gt; L1 -&gt; L2 3 --stdio Hosts 4 AG-UI SSE In standard flat MCP integrations, connecting 100 microservices means tools/list returns ~1,000 raw JSON schemas totaling 203,421 tokens on every cold turn. GAP exposes an invariant catalog of 5 static tools costing 651 tokens from N=10 to N=1,000 : Progressive Discovery L0 to L2 Flow (Fixed 651-Token tools"
+  },
+  {
+    "title": "Lesson 2: Driving Progressive Discovery (L0 -> L1 -> L2 -> gap_query) — Course 2: MCP, AG-UI & AI Assistants",
+    "section": "GAP Academy (Courses)",
+    "href": "academy/mcp-and-ai-assistants.html#mcp-lesson-2",
+    "snippet": "An AI agent moves through three deterministic hops—filtering out forbidden tools via the Cedar visibility bitset before ranking scores ( INV-05 ): json MCP 2026-07-28 — L0, L1, and L2 Discov",
+    "keywords": "Lesson 2: Driving Progressive Discovery (L0 -> L1 -> L2 -> gap_query) Course 2: MCP, AG-UI & AI Assistants An AI agent moves through three deterministic hops—filtering out forbidden tools via the Cedar visibility bitset before ranking scores ( INV-05 ): json MCP 2026-07-28 — L0, L1, and L2 Discovery Sequence Code Challenge Request Exact Composed Types at L2 Fill in the exact compiled OpenAPI return type name for Walking Skeleton customers inside gap_describe : Type the missing token/field: Check Answer Quick hints: shop_CustomersResult shop_OrdersResu"
+  },
+  {
+    "title": "Lesson 3: Connecting Desktop & IDE Agents via --stdio or HTTP — Course 2: MCP, AG-UI & AI Assistants",
+    "section": "GAP Academy (Courses)",
+    "href": "academy/mcp-and-ai-assistants.html#mcp-lesson-3",
+    "snippet": "Desktop hosts like Claude Desktop, Cursor, or Antigravity speak either newline-delimited --stdio JSON-RPC or Streamable HTTP POST /mcp (protocol header MCP-Protocol-Version: 2026-07-28 ). Co",
+    "keywords": "Lesson 3: Connecting Desktop & IDE Agents via --stdio or HTTP Course 2: MCP, AG-UI & AI Assistants Desktop hosts like Claude Desktop, Cursor, or Antigravity speak either newline-delimited --stdio JSON-RPC or Streamable HTTP POST /mcp (protocol header MCP-Protocol-Version: 2026-07-28 ). Configure --stdio cleanly while sending logs solely to stderr : json Host MCP Configuration (--stdio) Key Takeaways Mark Lesson Complete Under --stdio , stdout carries strictly valid JSON-RPC lines while structured logs write to stderr. Set MCP-Protocol-Version:"
+  },
+  {
+    "title": "Lesson 4: Streaming Interactive UI State with AG-UI v1.0 — Course 2: MCP, AG-UI & AI Assistants",
+    "section": "GAP Academy (Courses)",
+    "href": "academy/mcp-and-ai-assistants.html#mcp-lesson-4",
+    "snippet": "Human-facing web copilot interfaces connect over POST /ag-ui Server-Sent Events (SSE), receiving typed RUN_STARTED , TOOL_CALL_RESULT , STATE_SNAPSHOT , interrupt prompts, and escaped &lt;ga",
+    "keywords": "Lesson 4: Streaming Interactive UI State with AG-UI v1.0 Course 2: MCP, AG-UI & AI Assistants Human-facing web copilot interfaces connect over POST /ag-ui Server-Sent Events (SSE), receiving typed RUN_STARTED , TOOL_CALL_RESULT , STATE_SNAPSHOT , interrupt prompts, and escaped &lt;gap:untrusted&gt; payloads: terminal Terminal — Live AG-UI v1.0 SSE Run Knowledge Check How does GAP prevent an unauthorized MCP agent from discovering even the existence of admin-only tools? GAP applies the principal&#x27;s Cedar visibility bitset BEFORE scorin"
+  },
+  {
+    "title": "Course 3: REST, SQL & N+1 Batching",
+    "section": "GAP Academy (Courses)",
+    "href": "academy/connectors-and-batching.html",
+    "snippet": "4 lessons: diagnose N+1 waterfalls, batch with x-gap-in-param (INV-18), add SQL & Code AST branches, and approve proposals safely.",
+    "keywords": "Course 3: REST, SQL & N+1 Batching 4 lessons: diagnose N+1 waterfalls, batch with x-gap-in-param (INV-18), add SQL & Code AST branches, and approve proposals safely. Course 3 teaches federated query orchestration in GAP: diagnosing agent N+1 round-trip explosions, enabling declarative `x-gap-in-param` batching (`INV-18`), adding SQL & Code AST branches, and rolling out schemas safely via Propose-Not-Activate."
+  },
+  {
+    "title": "Lesson 1: Spotting the Agent N+1 Waterfall — Course 3: REST, SQL & N+1 Batching",
+    "section": "GAP Academy (Courses)",
+    "href": "academy/connectors-and-batching.html#batch-lesson-1",
+    "snippet": "Course 3: REST, SQL &amp; N+1 Batching · 25 min · 4 lessons 0 / 4 completed 1 N+1 Waterfall 2 x-gap-in-param 3 SQL &amp; Code AST 4 Safe Rollouts When an LLM uses flat tools to fetch 50 cust",
+    "keywords": "Lesson 1: Spotting the Agent N+1 Waterfall Course 3: REST, SQL & N+1 Batching Course 3: REST, SQL &amp; N+1 Batching · 25 min · 4 lessons 0 / 4 completed 1 N+1 Waterfall 2 x-gap-in-param 3 SQL &amp; Code AST 4 Safe Rollouts When an LLM uses flat tools to fetch 50 customers and then retrieve orders or notes for each customer, the model re-reads the entire conversation transcript across 4 round-trips while emitting dozens of serialized HTTP requests. In GAP-Bench , at N=1,000 tools this consumes 814,959.8 tokens uncached vs."
+  },
+  {
+    "title": "Lesson 2: Declarative REST Batching with \"x-gap-in-param\" (INV-18) — Course 3: REST, SQL & N+1 Batching",
+    "section": "GAP Academy (Courses)",
+    "href": "academy/connectors-and-batching.html#batch-lesson-2",
+    "snippet": "Just like Apollo GraphOS REST Connectors batch keys with $batch , GAP's OpenAPI NGC adapter looks for \"x-gap-in-param\" on OpenAPI operations (verbatim from examples/walking-skeleton/shop.ope",
+    "keywords": "Lesson 2: Declarative REST Batching with \"x-gap-in-param\" (INV-18) Course 3: REST, SQL & N+1 Batching Just like Apollo GraphOS REST Connectors batch keys with $batch , GAP's OpenAPI NGC adapter looks for \"x-gap-in-param\" on OpenAPI operations (verbatim from examples/walking-skeleton/shop.openapi.json ): json examples/walking-skeleton/shop.openapi.json Code Challenge Configure OpenAPI Key Batching Fill in the exact OpenAPI vendor extension key checked by gap-ngc-openapi to collapse 50 individual lookups into bounded ceil(unique_keys / max_batch_si"
+  },
+  {
+    "title": "Lesson 3: Unifying SQL Databases & tree-sitter Code ASTs (208.7x) — Course 3: REST, SQL & N+1 Batching",
+    "section": "GAP Academy (Courses)",
+    "href": "academy/connectors-and-batching.html#batch-lesson-3",
+    "snippet": "Beyond REST, the same supergraph unifies relational databases ( gap-ngc-sql using parameterized IN (...) clauses, never string concatenation) and source repositories ( gap-ngc-code indexing ",
+    "keywords": "Lesson 3: Unifying SQL Databases & tree-sitter Code ASTs (208.7x) Course 3: REST, SQL & N+1 Batching Beyond REST, the same supergraph unifies relational databases ( gap-ngc-sql using parameterized IN (...) clauses, never string concatenation) and source repositories ( gap-ngc-code indexing callers, callees, and symbol definitions via tree-sitter ): toml Example Code AST Branch Config (TOML) On the code_graph benchmark (24 symbols), querying callers/callees through GAP replaces 11 noisy search-and-read agent turns ( 137,810.4 cached tokens) with "
+  },
+  {
+    "title": "Lesson 4: Safe Schema Updates (Propose-Not-Activate & snapshot diff) — Course 3: REST, SQL & N+1 Batching",
+    "section": "GAP Academy (Courses)",
+    "href": "academy/connectors-and-batching.html#batch-lesson-4",
+    "snippet": "Neither schemas nor @join edges go live silently ( INV-06 ). GAP runs sampled containment checks on proposed joins (never trusting LLM guesses) and requires operator inspection before atomic",
+    "keywords": "Lesson 4: Safe Schema Updates (Propose-Not-Activate & snapshot diff) Course 3: REST, SQL & N+1 Batching Neither schemas nor @join edges go live silently ( INV-06 ). GAP runs sampled containment checks on proposed joins (never trusting LLM guesses) and requires operator inspection before atomic ArcSwap promotion: terminal Terminal — Ingest, Diff &amp; Approve Proposals Safely Knowledge Check What happens if gap ingest discovers a candidate @join edge between two branches, but no operator has run gap proposals approve ? The candidate remains in PROPO"
+  },
+  {
+    "title": "Course 4: Zero-Trust, Cedar & HTTP/3",
+    "section": "GAP Academy (Courses)",
+    "href": "academy/enterprise-zero-trust.html",
+    "snippet": "4 lessons: enforce T0/T1/T2 + <gap:untrusted>, write Cedar two-person rules, block rug pulls & SSRF, and deploy HTTP/3 QUIC.",
+    "keywords": "Course 4: Zero-Trust, Cedar & HTTP/3 4 lessons: enforce T0/T1/T2 + <gap:untrusted>, write Cedar two-person rules, block rug pulls & SSRF, and deploy HTTP/3 QUIC. Course 4 prepares you to deploy GAP in adversarial production environments: isolating untrusted `T2` tools, enforcing two-person Cedar rules on `IRREVERSIBLE` mutations, stopping MCP rug pulls & SSRF, and serving dual-stack HTTP/3 QUIC with BLAKE3 audit verification."
+  },
+  {
+    "title": "Lesson 1: Trust Tiers (T0/T1/T2) & <gap:untrusted> Escaping — Course 4: Zero-Trust, Cedar & HTTP/3",
+    "section": "GAP Academy (Courses)",
+    "href": "academy/enterprise-zero-trust.html#sec-lesson-1",
+    "snippet": "Course 4: Zero-Trust, Cedar &amp; HTTP/3 · 25 min · 4 lessons 0 / 4 completed 1 T0/T1/T2 &amp; Escaping 2 Cedar Policies 3 Rug Pull &amp; SSRF 4 HTTP/3 &amp; Audits Every upstream branch sit",
+    "keywords": "Lesson 1: Trust Tiers (T0/T1/T2) & <gap:untrusted> Escaping Course 4: Zero-Trust, Cedar & HTTP/3 Course 4: Zero-Trust, Cedar &amp; HTTP/3 · 25 min · 4 lessons 0 / 4 completed 1 T0/T1/T2 &amp; Escaping 2 Cedar Policies 3 Rug Pull &amp; SSRF 4 HTTP/3 &amp; Audits Every upstream branch sits in an explicit trust boundary: T0 (Ed25519 organization-signed manifest; invalid signature demotes cleanly to T2 ), T1 (admin-approved with JCS BLAKE3 hashes pinned), or T2 (untrusted/external). All T2 stdio processes require OS sandboxing (Bubblewrap/nsjail"
+  },
+  {
+    "title": "Lesson 2: Two-Person Cedar Authorization Rules (INV-04, INV-11) — Course 4: Zero-Trust, Cedar & HTTP/3",
+    "section": "GAP Academy (Courses)",
+    "href": "academy/enterprise-zero-trust.html#sec-lesson-2",
+    "snippet": "In GAP, access control is never left to LLM judgment ( INV-04 ). Cedar evaluates deterministically over (principal, action, resource, context) where forbid unconditionally beats permit . Loo",
+    "keywords": "Lesson 2: Two-Person Cedar Authorization Rules (INV-04, INV-11) Course 4: Zero-Trust, Cedar & HTTP/3 In GAP, access control is never left to LLM judgment ( INV-04 ). Cedar evaluates deterministically over (principal, action, resource, context) where forbid unconditionally beats permit . Look at the shipped rule in policies/default.cedar : cedar policies/default.cedar &amp; Validation CLI Code Challenge Enforce Two-Person Approval in Cedar Complete the shipped Cedar guard so a caller cannot self-approve an IRREVERSIBLE mutation: Type the missing "
+  },
+  {
+    "title": "Lesson 3: Stopping MCP Rug Pulls (DriftMonitor) & SSRF (EgressGuard) — Course 4: Zero-Trust, Cedar & HTTP/3",
+    "section": "GAP Academy (Courses)",
+    "href": "academy/enterprise-zero-trust.html#sec-lesson-3",
+    "snippet": "Anti-Rug-Pull Pinning ( SEC-082 , INV-08 ): Before an upstream serves a modified tool description to sneak hidden prompt injections after admin review, DriftMonitor recomputes the JCS BLAKE3",
+    "keywords": "Lesson 3: Stopping MCP Rug Pulls (DriftMonitor) & SSRF (EgressGuard) Course 4: Zero-Trust, Cedar & HTTP/3 Anti-Rug-Pull Pinning ( SEC-082 , INV-08 ): Before an upstream serves a modified tool description to sneak hidden prompt injections after admin review, DriftMonitor recomputes the JCS BLAKE3 desc_hash , detects mismatch, freezes the branch into BranchStatus::Drift , and continues serving only the pinned approved description. Zero-Bypass SSRF Defense ( SEC-075 ): When calling OpenAPI or webhook hosts, EgressGuard resolves DNS exactly once, blocks "
+  },
+  {
+    "title": "Lesson 4: HTTP/3 QUIC, BLAKE3 Audit Ledger & Crash Recovery (28.86 ms) — Course 4: Zero-Trust, Cedar & HTTP/3",
+    "section": "GAP Academy (Courses)",
+    "href": "academy/enterprise-zero-trust.html#sec-lesson-4",
+    "snippet": "Ready for production deployment? Enable dual-stack HTTP/2 + HTTP/3 over UDP QUIC (which measured 5,013 req/s at 2.36 ms p95 with zero errors and recovered /readyz in 28.86 ms after SIGKILL )",
+    "keywords": "Lesson 4: HTTP/3 QUIC, BLAKE3 Audit Ledger & Crash Recovery (28.86 ms) Course 4: Zero-Trust, Cedar & HTTP/3 Ready for production deployment? Enable dual-stack HTTP/2 + HTTP/3 over UDP QUIC (which measured 5,013 req/s at 2.36 ms p95 with zero errors and recovered /readyz in 28.86 ms after SIGKILL ), with max_early_data_size = 0 disabling 0-RTT replay risks: AI Host Integration via MCP 2026-07-28, A2A v1.0, AG-UI v1.0, and NGC AI Hosts &amp; UI Claude · Cursor Antigravity AG-UI Clients HTTP/2 + HTTP/3 QUIC TLS 1.3 (0-RTT off) /graphql · /mcp /ag-ui · A2A"
+  },
+  {
     "title": "Three-Plane Architecture",
     "section": "Core Concepts",
     "href": "concepts/architecture.html",
@@ -130,15 +347,15 @@ window.GAP_SEARCH_INDEX = [
     "title": "Walkthrough: From Intent to Typed Query — Progressive Disclosure (651 Tokens)",
     "section": "Core Concepts",
     "href": "concepts/progressive-disclosure.html#three-levels-walkthrough",
-    "snippet": "Progressive Discovery L0 to L2 Flow (Fixed 651-Token tools/list) Static tools/list 5 tools (651 tok) L0: gap_describe overview: true (&lt;=24 tok/branch) L1: gap_search BM25 + Cedar Bitset (",
-    "keywords": "Walkthrough: From Intent to Typed Query Progressive Disclosure (651 Tokens) Progressive Discovery L0 to L2 Flow (Fixed 651-Token tools/list) Static tools/list 5 tools (651 tok) L0: gap_describe overview: true (&lt;=24 tok/branch) L1: gap_search BM25 + Cedar Bitset (INV-05) L2: gap_describe types: [&quot;shop_CustomersResult&quot;] gap_query / mutate Typed batched execution 1 L0 — Branch Overview ( gap_describe{overview: true} / __metaGraph ) Agents start by inspecting a compact directory capped at &lt;= 24 tokens per bra"
+    "snippet": "Progressive Discovery L0 to L2 Flow (Fixed 651-Token tools/list) 1 -> 2 --> 0. Static tools/list 5 static tools (651 tok) 1. L0: gap_describe overview: true (&lt;=24 tok/branch) 2. L1: gap_s",
+    "keywords": "Walkthrough: From Intent to Typed Query Progressive Disclosure (651 Tokens) Progressive Discovery L0 to L2 Flow (Fixed 651-Token tools/list) 1 -> 2 --> 0. Static tools/list 5 static tools (651 tok) 1. L0: gap_describe overview: true (&lt;=24 tok/branch) 2. L1: gap_search BM25 + Cedar Bitset (INV-05) 4 --> 3. L2: gap_describe types: [&quot;shop_CustomersResult&quot;] 4. gap_query / gap_mutate Typed batched GraphQL execution Progressive Discovery L0 to L2 Flow (Fixed 651-Token tools/list) 1 L0 — Branch Overview ( gap_descr"
   },
   {
-    "title": "Security Guarantee: Visibility Filtering Before Ranking (INV-05) — Progressive Disclosure (651 Tokens)",
+    "title": "Security Guarantee: Visibility Filtering Before Ranking (INV-05) & Scaling Curve — Progressive Disclosure (651 Tokens)",
     "section": "Core Concepts",
     "href": "concepts/progressive-disclosure.html#visibility-before-rank",
     "snippet": "No Existence Leakage If a restricted tenant or unprivileged agent queries __search , restricted branches and operations are masked out via the per-principal visibility bitset before scoring,",
-    "keywords": "Security Guarantee: Visibility Filtering Before Ranking (INV-05) Progressive Disclosure (651 Tokens) No Existence Leakage If a restricted tenant or unprivileged agent queries __search , restricted branches and operations are masked out via the per-principal visibility bitset before scoring, ranking, or returning total counts."
+    "keywords": "Security Guarantee: Visibility Filtering Before Ranking (INV-05) & Scaling Curve Progressive Disclosure (651 Tokens) No Existence Leakage If a restricted tenant or unprivileged agent queries __search , restricted branches and operations are masked out via the per-principal visibility bitset before scoring, ranking, or returning total counts. MCP tools/list Prompt Tax by Catalog Scale (N = 10 to 1,000) Measured schema tokens sent to LLM before user prompt arrives (ADR-021) GAP Static 5-Tool (All N) 651 tok (constant) Direct-MCP (N = 10) 1,904 tok Direct-MCP (N ="
   },
   {
     "title": "GAP-QL & Batched Joins",
@@ -200,8 +417,8 @@ window.GAP_SEARCH_INDEX = [
     "title": "Three-Axis Interoperability Stack — MCP, A2A & AG-UI Facades",
     "section": "AI Agent Hosts & Routers",
     "href": "agents/facades-and-hosts.html#three-axis-flow",
-    "snippet": "AI Host Integration via MCP 2026-07-28, A2A v1.0, AG-UI v1.0, and NGC AI Hosts &amp; UI Claude Cursor · Antigravity AG-UI Clients HTTP/2 + HTTP/3 QUIC TLS 1.3 (0-RTT off) /graphql · /mcp /ag",
-    "keywords": "Three-Axis Interoperability Stack MCP, A2A & AG-UI Facades AI Host Integration via MCP 2026-07-28, A2A v1.0, AG-UI v1.0, and NGC AI Hosts &amp; UI Claude Cursor · Antigravity AG-UI Clients HTTP/2 + HTTP/3 QUIC TLS 1.3 (0-RTT off) /graphql · /mcp /ag-ui · A2A v1.0 GAP Gateway (gap-server) Cedar · ArcSwap DataLoader · BLAKE3 5,013 req/s H3 · 28.86ms 6 NGC Connectors OpenAPI · SQL GraphQL · gRPC CLI · Code AST Think of GAP's facades as compatibility translators in front of one core engine: vertical tool hos"
+    "snippet": "AI Host Integration via MCP 2026-07-28, A2A v1.0, AG-UI v1.0, and NGC AI Hosts &amp; UI Claude · Cursor Antigravity AG-UI Clients HTTP/2 + HTTP/3 QUIC TLS 1.3 (0-RTT off) /graphql · /mcp /ag",
+    "keywords": "Three-Axis Interoperability Stack MCP, A2A & AG-UI Facades AI Host Integration via MCP 2026-07-28, A2A v1.0, AG-UI v1.0, and NGC AI Hosts &amp; UI Claude · Cursor Antigravity AG-UI Clients HTTP/2 + HTTP/3 QUIC TLS 1.3 (0-RTT off) /graphql · /mcp /ag-ui · A2A v1.0 GAP Gateway (gap-server) Cedar · ArcSwap DataLoader · BLAKE3 5,013 req/s H3 · 28.86ms 6 NGC Connectors OpenAPI · SQL GraphQL · gRPC CLI · Code AST AI Host Integration via MCP 2026-07-28, A2A v1.0, AG-UI v1.0, and NGC Think of GAP's facades as co"
   },
   {
     "title": "Vertical Tool Facade: MCP 2026-07-28 (651 Tokens) — MCP, A2A & AG-UI Facades",
