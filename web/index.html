@@ -3,295 +3,321 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Learn Graph Agent Protocol (GAP) — From Novice to Master</title>
-  <link rel="alternate" hreflang="en" href="./index.html" />
-  <link rel="alternate" hreflang="vi" href="./vi.html" />
-  <!-- MANDATORY (modern-web-guidance: dark-mode): Declare both schemes + anti-FOUC inline script -->
   <meta name="color-scheme" content="light dark" />
   <script>
     try {
-      var savedScheme = localStorage.getItem("gap-color-scheme");
-      if (savedScheme === "light" || savedScheme === "dark") {
-        document.querySelector('meta[name="color-scheme"]').content = savedScheme;
+      var s = localStorage.getItem("gap-color-scheme");
+      if (s === "light" || s === "dark") {
+        document.querySelector('meta[name="color-scheme"]').content = s;
       }
     } catch (_e) {}
   </script>
+  <title>GAP Documentation Hub — GAP Docs</title>
+  <meta name="description" content="Unified typed GraphQL-profile gateway, progressive discovery, and zero-trust runtime governance for AI agents." />
+  <link rel="canonical" href="https://vnknowledge2014.github.io/GraphProtocol/index.html" />
+  <link rel="alternate" hreflang="en" href="index.html" />
+  <link rel="alternate" hreflang="vi" href="vi/index.html" />
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns=&#x27;http://www.w3.org/2000/svg&#x27; viewBox=&#x27;0 0 32 32&#x27;%3E%3Crect width=&#x27;32&#x27; height=&#x27;32&#x27; rx=&#x27;8&#x27; fill=&#x27;%230f4c81&#x27;/%3E%3Ctext x=&#x27;16&#x27; y=&#x27;22&#x27; text-anchor=&#x27;middle&#x27; font-family=&#x27;system-ui,sans-serif&#x27; font-weight=&#x27;800&#x27; font-size=&#x27;18&#x27; fill=&#x27;%23ffffff&#x27;%3EG%3C/text%3E%3C/svg%3E" />
   <link rel="stylesheet" href="styles.css" />
 </head>
-<body>
-  <a href="#portal-heading" class="skip-link visually-hidden">Skip to main content</a>
+<body data-slug="home" data-lang="en" data-section="start-here" data-web-root="">
+  <a class="skip-link" href="#article-title">Skip to article content</a>
 
   <header class="topbar">
     <div class="topbar-inner">
-      <div class="brand">
-        <span class="brand-badge">GAP 0.1.0-RC.1</span>
-        <span>Learn Graph Agent Protocol (English)</span>
+      <div class="topbar-left">
+        <button type="button" id="drawer-open" class="drawer-open-btn" aria-label="Open documentation menu" aria-controls="docs-drawer">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+            <path d="M4 6h16M4 12h16M4 18h16" />
+          </svg>
+        </button>
+        <a class="brand-link" href="index.html">
+          <span class="brand-mark" aria-hidden="true">G</span>
+          <span class="brand-text"><strong>GAP</strong> <span class="brand-sub">GAP Docs</span></span>
+          <span class="badge-ver">v0.1.0-rc.1</span>
+        </a>
       </div>
+
+      <nav class="top-nav" aria-label="Primary sections">
+        <a href="getting-started/what-is-gap.html" aria-current="true" class="top-link is-active">Get Started</a><a href="concepts/architecture.html" class="top-link">Architecture</a><a href="connectors/overview.html" class="top-link">Connectors</a><a href="security/zero-trust.html" class="top-link">Security</a><a href="lab/playground.html" class="top-link">Interactive Lab</a><a href="reference/cli-and-ops.html" class="top-link">Reference</a>
+      </nav>
+
       <div class="topbar-controls">
-        <nav class="lang-switch" aria-label="Language">
-          <a class="lang-link" href="./index.html" aria-current="page">EN</a>
-          <a class="lang-link" href="./vi.html" lang="vi" hreflang="vi">Tiếng Việt</a>
-        </nav>
-        <search class="search-box">
-          <label for="global-search" class="visually-hidden">Quick search for GAP crates, invariants, or CLI commands</label>
-          <input id="global-search" type="search" placeholder="Search crates, INV, CLI... [/]" autocomplete="off" />
-          <div id="search-results" class="search-results" hidden></div>
+        <search class="search-wrap">
+          <label class="visually-hidden" for="global-search">Search GAP documentation across all guides</label>
+          <input id="global-search" type="search" placeholder="Search docs, INV, CLI... [/]" autocomplete="off" />
+          <div id="search-results" class="search-results scroller" role="region" aria-live="polite" hidden></div>
         </search>
-        <span id="server-status-pill" class="pill">
-          <span id="server-status-dot" class="dot"></span>
-          <span id="server-status-text">Offline Mode (Static HTML)</span>
-        </span>
-        <button id="theme-toggle-btn" type="button" class="btn theme-toggle" aria-label="Toggle Light / Dark theme">
-          <span class="icon-to-dark" aria-hidden="true">&#9790;</span>
-          <span class="label-to-dark">Dark Mode</span>
-          <span class="icon-to-light" aria-hidden="true">&#9728;</span>
-          <span class="label-to-light">Light Mode</span>
+        <nav class="lang-switch" aria-label="Language">
+          <span class="lang-current" aria-current="true">EN</span>
+          <a class="lang-alt" href="vi/index.html" hreflang="vi" lang="vi">VI</a>
+        </nav>
+        <button type="button" id="theme-toggle-btn" class="theme-toggle" aria-label="Toggle Light / Dark theme">
+          <span class="icon-to-dark" aria-hidden="true">☽</span>
+          <span class="icon-to-light" aria-hidden="true">☀</span>
         </button>
       </div>
     </div>
   </header>
 
-  <div class="shell">
-    <aside class="sidebar">
-      <h2>Learning Path</h2>
-      <!-- modern-web-guidance: scrollspy (scroll-target-group: auto + Fallback IntersectionObserver) -->
-      <nav id="toc-nav" class="toc-nav" aria-label="Table of contents">
-        <a href="#overview">1. Overview &amp; Three Planes</a>
-        <a href="#learning-path">2. 6-Level Path (Novice &rarr; Master)</a>
-        <a href="#interactive-lab">3. Crossover Calculator &amp; Lab</a>
-        <a href="#crate-map">4. 32-Crate Map (L0&ndash;L6)</a>
-        <a href="#cli-runbooks">5. 15 CLI Commands &amp; 9 Runbooks</a>
-        <a href="#invariants-quiz">6. 20 Invariants, STE-100 &amp; Quiz</a>
-      </nav>
+  <dialog class="Drawer scroller" id="docs-drawer" aria-label="Documentation navigation drawer">
+    <nav class="Drawer-nav scroller" aria-label="Documentation sections">
+      <div class="Drawer-head">
+        <span class="Drawer-brand"><strong>GAP</strong> GAP Docs</span>
+        <button type="button" id="drawer-close" class="drawer-close-btn" aria-label="Close documentation menu">&times;</button>
+      </div>
+      <div class="nav-group" data-section-id="start-here">
+  <p class="nav-group-title" id="drawer-start-here">Start Here</p>
+  <ul aria-labelledby="drawer-start-here">
+    <li><a class="nav-link is-active" href="index.html" aria-current="page">GAP Documentation Hub</a></li><li><a class="nav-link" href="getting-started/what-is-gap.html">What is GAP?</a></li><li><a class="nav-link" href="getting-started/quickstart.html">10-Minute Quickstart</a></li>
+  </ul>
+</div>
+<div class="nav-group" data-section-id="concepts">
+  <p class="nav-group-title" id="drawer-concepts">Core Concepts</p>
+  <ul aria-labelledby="drawer-concepts">
+    <li><a class="nav-link" href="concepts/architecture.html">Three-Plane Architecture</a></li><li><a class="nav-link" href="concepts/progressive-disclosure.html">Progressive Disclosure (651 Tokens)</a></li><li><a class="nav-link" href="concepts/gap-ql-and-joins.html">GAP-QL &amp; Batched Joins</a></li>
+  </ul>
+</div>
+<div class="nav-group" data-section-id="connectors">
+  <p class="nav-group-title" id="drawer-connectors">Connect Data &amp; Tools (NGC)</p>
+  <ul aria-labelledby="drawer-connectors">
+    <li><a class="nav-link" href="connectors/overview.html">Native Graph Connectors (NGC)</a></li>
+  </ul>
+</div>
+<div class="nav-group" data-section-id="agents">
+  <p class="nav-group-title" id="drawer-agents">AI Agent Hosts &amp; Routers</p>
+  <ul aria-labelledby="drawer-agents">
+    <li><a class="nav-link" href="agents/facades-and-hosts.html">MCP, A2A &amp; AG-UI Facades</a></li><li><a class="nav-link" href="agents/routers-and-http3.html">System-1 Routers &amp; HTTP/3 QUIC</a></li>
+  </ul>
+</div>
+<div class="nav-group" data-section-id="security">
+  <p class="nav-group-title" id="drawer-security">Zero-Trust Governance</p>
+  <ul aria-labelledby="drawer-security">
+    <li><a class="nav-link" href="security/zero-trust.html">Zero-Trust Governance &amp; Cedar</a></li>
+  </ul>
+</div>
+<div class="nav-group" data-section-id="lab">
+  <p class="nav-group-title" id="drawer-lab">Interactive Lab</p>
+  <ul aria-labelledby="drawer-lab">
+    <li><a class="nav-link" href="lab/playground.html">Interactive Lab &amp; Calculator</a></li>
+  </ul>
+</div>
+<div class="nav-group" data-section-id="reference">
+  <p class="nav-group-title" id="drawer-reference">Operations &amp; Reference</p>
+  <ul aria-labelledby="drawer-reference">
+    <li><a class="nav-link" href="reference/cli-and-ops.html">CLI, Runbooks &amp; 32 Crates</a></li><li><a class="nav-link" href="reference/invariants-and-glossary.html">20 Invariants, STE-100 &amp; Paper</a></li>
+  </ul>
+</div>
+    </nav>
+    <button type="button" id="drawer-backdrop-close" class="Drawer-backdrop" aria-label="Close documentation menu"></button>
+  </dialog>
 
-      <div class="progress-box">
-        <div><strong>Checklist progress:</strong> <span id="progress-text">0 / 18</span> items</div>
-        <div class="progress-track" role="progressbar" aria-valuemin="0" aria-valuemax="18" aria-valuenow="0" aria-label="Checklist progress" id="progress-bar-wrap">
-          <div id="progress-fill" class="progress-fill"></div>
-        </div>
-        <small class="section-lead">Saved automatically in your browser.</small>
+  <div class="docs-shell">
+    <aside class="sidebar scroller" aria-label="Documentation sections">
+      <nav aria-label="Documentation sections">
+        <div class="nav-group" data-section-id="start-here">
+  <p class="nav-group-title" id="side-start-here">Start Here</p>
+  <ul aria-labelledby="side-start-here">
+    <li><a class="nav-link is-active" href="index.html" aria-current="page">GAP Documentation Hub</a></li><li><a class="nav-link" href="getting-started/what-is-gap.html">What is GAP?</a></li><li><a class="nav-link" href="getting-started/quickstart.html">10-Minute Quickstart</a></li>
+  </ul>
+</div>
+<div class="nav-group" data-section-id="concepts">
+  <p class="nav-group-title" id="side-concepts">Core Concepts</p>
+  <ul aria-labelledby="side-concepts">
+    <li><a class="nav-link" href="concepts/architecture.html">Three-Plane Architecture</a></li><li><a class="nav-link" href="concepts/progressive-disclosure.html">Progressive Disclosure (651 Tokens)</a></li><li><a class="nav-link" href="concepts/gap-ql-and-joins.html">GAP-QL &amp; Batched Joins</a></li>
+  </ul>
+</div>
+<div class="nav-group" data-section-id="connectors">
+  <p class="nav-group-title" id="side-connectors">Connect Data &amp; Tools (NGC)</p>
+  <ul aria-labelledby="side-connectors">
+    <li><a class="nav-link" href="connectors/overview.html">Native Graph Connectors (NGC)</a></li>
+  </ul>
+</div>
+<div class="nav-group" data-section-id="agents">
+  <p class="nav-group-title" id="side-agents">AI Agent Hosts &amp; Routers</p>
+  <ul aria-labelledby="side-agents">
+    <li><a class="nav-link" href="agents/facades-and-hosts.html">MCP, A2A &amp; AG-UI Facades</a></li><li><a class="nav-link" href="agents/routers-and-http3.html">System-1 Routers &amp; HTTP/3 QUIC</a></li>
+  </ul>
+</div>
+<div class="nav-group" data-section-id="security">
+  <p class="nav-group-title" id="side-security">Zero-Trust Governance</p>
+  <ul aria-labelledby="side-security">
+    <li><a class="nav-link" href="security/zero-trust.html">Zero-Trust Governance &amp; Cedar</a></li>
+  </ul>
+</div>
+<div class="nav-group" data-section-id="lab">
+  <p class="nav-group-title" id="side-lab">Interactive Lab</p>
+  <ul aria-labelledby="side-lab">
+    <li><a class="nav-link" href="lab/playground.html">Interactive Lab &amp; Calculator</a></li>
+  </ul>
+</div>
+<div class="nav-group" data-section-id="reference">
+  <p class="nav-group-title" id="side-reference">Operations &amp; Reference</p>
+  <ul aria-labelledby="side-reference">
+    <li><a class="nav-link" href="reference/cli-and-ops.html">CLI, Runbooks &amp; 32 Crates</a></li><li><a class="nav-link" href="reference/invariants-and-glossary.html">20 Invariants, STE-100 &amp; Paper</a></li>
+  </ul>
+</div>
+      </nav>
+      <div class="sidebar-status" role="status" aria-live="polite">
+        <span id="server-status-dot" class="status-dot" aria-hidden="true"></span>
+        <span id="server-status-text">Static Docs Mode</span>
       </div>
     </aside>
 
-    <main>
-      <!-- SECTION 1: OVERVIEW -->
-      <section id="overview" class="card">
-        <h1 id="portal-heading" class="portal-title" tabindex="-1">1. Architecture Overview &amp; Three-Plane Isolation</h1>
-        <p class="section-lead">
-          <strong>Graph Agent Protocol (GAP)</strong> solves the structural bottlenecks of production AI agent gateways: unify OpenAPI services, SQL stores, GraphQL subgraphs, code graphs, MCP servers, peer A2A workflows, and AG-UI streams with <strong>constant schema tokens</strong>, <strong>zero N+1 waterfalls</strong>, and <strong>deterministic zero-trust enforcement</strong>.
-        </p>
-
-        <div class="kpi-grid">
-          <div class="kpi">
-            <div class="val">651 tokens</div>
-            <div class="lbl">Constant MCP <code>tools/list</code> from N=10 to 1,000 tools (Direct-MCP: 203,421)</div>
-          </div>
-          <div class="kpi">
-            <div class="val">5,013 / 1,064 req/s</div>
-            <div class="lbl">HTTP/3 QUIC (2.36 ms p95, 0-RTT off) &amp; TCP HTTP/2 (11.54 ms p95, 28.1 MB binary)</div>
-          </div>
-          <div class="kpi">
-            <div class="val">99.0% / 208.7x</div>
-            <div class="lbl">Token savings on N=1,000 cross-branch joins &amp; Code Graph traversal (24 symbols)</div>
-          </div>
-          <div class="kpi">
-            <div class="val">28.86 ms</div>
-            <div class="lbl">/readyz recovery after hard SIGKILL (kill -9) · 0 RUSTSEC advisories</div>
-          </div>
-          <div class="kpi">
-            <div class="val">87 / 87 WP</div>
-            <div class="lbl">100% milestone completion · 32 crates · 2,516 traceability markers · Apache-2.0</div>
-          </div>
+    <main id="main-content" class="doc-main">
+      <article class="doc-article">
+        <nav class="breadcrumb" aria-label="Breadcrumbs">
+  <ol>
+    <li><a href="index.html">Docs</a></li>
+    <li><a href="index.html">Start Here</a></li>
+    <li><a href="index.html" aria-current="page">GAP Documentation Hub</a></li>
+  </ol>
+</nav>
+        <div class="article-meta-bar">
+          <span class="read-time">3 min read</span>
+          <span class="copy copy-md-wrap">
+            <button type="button" class="copy-button copy-md-btn" command="--copy" commandfor="page-markdown-src">
+              <span class="icon" aria-hidden="true"></span>
+              <span class="btn-label">Copy as Markdown</span>
+            </button>
+            <span class="tip" role="status"></span>
+          </span>
         </div>
 
-        <div class="hero-actions">
-          <a class="btn btn-primary" href="./paper/" target="_blank" rel="noopener">Read Academic Paper (HTML)</a>
-          <a class="btn" href="./paper/gap-paper.pdf" target="_blank" rel="noopener">Download Paper PDF (Camera-Ready)</a>
-          <a class="btn" href="https://github.com/vnknowledge2014/GraphProtocol" target="_blank" rel="noopener">GitHub Repository</a>
-          <a class="btn" href="./vi.html" hreflang="vi">Vietnamese Portal (<span lang="vi">Tiếng Việt</span>)</a>
+        <textarea id="page-markdown-src" class="visually-hidden" readonly tabindex="-1" aria-hidden="true"># GAP Documentation Hub
+
+Graph Agent Protocol (GAP) is an open-source (Apache-2.0), typed GraphQL-profile gateway and zero-trust governance layer for AI agents implemented across 32 layered Rust crates.
+
+## Measured Highlights (ADR-021)
+- Constant MCP `tools/list` schema: **651 tokens** from N=10 to 1,000 tools (vs. 203,421 in Direct-MCP)
+- Token reduction at N=1,000 cross-branch joins: **99.0%** uncached (**93.5%** cached), turns 4 -&gt; 2
+- Code-graph efficiency (24 symbols): **119.32x** uncached / **208.68x** cached, turns 11 -&gt; 1
+- Dual-stack transport: **5,013 req/s** HTTP/3 QUIC (2.36 ms p95, 0-RTT disabled) &amp; **1,064 req/s** TCP HTTP/2 (11.54 ms p95)
+- Crash resilience &amp; footprint: **28.86 ms** SIGKILL recovery, **9.32 MiB** idle RSS, **28.1 MB** bit-reproducible binary, **0** RUSTSEC advisories
+
+## Start Here
+- [What is GAP?](getting-started/what-is-gap.md)
+- [10-Minute Quickstart](getting-started/quickstart.md)
+- [Three-Plane Architecture](concepts/architecture.md)
+- [Progressive Disclosure (651 Tokens)](concepts/progressive-disclosure.md)</textarea>
+
+        <h1 id="article-title" tabindex="-1">GAP Documentation Hub</h1>
+        <p class="article-lead">Graph Agent Protocol (GAP) is an open-source, typed GraphQL-profile gateway and zero-trust governance runtime built in Rust across 32 layered crates. Unify OpenAPI REST services, SQL databases, GraphQL subgraphs, gRPC services, CLI tools, codebases, MCP servers, and A2A peers behind one progressive interface.</p>
+
+        <section class="learn-card" aria-labelledby="learn-heading">
+  <h2 id="learn-heading">What you&#x27;ll learn</h2>
+  <ul><li>Connect heterogeneous tools without dumping 200k+ schema tokens into every LLM prompt.</li><li>Eliminate agent N+1 round-trips using DataLoader join batching and wait-free ArcSwap snapshots.</li><li>Enforce default-deny Cedar authorization, rug-pull description pinning, and SSRF egress guards.</li></ul>
+</section>
+
+        <section id="get-started-paths" tabindex="-1" class="doc-section">
+  <h2>Choose Your Starting Path</h2>
+  <p>Pick the path that fits your goal today. Each guide explains one focused concept cleanly before showing real commands from the repository.</p>
+<div class="path-cards-grid">
+  <a class="path-card" href="getting-started/what-is-gap.html">
+    <span class="path-tag">Concept · 5 min</span>
+    <h3>New to GAP? Start Here</h3>
+    <p>Learn the 3 core problems GAP solves, how a supergraph organizes branches, and when Direct-MCP is still simpler.</p>
+  </a>
+  <a class="path-card" href="getting-started/quickstart.html">
+    <span class="path-tag">Tutorial · 10 min</span>
+    <h3>10-Minute Quickstart</h3>
+    <p>Validate <code>gap.toml</code>, run the Walking Skeleton REST + MCP fixtures, and execute your first federated query.</p>
+  </a>
+  <a class="path-card" href="lab/playground.html">
+    <span class="path-tag">Hands-On Lab</span>
+    <h3>Interactive Lab &amp; Calculator</h3>
+    <p>Test real <code>GAP-Bench</code> token tradeoffs, send live GraphQL/MCP requests via <code>serve.py</code>, and take the 6-question quiz.</p>
+  </a>
+</div>
+</section><section id="core-capabilities" tabindex="-1" class="doc-section">
+  <h2>Explore Core Platform Capabilities</h2>
+  <div class="pillar-grid">
+  <a class="pillar-card" href="concepts/architecture.html">
+    <h3>Three-Plane Architecture</h3>
+    <p>Zero-ML hot execution (<code>15 ns</code> ArcSwap pinning, own pure-Rust AVL <code>OrdMap</code>) separated cleanly from discovery and control.</p>
+  </a>
+  <a class="pillar-card" href="concepts/progressive-disclosure.html">
+    <h3>Progressive Disclosure (651 Tokens)</h3>
+    <p>Replace linear schema growth (<code>203,421</code> tokens at <code>N=1,000</code>) with constant 5-tool MCP discovery (<code>L0 -&gt; L1 -&gt; L2</code>).</p>
+  </a>
+  <a class="pillar-card" href="connectors/overview.html">
+    <h3>6 Native Graph Connectors</h3>
+    <p>Declarative OpenAPI, SQL, GraphQL, gRPC, sandboxed CLI, and tree-sitter Code AST adapters gated by Propose-Not-Activate.</p>
+  </a>
+  <a class="pillar-card" href="agents/facades-and-hosts.html">
+    <h3>MCP, A2A &amp; AG-UI Facades</h3>
+    <p>Serve MCP <code>2026-07-28</code>, A2A <code>v1.0</code> durable tasks, and AG-UI <code>v1.0</code> <code>/ag-ui</code> SSE approval interrupts from one binary.</p>
+  </a>
+  <a class="pillar-card" href="security/zero-trust.html">
+    <h3>Zero-Trust Agent Governance</h3>
+    <p>Cedar policies, <code>T0/T1/T2</code> isolation, <code>&lt;gap:untrusted&gt;</code> escaping, DriftMonitor rug-pull freeze, EgressGuard SSRF, and BLAKE3 audits.</p>
+  </a>
+  <a class="pillar-card" href="agents/routers-and-http3.html">
+    <h3>HTTP/3 QUIC &amp; System-1 Routing</h3>
+    <p>5,013 req/s multiplexed QUIC (<code>2.36 ms</code> p95, <code>0-RTT</code> off) alongside <code>95.24%</code> top-1 baseline routing and <code>INV-17</code> fallback.</p>
+  </a>
+</div>
+</section><section id="measured-highlights" tabindex="-1" class="doc-section">
+  <h2>Measured Performance &amp; Security Highlights</h2>
+  <p>Per <code>ADR-021</code>, every metric below comes directly from committed workspace test suites, <code>bench/results/gapbench/baseline.json</code>, and <code>bench/results/ga_local/report.json</code>.</p>
+<div class="kpi-grid">
+  <div class="kpi"><div class="val">651 tokens</div><div class="lbl">Constant MCP <code>tools/list</code> schema from N=10 to 1,000 tools (vs. 203,421 Direct-MCP)</div></div>
+  <div class="kpi"><div class="val">99.0% / 208.7x</div><div class="lbl">Cross-branch join token savings at N=1,000 uncached &amp; 24-symbol code-graph efficiency</div></div>
+  <div class="kpi"><div class="val">5,013 req/s</div><div class="lbl">HTTP/3 QUIC throughput (2.36 ms p95, 0 errors, 0-RTT off) alongside 1,064 req/s TCP HTTP/2</div></div>
+  <div class="kpi"><div class="val">28.86 ms</div><div class="lbl">/readyz recovery after SIGKILL (kill -9) · 9.32 MiB idle RSS · 28.1 MB reproducible binary</div></div>
+  <div class="kpi"><div class="val">87 / 87 WP</div><div class="lbl">100% specs traced (2,516 markers) · 136/136 conformance (CI) · 0 RUSTSEC advisories</div></div>
+</div>
+<div class="hero-actions">
+  <a class="btn btn-primary" href="getting-started/quickstart.html">Follow the 10-Min Quickstart</a>
+  <a class="btn" href="paper/gap-paper.html" target="_blank" rel="noopener">Read Academic Paper (HTML)</a>
+  <a class="btn" href="paper/gap-paper.pdf" target="_blank" rel="noopener">Download Camera-Ready PDF</a>
+  <a class="btn" href="https://github.com/vnknowledge2014/GraphProtocol" target="_blank" rel="noopener">GitHub Repository</a>
+</div>
+</section><section id="launch-videos" tabindex="-1" class="doc-section">
+  <h2>Product Walkthrough Videos (1080p)</h2>
+  <div class="lab-grid videos-grid">
+  <div class="subcard">
+    <h3 class="video-heading">Product Launch Overview (English Audio · 1080p)</h3>
+    <video class="promo-video" controls preload="metadata" playsinline width="1920" height="1080">
+      <source src="media/gap-promo-en.mp4" type="video/mp4" />
+      Your browser does not support MP4 playback (<a href="media/gap-promo-en.mp4">download English MP4</a>).
+    </video>
+  </div>
+  <div class="subcard">
+    <h3 class="video-heading">Product Launch Overview (Vietnamese Audio · 1080p)</h3>
+    <video class="promo-video" controls preload="metadata" playsinline width="1920" height="1080">
+      <source src="media/gap-promo-vi.mp4" type="video/mp4" />
+      Your browser does not support MP4 playback (<a href="media/gap-promo-vi.mp4">download Vietnamese MP4</a>).
+    </video>
+  </div>
+</div>
+</section>
+
+        <nav class="doc-pager" aria-label="Article pagination"><span class="pager-spacer" aria-hidden="true"></span><a class="pager-card pager-next" href="getting-started/what-is-gap.html"><span class="pager-dir">Next &rarr;</span><span class="pager-title">What is GAP?</span></a></nav>
+      </article>
+
+      <footer class="doc-footer">
+        <p class="footer-note">Documentation portal grounded 100% in repository source code, specs 00-09, and ADR-021 measurements.</p>
+        <div class="footer-links">
+          <a href="paper/gap-paper.html">Paper (HTML)</a>
+          <a href="paper/gap-paper.pdf">PDF</a>
+          <a href="llms.txt">llms.txt</a>
+          <a href="vi/index.html" hreflang="vi" lang="vi">Tiếng Việt</a>
         </div>
-
-        <div class="lab-grid videos-grid">
-          <div class="subcard">
-            <h2 class="video-heading">Product Launch Video (English · 1080p)</h2>
-            <video class="promo-video" controls preload="metadata" playsinline width="1920" height="1080">
-              <source src="./media/gap-promo-en.mp4" type="video/mp4" />
-              Your browser does not support MP4 playback (<a href="./media/gap-promo-en.mp4">download English promo MP4</a>).
-            </video>
-          </div>
-          <div class="subcard">
-            <h2 class="video-heading">Product Launch Video (Vietnamese Audio · 1080p)</h2>
-            <video class="promo-video" controls preload="metadata" playsinline width="1920" height="1080">
-              <source src="./media/gap-promo-vi.mp4" type="video/mp4" />
-              Your browser does not support MP4 playback (<a href="./media/gap-promo-vi.mp4">download Vietnamese promo MP4</a>).
-            </video>
-          </div>
-        </div>
-
-        <p><strong>Select any architecture block below</strong> to inspect its responsibilities, invariants, and Rust implementation modules:</p>
-        <div id="planes-grid" class="planes-grid"></div>
-        <div id="arch-inspector" class="inspector-panel" aria-live="polite"></div>
-      </section>
-
-      <!-- SECTION 2: 6-LEVEL LEARNING PATH (modern-web-guidance: tabs) -->
-      <section id="learning-path" class="card" tabindex="-1">
-        <h2>2. 6-Level Learning Path (Novice &rarr; Master)</h2>
-        <p class="section-lead">
-          Progress left to right through each tab. Supports &larr; / &rarr; arrow keys (<code>focusgroup</code>), in-page find (Ctrl/Cmd+F) across collapsed tabs (<code>hidden="until-found"</code>), and automatic browser progress persistence.
-        </p>
-
-        <div id="levels-tablist" class="tablist" focusgroup="tablist nomemory" aria-label="6 GAP learning levels"></div>
-        <div id="levels-tabpanels" class="tabpanels"></div>
-      </section>
-
-      <!-- SECTION 3: INTERACTIVE LAB & CROSSOVER -->
-      <section id="interactive-lab" class="card" tabindex="-1">
-        <h2>3. Crossover Calculator &amp; Interactive Playground</h2>
-        <p class="section-lead">
-          Explore measured <code>GAP-Bench</code> token crossover tradeoffs and run live <code>GAP-QL</code> / <code>MCP</code> queries when serving locally via <code>python3 web/serve.py</code>.
-        </p>
-
-        <div class="lab-grid">
-          <div class="subcard">
-            <h3>3A. Token Efficiency Calculator (Measured ADR-021 Data)</h3>
-            <div class="control-row">
-              <label for="calc-suite">Workload:</label>
-              <select id="calc-suite">
-                <option value="cross_branch_join">cross_branch_join (Federated multi-branch join)</option>
-                <option value="api_lookup">api_lookup (Single flat API lookup)</option>
-                <option value="code_graph">code_graph (Codebase AST navigation, 24 symbols)</option>
-              </select>
-            </div>
-            <div class="control-row">
-              <label for="calc-n">Catalog scale N:</label>
-              <select id="calc-n">
-                <option value="10">N = 10 tools (2 branches)</option>
-                <option value="50">N = 50 tools (5 branches)</option>
-                <option value="200">N = 200 tools (20 branches)</option>
-                <option value="1000" selected>N = 1000 tools (100 branches)</option>
-              </select>
-              <label><input id="calc-cached" type="checkbox" checked /> Enable Prompt Cache (0.10x)</label>
-            </div>
-            <div id="calc-output"></div>
-          </div>
-
-          <div class="subcard">
-            <h3>3B. GAP-QL &amp; MCP 2026-07-28 Playground</h3>
-            <div class="control-row">
-              <button id="btn-toggle-demo" type="button" class="btn btn-primary">Start Live Lab (gap serve)</button>
-              <span id="demo-badge" class="pill">Simulation Mode</span>
-            </div>
-            <div class="control-row">
-              <label for="play-scenario">Scenario:</label>
-              <select id="play-scenario"></select>
-            </div>
-            <p id="play-note" class="section-lead"></p>
-            <div><strong>Request to <code id="play-endpoint"></code>:</strong></div>
-            <pre role="region" aria-label="Sample request payload" tabindex="0"><code id="play-request"></code></pre>
-            <div class="control-row">
-              <button id="btn-run-play" type="button" class="btn btn-primary">Run scenario</button>
-              <span id="play-meta" class="section-lead"></span>
-            </div>
-            <div><strong>Response output:</strong></div>
-            <pre role="region" aria-label="Response output" tabindex="0"><code id="play-response"></code></pre>
-          </div>
-        </div>
-      </section>
-
-      <!-- SECTION 4: 32-CRATE ARCHITECTURE MAP -->
-      <section id="crate-map" class="card" tabindex="-1">
-        <h2>4. 32-Crate Rust Architecture Map (Layers L0&ndash;L6)</h2>
-        <p class="section-lead">
-          Higher-layer crates may only depend strictly downward (<code>tools/check_layers.py</code>). Five hot-path crates (<code>gap-exec</code>, <code>gap-plan</code>, <code>gap-transport</code>, <code>gap-snapshot</code>, <code>gap-balance</code>) are forbidden from any ML crate dependencies (<code>ARC-002</code>).
-        </p>
-        <div id="layer-chips" class="chip-group" role="group" aria-label="Filter crates by architectural layer"></div>
-        <div id="crates-grid" class="crates-grid"></div>
-      </section>
-
-      <!-- SECTION 5: CLI & RUNBOOKS (modern-web-guidance: accordion) -->
-      <section id="cli-runbooks" class="card" tabindex="-1">
-        <h2>5. 15 CLI Commands &amp; 9 Incident Runbooks</h2>
-        <p class="section-lead">
-          Expand any <code>gap</code> subcommand or runbook for usage details. Standard exit codes (<code>OPS-044</code>): <code>0</code> success · <code>1</code> runtime error · <code>2</code> config/usage error · <code>3</code> policy/integrity failure · <code>4</code> not found.
-        </p>
-
-        <div class="lab-grid">
-          <div class="subcard">
-            <h3>15 Subcommands of the <code>gap</code> Binary</h3>
-            <div id="cli-list" class="accordion"></div>
-          </div>
-
-          <div class="subcard">
-            <div class="accordion-header">
-              <h3>9 Operational Runbooks (Prometheus Alerts)</h3>
-              <button id="btn-toggle-all-runbooks" type="button" class="btn btn-sm" commandfor="runbooks-accordion" command="--toggle-all" aria-expanded="false">
-                <span class="expand">Expand all</span>
-                <span class="collapse">Collapse all</span>
-              </button>
-            </div>
-            <section id="runbooks-accordion" class="accordion" aria-label="9 incident response runbooks"></section>
-          </div>
-        </div>
-      </section>
-
-      <!-- SECTION 6: 20 INVARIANTS, STE-100 & QUIZ (modern-web-guidance: responsive-table) -->
-      <section id="invariants-quiz" class="card" tabindex="-1">
-        <h2>6. 20 Architectural Invariants, ASD-STE100 Glossary &amp; Knowledge Quiz</h2>
-        <p class="section-lead">
-          Tables pin sticky column headers on desktop scroll and automatically adapt into labeled cards below 640px via CSS <code>@container</code> queries.
-        </p>
-
-        <h3>6A. 20 Architectural Invariants (INV-01 &ndash; INV-20)</h3>
-        <div tabindex="0" role="region" aria-labelledby="cap-inv" class="table-wrapper">
-          <table class="data-table inv-table">
-            <caption id="cap-inv">20 normative invariants enforced automatically across the GAP workspace</caption>
-            <thead>
-              <tr>
-                <th scope="col">ID</th>
-                <th scope="col">Requirement</th>
-                <th scope="col">Enforcing Plane / Crate</th>
-                <th scope="col">Verification Status</th>
-              </tr>
-            </thead>
-            <tbody id="inv-tbody"></tbody>
-          </table>
-        </div>
-
-        <h3 class="section-subhead">6B. ASD-STE100 Controlled Terminology (Andrej Karpathy Style)</h3>
-        <p class="section-lead">
-          To eliminate LLM synonym drift across specs and agent prompts, <code>docs/ste100/</code> and <code>dist/check-ste100.py</code> enforce one canonical term per concept:
-        </p>
-        <div tabindex="0" role="region" aria-labelledby="cap-dict" class="table-wrapper">
-          <table class="data-table dict-table">
-            <caption id="cap-dict">Approved ASD-STE100 controlled terms in GAP</caption>
-            <thead>
-              <tr>
-                <th scope="col">Approved Term</th>
-                <th scope="col">GAP Definition</th>
-                <th scope="col">Prohibited Synonyms</th>
-              </tr>
-            </thead>
-            <tbody id="dict-tbody"></tbody>
-          </table>
-        </div>
-
-        <h3 class="section-subhead">6C. Self-Check Quiz (6 Core Questions)</h3>
-        <div id="quiz-container"></div>
-        <div id="quiz-score" class="pill">Current score: 0 / 6</div>
-      </section>
+      </footer>
     </main>
+
+    <aside class="toc-right" aria-label="On this page">
+      <div class="toc-sticky scroller">
+        <p class="toc-title">On this page</p>
+        <nav id="on-this-page-nav" class="toc-links" aria-label="On this page">
+          <a class="toc-link" href="#get-started-paths">Choose Your Starting Path</a><a class="toc-link" href="#core-capabilities">Explore Core Platform Capabilities</a><a class="toc-link" href="#measured-highlights">Measured Performance &amp; Security Highlights</a><a class="toc-link" href="#launch-videos">Product Walkthrough Videos (1080p)</a>
+        </nav>
+      </div>
+    </aside>
   </div>
 
-  <footer class="site-footer">
-    <strong>Graph Agent Protocol (GAP v0.1.0-rc.1)</strong> · Copyright 2026 Duy Đức Nguyễn (Infinite Agent Labs) · Apache-2.0 ·
-    <a href="https://github.com/vnknowledge2014/GraphProtocol" target="_blank" rel="noopener">GitHub</a> ·
-    <a href="./paper/" target="_blank" rel="noopener">Paper (HTML)</a> ·
-    <a href="./paper/gap-paper.pdf" target="_blank" rel="noopener">PDF</a> ·
-    <a href="./vi.html" lang="vi" hreflang="vi">Tiếng Việt</a> ·
-    Interactive documentation grounded 100% in repository source code, specs <code>00–09</code>, and verified benchmarks.
-  </footer>
-
-  <script src="data.en.js"></script>
+  <script src="search-index.en.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
