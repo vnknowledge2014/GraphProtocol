@@ -75,21 +75,21 @@ window.GAP_SEARCH_INDEX = [
     "section": "Bắt đầu",
     "href": "vi/getting-started/quickstart.html#prerequisites",
     "snippet": "Binary gap đã biên dịch (từ bản phát hành hoặc chạy ./dist/build-reproducible.sh --offline tạo ra ./target/dist/gap ). Python 3.10+ để chạy hai dịch vụ giả lập mẫu trong examples/walking-ske",
-    "keywords": "Chuẩn bị Trước khi Chạy Khởi chạy Nhanh (10 phút) Binary gap đã biên dịch (từ bản phát hành hoặc chạy ./dist/build-reproducible.sh --offline tạo ra ./target/dist/gap ). Python 3.10+ để chạy hai dịch vụ giả lập mẫu trong examples/walking-skeleton/fixtures/ . Bật nhanh ngay trên Trình duyệt Nếu bạn đang mở cổng web cục bộ qua python3 web/serve.py --port 8787 , bạn có thể nhấn đúng 1 nút trong trang Phòng Lab Thực hành để tự bật toàn bộ các tiến trình này."
+    "keywords": "Chuẩn bị Trước khi Chạy Khởi chạy Nhanh (10 phút) Binary gap đã biên dịch (từ bản phát hành hoặc chạy ./dist/build-reproducible.sh --offline tạo ra ./target/dist/gap ). Python 3.10+ để chạy hai dịch vụ giả lập mẫu trong examples/walking-skeleton/fixtures/ . Bật nhanh ngay trên Trình duyệt Nếu bạn đang mở cổng web cục bộ qua python3 web/serve.py --port 8787 , bạn có thể nhấn đúng 1 nút trong trang Phòng Lab Thực hành để tự bật toàn bộ các tiến trình này. Tạo mới Workspace từ đầu? Bạn có thể khởi "
   },
   {
     "title": "Hướng dẫn Từng bước — Khởi chạy Nhanh (10 phút)",
     "section": "Bắt đầu",
     "href": "vi/getting-started/quickstart.html#step-by-step",
     "snippet": "1 Kiểm tra hợp lệ tệp cấu hình Chạy kiểm tra tĩnh với examples/walking-skeleton/gap.toml . GAP từ chối khởi động ngay nếu thấy trường lạ, bí mật ghi trần không qua biến môi trường hoặc thiếu",
-    "keywords": "Hướng dẫn Từng bước Khởi chạy Nhanh (10 phút) 1 Kiểm tra hợp lệ tệp cấu hình Chạy kiểm tra tĩnh với examples/walking-skeleton/gap.toml . GAP từ chối khởi động ngay nếu thấy trường lạ, bí mật ghi trần không qua biến môi trường hoặc thiếu tệp spec: terminal Kết quả mong đợi: Cả hai lệnh trả về mã thoát 0 ( OPS-044 ). Khóa API dev-agent được lưu bằng mã băm BLAKE3 trong TOML. 2 Khởi chạy hai máy chủ upstream mẫu Bật giả lập REST API trên cổng 9101 và máy chủ MCP trên cổng 9102 : terminal 3 Khởi"
+    "keywords": "Hướng dẫn Từng bước Khởi chạy Nhanh (10 phút) 1 Kiểm tra hợp lệ tệp cấu hình Chạy kiểm tra tĩnh với examples/walking-skeleton/gap.toml . GAP từ chối khởi động ngay nếu thấy trường lạ, bí mật ghi trần không qua biến môi trường hoặc thiếu tệp spec: terminal Terminal — Kiểm tra gap.toml text Kết quả Mong đợi (Mã thoát 0 · OPS-044) Lưu ý: Cả hai lệnh trả về mã thoát 0 ( OPS-044 ). Khóa API dev-agent được lưu bằng mã băm BLAKE3 trong TOML. 2 Khởi chạy hai máy chủ upstream mẫu Bật giả lập REST API"
   },
   {
-    "title": "Bước 5: Gắn vào Claude Desktop, Cursor hoặc Antigravity — Khởi chạy Nhanh (10 phút)",
+    "title": "Bước 5: Gắn vào MCP Host hoặc Phát Luồng AG-UI — Khởi chạy Nhanh (10 phút)",
     "section": "Bắt đầu",
     "href": "vi/getting-started/quickstart.html#connect-ai-host",
-    "snippet": "Thay vì cấu hình từng công cụ REST rời rạc, hãy trỏ AI host vào MCP server 5 tool cố định của GAP qua stdio. Xem chi tiết tích hợp A2A và AG-UI tại Tích hợp MCP, A2A &amp; AG-UI . json",
-    "keywords": "Bước 5: Gắn vào Claude Desktop, Cursor hoặc Antigravity Khởi chạy Nhanh (10 phút) Thay vì cấu hình từng công cụ REST rời rạc, hãy trỏ AI host vào MCP server 5 tool cố định của GAP qua stdio. Xem chi tiết tích hợp A2A và AG-UI tại Tích hợp MCP, A2A &amp; AG-UI . json"
+    "snippet": "Thay vì cấu hình từng công cụ REST rời rạc, hãy trỏ AI host vào MCP server 5 tool cố định của GAP qua stdio, hoặc nhận luồng sự kiện AG-UI v1.0 qua SSE. Xem chi tiết tích hợp tại Tích hợp MC",
+    "keywords": "Bước 5: Gắn vào MCP Host hoặc Phát Luồng AG-UI Khởi chạy Nhanh (10 phút) Thay vì cấu hình từng công cụ REST rời rạc, hãy trỏ AI host vào MCP server 5 tool cố định của GAP qua stdio, hoặc nhận luồng sự kiện AG-UI v1.0 qua SSE. Xem chi tiết tích hợp tại Tích hợp MCP, A2A &amp; AG-UI . json mcp_servers.json — Cấu hình Client Stdio terminal Terminal — Luồng SSE AG-UI v1.0 Trực tiếp"
   },
   {
     "title": "Kiến trúc 3 Mặt phẳng",
@@ -102,8 +102,8 @@ window.GAP_SEARCH_INDEX = [
     "title": "Phân tách Cứng 3 Mặt phẳng — Kiến trúc 3 Mặt phẳng",
     "section": "Kiến trúc Cốt lõi",
     "href": "vi/concepts/architecture.html#three-planes-diagram",
-    "snippet": "Kiến trúc 3 Mặt phẳng tách biệt hoàn toàn trong GAP Mặt phẳng 2: Khám phá Lũy tiến L0/L1/L2 · Visibility Bitset (INV-05) · Baseline / S1 tùy chọn (INV-17) Mặt phẳng 1: Thực thi Tất định (CẤM",
-    "keywords": "Phân tách Cứng 3 Mặt phẳng Kiến trúc 3 Mặt phẳng Kiến trúc 3 Mặt phẳng tách biệt hoàn toàn trong GAP Mặt phẳng 2: Khám phá Lũy tiến L0/L1/L2 · Visibility Bitset (INV-05) · Baseline / S1 tùy chọn (INV-17) Mặt phẳng 1: Thực thi Tất định (CẤM ML — ARC-002) AuthN + Cedar Policy -&gt; PlanCache (TenantId) -&gt; ArcSwap Snapshot -&gt; BatchJoin -&gt; EgressGuard Mặt phẳng 3: Kiểm soát &amp; Ingest Zero-Trust Propose-Not-Activate · Kiểm chứng @join · DriftMonitor (desc_hash) · Auto RollbackWatcher Ran"
+    "snippet": "Kiến trúc 3 Mặt phẳng tách biệt hoàn toàn trong GAP Mặt phẳng 2: Khám phá Lũy tiến L0/L1/L2 · Visibility Bitset (INV-05) · Baseline / S1 tùy chọn (INV-17) Truy vấn đã chọn Mặt phẳng 1: Thực ",
+    "keywords": "Phân tách Cứng 3 Mặt phẳng Kiến trúc 3 Mặt phẳng Kiến trúc 3 Mặt phẳng tách biệt hoàn toàn trong GAP Mặt phẳng 2: Khám phá Lũy tiến L0/L1/L2 · Visibility Bitset (INV-05) · Baseline / S1 tùy chọn (INV-17) Truy vấn đã chọn Mặt phẳng 1: Thực thi Tất định (CẤM ML — ARC-002) AuthN + Cedar Policy -&gt; PlanCache (TenantId) -&gt; ArcSwap Snapshot -&gt; BatchJoin -&gt; EgressGuard Đổi ArcSwap (nguyên tử) Mặt phẳng 3: Kiểm soát &amp; Ingest Zero-Trust Propose-Not-Activate · Kiểm chứng @join · DriftMonit"
   },
   {
     "title": "Sơ đồ Tương tác 10 Khối Kiến trúc — Kiến trúc 3 Mặt phẳng",
@@ -130,8 +130,8 @@ window.GAP_SEARCH_INDEX = [
     "title": "Quy trình 3 Tầng Từ Ý định Đến Truy vấn — Khám phá Lũy tiến (651 Tokens)",
     "section": "Kiến trúc Cốt lõi",
     "href": "vi/concepts/progressive-disclosure.html#three-levels-walkthrough",
-    "snippet": "1 Tầng L0 — Tổng quan Nhánh ( __metaGraph / gap_describe ) Agent xem danh mục tóm tắt các nhánh hiện có, giới hạn &lt;= 24 token mỗi nhánh: graphql Kết quả trả về gọn nhẹ: shop (openapi, 4 o",
-    "keywords": "Quy trình 3 Tầng Từ Ý định Đến Truy vấn Khám phá Lũy tiến (651 Tokens) 1 Tầng L0 — Tổng quan Nhánh ( __metaGraph / gap_describe ) Agent xem danh mục tóm tắt các nhánh hiện có, giới hạn &lt;= 24 token mỗi nhánh: graphql Kết quả trả về gọn nhẹ: shop (openapi, 4 ops) , notes (mcp, 1 op) — dù hệ thống có hàng trăm backend vẫn gói gọn chỉ trong vài trăm tokens. 2 Tầng L1 — Tìm kiếm Lọc sẵn Quyền ( __search / gap_search ) Agent tìm top-k thao tác phù hợp bằng chỉ mục lai BM25 + vector HNSW. GAP áp dụng Cedar visibility bi"
+    "snippet": "Quy trình Khám phá Lũy tiến 3 tầng (651 tokens) so với tải phẳng tools/list tĩnh 5 tool (651 tok) L0: gap_describe overview: true (&lt;=24 tok/nhánh) L1: gap_search BM25 + Cedar Bitset (INV-",
+    "keywords": "Quy trình 3 Tầng Từ Ý định Đến Truy vấn Khám phá Lũy tiến (651 Tokens) Quy trình Khám phá Lũy tiến 3 tầng (651 tokens) so với tải phẳng tools/list tĩnh 5 tool (651 tok) L0: gap_describe overview: true (&lt;=24 tok/nhánh) L1: gap_search BM25 + Cedar Bitset (INV-05) L2: gap_describe types: [&quot;shop_CustomersResult&quot;] gap_query / mutate Thực thi GraphQL có batch 1 Tầng L0 — Tổng quan Nhánh ( gap_describe{overview: true} / __metaGraph ) Agent xem danh mục tóm tắt các nhánh hiện có qua MCP POST /mcp , giới hạn &lt"
   },
   {
     "title": "Bảo đảm Không Rò rỉ Sự tồn tại (INV-05) — Khám phá Lũy tiến (651 Tokens)",
@@ -151,15 +151,15 @@ window.GAP_SEARCH_INDEX = [
     "title": "Không Chế Cú pháp Lạ (GQL-001) — GAP-QL & Gom Lô Join",
     "section": "Kiến trúc Cốt lõi",
     "href": "vi/concepts/gap-ql-and-joins.html#valid-graphql-profile",
-    "snippet": "Thay vì tạo từ khóa phi chuẩn như traverse { ... } , GAP đặt khám phá và nối nhánh thành các field gốc chuẩn và directive hợp lệ ( @join , @sideEffect , @requiresScope ). Mọi truy vấn qua ki",
-    "keywords": "Không Chế Cú pháp Lạ (GQL-001) GAP-QL & Gom Lô Join Thay vì tạo từ khóa phi chuẩn như traverse { ... } , GAP đặt khám phá và nối nhánh thành các field gốc chuẩn và directive hợp lệ ( @join , @sideEffect , @requiresScope ). Mọi truy vấn qua kiểm tra vi phân đối chiếu trực tiếp với graphql-js 16.13.2 . graphql"
+    "snippet": "Thay vì tạo từ khóa phi chuẩn như traverse { ... } , GAP đặt khám phá và nối nhánh thành các field gốc chuẩn cùng các directive chuẩn trong spec/02-gap-ql.md §5 ( @join , @sideEffect , @auth",
+    "keywords": "Không Chế Cú pháp Lạ (GQL-001) GAP-QL & Gom Lô Join Thay vì tạo từ khóa phi chuẩn như traverse { ... } , GAP đặt khám phá và nối nhánh thành các field gốc chuẩn cùng các directive chuẩn trong spec/02-gap-ql.md §5 ( @join , @sideEffect , @auth , @pii ). Mọi truy vấn qua kiểm tra vi phân đối chiếu trực tiếp với graphql-js 16.13.2 . graphql spec/02-gap-ql.md §5 — Directives Hợp lệ"
   },
   {
     "title": "Triệt tiêu Lỗi Thác nước N+1 (INV-18) — GAP-QL & Gom Lô Join",
     "section": "Kiến trúc Cốt lõi",
     "href": "vi/concepts/gap-ql-and-joins.html#dataloader-batching",
     "snippet": "Khi một truy vấn lấy 50 khách hàng kèm ghi chú từ nhánh MCP hoặc SQL khác, client phẳng sẽ phát 50 lần gọi nối tiếp. Bộ thực thi GAP rút trích các khóa duy nhất, chia lô đúng giới hạn maxBat",
-    "keywords": "Triệt tiêu Lỗi Thác nước N+1 (INV-18) GAP-QL & Gom Lô Join Khi một truy vấn lấy 50 khách hàng kèm ghi chú từ nhánh MCP hoặc SQL khác, client phẳng sẽ phát 50 lần gọi nối tiếp. Bộ thực thi GAP rút trích các khóa duy nhất, chia lô đúng giới hạn maxBatch và chỉ gửi tối đa ceil(unique_keys / max_batch) khung BatchQuery — được kiểm tra tự động qua VER-040 . Số liệu GAP-Bench đo thật (Không Cache vs Prompt Cache 0,10x, N=10..1.000) Kịch bản / Quy mô N Direct-MCP (Không Cache) GAP (Không Cache) Direct-MCP (Có C"
+    "keywords": "Triệt tiêu Lỗi Thác nước N+1 (INV-18) GAP-QL & Gom Lô Join Khi một truy vấn lấy 50 khách hàng kèm ghi chú từ nhánh MCP hoặc SQL khác, client phẳng sẽ phát 50 lần gọi nối tiếp. Bộ thực thi GAP rút trích các khóa duy nhất, chia lô đúng giới hạn maxBatch và chỉ gửi tối đa ceil(unique_keys / max_batch) khung BatchQuery — được kiểm tra tự động qua VER-040 . So sánh thác nước N+1 qua LLM và gom lô DataLoader BatchJoin INV-18 Direct-MCP: Vòng lặp N+1 (4 lượt · 814.959 tok) LLM gọi customers -&gt; nhận 50 ID LLM"
   },
   {
     "title": "Kết nối Dữ liệu (NGC)",
@@ -172,8 +172,8 @@ window.GAP_SEARCH_INDEX = [
     "title": "Từ REST JSON đến Nhánh Đồ thị Chỉ với Khai báo — Kết nối Dữ liệu (NGC)",
     "section": "Kết nối Dữ liệu (NGC)",
     "href": "vi/connectors/overview.html#rest-to-gap-walkthrough",
-    "snippet": "Giả sử dịch vụ đơn hàng REST trả về JSON từ GET /orders?customer_id=... : json Chỉ cần khai báo nhánh trong gap.toml và gắn chú thích x-gap-in-param vào OpenAPI spec để bật gom lô tự động: t",
-    "keywords": "Từ REST JSON đến Nhánh Đồ thị Chỉ với Khai báo Kết nối Dữ liệu (NGC) Giả sử dịch vụ đơn hàng REST trả về JSON từ GET /orders?customer_id=... : json Chỉ cần khai báo nhánh trong gap.toml và gắn chú thích x-gap-in-param vào OpenAPI spec để bật gom lô tự động: toml id = \"shop\" : Định danh nhánh dùng cố định trong khóa bộ nhớ đệm và nhật ký kiểm toán. trust = \"T1\" : Nhánh đã được quản trị viên duyệt và ghim mã băm spec_hash / desc_hash chống sửa lén."
+    "snippet": "Với endpoint REST GET /customers/{id} đi kèm endpoint gom danh sách GET /customers?ids=1,2,3 , chỉ cần gắn khối \"x-gap-in-param\" ngay trong đặc tả OpenAPI (trích nguyên văn từ examples/walki",
+    "keywords": "Từ REST JSON đến Nhánh Đồ thị Chỉ với Khai báo Kết nối Dữ liệu (NGC) Với endpoint REST GET /customers/{id} đi kèm endpoint gom danh sách GET /customers?ids=1,2,3 , chỉ cần gắn khối \"x-gap-in-param\" ngay trong đặc tả OpenAPI (trích nguyên văn từ examples/walking-skeleton/shop.openapi.json ): json examples/walking-skeleton/shop.openapi.json Sau đó khai báo nhánh OpenAPI đó trong gap.toml : toml gap.toml — Khai báo Nhánh OpenAPI id = \"shop\" : Định danh nhánh dùng đặt tiền tố kiểu biên dịch ( shop_CustomersResult , sh"
   },
   {
     "title": "Toàn bộ 6 Adapter NGC Đóng gói Sẵn — Kết nối Dữ liệu (NGC)",
@@ -187,7 +187,7 @@ window.GAP_SEARCH_INDEX = [
     "section": "Kết nối Dữ liệu (NGC)",
     "href": "vi/connectors/overview.html#propose-not-activate",
     "snippet": "Không một schema mới hay cạnh @join nào tự động lọt vào luồng phục vụ khách hàng. Lệnh gap ingest once trích xuất đồ thị trung gian (CISG), kiểm tra thực tế trên dữ liệu mẫu đối với cạnh nối",
-    "keywords": "Quy trình Duyệt An toàn: Propose-Not-Activate Kết nối Dữ liệu (NGC) Không một schema mới hay cạnh @join nào tự động lọt vào luồng phục vụ khách hàng. Lệnh gap ingest once trích xuất đồ thị trung gian (CISG), kiểm tra thực tế trên dữ liệu mẫu đối với cạnh nối đề xuất (tỷ lệ khớp tập khóa RHS, tỷ lệ null) rồi tạo Proposal chờ người vận hành duyệt: terminal"
+    "keywords": "Quy trình Duyệt An toàn: Propose-Not-Activate Kết nối Dữ liệu (NGC) Không một schema mới hay cạnh @join nào tự động lọt vào luồng phục vụ khách hàng. Lệnh gap ingest once trích xuất đồ thị trung gian (CISG), kiểm tra thực tế trên dữ liệu mẫu đối với cạnh nối đề xuất (tỷ lệ khớp tập khóa RHS, tỷ lệ null) rồi tạo Proposal chờ người vận hành duyệt: terminal Terminal — Ingest, Diff &amp; Duyệt Proposal"
   },
   {
     "title": "Tích hợp MCP, A2A & AG-UI",
@@ -214,8 +214,8 @@ window.GAP_SEARCH_INDEX = [
     "title": "Liên thông A2A v1.0 & Luồng Giao diện AG-UI v1.0 — Tích hợp MCP, A2A & AG-UI",
     "section": "Tích hợp AI Agent",
     "href": "vi/agents/facades-and-hosts.html#a2a-and-agui",
-    "snippet": "Chuẩn ngang hàng A2A v1.0 ( adapters/gap-a2a ): Cung cấp /.well-known/agent-card.json và quản lý vòng đời tác vụ 8 trạng thái trên SQLite kèm bộ đếm hop tăng đơn điệu, ngắt ngay vòng lặp chu",
-    "keywords": "Liên thông A2A v1.0 & Luồng Giao diện AG-UI v1.0 Tích hợp MCP, A2A & AG-UI Chuẩn ngang hàng A2A v1.0 ( adapters/gap-a2a ): Cung cấp /.well-known/agent-card.json và quản lý vòng đời tác vụ 8 trạng thái trên SQLite kèm bộ đếm hop tăng đơn điệu, ngắt ngay vòng lặp chuyển tiếp ( GAP_LOOP_DETECTED , INV-20 ). Luồng sự kiện AG-UI v1.0 ( adapters/gap-agui ): Mở POST /ag-ui SSE phát chuẩn RunStarted , StepStarted , TextMessage* , ToolCall* , StateDelta , RunFinished , RunError . Khi Cedar yêu cầu con người duyệt mutation IRREVE"
+    "snippet": "Chuẩn ngang hàng A2A v1.0 ( adapters/gap-a2a ): Quản lý vòng đời tác vụ 8 trạng thái trên SQLite kèm bộ đếm hop tăng đơn điệu, ngắt ngay vòng lặp chuyển tiếp ( GAP_LOOP_DETECTED , INV-20 ). ",
+    "keywords": "Liên thông A2A v1.0 & Luồng Giao diện AG-UI v1.0 Tích hợp MCP, A2A & AG-UI Chuẩn ngang hàng A2A v1.0 ( adapters/gap-a2a ): Quản lý vòng đời tác vụ 8 trạng thái trên SQLite kèm bộ đếm hop tăng đơn điệu, ngắt ngay vòng lặp chuyển tiếp ( GAP_LOOP_DETECTED , INV-20 ). Luồng sự kiện AG-UI v1.0 ( adapters/gap-agui ): Mở POST /ag-ui SSE phát chuẩn RUN_STARTED , STEP_STARTED , TOOL_CALL_* , STATE_SNAPSHOT , RUN_FINISHED . Khi Cedar yêu cầu con người duyệt mutation IRREVERSIBLE , luồng dừng lại qua RUN_FINISHED interrupt và chạy"
   },
   {
     "title": "Định tuyến System-1 & HTTP/3 QUIC",
@@ -235,8 +235,8 @@ window.GAP_SEARCH_INDEX = [
     "title": "Dual-Stack HTTP/2 + HTTP/3 trên QUIC (OPS-005, ADR-026) — Định tuyến System-1 & HTTP/3 QUIC",
     "section": "Tích hợp AI Agent",
     "href": "vi/agents/routers-and-http3.html#http3-dual-stack",
-    "snippet": "Khi khai báo trong gap.toml , crate gap-transport mở song song TCP HTTPS ( HTTP/1.1 + HTTP/2 kèm header Alt-Svc: h3=\":8443\"; ma=86400 ) và UDP QUIC ( quinn + h3 , TLS 1.3 ALPN h3 ): toml Chố",
-    "keywords": "Dual-Stack HTTP/2 + HTTP/3 trên QUIC (OPS-005, ADR-026) Định tuyến System-1 & HTTP/3 QUIC Khi khai báo trong gap.toml , crate gap-transport mở song song TCP HTTPS ( HTTP/1.1 + HTTP/2 kèm header Alt-Svc: h3=\":8443\"; ma=86400 ) và UDP QUIC ( quinn + h3 , TLS 1.3 ALPN h3 ): toml Chống Replay Attack: Thiết lập max_early_data_size = 0 để tắt hoàn toàn TLS 1.3 0-RTT trên QUIC, ngăn chặn phát lại các thao tác thay đổi dữ liệu. Fail-Closed ở prod : Nếu chạy profile = \"prod\" có http3_listen nhưng thiếu chứng chỉ tls_cert_secret / tls_key_secre"
+    "snippet": "Khi khai báo trong gap.toml , crate gap-transport mở song song TCP HTTPS ( HTTP/1.1 + HTTP/2 kèm header Alt-Svc: h3=\":8443\"; ma=86400 ) và UDP QUIC ( quinn + h3 , TLS 1.3 ALPN h3 ): toml gap",
+    "keywords": "Dual-Stack HTTP/2 + HTTP/3 trên QUIC (OPS-005, ADR-026) Định tuyến System-1 & HTTP/3 QUIC Khi khai báo trong gap.toml , crate gap-transport mở song song TCP HTTPS ( HTTP/1.1 + HTTP/2 kèm header Alt-Svc: h3=\":8443\"; ma=86400 ) và UDP QUIC ( quinn + h3 , TLS 1.3 ALPN h3 ): toml gap.toml — Dual-Stack HTTP/2 + HTTP/3 Chống Replay Attack: Thiết lập max_early_data_size = 0 để tắt hoàn toàn TLS 1.3 0-RTT trên QUIC, ngăn chặn phát lại các thao tác thay đổi dữ liệu. Fail-Closed ở prod : Nếu chạy profile = \"prod\" có http3_listen nhưng thiếu chứ"
   },
   {
     "title": "Bảo mật Zero-Trust & Cedar",
@@ -271,7 +271,7 @@ window.GAP_SEARCH_INDEX = [
     "section": "Phòng Lab Thực hành",
     "href": "vi/lab/playground.html#interactive-lab-suite",
     "snippet": "3A. Bộ tính Hiệu quả Token (Số liệu đo thật ADR-021) Tác vụ: cross_branch_join (Truy vấn gộp liên nhánh) api_lookup (Gọi 1 API đơn lẻ) code_graph (Hiểu kho mã nguồn, 24 symbols) Quy mô N: N ",
-    "keywords": "Bộ tính Crossover & Playground Tương tác Phòng Lab & Bộ tính Token 3A. Bộ tính Hiệu quả Token (Số liệu đo thật ADR-021) Tác vụ: cross_branch_join (Truy vấn gộp liên nhánh) api_lookup (Gọi 1 API đơn lẻ) code_graph (Hiểu kho mã nguồn, 24 symbols) Quy mô N: N = 10 tools (2 nhánh) N = 50 tools (5 nhánh) N = 200 tools (20 nhánh) N = 1000 tools (100 nhánh) Bật Prompt Cache (0.10x) 3B. Playground GAP-QL &amp; MCP 2026-07-28 Bật Lab Thực Hành (gap serve) Mô phỏng sẵn Kịch bản: Request gửi tới : Chạy thử kịch bản Kết quả"
+    "keywords": "Bộ tính Crossover & Playground Tương tác Phòng Lab & Bộ tính Token 3A. Bộ tính Hiệu quả Token (Số liệu đo thật ADR-021) Tác vụ: cross_branch_join (Truy vấn gộp liên nhánh) api_lookup (Gọi 1 API đơn lẻ) code_graph (Hiểu kho mã nguồn, 24 symbols) Quy mô N: N = 10 tools (2 nhánh) N = 50 tools (5 nhánh) N = 200 tools (20 nhánh) N = 1000 tools (100 nhánh) Bật Prompt Cache (0.10x) 3B. Playground GAP-QL &amp; MCP 2026-07-28 Bật Lab Thực Hành (gap serve) Mô phỏng sẵn Kịch bản: request Chạy thử kịch bản response Kết quả "
   },
   {
     "title": "Lộ trình 6 Cấp độ (Novice đến Master) — Phòng Lab & Bộ tính Token",

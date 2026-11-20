@@ -199,6 +199,7 @@ Khởi chạy Walking Skeleton kết hợp nhánh OpenAPI REST (`shop`) và nhá
   <h2 id="learn-heading">Bạn sẽ nắm được gì</h2>
   <ul><li>Kiểm tra cấu hình an toàn bằng <code>gap config check</code> và <code>gap doctor</code>.</li><li>Khởi chạy hai upstream mẫu REST + MCP và tiến trình <code>gap serve</code>.</li><li>Thực thi câu truy vấn gộp dữ liệu từ cả hai nguồn trong một request duy nhất.</li></ul>
 </section>
+        <details class="toc-inline"><summary>Trong trang này</summary><nav class="toc-inline-links" aria-label="Mục lục bài viết"><a class="toc-inline-link" href="#prerequisites">Chuẩn bị Trước khi Chạy</a><a class="toc-inline-link" href="#step-by-step">Hướng dẫn Từng bước</a><a class="toc-inline-link" href="#connect-ai-host">Bước 5: Gắn vào MCP Host hoặc Phát Luồng AG-UI</a></nav></details>
 
         <section id="prerequisites" tabindex="-1" class="doc-section">
   <h2>Chuẩn bị Trước khi Chạy</h2>
@@ -208,6 +209,9 @@ Khởi chạy Walking Skeleton kết hợp nhánh OpenAPI REST (`shop`) và nhá
 </ul><aside class="callout callout-tip">
   <p class="callout-title">Bật nhanh ngay trên Trình duyệt</p>
   <div class="callout-body"><p>Nếu bạn đang mở cổng web cục bộ qua <code>python3 web/serve.py --port 8787</code>, bạn có thể nhấn đúng 1 nút trong trang <a href="../lab/playground.html">Phòng Lab Thực hành</a> để tự bật toàn bộ các tiến trình này.</p></div>
+</aside><aside class="callout callout-note">
+  <p class="callout-title">Tạo mới Workspace từ đầu?</p>
+  <div class="callout-body"><p>Bạn có thể khởi tạo nhanh thư mục dự án mẫu 5 tệp bằng lệnh <code>./target/dist/gap init my-gateway</code> rồi chỉnh <code>gap.toml</code>.</p></div>
 </aside>
 </section><section id="step-by-step" tabindex="-1" class="doc-section">
   <h2>Hướng dẫn Từng bước</h2>
@@ -218,17 +222,39 @@ Khởi chạy Walking Skeleton kết hợp nhánh OpenAPI REST (`shop`) và nhá
     <h3>Kiểm tra hợp lệ tệp cấu hình</h3>
     <p>Chạy kiểm tra tĩnh với <code>examples/walking-skeleton/gap.toml</code>. GAP từ chối khởi động ngay nếu thấy trường lạ, bí mật ghi trần không qua biến môi trường hoặc thiếu tệp spec:</p><figure class="code-figure">
   <div class="code-toolbar">
-    <span class="code-lang">terminal</span>
+    <div class="code-meta">
+      <span class="code-lang">terminal</span>
+      <span class="code-title">Terminal — Kiểm tra gap.toml</span>
+    </div>
     <span class="copy">
-      <button type="button" class="copy-button" command="--copy" commandfor="qs-check" aria-label="Sao chép đoạn mã terminal (qs-check)">
+      <button type="button" class="copy-button" command="--copy" commandfor="qs-check" aria-label="Sao chép đoạn mã terminal (Terminal — Kiểm tra gap.toml)">
         <span class="icon" aria-hidden="true"></span>
       </button>
       <span class="tip" role="status"></span>
     </span>
   </div>
-  <pre role="region" aria-label="Đoạn mã terminal" tabindex="0"><code id="qs-check" class="language-terminal">./target/dist/gap config check examples/walking-skeleton/gap.toml
+  <pre role="region" aria-label="Terminal — Kiểm tra gap.toml" tabindex="0"><code id="qs-check" class="language-terminal">./target/dist/gap config check examples/walking-skeleton/gap.toml
 ./target/dist/gap doctor --config examples/walking-skeleton/gap.toml</code></pre>
-</figure><ul><li><strong>Kết quả mong đợi:</strong> Cả hai lệnh trả về mã thoát <code>0</code> (<code>OPS-044</code>). Khóa API <code>dev-agent</code> được lưu bằng mã băm BLAKE3 trong TOML.</li></ul>
+</figure><figure class="code-figure">
+  <div class="code-toolbar">
+    <div class="code-meta">
+      <span class="code-lang">text</span>
+      <span class="code-title">Kết quả Mong đợi (Mã thoát 0 · OPS-044)</span>
+    </div>
+    <span class="copy">
+      <button type="button" class="copy-button" command="--copy" commandfor="qs-check-out" aria-label="Sao chép đoạn mã text (Kết quả Mong đợi (Mã thoát 0 · OPS-044))">
+        <span class="icon" aria-hidden="true"></span>
+      </button>
+      <span class="tip" role="status"></span>
+    </span>
+  </div>
+  <pre role="region" aria-label="Kết quả Mong đợi (Mã thoát 0 · OPS-044)" tabindex="0"><code id="qs-check-out" class="language-text">ok: `examples/walking-skeleton/gap.toml` valid (2 branches)
+[ok] config.parse: parsed examples/walking-skeleton/gap.toml (profile=dev)
+[ok] security.sandbox: OS sandbox operational
+[ok] security.egress_guard: egress SSRF self-test matrix passed
+[warn] models.s1: model cache incomplete offline; degrades safely to baseline (RTE-044)
+summary: 11 ok, 1 warn, 0 fail, 0 skip</code></pre>
+</figure><ul><li><strong>Lưu ý:</strong> Cả hai lệnh trả về mã thoát <code>0</code> (<code>OPS-044</code>). Khóa API <code>dev-agent</code> được lưu bằng mã băm BLAKE3 trong TOML.</li></ul>
   </div>
 </li>
 <li class="step-item">
@@ -237,15 +263,18 @@ Khởi chạy Walking Skeleton kết hợp nhánh OpenAPI REST (`shop`) và nhá
     <h3>Khởi chạy hai máy chủ upstream mẫu</h3>
     <p>Bật giả lập REST API trên cổng <code>9101</code> và máy chủ MCP trên cổng <code>9102</code>:</p><figure class="code-figure">
   <div class="code-toolbar">
-    <span class="code-lang">terminal</span>
+    <div class="code-meta">
+      <span class="code-lang">terminal</span>
+      <span class="code-title">Terminal — Hai Máy chủ Upstream Giả lập</span>
+    </div>
     <span class="copy">
-      <button type="button" class="copy-button" command="--copy" commandfor="qs-fixtures" aria-label="Sao chép đoạn mã terminal (qs-fixtures)">
+      <button type="button" class="copy-button" command="--copy" commandfor="qs-fixtures" aria-label="Sao chép đoạn mã terminal (Terminal — Hai Máy chủ Upstream Giả lập)">
         <span class="icon" aria-hidden="true"></span>
       </button>
       <span class="tip" role="status"></span>
     </span>
   </div>
-  <pre role="region" aria-label="Đoạn mã terminal" tabindex="0"><code id="qs-fixtures" class="language-terminal">python3 examples/walking-skeleton/fixtures/rest_fixture.py --port 9101 &amp;
+  <pre role="region" aria-label="Terminal — Hai Máy chủ Upstream Giả lập" tabindex="0"><code id="qs-fixtures" class="language-terminal">python3 examples/walking-skeleton/fixtures/rest_fixture.py --port 9101 &amp;
 python3 examples/walking-skeleton/fixtures/mcp_fixture.py --port 9102 &amp;</code></pre>
 </figure>
   </div>
@@ -256,53 +285,92 @@ python3 examples/walking-skeleton/fixtures/mcp_fixture.py --port 9102 &amp;</cod
     <h3>Khởi chạy Cổng GAP Gateway</h3>
     <p>Chạy lệnh <code>gap serve</code> trỏ tới cấu hình Walking Skeleton:</p><figure class="code-figure">
   <div class="code-toolbar">
-    <span class="code-lang">terminal</span>
+    <div class="code-meta">
+      <span class="code-lang">terminal</span>
+      <span class="code-title">Terminal — Khởi chạy Gateway</span>
+    </div>
     <span class="copy">
-      <button type="button" class="copy-button" command="--copy" commandfor="qs-serve" aria-label="Sao chép đoạn mã terminal (qs-serve)">
+      <button type="button" class="copy-button" command="--copy" commandfor="qs-serve" aria-label="Sao chép đoạn mã terminal (Terminal — Khởi chạy Gateway)">
         <span class="icon" aria-hidden="true"></span>
       </button>
       <span class="tip" role="status"></span>
     </span>
   </div>
-  <pre role="region" aria-label="Đoạn mã terminal" tabindex="0"><code id="qs-serve" class="language-terminal">./target/dist/gap serve --config examples/walking-skeleton/gap.toml</code></pre>
-</figure><ul><li><strong>Kiểm tra sẵn sàng:</strong> <code>GET http://127.0.0.1:8080/readyz</code> trả HTTP <code>200</code> ngay khi thế hệ snapshot <code>1</code> được nạp xong.</li></ul>
+  <pre role="region" aria-label="Terminal — Khởi chạy Gateway" tabindex="0"><code id="qs-serve" class="language-terminal">./target/dist/gap serve --config examples/walking-skeleton/gap.toml</code></pre>
+</figure><ul><li><strong>Kiểm tra sẵn sàng:</strong> <code>GET http://127.0.0.1:8080/readyz</code> trả HTTP <code>200</code> (<code>{"status":"ready","generation":1}</code>) ngay khi thế hệ snapshot <code>1</code> được nạp xong.</li></ul>
   </div>
 </li>
 <li class="step-item">
   <div class="step-badge" aria-hidden="true">4</div>
   <div class="step-content">
     <h3>Gửi truy vấn gộp liên nhánh đầu tiên</h3>
-    <p>Lấy hồ sơ khách hàng + đơn hàng từ nhánh OpenAPI <code>shop</code> kèm ghi chú từ nhánh MCP <code>notes</code> trong duy nhất 1 lần gọi HTTP:</p><figure class="code-figure">
+    <p>Lấy hồ sơ khách hàng + đơn hàng từ nhánh OpenAPI <code>shop</code> kèm JSON ghi chú từ nhánh MCP <code>notes</code> trong 1 lần gọi HTTP (chú ý <code>customer_notes</code> trả về kiểu vô hướng <code>JSON</code> nên gọi trực tiếp không mở ngoặc con):</p><figure class="code-figure">
   <div class="code-toolbar">
-    <span class="code-lang">terminal</span>
+    <div class="code-meta">
+      <span class="code-lang">terminal</span>
+      <span class="code-title">Terminal — Truy vấn GraphQL Gộp 2 Nhánh</span>
+    </div>
     <span class="copy">
-      <button type="button" class="copy-button" command="--copy" commandfor="qs-curl" aria-label="Sao chép đoạn mã terminal (qs-curl)">
+      <button type="button" class="copy-button" command="--copy" commandfor="qs-curl" aria-label="Sao chép đoạn mã terminal (Terminal — Truy vấn GraphQL Gộp 2 Nhánh)">
         <span class="icon" aria-hidden="true"></span>
       </button>
       <span class="tip" role="status"></span>
     </span>
   </div>
-  <pre role="region" aria-label="Đoạn mã terminal" tabindex="0"><code id="qs-curl" class="language-terminal">curl -sS -X POST http://127.0.0.1:8080/graphql \
-  -H &quot;Authorization: Bearer gap_dev_skeleton_key_01&quot; \
+  <pre role="region" aria-label="Terminal — Truy vấn GraphQL Gộp 2 Nhánh" tabindex="0"><code id="qs-curl" class="language-terminal">curl -sS -X POST http://127.0.0.1:8080/graphql \
   -H &quot;Content-Type: application/json&quot; \
-  -d &#x27;{&quot;query&quot;: &quot;{ customer(id: 1) { id name tier } orders(customer_id: 1) { id total_cents status } customer_notes(customer_id: 1) { notes { note_id summary } } }&quot;}&#x27; | python3 -m json.tool</code></pre>
+  -H &quot;Accept: application/graphql-response+json&quot; \
+  -H &quot;Authorization: Bearer gap_dev_skeleton_key_01&quot; \
+  -d &#x27;{&quot;query&quot;: &quot;{ customer(id: 1) { id name tier } orders(customer_id: 1) { id total_cents status } customer_notes(customer_id: 1) }&quot;}&#x27; | python3 -m json.tool</code></pre>
+</figure><figure class="code-figure">
+  <div class="code-toolbar">
+    <div class="code-meta">
+      <span class="code-lang">json</span>
+      <span class="code-title">Kết quả Mong đợi — HTTP 200 JSON</span>
+    </div>
+    <span class="copy">
+      <button type="button" class="copy-button" command="--copy" commandfor="qs-curl-out" aria-label="Sao chép đoạn mã json (Kết quả Mong đợi — HTTP 200 JSON)">
+        <span class="icon" aria-hidden="true"></span>
+      </button>
+      <span class="tip" role="status"></span>
+    </span>
+  </div>
+  <pre role="region" aria-label="Kết quả Mong đợi — HTTP 200 JSON" tabindex="0"><code id="qs-curl-out" class="language-json">{
+  &quot;data&quot;: {
+    &quot;customer&quot;: { &quot;id&quot;: 1, &quot;name&quot;: &quot;Ada Lovelace&quot;, &quot;tier&quot;: &quot;vip&quot; },
+    &quot;orders&quot;: [
+      { &quot;id&quot;: 101, &quot;total_cents&quot;: 4200, &quot;status&quot;: &quot;paid&quot; },
+      { &quot;id&quot;: 103, &quot;total_cents&quot;: 8500, &quot;status&quot;: &quot;pending&quot; }
+    ],
+    &quot;customer_notes&quot;: {
+      &quot;customer_id&quot;: 1,
+      &quot;notes&quot;: [{ &quot;note_id&quot;: &quot;n-1&quot;, &quot;customer_id&quot;: 1, &quot;summary&quot;: &quot;Prefers consolidated monthly invoice&quot; }]
+    }
+  },
+  &quot;extensions&quot;: {
+    &quot;gap&quot;: { &quot;cost&quot;: { &quot;actual&quot;: 7, &quot;planned&quot;: 306 }, &quot;generation&quot;: 1, &quot;partial&quot;: false }
+  }
+}</code></pre>
 </figure>
   </div>
 </li>
 </ol>
 </section><section id="connect-ai-host" tabindex="-1" class="doc-section">
-  <h2>Bước 5: Gắn vào Claude Desktop, Cursor hoặc Antigravity</h2>
-  <p>Thay vì cấu hình từng công cụ REST rời rạc, hãy trỏ AI host vào MCP server 5 tool cố định của GAP qua stdio. Xem chi tiết tích hợp A2A và AG-UI tại <a href="../agents/facades-and-hosts.html">Tích hợp MCP, A2A &amp; AG-UI</a>.</p><figure class="code-figure">
+  <h2>Bước 5: Gắn vào MCP Host hoặc Phát Luồng AG-UI</h2>
+  <p>Thay vì cấu hình từng công cụ REST rời rạc, hãy trỏ AI host vào MCP server 5 tool cố định của GAP qua stdio, hoặc nhận luồng sự kiện AG-UI <code>v1.0</code> qua SSE. Xem chi tiết tích hợp tại <a href="../agents/facades-and-hosts.html">Tích hợp MCP, A2A &amp; AG-UI</a>.</p><figure class="code-figure">
   <div class="code-toolbar">
-    <span class="code-lang">json</span>
+    <div class="code-meta">
+      <span class="code-lang">json</span>
+      <span class="code-title">mcp_servers.json — Cấu hình Client Stdio</span>
+    </div>
     <span class="copy">
-      <button type="button" class="copy-button" command="--copy" commandfor="qs-mcp-cfg" aria-label="Sao chép đoạn mã json (qs-mcp-cfg)">
+      <button type="button" class="copy-button" command="--copy" commandfor="qs-mcp-cfg" aria-label="Sao chép đoạn mã json (mcp_servers.json — Cấu hình Client Stdio)">
         <span class="icon" aria-hidden="true"></span>
       </button>
       <span class="tip" role="status"></span>
     </span>
   </div>
-  <pre role="region" aria-label="Đoạn mã json" tabindex="0"><code id="qs-mcp-cfg" class="language-json">{
+  <pre role="region" aria-label="mcp_servers.json — Cấu hình Client Stdio" tabindex="0"><code id="qs-mcp-cfg" class="language-json">{
   &quot;mcpServers&quot;: {
     &quot;gap-gateway&quot;: {
       &quot;command&quot;: &quot;/path/to/GraphProtocol/target/dist/gap&quot;,
@@ -310,6 +378,24 @@ python3 examples/walking-skeleton/fixtures/mcp_fixture.py --port 9102 &amp;</cod
     }
   }
 }</code></pre>
+</figure><figure class="code-figure">
+  <div class="code-toolbar">
+    <div class="code-meta">
+      <span class="code-lang">terminal</span>
+      <span class="code-title">Terminal — Luồng SSE AG-UI v1.0 Trực tiếp</span>
+    </div>
+    <span class="copy">
+      <button type="button" class="copy-button" command="--copy" commandfor="qs-agui-curl" aria-label="Sao chép đoạn mã terminal (Terminal — Luồng SSE AG-UI v1.0 Trực tiếp)">
+        <span class="icon" aria-hidden="true"></span>
+      </button>
+      <span class="tip" role="status"></span>
+    </span>
+  </div>
+  <pre role="region" aria-label="Terminal — Luồng SSE AG-UI v1.0 Trực tiếp" tabindex="0"><code id="qs-agui-curl" class="language-terminal">curl -sS -N -X POST http://127.0.0.1:8080/ag-ui \
+  -H &quot;Content-Type: application/json&quot; \
+  -H &quot;Accept: text/event-stream&quot; \
+  -H &quot;Authorization: Bearer gap_dev_skeleton_key_01&quot; \
+  -d &#x27;{&quot;threadId&quot;:&quot;t1&quot;,&quot;runId&quot;:&quot;r1&quot;,&quot;messages&quot;:[],&quot;forwardedProps&quot;:{&quot;graphql&quot;:{&quot;query&quot;:&quot;{ customer(id: 1) { id name } customer_notes(customer_id: 1) }&quot;}}}&#x27;</code></pre>
 </figure>
 </section>
 
@@ -331,7 +417,7 @@ python3 examples/walking-skeleton/fixtures/mcp_fixture.py --port 9102 &amp;</cod
       <div class="toc-sticky scroller">
         <p class="toc-title">Trong trang này</p>
         <nav id="on-this-page-nav" class="toc-links" aria-label="Mục lục bài viết">
-          <a class="toc-link" href="#prerequisites">Chuẩn bị Trước khi Chạy</a><a class="toc-link" href="#step-by-step">Hướng dẫn Từng bước</a><a class="toc-link" href="#connect-ai-host">Bước 5: Gắn vào Claude Desktop, Cursor hoặc Antigravity</a>
+          <a class="toc-link" href="#prerequisites">Chuẩn bị Trước khi Chạy</a><a class="toc-link" href="#step-by-step">Hướng dẫn Từng bước</a><a class="toc-link" href="#connect-ai-host">Bước 5: Gắn vào MCP Host hoặc Phát Luồng AG-UI</a>
         </nav>
       </div>
     </aside>

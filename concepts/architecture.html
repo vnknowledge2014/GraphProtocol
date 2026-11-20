@@ -198,23 +198,38 @@ GAP divides gateway execution into three non-overlapping planes enforced in CI v
   <h2 id="learn-heading">What you&#x27;ll learn</h2>
   <ul><li>How Plane 1 (Execution), Plane 2 (Discovery), and Plane 3 (Control) isolate responsibilities.</li><li>Why every request stays pinned to one immutable snapshot via <code>ArcSwap</code> and pure-Rust AVL <code>OrdMap</code>.</li><li>Explore every component interactively using the 10-Node Architecture Inspector.</li></ul>
 </section>
+        <details class="toc-inline"><summary>On this page</summary><nav class="toc-inline-links" aria-label="On this page"><a class="toc-inline-link" href="#three-planes-diagram">Strict Plane Separation</a><a class="toc-inline-link" href="#interactive-inspector">Interactive 10-Node Architecture Explorer</a><a class="toc-inline-link" href="#lock-free-snapshots">Wait-Free Request Pinning &amp; Memory Control</a></nav></details>
 
         <section id="three-planes-diagram" tabindex="-1" class="doc-section">
   <h2>Strict Plane Separation</h2>
   <figure class="diagram-frame">
-  <svg role="img" aria-label="GAP Three-Plane Strict Architectural Separation" viewBox="0 0 760 278" width="760" height="278" xmlns="http://www.w3.org/2000/svg">
+  <svg role="img" aria-label="GAP Three-Plane Strict Architectural Separation" viewBox="0 0 760 296" width="760" height="296" xmlns="http://www.w3.org/2000/svg">
     <title>GAP Three-Plane Strict Architectural Separation</title>
-    <rect x="14" y="14" width="732" height="72" rx="10" fill="var(--surface-alt)" stroke="var(--accent)" stroke-width="1.5"/>
-    <text x="32" y="42" fill="var(--accent)" font-size="14" font-weight="700">Plane 2: Progressive Intent Discovery</text>
-    <text x="32" y="66" fill="var(--text)" font-size="12.5">L0/L1/L2 · Visibility Bitset (INV-05) · Baseline 95.24% / Optional S1 (INV-17)</text>
+    <defs>
+      <marker id="tp-arr-accent" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+        <path d="M 0 1.5 L 9 5 L 0 8.5 z" fill="var(--accent)"/>
+      </marker>
+      <marker id="tp-arr-warn" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+        <path d="M 0 1.5 L 9 5 L 0 8.5 z" fill="var(--warn)"/>
+      </marker>
+    </defs>
+    <rect x="14" y="10" width="732" height="72" rx="10" fill="var(--surface-alt)" stroke="var(--accent)" stroke-width="1.5"/>
+    <text x="32" y="38" fill="var(--accent)" font-size="14" font-weight="700">Plane 2: Progressive Intent Discovery</text>
+    <text x="32" y="62" fill="var(--text)" font-size="12.5">L0/L1/L2 · Visibility Bitset (INV-05) · Baseline 95.24% / Optional S1 (INV-17)</text>
 
-    <rect x="14" y="102" width="732" height="76" rx="10" fill="var(--surface-alt)" stroke="var(--ok)" stroke-width="2"/>
-    <text x="32" y="131" fill="var(--ok)" font-size="14" font-weight="700">Plane 1: Zero-ML Deterministic Execution (ARC-002)</text>
-    <text x="32" y="156" fill="var(--text)" font-size="12.5">AuthN + Cedar Policy -&gt; PlanCache (TenantId) -&gt; ArcSwap Snapshot -&gt; BatchJoin -&gt; EgressGuard</text>
+    <line x1="380" y1="82" x2="380" y2="108" stroke="var(--accent)" stroke-width="2" marker-end="url(#tp-arr-accent)"/>
+    <text x="392" y="99" fill="var(--accent)" font-size="11.5" font-weight="600">Selected query</text>
 
-    <rect x="14" y="194" width="732" height="72" rx="10" fill="var(--surface-alt)" stroke="var(--warn)" stroke-width="1.5"/>
-    <text x="32" y="222" fill="var(--warn)" font-size="14" font-weight="700">Plane 3: Zero-Trust Control &amp; Ingestion</text>
-    <text x="32" y="246" fill="var(--text)" font-size="12.5">Propose-Not-Activate · Sampled @join Gates · DriftMonitor (desc_hash) · Auto Rollback</text>
+    <rect x="14" y="110" width="732" height="76" rx="10" fill="var(--surface-alt)" stroke="var(--ok)" stroke-width="2"/>
+    <text x="32" y="139" fill="var(--ok)" font-size="14" font-weight="700">Plane 1: Zero-ML Deterministic Execution (ARC-002)</text>
+    <text x="32" y="164" fill="var(--text)" font-size="12.5">AuthN + Cedar Policy -&gt; PlanCache (TenantId) -&gt; ArcSwap Snapshot -&gt; BatchJoin -&gt; EgressGuard</text>
+
+    <line x1="380" y1="214" x2="380" y2="188" stroke="var(--warn)" stroke-width="2" marker-end="url(#tp-arr-warn)"/>
+    <text x="392" y="205" fill="var(--warn)" font-size="11.5" font-weight="600">Atomic ArcSwap publish</text>
+
+    <rect x="14" y="214" width="732" height="72" rx="10" fill="var(--surface-alt)" stroke="var(--warn)" stroke-width="1.5"/>
+    <text x="32" y="242" fill="var(--warn)" font-size="14" font-weight="700">Plane 3: Zero-Trust Control &amp; Ingestion</text>
+    <text x="32" y="266" fill="var(--text)" font-size="12.5">Propose-Not-Activate · Sampled @join Gates · DriftMonitor (desc_hash) · Auto Rollback</text>
   </svg>
 </figure><p>Notice the hard compiler boundary enforced by <code>tools/check_layers.py</code>: crates in the hot execution plane (<code>gap-exec</code>, <code>gap-plan</code>, <code>gap-transport</code>, <code>gap-snapshot</code>, <code>gap-balance</code>) fail CI immediately if any ML crate ever enters their dependency tree.</p>
 </section><section id="interactive-inspector" tabindex="-1" class="doc-section">

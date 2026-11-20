@@ -49,12 +49,20 @@ def build_vi_part2() -> dict[str, dict]:
                         ["<code>gap_task</code>", "Khởi tạo, theo dõi hoặc hủy tác vụ A2A dài hạn.", "Lưu chuyển trạng thái FSM vào SQLite trước khi phát sự kiện (<code>INV-13</code>)."],
                     ],
                 )
-                + """<p>Cấu hình Claude Desktop, Cursor hoặc Antigravity dùng chế độ stdio (<code>gap serve --stdio</code>) hoặc Streamable HTTP (<code>POST /mcp</code> kèm header <code>MCP-Protocol-Version: 2026-07-28</code>):</p>"""
+                + """<p>Cấu hình Claude Desktop, Cursor hoặc Antigravity dùng chế độ stdio (<code>gap serve --stdio</code>) hoặc gọi trực tiếp qua HTTP (<code>POST /mcp</code>):</p>"""
                 + code_block(
                     '{\n  "mcpServers": {\n    "gap-gateway": {\n      "command": "/usr/local/bin/gap",\n      "args": ["serve", "--config", "/etc/gap/gap.toml", "--stdio"]\n    }\n  }\n}',
                     "json",
                     "host-mcp-stdio",
                     "vi",
+                    title="mcp_servers.json — Cấu hình Client Stdio",
+                )
+                + code_block(
+                    'curl -sS -X POST http://127.0.0.1:8080/mcp \\\n  -H "Content-Type: application/json" \\\n  -H "Accept: application/json, text/event-stream" \\\n  -H "MCP-Protocol-Version: 2026-07-28" \\\n  -H "Mcp-Method: tools/call" \\\n  -H "Mcp-Name: gap_query" \\\n  -H "Authorization: Bearer gap_dev_skeleton_key_01" \\\n  -d \'{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"_meta":{"io.modelcontextprotocol/protocolVersion":"2026-07-28","io.modelcontextprotocol/clientCapabilities":{}},"name":"gap_query","arguments":{"query":"{ customer(id: 2) { id name } customer_notes(customer_id: 2) }"}}}\'',
+                    "terminal",
+                    "host-mcp-http",
+                    "vi",
+                    title="Terminal — Gọi MCP 2026-07-28 qua HTTP",
                 ),
             },
             {
@@ -62,16 +70,30 @@ def build_vi_part2() -> dict[str, dict]:
                 "h2": "Liên thông A2A v1.0 & Luồng Giao diện AG-UI v1.0",
                 "subheadings": [],
                 "html": """<ul>
-  <li><strong>Chuẩn ngang hàng A2A v1.0 (<code>adapters/gap-a2a</code>):</strong> Cung cấp <code>/.well-known/agent-card.json</code> và quản lý vòng đời tác vụ 8 trạng thái trên SQLite kèm bộ đếm hop tăng đơn điệu, ngắt ngay vòng lặp chuyển tiếp (<code>GAP_LOOP_DETECTED</code>, <code>INV-20</code>).</li>
-  <li><strong>Luồng sự kiện AG-UI v1.0 (<code>adapters/gap-agui</code>):</strong> Mở <code>POST /ag-ui</code> SSE phát chuẩn <code>RunStarted</code>, <code>StepStarted</code>, <code>TextMessage*</code>, <code>ToolCall*</code>, <code>StateDelta</code>, <code>RunFinished</code>, <code>RunError</code>. Khi Cedar yêu cầu con người duyệt mutation <code>IRREVERSIBLE</code>, luồng dừng lại qua <code>RUN_FINISHED</code> interrupt và chạy tiếp khi có xác nhận.</li>
-</ul>""",
+  <li><strong>Chuẩn ngang hàng A2A v1.0 (<code>adapters/gap-a2a</code>):</strong> Quản lý vòng đời tác vụ 8 trạng thái trên SQLite kèm bộ đếm hop tăng đơn điệu, ngắt ngay vòng lặp chuyển tiếp (<code>GAP_LOOP_DETECTED</code>, <code>INV-20</code>).</li>
+  <li><strong>Luồng sự kiện AG-UI v1.0 (<code>adapters/gap-agui</code>):</strong> Mở <code>POST /ag-ui</code> SSE phát chuẩn <code>RUN_STARTED</code>, <code>STEP_STARTED</code>, <code>TOOL_CALL_*</code>, <code>STATE_SNAPSHOT</code>, <code>RUN_FINISHED</code>. Khi Cedar yêu cầu con người duyệt mutation <code>IRREVERSIBLE</code>, luồng dừng lại qua <code>RUN_FINISHED</code> interrupt và chạy tiếp khi có xác nhận.</li>
+</ul>"""
+                + code_block(
+                    'curl -sS -N -X POST http://127.0.0.1:8080/ag-ui \\\n  -H "Content-Type: application/json" \\\n  -H "Accept: text/event-stream" \\\n  -H "Authorization: Bearer gap_dev_skeleton_key_01" \\\n  -d \'{"threadId":"demo-1","runId":"r-1","messages":[],"forwardedProps":{"graphql":{"query":"{ customer(id: 1) { id name tier } customer_notes(customer_id: 1) }"}}}\'',
+                    "terminal",
+                    "host-agui-curl",
+                    "vi",
+                    title="Terminal — Nhận Luồng SSE AG-UI v1.0",
+                )
+                + code_block(
+                    'data: {"type":"RUN_STARTED","threadId":"demo-1","runId":"r-1","metadata":{"generation":1,"tenant":"default"}}\ndata: {"type":"TOOL_CALL_RESULT","toolCallName":"gap_query",...}\ndata: {"type":"STATE_SNAPSHOT","snapshot":{"generation":1,"lastData":{"customer":{"id":1,"name":"Ada Lovelace","tier":"vip"},...}}}\ndata: {"type":"RUN_FINISHED","outcome":{"type":"success"}}',
+                    "text",
+                    "host-agui-out",
+                    "vi",
+                    title="Chuỗi Sự kiện SSE Mong đợi",
+                ),
             },
         ],
         "markdown": """# Tích hợp MCP, A2A & AG-UI
 
 Một gateway GAP duy nhất đồng thời phục vụ:
 1. **MCP `2026-07-28` (`gap-mcp`):** 5 static tools cố định (`651` tokens) qua HTTP hoặc `--stdio`.
-2. **A2A `v1.0` (`gap-a2a`):** Agent Card `/.well-known/agent-card.json`, SQLite task leases (`INV-13`) và chống vòng lặp (`INV-20`).
+2. **A2A `v1.0` (`gap-a2a`):** AgentCard 8 trạng thái, SQLite task leases (`INV-13`) và chống vòng lặp (`INV-20`).
 3. **AG-UI `v1.0` (`gap-agui`):** `POST /ag-ui` SSE, `StateDelta`, human-in-the-loop interrupts và thẻ `<gap:untrusted>`.
 """,
     }
@@ -107,10 +129,11 @@ Một gateway GAP duy nhất đồng thời phục vụ:
                     "<p>Nếu bất kỳ provider System-1 nào (<code>@receptron/laya</code>, TypeSafe <code>jev</code> <code>/v1/systemone</code> hoặc Google <code>gemini_decision_1</code>) bị tắt, quá hạn hay trả định dạng lỗi, hệ thống tự động rơi về bộ định tuyến nền tất định mà không bao giờ làm sập request hay ảnh hưởng Cedar.</p>",
                 )
                 + code_block(
-                    '[router]\nprovider = "gemini_decision_1"   # none | laya_candle | laya_http | jev | gemini_decision_1\nendpoint = "https://generativelanguage.googleapis.com"\napi_key_secret = "env://GEMINI_API_KEY"\ntimeout_ms = 250',
+                    '[router]\n# disabled | laya_candle | laya_ort | http_sidecar | receptron_laya | jev | gemini_decision_1\nprovider = "gemini_decision_1"\nendpoint = "https://generativelanguage.googleapis.com"\nmodel = "gemini-decision-1"\napi_key_secret = "env://GEMINI_API_KEY"\ntimeout_ms = 400',
                     "toml",
                     "rt-s1-toml",
                     "vi",
+                    title="gap.toml — Cấu hình [router] Tùy chọn",
                 ),
             },
             {
@@ -123,10 +146,11 @@ Một gateway GAP duy nhất đồng thời phục vụ:
                     "toml",
                     "rt-h3-toml",
                     "vi",
+                    title="gap.toml — Dual-Stack HTTP/2 + HTTP/3",
                 )
                 + """<ul>
   <li><strong>Chống Replay Attack:</strong> Thiết lập <code>max_early_data_size = 0</code> để tắt hoàn toàn TLS 1.3 <code>0-RTT</code> trên QUIC, ngăn chặn phát lại các thao tác thay đổi dữ liệu.</li>
-  <li><strong>Fail-Closed ở <code>prod</code>:</strong> Nếu chạy <code>profile = "prod"</code> có <code>http3_listen</code> nhưng thiếu chứng chỉ <code>tls_cert_secret</code> / <code>tls_key_secret</code>, cổng từ chối khởi động (<code>tls_self_signed_dev = true</code> chỉ cho phép trong <code>dev</code>).</li>
+  <li><strong>Fail-Closed ở <code>prod</code>:</strong> Nếu chạy <code>profile = "prod"</code> có <code>http3_listen</code> nhưng thiếu chứng chỉ <code>tls_cert_secret</code> / <code>tls_key_secret</code>, cổng từ chối khởi động ngay; ở <code>profile = "dev"</code>, hệ thống tự sinh chứng chỉ TLS 1.3 tự ký tạm thời nếu chưa truyền file chứng chỉ.</li>
   <li><strong>Hiệu năng đo thực tế:</strong> Đạt <strong>5.013,1 req/s</strong> qua kết nối QUIC đa luồng (<strong>1,626 ms</strong> p50 / <strong>2,364 ms</strong> p95 / <code>0</code> lỗi) song hành cùng <strong>1.063,6 req/s</strong> qua TCP HTTP/1.1+2 (<code>11,544 ms</code> p95).</li>
 </ul>""",
             },
@@ -167,10 +191,18 @@ Một gateway GAP duy nhất đồng thời phục vụ:
 </ul>
 <p>Phân quyền do bộ đánh giá Cedar thuần hàm (<code>policies/default.cedar</code>) đảm nhiệm, trong đó luật <code>forbid</code> luôn thắng <code>permit</code>:</p>"""
                 + code_block(
-                    'forbid (\n  principal,\n  action == Gap::Action::"mutate",\n  resource\n) when {\n  resource.sideEffect == "IRREVERSIBLE" &&\n  !(context has approverIsDifferent && context.approverIsDifferent == true)\n};',
+                    '@id("forbid-mutate-irreversible-or-unknown-unapproved")\nforbid (\n    principal,\n    action == Action::"Mutate",\n    resource\n) when {\n    (resource.sideEffect == "IRREVERSIBLE" || resource.sideEffect == "UNKNOWN")\n        && !(context.approved && context.approverIsDifferent)\n};',
                     "cedar",
                     "sec-cedar",
                     "vi",
+                    title="policies/default.cedar — Luật Duyệt 2 Người",
+                )
+                + code_block(
+                    "./target/dist/gap policy check --dir policies\n./target/dist/gap audit verify --nightly",
+                    "terminal",
+                    "sec-cli-verify",
+                    "vi",
+                    title="Terminal — Kiểm tra Cedar & Chuỗi BLAKE3",
                 )
                 + """<ul>
   <li><strong>Không mô hình ML nào can thiệp AuthZ:</strong> Mọi đánh giá Cedar hoàn toàn tất định (<code>INV-04</code>) và bỏ qua hoàn toàn các gợi ý tự khai báo từ server ngoài như <code>readOnlyHint: true</code>.</li>
@@ -253,14 +285,40 @@ Một gateway GAP duy nhất đồng thời phục vụ:
       <select id="play-scenario"></select>
     </div>
     <p id="play-note" class="section-lead"></p>
-    <div><strong>Request gửi tới <code id="play-endpoint"></code>:</strong></div>
-    <pre role="region" aria-label="Payload request mẫu" tabindex="0"><code id="play-request"></code></pre>
+    <figure class="code-figure">
+      <div class="code-toolbar">
+        <div class="code-meta">
+          <span class="code-lang">request</span>
+          <span class="code-title"><code id="play-endpoint"></code></span>
+        </div>
+        <span class="copy">
+          <button type="button" class="copy-button" command="--copy" commandfor="play-request" aria-label="Sao chép payload request mẫu">
+            <span class="icon" aria-hidden="true"></span>
+          </button>
+          <span class="tip" role="status"></span>
+        </span>
+      </div>
+      <pre role="region" aria-label="Payload request mẫu" tabindex="0"><code id="play-request" class="language-json"></code></pre>
+    </figure>
     <div class="control-row">
       <button id="btn-run-play" type="button" class="btn btn-primary">Chạy thử kịch bản</button>
       <span id="play-meta" class="section-lead"></span>
     </div>
-    <div><strong>Kết quả phản hồi:</strong></div>
-    <pre role="region" aria-label="Kết quả phản hồi" tabindex="0"><code id="play-response"></code></pre>
+    <figure class="code-figure">
+      <div class="code-toolbar">
+        <div class="code-meta">
+          <span class="code-lang">response</span>
+          <span class="code-title">Kết quả JSON / SSE</span>
+        </div>
+        <span class="copy">
+          <button type="button" class="copy-button" command="--copy" commandfor="play-response" aria-label="Sao chép kết quả phản hồi">
+            <span class="icon" aria-hidden="true"></span>
+          </button>
+          <span class="tip" role="status"></span>
+        </span>
+      </div>
+      <pre role="region" aria-label="Kết quả phản hồi" tabindex="0"><code id="play-response" class="language-json"></code></pre>
+    </figure>
   </div>
 </div>""",
             },

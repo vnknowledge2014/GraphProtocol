@@ -1,7 +1,12 @@
 """Vietnamese documentation pages 1..7 following Apollo GraphQL Docs pedagogical structure."""
 from __future__ import annotations
 
-from .diagrams import svg_mental_model, svg_three_planes
+from .diagrams import (
+    svg_batch_join,
+    svg_mental_model,
+    svg_progressive_levels,
+    svg_three_planes,
+)
 from .nav import link_to_asset, link_to_page
 from .render import callout, code_block, data_table, esc, steps_list
 
@@ -99,7 +104,14 @@ def build_vi_part1() -> dict[str, dict]:
   <a class="btn" href="{esc(a('paper/gap-paper.html'))}" target="_blank" rel="noopener">Đọc Bài báo Khoa học (HTML)</a>
   <a class="btn" href="{esc(a('paper/gap-paper.pdf'))}" target="_blank" rel="noopener">Tải Bài báo PDF</a>
   <a class="btn" href="https://github.com/vnknowledge2014/GraphProtocol" target="_blank" rel="noopener">Kho mã nguồn GitHub</a>
-</div>""",
+</div>"""
+                + code_block(
+                    "./target/dist/gap init my-gateway\n./target/dist/gap config check my-gateway/gap.toml\n./target/dist/gap doctor --config my-gateway/gap.toml",
+                    "terminal",
+                    "home-init",
+                    "vi",
+                    title="Thử GAP trong 30 giây — Khởi tạo & Chẩn đoán",
+                ),
             },
             {
                 "id": "launch-videos",
@@ -224,6 +236,10 @@ GAP mang lại một cổng vào duy nhất, định kiểu chặt chẽ cho RES
                     "tip",
                     "Bật nhanh ngay trên Trình duyệt",
                     f"<p>Nếu bạn đang mở cổng web cục bộ qua <code>python3 web/serve.py --port 8787</code>, bạn có thể nhấn đúng 1 nút trong trang <a href=\"{esc(u('playground'))}\">Phòng Lab Thực hành</a> để tự bật toàn bộ các tiến trình này.</p>",
+                ) + callout(
+                    "note",
+                    "Tạo mới Workspace từ đầu?",
+                    "<p>Bạn có thể khởi tạo nhanh thư mục dự án mẫu 5 tệp bằng lệnh <code>./target/dist/gap init my-gateway</code> rồi chỉnh <code>gap.toml</code>.</p>",
                 ),
             },
             {
@@ -239,8 +255,16 @@ GAP mang lại một cổng vào duy nhất, định kiểu chặt chẽ cho RES
                             "terminal",
                             "qs-check",
                             "vi",
+                            title="Terminal — Kiểm tra gap.toml",
                         )
-                        + """<ul><li><strong>Kết quả mong đợi:</strong> Cả hai lệnh trả về mã thoát <code>0</code> (<code>OPS-044</code>). Khóa API <code>dev-agent</code> được lưu bằng mã băm BLAKE3 trong TOML.</li></ul>""",
+                        + code_block(
+                            "ok: `examples/walking-skeleton/gap.toml` valid (2 branches)\n[ok] config.parse: parsed examples/walking-skeleton/gap.toml (profile=dev)\n[ok] security.sandbox: OS sandbox operational\n[ok] security.egress_guard: egress SSRF self-test matrix passed\n[warn] models.s1: model cache incomplete offline; degrades safely to baseline (RTE-044)\nsummary: 11 ok, 1 warn, 0 fail, 0 skip",
+                            "text",
+                            "qs-check-out",
+                            "vi",
+                            title="Kết quả Mong đợi (Mã thoát 0 · OPS-044)",
+                        )
+                        + """<ul><li><strong>Lưu ý:</strong> Cả hai lệnh trả về mã thoát <code>0</code> (<code>OPS-044</code>). Khóa API <code>dev-agent</code> được lưu bằng mã băm BLAKE3 trong TOML.</li></ul>""",
                     ),
                     (
                         "Khởi chạy hai máy chủ upstream mẫu",
@@ -250,6 +274,7 @@ GAP mang lại một cổng vào duy nhất, định kiểu chặt chẽ cho RES
                             "terminal",
                             "qs-fixtures",
                             "vi",
+                            title="Terminal — Hai Máy chủ Upstream Giả lập",
                         ),
                     ),
                     (
@@ -260,31 +285,48 @@ GAP mang lại một cổng vào duy nhất, định kiểu chặt chẽ cho RES
                             "terminal",
                             "qs-serve",
                             "vi",
+                            title="Terminal — Khởi chạy Gateway",
                         )
-                        + """<ul><li><strong>Kiểm tra sẵn sàng:</strong> <code>GET http://127.0.0.1:8080/readyz</code> trả HTTP <code>200</code> ngay khi thế hệ snapshot <code>1</code> được nạp xong.</li></ul>""",
+                        + """<ul><li><strong>Kiểm tra sẵn sàng:</strong> <code>GET http://127.0.0.1:8080/readyz</code> trả HTTP <code>200</code> (<code>{"status":"ready","generation":1}</code>) ngay khi thế hệ snapshot <code>1</code> được nạp xong.</li></ul>""",
                     ),
                     (
                         "Gửi truy vấn gộp liên nhánh đầu tiên",
-                        """<p>Lấy hồ sơ khách hàng + đơn hàng từ nhánh OpenAPI <code>shop</code> kèm ghi chú từ nhánh MCP <code>notes</code> trong duy nhất 1 lần gọi HTTP:</p>"""
+                        """<p>Lấy hồ sơ khách hàng + đơn hàng từ nhánh OpenAPI <code>shop</code> kèm JSON ghi chú từ nhánh MCP <code>notes</code> trong 1 lần gọi HTTP (chú ý <code>customer_notes</code> trả về kiểu vô hướng <code>JSON</code> nên gọi trực tiếp không mở ngoặc con):</p>"""
                         + code_block(
-                            'curl -sS -X POST http://127.0.0.1:8080/graphql \\\n  -H "Authorization: Bearer gap_dev_skeleton_key_01" \\\n  -H "Content-Type: application/json" \\\n  -d \'{"query": "{ customer(id: 1) { id name tier } orders(customer_id: 1) { id total_cents status } customer_notes(customer_id: 1) { notes { note_id summary } } }"}\' | python3 -m json.tool',
+                            'curl -sS -X POST http://127.0.0.1:8080/graphql \\\n  -H "Content-Type: application/json" \\\n  -H "Accept: application/graphql-response+json" \\\n  -H "Authorization: Bearer gap_dev_skeleton_key_01" \\\n  -d \'{"query": "{ customer(id: 1) { id name tier } orders(customer_id: 1) { id total_cents status } customer_notes(customer_id: 1) }"}\' | python3 -m json.tool',
                             "terminal",
                             "qs-curl",
                             "vi",
+                            title="Terminal — Truy vấn GraphQL Gộp 2 Nhánh",
+                        )
+                        + code_block(
+                            '{\n  "data": {\n    "customer": { "id": 1, "name": "Ada Lovelace", "tier": "vip" },\n    "orders": [\n      { "id": 101, "total_cents": 4200, "status": "paid" },\n      { "id": 103, "total_cents": 8500, "status": "pending" }\n    ],\n    "customer_notes": {\n      "customer_id": 1,\n      "notes": [{ "note_id": "n-1", "customer_id": 1, "summary": "Prefers consolidated monthly invoice" }]\n    }\n  },\n  "extensions": {\n    "gap": { "cost": { "actual": 7, "planned": 306 }, "generation": 1, "partial": false }\n  }\n}',
+                            "json",
+                            "qs-curl-out",
+                            "vi",
+                            title="Kết quả Mong đợi — HTTP 200 JSON",
                         ),
                     ),
                 ]),
             },
             {
                 "id": "connect-ai-host",
-                "h2": "Bước 5: Gắn vào Claude Desktop, Cursor hoặc Antigravity",
+                "h2": "Bước 5: Gắn vào MCP Host hoặc Phát Luồng AG-UI",
                 "subheadings": [],
-                "html": f"""<p>Thay vì cấu hình từng công cụ REST rời rạc, hãy trỏ AI host vào MCP server 5 tool cố định của GAP qua stdio. Xem chi tiết tích hợp A2A và AG-UI tại <a href="{esc(u('facades-and-hosts'))}">Tích hợp MCP, A2A &amp; AG-UI</a>.</p>"""
+                "html": f"""<p>Thay vì cấu hình từng công cụ REST rời rạc, hãy trỏ AI host vào MCP server 5 tool cố định của GAP qua stdio, hoặc nhận luồng sự kiện AG-UI <code>v1.0</code> qua SSE. Xem chi tiết tích hợp tại <a href="{esc(u('facades-and-hosts'))}">Tích hợp MCP, A2A &amp; AG-UI</a>.</p>"""
                 + code_block(
                     '{\n  "mcpServers": {\n    "gap-gateway": {\n      "command": "/path/to/GraphProtocol/target/dist/gap",\n      "args": ["serve", "--config", "examples/walking-skeleton/gap.toml", "--stdio"]\n    }\n  }\n}',
                     "json",
                     "qs-mcp-cfg",
                     "vi",
+                    title="mcp_servers.json — Cấu hình Client Stdio",
+                )
+                + code_block(
+                    'curl -sS -N -X POST http://127.0.0.1:8080/ag-ui \\\n  -H "Content-Type: application/json" \\\n  -H "Accept: text/event-stream" \\\n  -H "Authorization: Bearer gap_dev_skeleton_key_01" \\\n  -d \'{"threadId":"t1","runId":"r1","messages":[],"forwardedProps":{"graphql":{"query":"{ customer(id: 1) { id name } customer_notes(customer_id: 1) }"}}}\'',
+                    "terminal",
+                    "qs-agui-curl",
+                    "vi",
+                    title="Terminal — Luồng SSE AG-UI v1.0 Trực tiếp",
                 ),
             },
         ],
@@ -361,36 +403,61 @@ GAP tách hệ thống thành 3 mặt phẳng không chồng chéo (cưỡng ch�
                 "id": "three-levels-walkthrough",
                 "h2": "Quy trình 3 Tầng Từ Ý định Đến Truy vấn",
                 "subheadings": [],
-                "html": steps_list([
+                "html": svg_progressive_levels("vi")
+                + steps_list([
                     (
-                        "Tầng L0 — Tổng quan Nhánh (`__metaGraph` / `gap_describe`)",
-                        "<p>Agent xem danh mục tóm tắt các nhánh hiện có, giới hạn &lt;= 24 token mỗi nhánh:</p>"
+                        "Tầng L0 — Tổng quan Nhánh (`gap_describe{overview: true}` / `__metaGraph`)",
+                        "<p>Agent xem danh mục tóm tắt các nhánh hiện có qua MCP <code>POST /mcp</code>, giới hạn &lt;= 24 token mỗi nhánh (đối chiếu cấu trúc <code>MetaGraph</code> trong <code>spec/02-gap-ql.md</code>):</p>"
                         + code_block(
-                            'query { __metaGraph { id kind opCount summary } }',
-                            "graphql",
+                            '{\n  "jsonrpc": "2.0",\n  "id": 1,\n  "method": "tools/call",\n  "params": {\n    "name": "gap_describe",\n    "arguments": { "overview": true }\n  }\n}',
+                            "json",
                             "pd-l0",
                             "vi",
+                            title="MCP 2026-07-28 — Gọi Tổng quan L0",
                         )
-                        + """<ul><li><strong>Kết quả trả về gọn nhẹ:</strong> <code>shop (openapi, 4 ops)</code>, <code>notes (mcp, 1 op)</code> — dù hệ thống có hàng trăm backend vẫn gói gọn chỉ trong vài trăm tokens.</li></ul>""",
+                        + code_block(
+                            "# Hợp đồng MetaGraph trong spec/02-gap-ql.md:\nquery { __metaGraph { generation groupCount tokensEstimate branches { id protocol trust status synopsis operationCount } } }",
+                            "graphql",
+                            "pd-l0-sdl",
+                            "vi",
+                            title="Tham chiếu Đặc tả GAP-QL (spec/02-gap-ql.md)",
+                        )
+                        + """<ul><li><strong>Kết quả trả về gọn nhẹ:</strong> <code>shop (REST, T1, 4 ops)</code>, <code>notes (MCP, T1, 1 op)</code> — dù hệ thống có hàng trăm backend vẫn gói gọn chỉ trong vài trăm tokens.</li></ul>""",
                     ),
                     (
-                        "Tầng L1 — Tìm kiếm Lọc sẵn Quyền (`__search` / `gap_search`)",
+                        "Tầng L1 — Tìm kiếm Lọc sẵn Quyền (`gap_search` / `__search`)",
                         "<p>Agent tìm top-k thao tác phù hợp bằng chỉ mục lai BM25 + vector HNSW. GAP áp dụng Cedar visibility bitset của người gọi <strong>trước khi xếp hạng</strong> (<code>INV-05</code>), nên công cụ không có quyền hoàn toàn biến mất khỏi kết quả:</p>"
                         + code_block(
-                            'query { __search(query: "customer order notes", limit: 5) { branch operation kind score } }',
-                            "graphql",
+                            '{\n  "jsonrpc": "2.0",\n  "id": 2,\n  "method": "tools/call",\n  "params": {\n    "name": "gap_search",\n    "arguments": { "query": "customer order notes", "limit": 5 }\n  }\n}',
+                            "json",
                             "pd-l1",
                             "vi",
+                            title="MCP 2026-07-28 — Tìm kiếm Có Lọc quyền L1",
+                        )
+                        + code_block(
+                            'query { __search(query: "customer order notes", first: 5) { tokensEstimate abstained hits { score kind name path branch sdl } } }',
+                            "graphql",
+                            "pd-l1-sdl",
+                            "vi",
+                            title="Cấu trúc SearchResult SDL (spec/02-gap-ql.md)",
                         ),
                     ),
                     (
-                        "Tầng L2 — Mở Chi tiết Kiểu Dữ liệu (`__type`)",
-                        "<p>Chỉ sau khi chọn đúng thao tác cần gọi, agent mới tải định nghĩa trường SDL cho đúng các kiểu liên quan:</p>"
+                        "Tầng L2 — Mở Chi tiết Kiểu Dữ liệu (`gap_describe{types: [...]}` / `__type`)",
+                        "<p>Chỉ sau khi chọn đúng thao tác cần gọi, agent mới tải định nghĩa SDL cho đúng các kiểu OpenAPI đã biên dịch trong supergraph (với Walking Skeleton là <code>shop_CustomersResult</code>, <code>shop_OrdersResult</code>):</p>"
                         + code_block(
-                            'query { __type(name: "Customer") { name fields { name type { name kind } } } }',
-                            "graphql",
+                            '{\n  "jsonrpc": "2.0",\n  "id": 3,\n  "method": "tools/call",\n  "params": {\n    "name": "gap_describe",\n    "arguments": { "types": ["shop_CustomersResult", "shop_OrdersResult"], "depth": 1 }\n  }\n}',
+                            "json",
                             "pd-l2",
                             "vi",
+                            title="MCP 2026-07-28 — Mở Kiểu Supergraph L2",
+                        )
+                        + code_block(
+                            'query { __type(name: "shop_CustomersResult") { name fields { name type { name kind } } } }',
+                            "graphql",
+                            "pd-l2-sdl",
+                            "vi",
+                            title="Cấu trúc Introspection GAP-QL (spec/02-gap-ql.md)",
                         ),
                     ),
                 ]),
@@ -431,12 +498,13 @@ GAP giữ MCP `tools/list` cố định ở 651 tokens từ 10 đến 1.000 côn
                 "id": "valid-graphql-profile",
                 "h2": "Không Chế Cú pháp Lạ (`GQL-001`)",
                 "subheadings": [],
-                "html": """<p>Thay vì tạo từ khóa phi chuẩn như <code>traverse { ... }</code>, GAP đặt khám phá và nối nhánh thành các field gốc chuẩn và directive hợp lệ (<code>@join</code>, <code>@sideEffect</code>, <code>@requiresScope</code>). Mọi truy vấn qua kiểm tra vi phân đối chiếu trực tiếp với <code>graphql-js 16.13.2</code>.</p>"""
+                "html": """<p>Thay vì tạo từ khóa phi chuẩn như <code>traverse { ... }</code>, GAP đặt khám phá và nối nhánh thành các field gốc chuẩn cùng các directive chuẩn trong <code>spec/02-gap-ql.md</code> §5 (<code>@join</code>, <code>@sideEffect</code>, <code>@auth</code>, <code>@pii</code>). Mọi truy vấn qua kiểm tra vi phân đối chiếu trực tiếp với <code>graphql-js 16.13.2</code>.</p>"""
                 + code_block(
-                    "directive @sideEffect(level: SideEffectLevel!) on FIELD_DEFINITION\ndirective @join(rhs: String!, key: String!, batchParam: String!, maxBatch: Int = 64) on FIELD_DEFINITION",
+                    "directive @join(to: String!, on: [JoinKey!]!, cardinality: Cardinality!,\n                strategy: JoinStrategy = FOREACH_BATCH, status: JoinStatus = PROPOSED,\n                evidence: JSON) on FIELD_DEFINITION\ndirective @sideEffect(level: SideEffectLevel!, idempotent: Boolean = false, dryRun: Boolean = false) on FIELD_DEFINITION\ndirective @auth(policy: String, scopes: [String!]) on OBJECT | FIELD_DEFINITION\ndirective @pii(kind: String!) on FIELD_DEFINITION",
                     "graphql",
                     "gql-dirs",
                     "vi",
+                    title="spec/02-gap-ql.md §5 — Directives Hợp lệ",
                 ),
             },
             {
@@ -444,6 +512,7 @@ GAP giữ MCP `tools/list` cố định ở 651 tokens từ 10 đến 1.000 côn
                 "h2": "Triệt tiêu Lỗi Thác nước N+1 (`INV-18`)",
                 "subheadings": [],
                 "html": """<p>Khi một truy vấn lấy 50 khách hàng kèm ghi chú từ nhánh MCP hoặc SQL khác, client phẳng sẽ phát 50 lần gọi nối tiếp. Bộ thực thi GAP rút trích các khóa duy nhất, chia lô đúng giới hạn <code>maxBatch</code> và chỉ gửi tối đa <code>ceil(unique_keys / max_batch)</code> khung <code>BatchQuery</code> — được kiểm tra tự động qua <code>VER-040</code>.</p>"""
+                + svg_batch_join("vi")
                 + data_table(
                     "Số liệu GAP-Bench đo thật (Không Cache vs Prompt Cache 0,10x, N=10..1.000)",
                     ["Kịch bản / Quy mô N", "Direct-MCP (Không Cache)", "GAP (Không Cache)", "Direct-MCP (Có Cache)", "GAP (Có Cache)", "Số lượt (Direct -> GAP)"],
@@ -482,22 +551,24 @@ GAP-QL tương thích 100% `apollo-compiler` và bộ kiểm thử `graphql-js 1
                 "id": "rest-to-gap-walkthrough",
                 "h2": "Từ REST JSON đến Nhánh Đồ thị Chỉ với Khai báo",
                 "subheadings": [],
-                "html": """<p>Giả sử dịch vụ đơn hàng REST trả về JSON từ <code>GET /orders?customer_id=...</code>:</p>"""
+                "html": """<p>Với endpoint REST <code>GET /customers/{id}</code> đi kèm endpoint gom danh sách <code>GET /customers?ids=1,2,3</code>, chỉ cần gắn khối <code>"x-gap-in-param"</code> ngay trong đặc tả OpenAPI (trích nguyên văn từ <code>examples/walking-skeleton/shop.openapi.json</code>):</p>"""
                 + code_block(
-                    '{\n  "orders": [\n    { "id": 101, "customer_id": 1, "total_cents": 4200, "status": "paid" }\n  ]\n}',
+                    '"/customers/{id}": {\n  "get": {\n    "operationId": "customer",\n    "x-gap-in-param": {\n      "path": "/customers",\n      "param": "ids",\n      "key_field": "id",\n      "max_batch_size": 50\n    }\n  }\n}',
                     "json",
                     "ngc-json",
                     "vi",
+                    title="examples/walking-skeleton/shop.openapi.json",
                 )
-                + """<p>Chỉ cần khai báo nhánh trong <code>gap.toml</code> và gắn chú thích <code>x-gap-in-param</code> vào OpenAPI spec để bật gom lô tự động:</p>"""
+                + """<p>Sau đó khai báo nhánh OpenAPI đó trong <code>gap.toml</code>:</p>"""
                 + code_block(
                     '[[branches]]\nid = "shop"\nprotocol = "openapi"\ntrust = "T1"\n\n[branches.openapi]\nspec = "shop.openapi.json"\nbase_url = "http://127.0.0.1:9101"',
                     "toml",
                     "ngc-toml",
                     "vi",
+                    title="gap.toml — Khai báo Nhánh OpenAPI",
                 )
                 + """<ul>
-  <li><strong><code>id = "shop"</code>:</strong> Định danh nhánh dùng cố định trong khóa bộ nhớ đệm và nhật ký kiểm toán.</li>
+  <li><strong><code>id = "shop"</code>:</strong> Định danh nhánh dùng đặt tiền tố kiểu biên dịch (<code>shop_CustomersResult</code>, <code>shop_OrdersResult</code>) và khóa audit.</li>
   <li><strong><code>trust = "T1"</code>:</strong> Nhánh đã được quản trị viên duyệt và ghim mã băm <code>spec_hash</code> / <code>desc_hash</code> chống sửa lén.</li>
 </ul>""",
             },
@@ -524,10 +595,11 @@ GAP-QL tương thích 100% `apollo-compiler` và bộ kiểm thử `graphql-js 1
                 "subheadings": [],
                 "html": """<p>Không một schema mới hay cạnh <code>@join</code> nào tự động lọt vào luồng phục vụ khách hàng. Lệnh <code>gap ingest once</code> trích xuất đồ thị trung gian (CISG), kiểm tra thực tế trên dữ liệu mẫu đối với cạnh nối đề xuất (tỷ lệ khớp tập khóa RHS, tỷ lệ null) rồi tạo Proposal chờ người vận hành duyệt:</p>"""
                 + code_block(
-                    "./target/dist/gap ingest once --config gap.toml --tenant default\n./target/dist/gap proposals list\n./target/dist/gap snapshot diff\n./target/dist/gap proposals approve <proposal-id>",
+                    "./target/dist/gap ingest once --config examples/walking-skeleton/gap.toml --tenant default\n./target/dist/gap proposals list\n./target/dist/gap snapshot show --config examples/walking-skeleton/gap.toml\n./target/dist/gap snapshot diff --before gap.toml --after gap.next.toml\n./target/dist/gap proposals approve <proposal-id>",
                     "terminal",
                     "ngc-propose",
                     "vi",
+                    title="Terminal — Ingest, Diff & Duyệt Proposal",
                 ),
             },
         ],

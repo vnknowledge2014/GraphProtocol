@@ -211,6 +211,7 @@ Query `customer`, `orders` (OpenAPI) and `customer_notes` (MCP) in one HTTP call
   <h2 id="learn-heading">What you&#x27;ll learn</h2>
   <ul><li>Validate configuration files fail-closed with <code>gap config check</code> and <code>gap doctor</code>.</li><li>Boot the local REST + MCP sample fixtures alongside <code>gap serve</code>.</li><li>Send your first cross-branch GraphQL query joining both upstream sources.</li></ul>
 </section>
+        <details class="toc-inline"><summary>On this page</summary><nav class="toc-inline-links" aria-label="On this page"><a class="toc-inline-link" href="#prerequisites">Prerequisites</a><a class="toc-inline-link" href="#step-by-step">Step-by-Step Setup</a><a class="toc-inline-link" href="#connect-ai-host">Step 5: Connect MCP Hosts or Stream AG-UI Events</a></nav></details>
 
         <section id="prerequisites" tabindex="-1" class="doc-section">
   <h2>Prerequisites</h2>
@@ -220,6 +221,9 @@ Query `customer`, `orders` (OpenAPI) and `customer_notes` (MCP) in one HTTP call
 </ul><aside class="callout callout-tip">
   <p class="callout-title">Zero-Setup Browser Shortcut</p>
   <div class="callout-body"><p>Already running <code>python3 web/serve.py --port 8787</code>? You can boot these exact fixtures with one click inside the <a href="../lab/playground.html">Interactive Lab</a>.</p></div>
+</aside><aside class="callout callout-note">
+  <p class="callout-title">Starting a Fresh Project?</p>
+  <div class="callout-body"><p>You can also scaffold a starter 5-file workspace anywhere using <code>./target/dist/gap init my-gateway</code> before customizing <code>gap.toml</code>.</p></div>
 </aside>
 </section><section id="step-by-step" tabindex="-1" class="doc-section">
   <h2>Step-by-Step Setup</h2>
@@ -230,17 +234,39 @@ Query `customer`, `orders` (OpenAPI) and `customer_notes` (MCP) in one HTTP call
     <h3>Inspect and validate the configuration</h3>
     <p>Run static validation against <code>examples/walking-skeleton/gap.toml</code> before starting listeners. Unknown keys, unreferenced inline secrets, or missing spec files fail closed immediately:</p><figure class="code-figure">
   <div class="code-toolbar">
-    <span class="code-lang">terminal</span>
+    <div class="code-meta">
+      <span class="code-lang">terminal</span>
+      <span class="code-title">Terminal — Validate gap.toml</span>
+    </div>
     <span class="copy">
-      <button type="button" class="copy-button" command="--copy" commandfor="qs-check" aria-label="Copy terminal code snippet (qs-check)">
+      <button type="button" class="copy-button" command="--copy" commandfor="qs-check" aria-label="Copy terminal code snippet (Terminal — Validate gap.toml)">
         <span class="icon" aria-hidden="true"></span>
       </button>
       <span class="tip" role="status"></span>
     </span>
   </div>
-  <pre role="region" aria-label="terminal code block" tabindex="0"><code id="qs-check" class="language-terminal">./target/dist/gap config check examples/walking-skeleton/gap.toml
+  <pre role="region" aria-label="Terminal — Validate gap.toml" tabindex="0"><code id="qs-check" class="language-terminal">./target/dist/gap config check examples/walking-skeleton/gap.toml
 ./target/dist/gap doctor --config examples/walking-skeleton/gap.toml</code></pre>
-</figure><ul><li><strong>Check output:</strong> Both commands exit <code>0</code> (<code>OPS-044</code>). Notice the <code>dev-agent</code> API key uses a SHA/BLAKE3 hash—no plaintext secret is ever stored in TOML.</li></ul>
+</figure><figure class="code-figure">
+  <div class="code-toolbar">
+    <div class="code-meta">
+      <span class="code-lang">text</span>
+      <span class="code-title">Expected Output (Exit 0 · OPS-044)</span>
+    </div>
+    <span class="copy">
+      <button type="button" class="copy-button" command="--copy" commandfor="qs-check-out" aria-label="Copy text code snippet (Expected Output (Exit 0 · OPS-044))">
+        <span class="icon" aria-hidden="true"></span>
+      </button>
+      <span class="tip" role="status"></span>
+    </span>
+  </div>
+  <pre role="region" aria-label="Expected Output (Exit 0 · OPS-044)" tabindex="0"><code id="qs-check-out" class="language-text">ok: `examples/walking-skeleton/gap.toml` valid (2 branches)
+[ok] config.parse: parsed examples/walking-skeleton/gap.toml (profile=dev)
+[ok] security.sandbox: OS sandbox operational
+[ok] security.egress_guard: egress SSRF self-test matrix passed
+[warn] models.s1: model cache incomplete offline; degrades safely to baseline (RTE-044)
+summary: 11 ok, 1 warn, 0 fail, 0 skip</code></pre>
+</figure><ul><li><strong>Notice:</strong> Both commands exit <code>0</code> (<code>OPS-044</code>), and the <code>dev-agent</code> API key is hashed with BLAKE3 in TOML—no plaintext secret is ever persisted.</li></ul>
   </div>
 </li>
 <li class="step-item">
@@ -249,15 +275,18 @@ Query `customer`, `orders` (OpenAPI) and `customer_notes` (MCP) in one HTTP call
     <h3>Start both upstream fixtures</h3>
     <p>Open two terminal tabs (or run in background) to launch the mock REST API on port <code>9101</code> and the MCP server on port <code>9102</code>:</p><figure class="code-figure">
   <div class="code-toolbar">
-    <span class="code-lang">terminal</span>
+    <div class="code-meta">
+      <span class="code-lang">terminal</span>
+      <span class="code-title">Terminal — Mock OpenAPI + MCP Upstreams</span>
+    </div>
     <span class="copy">
-      <button type="button" class="copy-button" command="--copy" commandfor="qs-fixtures" aria-label="Copy terminal code snippet (qs-fixtures)">
+      <button type="button" class="copy-button" command="--copy" commandfor="qs-fixtures" aria-label="Copy terminal code snippet (Terminal — Mock OpenAPI + MCP Upstreams)">
         <span class="icon" aria-hidden="true"></span>
       </button>
       <span class="tip" role="status"></span>
     </span>
   </div>
-  <pre role="region" aria-label="terminal code block" tabindex="0"><code id="qs-fixtures" class="language-terminal">python3 examples/walking-skeleton/fixtures/rest_fixture.py --port 9101 &amp;
+  <pre role="region" aria-label="Terminal — Mock OpenAPI + MCP Upstreams" tabindex="0"><code id="qs-fixtures" class="language-terminal">python3 examples/walking-skeleton/fixtures/rest_fixture.py --port 9101 &amp;
 python3 examples/walking-skeleton/fixtures/mcp_fixture.py --port 9102 &amp;</code></pre>
 </figure>
   </div>
@@ -268,53 +297,92 @@ python3 examples/walking-skeleton/fixtures/mcp_fixture.py --port 9102 &amp;</cod
     <h3>Boot the GAP Gateway</h3>
     <p>Start <code>gap serve</code> pointing at the walking-skeleton configuration:</p><figure class="code-figure">
   <div class="code-toolbar">
-    <span class="code-lang">terminal</span>
+    <div class="code-meta">
+      <span class="code-lang">terminal</span>
+      <span class="code-title">Terminal — Start Gateway</span>
+    </div>
     <span class="copy">
-      <button type="button" class="copy-button" command="--copy" commandfor="qs-serve" aria-label="Copy terminal code snippet (qs-serve)">
+      <button type="button" class="copy-button" command="--copy" commandfor="qs-serve" aria-label="Copy terminal code snippet (Terminal — Start Gateway)">
         <span class="icon" aria-hidden="true"></span>
       </button>
       <span class="tip" role="status"></span>
     </span>
   </div>
-  <pre role="region" aria-label="terminal code block" tabindex="0"><code id="qs-serve" class="language-terminal">./target/dist/gap serve --config examples/walking-skeleton/gap.toml</code></pre>
-</figure><ul><li><strong>Readiness probe:</strong> <code>GET http://127.0.0.1:8080/readyz</code> returns HTTP <code>200</code> as soon as snapshot generation <code>1</code> is pinned.</li></ul>
+  <pre role="region" aria-label="Terminal — Start Gateway" tabindex="0"><code id="qs-serve" class="language-terminal">./target/dist/gap serve --config examples/walking-skeleton/gap.toml</code></pre>
+</figure><ul><li><strong>Readiness probe:</strong> <code>GET http://127.0.0.1:8080/readyz</code> returns HTTP <code>200</code> (<code>{"status":"ready","generation":1}</code>) once snapshot generation <code>1</code> is pinned.</li></ul>
   </div>
 </li>
 <li class="step-item">
   <div class="step-badge" aria-hidden="true">4</div>
   <div class="step-content">
     <h3>Execute your first cross-branch query</h3>
-    <p>Fetch customer profile and order rows from OpenAPI <code>shop</code> alongside agent notes from MCP <code>notes</code> in one call:</p><figure class="code-figure">
+    <p>Fetch customer profile and order rows from OpenAPI <code>shop</code> alongside the JSON notes payload from MCP <code>notes</code> (note: <code>customer_notes</code> returns a <code>JSON</code> scalar leaf, so select it without subfields):</p><figure class="code-figure">
   <div class="code-toolbar">
-    <span class="code-lang">terminal</span>
+    <div class="code-meta">
+      <span class="code-lang">terminal</span>
+      <span class="code-title">Terminal — Federated GraphQL Query</span>
+    </div>
     <span class="copy">
-      <button type="button" class="copy-button" command="--copy" commandfor="qs-curl" aria-label="Copy terminal code snippet (qs-curl)">
+      <button type="button" class="copy-button" command="--copy" commandfor="qs-curl" aria-label="Copy terminal code snippet (Terminal — Federated GraphQL Query)">
         <span class="icon" aria-hidden="true"></span>
       </button>
       <span class="tip" role="status"></span>
     </span>
   </div>
-  <pre role="region" aria-label="terminal code block" tabindex="0"><code id="qs-curl" class="language-terminal">curl -sS -X POST http://127.0.0.1:8080/graphql \
-  -H &quot;Authorization: Bearer gap_dev_skeleton_key_01&quot; \
+  <pre role="region" aria-label="Terminal — Federated GraphQL Query" tabindex="0"><code id="qs-curl" class="language-terminal">curl -sS -X POST http://127.0.0.1:8080/graphql \
   -H &quot;Content-Type: application/json&quot; \
-  -d &#x27;{&quot;query&quot;: &quot;{ customer(id: 1) { id name tier } orders(customer_id: 1) { id total_cents status } customer_notes(customer_id: 1) { notes { note_id summary } } }&quot;}&#x27; | python3 -m json.tool</code></pre>
+  -H &quot;Accept: application/graphql-response+json&quot; \
+  -H &quot;Authorization: Bearer gap_dev_skeleton_key_01&quot; \
+  -d &#x27;{&quot;query&quot;: &quot;{ customer(id: 1) { id name tier } orders(customer_id: 1) { id total_cents status } customer_notes(customer_id: 1) }&quot;}&#x27; | python3 -m json.tool</code></pre>
+</figure><figure class="code-figure">
+  <div class="code-toolbar">
+    <div class="code-meta">
+      <span class="code-lang">json</span>
+      <span class="code-title">Expected Output — HTTP 200 JSON</span>
+    </div>
+    <span class="copy">
+      <button type="button" class="copy-button" command="--copy" commandfor="qs-curl-out" aria-label="Copy json code snippet (Expected Output — HTTP 200 JSON)">
+        <span class="icon" aria-hidden="true"></span>
+      </button>
+      <span class="tip" role="status"></span>
+    </span>
+  </div>
+  <pre role="region" aria-label="Expected Output — HTTP 200 JSON" tabindex="0"><code id="qs-curl-out" class="language-json">{
+  &quot;data&quot;: {
+    &quot;customer&quot;: { &quot;id&quot;: 1, &quot;name&quot;: &quot;Ada Lovelace&quot;, &quot;tier&quot;: &quot;vip&quot; },
+    &quot;orders&quot;: [
+      { &quot;id&quot;: 101, &quot;total_cents&quot;: 4200, &quot;status&quot;: &quot;paid&quot; },
+      { &quot;id&quot;: 103, &quot;total_cents&quot;: 8500, &quot;status&quot;: &quot;pending&quot; }
+    ],
+    &quot;customer_notes&quot;: {
+      &quot;customer_id&quot;: 1,
+      &quot;notes&quot;: [{ &quot;note_id&quot;: &quot;n-1&quot;, &quot;customer_id&quot;: 1, &quot;summary&quot;: &quot;Prefers consolidated monthly invoice&quot; }]
+    }
+  },
+  &quot;extensions&quot;: {
+    &quot;gap&quot;: { &quot;cost&quot;: { &quot;actual&quot;: 7, &quot;planned&quot;: 306 }, &quot;generation&quot;: 1, &quot;partial&quot;: false }
+  }
+}</code></pre>
 </figure>
   </div>
 </li>
 </ol>
 </section><section id="connect-ai-host" tabindex="-1" class="doc-section">
-  <h2>Step 5: Connect Claude Desktop or Antigravity via MCP</h2>
-  <p>Rather than exposing every REST endpoint individually, attach your AI client to GAP's constant 5-tool MCP <code>2026-07-28</code> stdio server. Read full host patterns on <a href="../agents/facades-and-hosts.html">MCP, A2A &amp; AG-UI Facades</a>.</p><figure class="code-figure">
+  <h2>Step 5: Connect MCP Hosts or Stream AG-UI Events</h2>
+  <p>Rather than exposing every REST endpoint individually, attach your AI client to GAP's fixed 5-tool MCP <code>2026-07-28</code> server over stdio or HTTP, or stream AG-UI <code>v1.0</code> events over SSE. Read full host details on <a href="../agents/facades-and-hosts.html">MCP, A2A &amp; AG-UI Facades</a>.</p><figure class="code-figure">
   <div class="code-toolbar">
-    <span class="code-lang">json</span>
+    <div class="code-meta">
+      <span class="code-lang">json</span>
+      <span class="code-title">mcp_servers.json — Stdio Client Config</span>
+    </div>
     <span class="copy">
-      <button type="button" class="copy-button" command="--copy" commandfor="qs-mcp-cfg" aria-label="Copy json code snippet (qs-mcp-cfg)">
+      <button type="button" class="copy-button" command="--copy" commandfor="qs-mcp-cfg" aria-label="Copy json code snippet (mcp_servers.json — Stdio Client Config)">
         <span class="icon" aria-hidden="true"></span>
       </button>
       <span class="tip" role="status"></span>
     </span>
   </div>
-  <pre role="region" aria-label="json code block" tabindex="0"><code id="qs-mcp-cfg" class="language-json">{
+  <pre role="region" aria-label="mcp_servers.json — Stdio Client Config" tabindex="0"><code id="qs-mcp-cfg" class="language-json">{
   &quot;mcpServers&quot;: {
     &quot;gap-gateway&quot;: {
       &quot;command&quot;: &quot;/path/to/GraphProtocol/target/dist/gap&quot;,
@@ -322,6 +390,24 @@ python3 examples/walking-skeleton/fixtures/mcp_fixture.py --port 9102 &amp;</cod
     }
   }
 }</code></pre>
+</figure><figure class="code-figure">
+  <div class="code-toolbar">
+    <div class="code-meta">
+      <span class="code-lang">terminal</span>
+      <span class="code-title">Terminal — Live AG-UI v1.0 SSE Stream</span>
+    </div>
+    <span class="copy">
+      <button type="button" class="copy-button" command="--copy" commandfor="qs-agui-curl" aria-label="Copy terminal code snippet (Terminal — Live AG-UI v1.0 SSE Stream)">
+        <span class="icon" aria-hidden="true"></span>
+      </button>
+      <span class="tip" role="status"></span>
+    </span>
+  </div>
+  <pre role="region" aria-label="Terminal — Live AG-UI v1.0 SSE Stream" tabindex="0"><code id="qs-agui-curl" class="language-terminal">curl -sS -N -X POST http://127.0.0.1:8080/ag-ui \
+  -H &quot;Content-Type: application/json&quot; \
+  -H &quot;Accept: text/event-stream&quot; \
+  -H &quot;Authorization: Bearer gap_dev_skeleton_key_01&quot; \
+  -d &#x27;{&quot;threadId&quot;:&quot;t1&quot;,&quot;runId&quot;:&quot;r1&quot;,&quot;messages&quot;:[],&quot;forwardedProps&quot;:{&quot;graphql&quot;:{&quot;query&quot;:&quot;{ customer(id: 1) { id name } customer_notes(customer_id: 1) }&quot;}}}&#x27;</code></pre>
 </figure>
 </section>
 
@@ -343,7 +429,7 @@ python3 examples/walking-skeleton/fixtures/mcp_fixture.py --port 9102 &amp;</cod
       <div class="toc-sticky scroller">
         <p class="toc-title">On this page</p>
         <nav id="on-this-page-nav" class="toc-links" aria-label="On this page">
-          <a class="toc-link" href="#prerequisites">Prerequisites</a><a class="toc-link" href="#step-by-step">Step-by-Step Setup</a><a class="toc-link" href="#connect-ai-host">Step 5: Connect Claude Desktop or Antigravity via MCP</a>
+          <a class="toc-link" href="#prerequisites">Prerequisites</a><a class="toc-link" href="#step-by-step">Step-by-Step Setup</a><a class="toc-link" href="#connect-ai-host">Step 5: Connect MCP Hosts or Stream AG-UI Events</a>
         </nav>
       </div>
     </aside>

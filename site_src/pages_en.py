@@ -1,7 +1,12 @@
 """English documentation pages 1..7 following Apollo GraphQL Docs pedagogical structure."""
 from __future__ import annotations
 
-from .diagrams import svg_mental_model, svg_three_planes
+from .diagrams import (
+    svg_batch_join,
+    svg_mental_model,
+    svg_progressive_levels,
+    svg_three_planes,
+)
 from .nav import link_to_asset, link_to_mirror, link_to_page
 from .render import callout, code_block, data_table, esc, steps_list
 
@@ -101,7 +106,14 @@ def build_en_part1() -> dict[str, dict]:
   <a class="btn" href="{esc(a('paper/gap-paper.html'))}" target="_blank" rel="noopener">Read Academic Paper (HTML)</a>
   <a class="btn" href="{esc(a('paper/gap-paper.pdf'))}" target="_blank" rel="noopener">Download Camera-Ready PDF</a>
   <a class="btn" href="https://github.com/vnknowledge2014/GraphProtocol" target="_blank" rel="noopener">GitHub Repository</a>
-</div>""",
+</div>"""
+                + code_block(
+                    "./target/dist/gap init my-gateway\n./target/dist/gap config check my-gateway/gap.toml\n./target/dist/gap doctor --config my-gateway/gap.toml",
+                    "terminal",
+                    "home-init",
+                    "en",
+                    title="Try GAP in 30 seconds — Scaffold & Doctor",
+                ),
             },
             {
                 "id": "launch-videos",
@@ -137,10 +149,10 @@ Graph Agent Protocol (GAP) is an open-source (Apache-2.0), typed GraphQL-profile
 - Crash resilience & footprint: **28.86 ms** SIGKILL recovery, **9.32 MiB** idle RSS, **28.1 MB** bit-reproducible binary, **0** RUSTSEC advisories
 
 ## Start Here
-- [What is GAP?](getting-started/what-is-gap.md)
-- [10-Minute Quickstart](getting-started/quickstart.md)
-- [Three-Plane Architecture](concepts/architecture.md)
-- [Progressive Disclosure (651 Tokens)](concepts/progressive-disclosure.md)
+- [What is GAP?](getting-started/what-is-gap.html)
+- [10-Minute Quickstart](getting-started/quickstart.html)
+- [Three-Plane Architecture](concepts/architecture.html)
+- [Progressive Disclosure (651 Tokens)](concepts/progressive-disclosure.html)
 """,
     }
 
@@ -235,6 +247,10 @@ At N <= 50 flat lookups with prompt caching warm, Direct-MCP uses fewer raw toke
                     "tip",
                     "Zero-Setup Browser Shortcut",
                     f"<p>Already running <code>python3 web/serve.py --port 8787</code>? You can boot these exact fixtures with one click inside the <a href=\"{esc(u('playground'))}\">Interactive Lab</a>.</p>",
+                ) + callout(
+                    "note",
+                    "Starting a Fresh Project?",
+                    "<p>You can also scaffold a starter 5-file workspace anywhere using <code>./target/dist/gap init my-gateway</code> before customizing <code>gap.toml</code>.</p>",
                 ),
             },
             {
@@ -250,8 +266,16 @@ At N <= 50 flat lookups with prompt caching warm, Direct-MCP uses fewer raw toke
                             "terminal",
                             "qs-check",
                             "en",
+                            title="Terminal — Validate gap.toml",
                         )
-                        + """<ul><li><strong>Check output:</strong> Both commands exit <code>0</code> (<code>OPS-044</code>). Notice the <code>dev-agent</code> API key uses a SHA/BLAKE3 hash—no plaintext secret is ever stored in TOML.</li></ul>""",
+                        + code_block(
+                            "ok: `examples/walking-skeleton/gap.toml` valid (2 branches)\n[ok] config.parse: parsed examples/walking-skeleton/gap.toml (profile=dev)\n[ok] security.sandbox: OS sandbox operational\n[ok] security.egress_guard: egress SSRF self-test matrix passed\n[warn] models.s1: model cache incomplete offline; degrades safely to baseline (RTE-044)\nsummary: 11 ok, 1 warn, 0 fail, 0 skip",
+                            "text",
+                            "qs-check-out",
+                            "en",
+                            title="Expected Output (Exit 0 · OPS-044)",
+                        )
+                        + """<ul><li><strong>Notice:</strong> Both commands exit <code>0</code> (<code>OPS-044</code>), and the <code>dev-agent</code> API key is hashed with BLAKE3 in TOML—no plaintext secret is ever persisted.</li></ul>""",
                     ),
                     (
                         "Start both upstream fixtures",
@@ -261,6 +285,7 @@ At N <= 50 flat lookups with prompt caching warm, Direct-MCP uses fewer raw toke
                             "terminal",
                             "qs-fixtures",
                             "en",
+                            title="Terminal — Mock OpenAPI + MCP Upstreams",
                         ),
                     ),
                     (
@@ -271,31 +296,48 @@ At N <= 50 flat lookups with prompt caching warm, Direct-MCP uses fewer raw toke
                             "terminal",
                             "qs-serve",
                             "en",
+                            title="Terminal — Start Gateway",
                         )
-                        + """<ul><li><strong>Readiness probe:</strong> <code>GET http://127.0.0.1:8080/readyz</code> returns HTTP <code>200</code> as soon as snapshot generation <code>1</code> is pinned.</li></ul>""",
+                        + """<ul><li><strong>Readiness probe:</strong> <code>GET http://127.0.0.1:8080/readyz</code> returns HTTP <code>200</code> (<code>{"status":"ready","generation":1}</code>) once snapshot generation <code>1</code> is pinned.</li></ul>""",
                     ),
                     (
                         "Execute your first cross-branch query",
-                        """<p>Fetch customer profile and order rows from OpenAPI <code>shop</code> alongside agent notes from MCP <code>notes</code> in one call:</p>"""
+                        """<p>Fetch customer profile and order rows from OpenAPI <code>shop</code> alongside the JSON notes payload from MCP <code>notes</code> (note: <code>customer_notes</code> returns a <code>JSON</code> scalar leaf, so select it without subfields):</p>"""
                         + code_block(
-                            'curl -sS -X POST http://127.0.0.1:8080/graphql \\\n  -H "Authorization: Bearer gap_dev_skeleton_key_01" \\\n  -H "Content-Type: application/json" \\\n  -d \'{"query": "{ customer(id: 1) { id name tier } orders(customer_id: 1) { id total_cents status } customer_notes(customer_id: 1) { notes { note_id summary } } }"}\' | python3 -m json.tool',
+                            'curl -sS -X POST http://127.0.0.1:8080/graphql \\\n  -H "Content-Type: application/json" \\\n  -H "Accept: application/graphql-response+json" \\\n  -H "Authorization: Bearer gap_dev_skeleton_key_01" \\\n  -d \'{"query": "{ customer(id: 1) { id name tier } orders(customer_id: 1) { id total_cents status } customer_notes(customer_id: 1) }"}\' | python3 -m json.tool',
                             "terminal",
                             "qs-curl",
                             "en",
+                            title="Terminal — Federated GraphQL Query",
+                        )
+                        + code_block(
+                            '{\n  "data": {\n    "customer": { "id": 1, "name": "Ada Lovelace", "tier": "vip" },\n    "orders": [\n      { "id": 101, "total_cents": 4200, "status": "paid" },\n      { "id": 103, "total_cents": 8500, "status": "pending" }\n    ],\n    "customer_notes": {\n      "customer_id": 1,\n      "notes": [{ "note_id": "n-1", "customer_id": 1, "summary": "Prefers consolidated monthly invoice" }]\n    }\n  },\n  "extensions": {\n    "gap": { "cost": { "actual": 7, "planned": 306 }, "generation": 1, "partial": false }\n  }\n}',
+                            "json",
+                            "qs-curl-out",
+                            "en",
+                            title="Expected Output — HTTP 200 JSON",
                         ),
                     ),
                 ]),
             },
             {
                 "id": "connect-ai-host",
-                "h2": "Step 5: Connect Claude Desktop or Antigravity via MCP",
+                "h2": "Step 5: Connect MCP Hosts or Stream AG-UI Events",
                 "subheadings": [],
-                "html": f"""<p>Rather than exposing every REST endpoint individually, attach your AI client to GAP's constant 5-tool MCP <code>2026-07-28</code> stdio server. Read full host patterns on <a href="{esc(u('facades-and-hosts'))}">MCP, A2A &amp; AG-UI Facades</a>.</p>"""
+                "html": f"""<p>Rather than exposing every REST endpoint individually, attach your AI client to GAP's fixed 5-tool MCP <code>2026-07-28</code> server over stdio or HTTP, or stream AG-UI <code>v1.0</code> events over SSE. Read full host details on <a href="{esc(u('facades-and-hosts'))}">MCP, A2A &amp; AG-UI Facades</a>.</p>"""
                 + code_block(
                     '{\n  "mcpServers": {\n    "gap-gateway": {\n      "command": "/path/to/GraphProtocol/target/dist/gap",\n      "args": ["serve", "--config", "examples/walking-skeleton/gap.toml", "--stdio"]\n    }\n  }\n}',
                     "json",
                     "qs-mcp-cfg",
                     "en",
+                    title="mcp_servers.json — Stdio Client Config",
+                )
+                + code_block(
+                    'curl -sS -N -X POST http://127.0.0.1:8080/ag-ui \\\n  -H "Content-Type: application/json" \\\n  -H "Accept: text/event-stream" \\\n  -H "Authorization: Bearer gap_dev_skeleton_key_01" \\\n  -d \'{"threadId":"t1","runId":"r1","messages":[],"forwardedProps":{"graphql":{"query":"{ customer(id: 1) { id name } customer_notes(customer_id: 1) }"}}}\'',
+                    "terminal",
+                    "qs-agui-curl",
+                    "en",
+                    title="Terminal — Live AG-UI v1.0 SSE Stream",
                 ),
             },
         ],
@@ -384,36 +426,61 @@ GAP divides gateway execution into three non-overlapping planes enforced in CI v
                 "id": "three-levels-walkthrough",
                 "h2": "Walkthrough: From Intent to Typed Query",
                 "subheadings": [],
-                "html": steps_list([
+                "html": svg_progressive_levels("en")
+                + steps_list([
                     (
-                        "L0 — Branch Overview (`__metaGraph` / `gap_describe`)",
-                        "<p>The agent first requests a concise capability directory capped at &lt;= 24 tokens per branch:</p>"
+                        "L0 — Branch Overview (`gap_describe{overview: true}` / `__metaGraph`)",
+                        "<p>Agents start by inspecting a compact directory capped at &lt;= 24 tokens per branch over MCP <code>POST /mcp</code> (or inspect the <code>spec/02-gap-ql.md</code> <code>MetaGraph</code> contract):</p>"
                         + code_block(
-                            'query { __metaGraph { id kind opCount summary } }',
-                            "graphql",
+                            '{\n  "jsonrpc": "2.0",\n  "id": 1,\n  "method": "tools/call",\n  "params": {\n    "name": "gap_describe",\n    "arguments": { "overview": true }\n  }\n}',
+                            "json",
                             "pd-l0",
                             "en",
+                            title="MCP 2026-07-28 — L0 Overview Call",
                         )
-                        + """<ul><li><strong>Returned summary:</strong> <code>shop (openapi, 4 ops)</code>, <code>notes (mcp, 1 op)</code>—hundreds of branches stay legible in a few hundred tokens.</li></ul>""",
+                        + code_block(
+                            "# Spec 02 MetaGraph SDL contract:\nquery { __metaGraph { generation groupCount tokensEstimate branches { id protocol trust status synopsis operationCount } } }",
+                            "graphql",
+                            "pd-l0-sdl",
+                            "en",
+                            title="GAP-QL Spec Reference (spec/02-gap-ql.md)",
+                        )
+                        + """<ul><li><strong>Returned summary:</strong> <code>shop (REST, T1, 4 ops)</code> and <code>notes (MCP, T1, 1 op)</code>—hundreds of upstream services fit comfortably in a few hundred tokens.</li></ul>""",
                     ),
                     (
-                        "L1 — Authorized Hybrid Search (`__search` / `gap_search`)",
-                        "<p>The agent searches top-k matching operations using hybrid BM25 + HNSW vectors. GAP applies the caller's Cedar visibility bitset <strong>first</strong> (<code>INV-05</code>), so forbidden operations never appear in candidate lists or token counts:</p>"
+                        "L1 — Authorized Hybrid Search (`gap_search` / `__search`)",
+                        "<p>Next, search top-k matching operations via hybrid BM25 + HNSW. GAP applies the caller's Cedar visibility bitset <strong>first</strong> (<code>INV-05</code>), so forbidden operations never appear in candidate lists or token counts:</p>"
                         + code_block(
-                            'query { __search(query: "customer order notes", limit: 5) { branch operation kind score } }',
-                            "graphql",
+                            '{\n  "jsonrpc": "2.0",\n  "id": 2,\n  "method": "tools/call",\n  "params": {\n    "name": "gap_search",\n    "arguments": { "query": "customer order notes", "limit": 5 }\n  }\n}',
+                            "json",
                             "pd-l1",
                             "en",
+                            title="MCP 2026-07-28 — L1 Authorized Search",
+                        )
+                        + code_block(
+                            'query { __search(query: "customer order notes", first: 5) { tokensEstimate abstained hits { score kind name path branch sdl } } }',
+                            "graphql",
+                            "pd-l1-sdl",
+                            "en",
+                            title="GAP-QL SearchResult SDL (spec/02-gap-ql.md)",
                         ),
                     ),
                     (
-                        "L2 — On-Demand Type Hydration (`__type`)",
-                        "<p>Only after choosing operations does the agent inspect the exact GraphQL input and return fields needed to build its query:</p>"
+                        "L2 — On-Demand Type Hydration (`gap_describe{types: [...]}` / `__type`)",
+                        "<p>Finally, hydrate only the composed types needed for the query (in Walking Skeleton, OpenAPI ingestion compiles <code>shop_CustomersResult</code> and <code>shop_OrdersResult</code>):</p>"
                         + code_block(
-                            'query { __type(name: "Customer") { name fields { name type { name kind } } } }',
-                            "graphql",
+                            '{\n  "jsonrpc": "2.0",\n  "id": 3,\n  "method": "tools/call",\n  "params": {\n    "name": "gap_describe",\n    "arguments": { "types": ["shop_CustomersResult", "shop_OrdersResult"], "depth": 1 }\n  }\n}',
+                            "json",
                             "pd-l2",
                             "en",
+                            title="MCP 2026-07-28 — L2 Composed Type Lookup",
+                        )
+                        + code_block(
+                            'query { __type(name: "shop_CustomersResult") { name fields { name type { name kind } } } }',
+                            "graphql",
+                            "pd-l2-sdl",
+                            "en",
+                            title="GAP-QL Introspection Shape (spec/02-gap-ql.md)",
                         ),
                     ),
                 ]),
@@ -454,12 +521,13 @@ GAP keeps MCP `tools/list` fixed at 651 tokens regardless of whether 10 or 1,000
                 "id": "valid-graphql-profile",
                 "h2": "Zero Custom Keywords (`GQL-001`)",
                 "subheadings": [],
-                "html": """<p>Instead of inventing non-standard GraphQL syntax like <code>traverse { ... }</code>, GAP exposes discovery and federation via standard schema root fields and validated directives (<code>@join</code>, <code>@sideEffect</code>, <code>@requiresScope</code>). Every query passes <code>apollo-compiler</code> validation and differential testing against <code>graphql-js 16.13.2</code>.</p>"""
+                "html": """<p>Instead of inventing non-standard GraphQL syntax like <code>traverse { ... }</code>, GAP exposes discovery and federation via standard schema root fields and validated directives from <code>spec/02-gap-ql.md</code> §5 (<code>@join</code>, <code>@sideEffect</code>, <code>@auth</code>, <code>@pii</code>). Every query passes <code>apollo-compiler</code> validation and differential testing against <code>graphql-js 16.13.2</code>.</p>"""
                 + code_block(
-                    "directive @sideEffect(level: SideEffectLevel!) on FIELD_DEFINITION\ndirective @join(rhs: String!, key: String!, batchParam: String!, maxBatch: Int = 64) on FIELD_DEFINITION",
+                    "directive @join(to: String!, on: [JoinKey!]!, cardinality: Cardinality!,\n                strategy: JoinStrategy = FOREACH_BATCH, status: JoinStatus = PROPOSED,\n                evidence: JSON) on FIELD_DEFINITION\ndirective @sideEffect(level: SideEffectLevel!, idempotent: Boolean = false, dryRun: Boolean = false) on FIELD_DEFINITION\ndirective @auth(policy: String, scopes: [String!]) on OBJECT | FIELD_DEFINITION\ndirective @pii(kind: String!) on FIELD_DEFINITION",
                     "graphql",
                     "gql-dirs",
                     "en",
+                    title="spec/02-gap-ql.md §5 — Built-in Directives",
                 ),
             },
             {
@@ -467,6 +535,7 @@ GAP keeps MCP `tools/list` fixed at 651 tokens regardless of whether 10 or 1,000
                 "h2": "Preventing N+1 Waterfalls (`INV-18`)",
                 "subheadings": [],
                 "html": f"""<p>Suppose a cross-branch query fetches 50 customers and joins their notes from an external MCP or SQL branch. Flat RPC loops fire 50 separate network requests. GAP extracts unique keys, enforces bounded chunks, and sends at most <code>ceil(unique_keys / max_batch)</code> <code>BatchQuery</code> frames—validated on every CI run (<code>VER-040</code>).</p>"""
+                + svg_batch_join("en")
                 + data_table(
                     "GAP-Bench Measured Tokens (Uncached vs 0.10x Prompt Cache, N=10..1,000)",
                     ["Suite / Scale N", "Direct-MCP (Uncached)", "GAP (Uncached)", "Direct-MCP (Cached)", "GAP (Cached)", "Turns (Direct -> GAP)"],
@@ -505,22 +574,24 @@ GAP-QL is a strict GraphQL profile parsed by `apollo-compiler` and differentiall
                 "id": "rest-to-gap-walkthrough",
                 "h2": "How a REST API Becomes a Graph Branch",
                 "subheadings": [],
-                "html": """<p>Given an upstream REST endpoint <code>GET /orders?customer_id=...</code> or batch endpoint <code>GET /orders?customer_ids=1,2,3</code> returning JSON:</p>"""
+                "html": """<p>Given an upstream REST endpoint like <code>GET /customers/{id}</code> paired with list batching <code>GET /customers?ids=1,2,3</code>, declare the <code>"x-gap-in-param"</code> extension inside your OpenAPI operation (verbatim from <code>examples/walking-skeleton/shop.openapi.json</code>):</p>"""
                 + code_block(
-                    '{\n  "orders": [\n    { "id": 101, "customer_id": 1, "total_cents": 4200, "status": "paid" }\n  ]\n}',
+                    '"/customers/{id}": {\n  "get": {\n    "operationId": "customer",\n    "x-gap-in-param": {\n      "path": "/customers",\n      "param": "ids",\n      "key_field": "id",\n      "max_batch_size": 50\n    }\n  }\n}',
                     "json",
                     "ngc-json",
                     "en",
+                    title="examples/walking-skeleton/shop.openapi.json",
                 )
-                + """<p>Declare the branch in <code>gap.toml</code> and mark the OpenAPI parameter <code>x-gap-in-param</code> in your OpenAPI spec so the executor automatically batches multi-customer joins:</p>"""
+                + """<p>Then wire the OpenAPI file into <code>gap.toml</code>:</p>"""
                 + code_block(
                     '[[branches]]\nid = "shop"\nprotocol = "openapi"\ntrust = "T1"\n\n[branches.openapi]\nspec = "shop.openapi.json"\nbase_url = "http://127.0.0.1:9101"',
                     "toml",
                     "ngc-toml",
                     "en",
+                    title="gap.toml — OpenAPI Branch",
                 )
                 + """<ul>
-  <li><strong><code>id = "shop"</code>:</strong> Stable branch identifier scoping generated GraphQL fields and audit logs.</li>
+  <li><strong><code>id = "shop"</code>:</strong> Stable branch identifier scoping generated GraphQL types (<code>shop_CustomersResult</code>, <code>shop_OrdersResult</code>) and audit logs.</li>
   <li><strong><code>trust = "T1"</code>:</strong> Admin-approved branch whose OpenAPI <code>spec_hash</code> and operation <code>desc_hash</code> are cryptographically pinned against silent mutations.</li>
 </ul>""",
             },
@@ -547,10 +618,11 @@ GAP-QL is a strict GraphQL profile parsed by `apollo-compiler` and differentiall
                 "subheadings": [],
                 "html": """<p>Newly ingested schemas never auto-publish directly into request execution. Instead, <code>gap ingest once</code> compiles a Candidate Intermediate Schema Graph (CISG), runs sample data verification on proposed <code>@join</code> edges (checking containment &amp; null rates, never LLM guesswork), and queues a Proposal for operator review:</p>"""
                 + code_block(
-                    "./target/dist/gap ingest once --config gap.toml --tenant default\n./target/dist/gap proposals list\n./target/dist/gap snapshot diff\n./target/dist/gap proposals approve <proposal-id>",
+                    "./target/dist/gap ingest once --config examples/walking-skeleton/gap.toml --tenant default\n./target/dist/gap proposals list\n./target/dist/gap snapshot show --config examples/walking-skeleton/gap.toml\n./target/dist/gap snapshot diff --before gap.toml --after gap.next.toml\n./target/dist/gap proposals approve <proposal-id>",
                     "terminal",
                     "ngc-propose",
                     "en",
+                    title="Terminal — Ingest, Diff & Proposal Approval",
                 ),
             },
         ],

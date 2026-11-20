@@ -394,7 +394,7 @@ window.GAP_DATA = {
       id: "mcp-l0-describe",
       label: "2. MCP L0: gap_describe (overview: true)",
       endpoint: "POST /mcp",
-      note: "Tầng L0 trả về tóm tắt các nhánh ngắn gọn thay vì toàn bộ schema hàng trăm nghìn tokens.",
+      note: "Tầng L0 trả về tóm tắt các nhánh ngắn gọn (<= 24 tokens/nhánh) thay vì toàn bộ schema hàng trăm nghìn tokens.",
       liveSupported: true,
       requestJson: {
         jsonrpc: "2.0",
@@ -413,12 +413,19 @@ window.GAP_DATA = {
         jsonrpc: "2.0",
         id: 1,
         result: {
-          content: [
-            {
-              type: "text",
-              text: "branches: shop (openapi, T1, 4 ops), notes (mcp, T1, 1 op); generation: 1"
+          isError: false,
+          resultType: "complete",
+          structuredContent: {
+            data: {
+              overview: {
+                generation: 1,
+                branches: [
+                  { id: "notes", protocol: "MCP", trust: "T1", status: "ACTIVE", operationCount: 1 },
+                  { id: "shop", protocol: "REST", trust: "T1", status: "ACTIVE", operationCount: 4 }
+                ]
+              }
             }
-          ]
+          }
         }
       }
     },
@@ -445,19 +452,28 @@ window.GAP_DATA = {
         jsonrpc: "2.0",
         id: 2,
         result: {
-          matches: [
-            { branch: "shop", operation: "customer", kind: "QUERY", score: 0.96 },
-            { branch: "shop", operation: "orders", kind: "QUERY", score: 0.91 },
-            { branch: "notes", operation: "customer_notes", kind: "QUERY", score: 0.89 }
-          ]
+          isError: false,
+          resultType: "complete",
+          structuredContent: {
+            data: {
+              __search: {
+                abstained: false,
+                hits: [
+                  { branch: "shop", kind: "QUERY", name: "customer", path: "Query.customer", score: 0.96 },
+                  { branch: "shop", kind: "QUERY", name: "orders", path: "Query.orders", score: 0.91 },
+                  { branch: "notes", kind: "QUERY", name: "customer_notes", path: "Query.customer_notes", score: 0.89 }
+                ]
+              }
+            }
+          }
         }
       }
     },
     {
       id: "mcp-l2-type",
-      label: "4. MCP L2: gap_describe (names: ['Customer'])",
+      label: "4. MCP L2: gap_describe (types: ['shop_CustomersResult', 'shop_OrdersResult'])",
       endpoint: "POST /mcp",
-      note: "Tầng L2 chỉ mở SDL chi tiết của đúng kiểu dữ liệu agent vừa chọn.",
+      note: "Tầng L2 chỉ mở SDL chi tiết của đúng các kiểu OpenAPI đã biên dịch trong supergraph (`shop_CustomersResult`, `shop_OrdersResult`).",
       liveSupported: true,
       requestJson: {
         jsonrpc: "2.0",
@@ -469,20 +485,52 @@ window.GAP_DATA = {
             "io.modelcontextprotocol/clientCapabilities": {}
           },
           name: "gap_describe",
-          arguments: { names: ["Customer"] }
+          arguments: { types: ["shop_CustomersResult", "shop_OrdersResult"] }
         }
       },
       simulatedResponse: {
         jsonrpc: "2.0",
         id: 3,
         result: {
-          sdl: "type Customer { id: Int! name: String! tier: String! }"
+          isError: false,
+          resultType: "complete",
+          structuredContent: {
+            data: {
+              sdl: "type shop_CustomersResult { id: Int! name: String! tier: shop_CustomersResultTier! }\ntype shop_OrdersResult { customer_id: Int! id: Int! status: shop_OrdersResultStatus! total_cents: Int! }"
+            }
+          }
         }
       }
     },
     {
+      id: "agui-sse-stream",
+      label: "5. AG-UI v1.0: Luồng SSE POST /ag-ui Trực tiếp",
+      endpoint: "POST /ag-ui",
+      note: "Phát luồng sự kiện AG-UI v1.0 có cấu trúc (`RUN_STARTED`, `STEP_STARTED`, `TOOL_CALL_*`, `STATE_SNAPSHOT`, `RUN_FINISHED`) trực tiếp từ `gap serve`.",
+      liveSupported: true,
+      requestJson: {
+        threadId: "playground-thread",
+        runId: "playground-run-1",
+        messages: [],
+        forwardedProps: {
+          graphql: {
+            query: "{ customer(id: 1) { id name tier } customer_notes(customer_id: 1) }"
+          }
+        }
+      },
+      simulatedResponse: {
+        sse_event_count: 10,
+        events: [
+          { type: "RUN_STARTED", threadId: "playground-thread", runId: "playground-run-1", metadata: { generation: 1, tenant: "default" } },
+          { type: "STEP_STARTED", stepName: "gap.execute" },
+          { type: "STATE_SNAPSHOT", snapshot: { generation: 1, lastData: { customer: { id: 1, name: "Ada Lovelace", tier: "vip" }, customer_notes: { customer_id: 1, notes: [{ customer_id: 1, note_id: "n-1", summary: "Prefers consolidated monthly invoice" }] } } } },
+          { type: "RUN_FINISHED", outcome: { type: "success" } }
+        ]
+      }
+    },
+    {
       id: "sec-t2-untrusted",
-      label: "5. Bảo mật: Bọc dữ liệu T2 <gap:untrusted> (Mô phỏng)",
+      label: "6. Bảo mật: Bọc dữ liệu T2 <gap:untrusted> (Mô phỏng)",
       endpoint: "Mô phỏng SEC-080 / CMP-007",
       note: "Nếu upstream chèn chuỗi thoát thẻ để tiêm lệnh prompt injection, GAP sẽ escape thẻ đóng bên trong để nhốt chặt chuỗi độc hại.",
       liveSupported: false,
@@ -499,9 +547,9 @@ window.GAP_DATA = {
     },
     {
       id: "sec-cedar-deny",
-      label: "6. Bảo mật: Cedar chặn IRREVERSIBLE Mutation (Mô phỏng)",
+      label: "7. Bảo mật: Cedar chặn IRREVERSIBLE Mutation (Mô phỏng)",
       endpoint: "Mô phỏng INV-04 / ADR-023",
-      note: "Mutation không có bối cảnh phê duyệt của người thứ hai (approverIsDifferent) bị chặn bằng GAP_FORBIDDEN ngay trước khi gọi connector.",
+      note: "Luật Cedar `@id(\"forbid-mutate-irreversible-or-unknown-unapproved\")` chặn `Action::\"Mutate\"` nếu thiếu `context.approved && context.approverIsDifferent`.",
       liveSupported: false,
       requestJson: {
         mutation: "mutation { wipe_customer_ledger(id: 1) }"
@@ -509,7 +557,7 @@ window.GAP_DATA = {
       simulatedResponse: {
         errors: [
           {
-            message: "authorization denied by Cedar policy: IRREVERSIBLE mutation requires approverIsDifferent=true",
+            message: "authorization denied by Cedar policy: IRREVERSIBLE mutation requires context.approved && context.approverIsDifferent",
             extensions: {
               code: "GAP_FORBIDDEN",
               invariant: "INV-04",
@@ -577,9 +625,9 @@ window.GAP_DATA = {
 
   runbooks: [
     { id: "SwapStuck", severity: "page", trigger: "Swap snapshot p99 > 1s hoặc tồn đọng ingest 15 phút không tăng thế hệ", action: "Kiểm tra các request ghim generation quá lâu, xem queue tồn đọng và dùng gap snapshot show." },
-    { id: "AutoRollback", severity: "page", trigger: "gap_snapshot_rollbacks_total tăng > 0", action: "RollbackWatcher vừa cứu hệ thống về thế hệ cũ; xem diff giữa 2 thế hệ trước khi duyệt lại." },
+    { id: "AutoRollback", severity: "page", trigger: "gap_snapshot_rollbacks_total tăng > 0", action: "RollbackWatcher vừa cứu hệ thống về thế hệ cũ; chạy gap snapshot diff --before <old.toml> --after <new.toml> trước khi duyệt lại." },
     { id: "BreakerFlapping", severity: "ticket", trigger: "Circuit breaker đóng/mở >= 4 lần trong 15 phút", action: "Kiểm tra sức khỏe upstream của nhánh bị lỗi và điều chỉnh ngưỡng hysteresis nếu mạng chập chờn." },
-    { id: "BranchDrift", severity: "ticket", trigger: "Tỷ lệ lỗi EWMA > 0.15 hoặc phản hồi lệch schema", action: "Chạy gap proposals list && gap ingest once && gap snapshot diff để duyệt hoặc cách ly nhánh." },
+    { id: "BranchDrift", severity: "ticket", trigger: "Tỷ lệ lỗi EWMA > 0.15 hoặc phản hồi lệch schema", action: "Chạy gap proposals list && gap ingest once && gap snapshot diff --before <old.toml> --after <new.toml> để duyệt hoặc cách ly nhánh." },
     { id: "S1Drift", severity: "ticket", trigger: "ECE online > 0.05 hoặc tỷ lệ fallback > 10%", action: "Chạy gap calibrate trên dữ liệu mới nhất hoặc chuyển router về chế độ baseline." },
     { id: "IngestBacklog", severity: "ticket", trigger: "Hàng đợi ingestion > 100 hoặc thất bại cổng xác minh", action: "Kiểm tra worker pool theo tenant và log từ chối join/linter." },
     { id: "AuditVerifyFail", severity: "page", trigger: "gap_audit_verify_failures_total > 0", action: "CẢNH BÁO NGHIÊM TRỌNG: chạy gap audit verify --nightly ngay lập tức để khoanh vùng vị trí hỏng chuỗi BLAKE3." },
@@ -620,7 +668,7 @@ window.GAP_DATA = {
     { term: "tenant", def: "Phạm vi cô lập dữ liệu của một tổ chức/không gian làm việc (INV-09).", forbidden: "org slice, namespace" },
     { term: "proposal", def: "Đề xuất thay đổi schema hoặc cạnh @join đang chờ quản trị viên duyệt.", forbidden: "draft patch, pending update" },
     { term: "untrusted envelope", def: "Thẻ <gap:untrusted> cô lập văn bản từ nhánh T1/T2 (SEC-080).", forbidden: "safety tag, wrapper" },
-    { term: "audit chain", def: "Nhật ký SQLite nối tiếp bằng mã băm mật mã BLAKE3 (INV-10).", forbidden: "event trail, history log" },
+    { term: "audit chain", def: "Nhật ký SQLite nối tiếp bằng mã băm mật mã BLAKE3 (INV-14).", forbidden: "event trail, history log" },
     { term: "HTTP/3 (QUIC)", def: "Giao thức truyền tải mã hóa UDP dùng TLS 1.3 ALPN h3, tắt 0-RTT chống replay (OPS-005).", forbidden: "HTTP3 proxy, QUIC tunnel" }
   ],
 

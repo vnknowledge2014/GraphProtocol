@@ -199,6 +199,7 @@ Trang thực hành tương tác (`vi/lab/playground.html`) giúp bạn:
   <h2 id="learn-heading">Bạn sẽ nắm được gì</h2>
   <ul><li>So sánh lượng token tiêu thụ Direct-MCP với GAP theo từng tác vụ và quy mô <code>N=10..1.000</code>.</li><li>Chuyển từ chế độ mô phỏng sang gọi socket <code>gap serve</code> thật qua <code>python3 web/serve.py</code>.</li><li>Lưu tự động tiến độ 18 đầu mục thực hành trong trình duyệt (dùng chung cho bản Anh &amp; Việt).</li></ul>
 </section>
+        <details class="toc-inline"><summary>Trong trang này</summary><nav class="toc-inline-links" aria-label="Mục lục bài viết"><a class="toc-inline-link" href="#interactive-lab-suite">Bộ tính Crossover &amp; Playground Tương tác</a><a class="toc-inline-link" href="#curriculum-checklist">Lộ trình 6 Cấp độ (Novice đến Master)</a><a class="toc-inline-link" href="#knowledge-quiz">Tự kiểm tra Kiến thức (6 Câu hỏi Cốt lõi)</a></nav></details>
 
         <section id="interactive-lab-suite" tabindex="-1" class="doc-section">
   <h2>Bộ tính Crossover &amp; Playground Tương tác</h2>
@@ -237,14 +238,40 @@ Trang thực hành tương tác (`vi/lab/playground.html`) giúp bạn:
       <select id="play-scenario"></select>
     </div>
     <p id="play-note" class="section-lead"></p>
-    <div><strong>Request gửi tới <code id="play-endpoint"></code>:</strong></div>
-    <pre role="region" aria-label="Payload request mẫu" tabindex="0"><code id="play-request"></code></pre>
+    <figure class="code-figure">
+      <div class="code-toolbar">
+        <div class="code-meta">
+          <span class="code-lang">request</span>
+          <span class="code-title"><code id="play-endpoint"></code></span>
+        </div>
+        <span class="copy">
+          <button type="button" class="copy-button" command="--copy" commandfor="play-request" aria-label="Sao chép payload request mẫu">
+            <span class="icon" aria-hidden="true"></span>
+          </button>
+          <span class="tip" role="status"></span>
+        </span>
+      </div>
+      <pre role="region" aria-label="Payload request mẫu" tabindex="0"><code id="play-request" class="language-json"></code></pre>
+    </figure>
     <div class="control-row">
       <button id="btn-run-play" type="button" class="btn btn-primary">Chạy thử kịch bản</button>
       <span id="play-meta" class="section-lead"></span>
     </div>
-    <div><strong>Kết quả phản hồi:</strong></div>
-    <pre role="region" aria-label="Kết quả phản hồi" tabindex="0"><code id="play-response"></code></pre>
+    <figure class="code-figure">
+      <div class="code-toolbar">
+        <div class="code-meta">
+          <span class="code-lang">response</span>
+          <span class="code-title">Kết quả JSON / SSE</span>
+        </div>
+        <span class="copy">
+          <button type="button" class="copy-button" command="--copy" commandfor="play-response" aria-label="Sao chép kết quả phản hồi">
+            <span class="icon" aria-hidden="true"></span>
+          </button>
+          <span class="tip" role="status"></span>
+        </span>
+      </div>
+      <pre role="region" aria-label="Kết quả phản hồi" tabindex="0"><code id="play-response" class="language-json"></code></pre>
+    </figure>
   </div>
 </div>
 </section><section id="curriculum-checklist" tabindex="-1" class="doc-section">

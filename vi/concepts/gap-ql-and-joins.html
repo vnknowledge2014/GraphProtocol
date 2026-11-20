@@ -198,27 +198,62 @@ GAP-QL tương thích 100% `apollo-compiler` và bộ kiểm thử `graphql-js 1
   <h2 id="learn-heading">Bạn sẽ nắm được gì</h2>
   <ul><li>Vì sao mô hình hóa khám phá bằng field GraphQL chuẩn tương thích mọi công cụ có sẵn.</li><li>Cơ chế khử trùng lặp khóa join giới hạn số lời gọi ở <code>ceil(unique_keys / max_batch)</code> (<code>INV-18</code>).</li><li>Bảng đối chứng số token thật trên <code>N=10..1.000</code> có và không có Prompt Cache.</li></ul>
 </section>
+        <details class="toc-inline"><summary>Trong trang này</summary><nav class="toc-inline-links" aria-label="Mục lục bài viết"><a class="toc-inline-link" href="#valid-graphql-profile">Không Chế Cú pháp Lạ (<code>GQL-001</code>)</a><a class="toc-inline-link" href="#dataloader-batching">Triệt tiêu Lỗi Thác nước N+1 (<code>INV-18</code>)</a></nav></details>
 
         <section id="valid-graphql-profile" tabindex="-1" class="doc-section">
   <h2>Không Chế Cú pháp Lạ (<code>GQL-001</code>)</h2>
-  <p>Thay vì tạo từ khóa phi chuẩn như <code>traverse { ... }</code>, GAP đặt khám phá và nối nhánh thành các field gốc chuẩn và directive hợp lệ (<code>@join</code>, <code>@sideEffect</code>, <code>@requiresScope</code>). Mọi truy vấn qua kiểm tra vi phân đối chiếu trực tiếp với <code>graphql-js 16.13.2</code>.</p><figure class="code-figure">
+  <p>Thay vì tạo từ khóa phi chuẩn như <code>traverse { ... }</code>, GAP đặt khám phá và nối nhánh thành các field gốc chuẩn cùng các directive chuẩn trong <code>spec/02-gap-ql.md</code> §5 (<code>@join</code>, <code>@sideEffect</code>, <code>@auth</code>, <code>@pii</code>). Mọi truy vấn qua kiểm tra vi phân đối chiếu trực tiếp với <code>graphql-js 16.13.2</code>.</p><figure class="code-figure">
   <div class="code-toolbar">
-    <span class="code-lang">graphql</span>
+    <div class="code-meta">
+      <span class="code-lang">graphql</span>
+      <span class="code-title">spec/02-gap-ql.md §5 — Directives Hợp lệ</span>
+    </div>
     <span class="copy">
-      <button type="button" class="copy-button" command="--copy" commandfor="gql-dirs" aria-label="Sao chép đoạn mã graphql (gql-dirs)">
+      <button type="button" class="copy-button" command="--copy" commandfor="gql-dirs" aria-label="Sao chép đoạn mã graphql (spec/02-gap-ql.md §5 — Directives Hợp lệ)">
         <span class="icon" aria-hidden="true"></span>
       </button>
       <span class="tip" role="status"></span>
     </span>
   </div>
-  <pre role="region" aria-label="Đoạn mã graphql" tabindex="0"><code id="gql-dirs" class="language-graphql">directive @sideEffect(level: SideEffectLevel!) on FIELD_DEFINITION
-directive @join(rhs: String!, key: String!, batchParam: String!, maxBatch: Int = 64) on FIELD_DEFINITION</code></pre>
+  <pre role="region" aria-label="spec/02-gap-ql.md §5 — Directives Hợp lệ" tabindex="0"><code id="gql-dirs" class="language-graphql">directive @join(to: String!, on: [JoinKey!]!, cardinality: Cardinality!,
+                strategy: JoinStrategy = FOREACH_BATCH, status: JoinStatus = PROPOSED,
+                evidence: JSON) on FIELD_DEFINITION
+directive @sideEffect(level: SideEffectLevel!, idempotent: Boolean = false, dryRun: Boolean = false) on FIELD_DEFINITION
+directive @auth(policy: String, scopes: [String!]) on OBJECT | FIELD_DEFINITION
+directive @pii(kind: String!) on FIELD_DEFINITION</code></pre>
 </figure>
 </section><section id="dataloader-batching" tabindex="-1" class="doc-section">
   <h2>Triệt tiêu Lỗi Thác nước N+1 (<code>INV-18</code>)</h2>
-  <p>Khi một truy vấn lấy 50 khách hàng kèm ghi chú từ nhánh MCP hoặc SQL khác, client phẳng sẽ phát 50 lần gọi nối tiếp. Bộ thực thi GAP rút trích các khóa duy nhất, chia lô đúng giới hạn <code>maxBatch</code> và chỉ gửi tối đa <code>ceil(unique_keys / max_batch)</code> khung <code>BatchQuery</code> — được kiểm tra tự động qua <code>VER-040</code>.</p><div tabindex="0" role="region" aria-label="Số liệu GAP-Bench đo thật (Không Cache vs Prompt Cache 0,10x, N=10..1.000)" class="table-wrapper">
-  <table class="data-table">
-    <caption>Số liệu GAP-Bench đo thật (Không Cache vs Prompt Cache 0,10x, N=10..1.000)</caption>
+  <p>Khi một truy vấn lấy 50 khách hàng kèm ghi chú từ nhánh MCP hoặc SQL khác, client phẳng sẽ phát 50 lần gọi nối tiếp. Bộ thực thi GAP rút trích các khóa duy nhất, chia lô đúng giới hạn <code>maxBatch</code> và chỉ gửi tối đa <code>ceil(unique_keys / max_batch)</code> khung <code>BatchQuery</code> — được kiểm tra tự động qua <code>VER-040</code>.</p><figure class="diagram-frame">
+  <svg role="img" aria-label="So sánh thác nước N+1 qua LLM và gom lô DataLoader BatchJoin INV-18" viewBox="0 0 760 170" width="760" height="170" xmlns="http://www.w3.org/2000/svg">
+    <title>So sánh thác nước N+1 qua LLM và gom lô DataLoader BatchJoin INV-18</title>
+    <defs>
+      <marker id="bj-arr-warn" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+        <path d="M 0 1.5 L 9 5 L 0 8.5 z" fill="var(--warn)"/>
+      </marker>
+      <marker id="bj-arr-ok" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+        <path d="M 0 1.5 L 9 5 L 0 8.5 z" fill="var(--ok)"/>
+      </marker>
+    </defs>
+    <rect x="8" y="10" width="356" height="150" rx="10" fill="var(--surface-alt)" stroke="var(--warn)" stroke-width="1.5"/>
+    <text x="24" y="36" fill="var(--warn)" font-size="13" font-weight="700">Direct-MCP: Vòng lặp N+1 (4 lượt · 814.959 tok)</text>
+    <rect x="24" y="50" width="324" height="36" rx="6" fill="var(--surface)" stroke="var(--border)"/>
+    <text x="186" y="73" text-anchor="middle" fill="var(--text)" font-size="12">LLM gọi customers -&gt; nhận 50 ID</text>
+    <line x1="186" y1="86" x2="186" y2="108" stroke="var(--warn)" stroke-width="2" stroke-dasharray="4 3" marker-end="url(#bj-arr-warn)"/>
+    <rect x="24" y="110" width="324" height="36" rx="6" fill="var(--surface)" stroke="var(--warn)"/>
+    <text x="186" y="133" text-anchor="middle" fill="var(--warn)" font-size="12" font-weight="600">LLM tự phát 50 HTTP rời: /orders?c=1 .. 50</text>
+
+    <rect x="396" y="10" width="356" height="150" rx="10" fill="var(--surface-alt)" stroke="var(--ok)" stroke-width="2"/>
+    <text x="412" y="36" fill="var(--ok)" font-size="13" font-weight="700">GAP @join: DataLoader BatchJoin (2 lượt · 8.547 tok)</text>
+    <rect x="412" y="50" width="324" height="36" rx="6" fill="var(--surface)" stroke="var(--border)"/>
+    <text x="574" y="73" text-anchor="middle" fill="var(--text)" font-size="12">gap-plan gom khóa duy nhất {1..50}</text>
+    <line x1="574" y1="86" x2="574" y2="108" stroke="var(--ok)" stroke-width="2" marker-end="url(#bj-arr-ok)"/>
+    <rect x="412" y="110" width="324" height="36" rx="6" fill="var(--surface)" stroke="var(--ok)"/>
+    <text x="574" y="133" text-anchor="middle" fill="var(--ok)" font-size="12" font-weight="700">1 khung BatchQuery ceil(K/max_batch) (INV-18)</text>
+  </svg>
+</figure><div tabindex="0" role="region" aria-labelledby="cap-09a0e1b4" class="table-wrapper">
+  <table class="data-table" style="--col-2: &quot;Direct-MCP (Không Cache)&quot;; --col-3: &quot;GAP (Không Cache)&quot;; --col-4: &quot;Direct-MCP (Có Cache)&quot;; --col-5: &quot;GAP (Có Cache)&quot;; --col-6: &quot;Số lượt (Direct -&gt; GAP)&quot;;">
+    <caption id="cap-09a0e1b4">Số liệu GAP-Bench đo thật (Không Cache vs Prompt Cache 0,10x, N=10..1.000)</caption>
     <thead><tr><th scope="col">Kịch bản / Quy mô N</th><th scope="col">Direct-MCP (Không Cache)</th><th scope="col">GAP (Không Cache)</th><th scope="col">Direct-MCP (Có Cache)</th><th scope="col">GAP (Có Cache)</th><th scope="col">Số lượt (Direct -&gt; GAP)</th></tr></thead>
     <tbody><tr><th scope="row"><code>cross_branch_join</code> · N=10</th><td>8.891,8</td><td><strong>8.517,9</strong></td><td><strong>2.200,5</strong></td><td>7.383,7</td><td>4 -> 2</td></tr>
 <tr><th scope="row"><code>cross_branch_join</code> · N=50</th><td>41.539,8</td><td><strong>8.547,9</strong></td><td><strong>6.740,7</strong></td><td>7.413,7</td><td>4 -> 2</td></tr>

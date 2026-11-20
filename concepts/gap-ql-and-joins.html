@@ -198,27 +198,62 @@ GAP-QL is a strict GraphQL profile parsed by `apollo-compiler` and differentiall
   <h2 id="learn-heading">What you&#x27;ll learn</h2>
   <ul><li>Why modeling discovery as <code>__metaGraph</code>/<code>__search</code>/<code>__type</code> preserves GraphQL parser compatibility.</li><li>How GAP deduplicates join keys to dispatch <code>ceil(unique_keys / max_batch)</code> upstream calls (<code>INV-18</code>).</li><li>Full <code>GAP-Bench</code> token matrix across <code>N in {10, 50, 200, 1000}</code>.</li></ul>
 </section>
+        <details class="toc-inline"><summary>On this page</summary><nav class="toc-inline-links" aria-label="On this page"><a class="toc-inline-link" href="#valid-graphql-profile">Zero Custom Keywords (<code>GQL-001</code>)</a><a class="toc-inline-link" href="#dataloader-batching">Preventing N+1 Waterfalls (<code>INV-18</code>)</a></nav></details>
 
         <section id="valid-graphql-profile" tabindex="-1" class="doc-section">
   <h2>Zero Custom Keywords (<code>GQL-001</code>)</h2>
-  <p>Instead of inventing non-standard GraphQL syntax like <code>traverse { ... }</code>, GAP exposes discovery and federation via standard schema root fields and validated directives (<code>@join</code>, <code>@sideEffect</code>, <code>@requiresScope</code>). Every query passes <code>apollo-compiler</code> validation and differential testing against <code>graphql-js 16.13.2</code>.</p><figure class="code-figure">
+  <p>Instead of inventing non-standard GraphQL syntax like <code>traverse { ... }</code>, GAP exposes discovery and federation via standard schema root fields and validated directives from <code>spec/02-gap-ql.md</code> §5 (<code>@join</code>, <code>@sideEffect</code>, <code>@auth</code>, <code>@pii</code>). Every query passes <code>apollo-compiler</code> validation and differential testing against <code>graphql-js 16.13.2</code>.</p><figure class="code-figure">
   <div class="code-toolbar">
-    <span class="code-lang">graphql</span>
+    <div class="code-meta">
+      <span class="code-lang">graphql</span>
+      <span class="code-title">spec/02-gap-ql.md §5 — Built-in Directives</span>
+    </div>
     <span class="copy">
-      <button type="button" class="copy-button" command="--copy" commandfor="gql-dirs" aria-label="Copy graphql code snippet (gql-dirs)">
+      <button type="button" class="copy-button" command="--copy" commandfor="gql-dirs" aria-label="Copy graphql code snippet (spec/02-gap-ql.md §5 — Built-in Directives)">
         <span class="icon" aria-hidden="true"></span>
       </button>
       <span class="tip" role="status"></span>
     </span>
   </div>
-  <pre role="region" aria-label="graphql code block" tabindex="0"><code id="gql-dirs" class="language-graphql">directive @sideEffect(level: SideEffectLevel!) on FIELD_DEFINITION
-directive @join(rhs: String!, key: String!, batchParam: String!, maxBatch: Int = 64) on FIELD_DEFINITION</code></pre>
+  <pre role="region" aria-label="spec/02-gap-ql.md §5 — Built-in Directives" tabindex="0"><code id="gql-dirs" class="language-graphql">directive @join(to: String!, on: [JoinKey!]!, cardinality: Cardinality!,
+                strategy: JoinStrategy = FOREACH_BATCH, status: JoinStatus = PROPOSED,
+                evidence: JSON) on FIELD_DEFINITION
+directive @sideEffect(level: SideEffectLevel!, idempotent: Boolean = false, dryRun: Boolean = false) on FIELD_DEFINITION
+directive @auth(policy: String, scopes: [String!]) on OBJECT | FIELD_DEFINITION
+directive @pii(kind: String!) on FIELD_DEFINITION</code></pre>
 </figure>
 </section><section id="dataloader-batching" tabindex="-1" class="doc-section">
   <h2>Preventing N+1 Waterfalls (<code>INV-18</code>)</h2>
-  <p>Suppose a cross-branch query fetches 50 customers and joins their notes from an external MCP or SQL branch. Flat RPC loops fire 50 separate network requests. GAP extracts unique keys, enforces bounded chunks, and sends at most <code>ceil(unique_keys / max_batch)</code> <code>BatchQuery</code> frames—validated on every CI run (<code>VER-040</code>).</p><div tabindex="0" role="region" aria-label="GAP-Bench Measured Tokens (Uncached vs 0.10x Prompt Cache, N=10..1,000)" class="table-wrapper">
-  <table class="data-table">
-    <caption>GAP-Bench Measured Tokens (Uncached vs 0.10x Prompt Cache, N=10..1,000)</caption>
+  <p>Suppose a cross-branch query fetches 50 customers and joins their notes from an external MCP or SQL branch. Flat RPC loops fire 50 separate network requests. GAP extracts unique keys, enforces bounded chunks, and sends at most <code>ceil(unique_keys / max_batch)</code> <code>BatchQuery</code> frames—validated on every CI run (<code>VER-040</code>).</p><figure class="diagram-frame">
+  <svg role="img" aria-label="LLM N+1 Waterfall vs GAP DataLoader BatchJoin (INV-18)" viewBox="0 0 760 170" width="760" height="170" xmlns="http://www.w3.org/2000/svg">
+    <title>LLM N+1 Waterfall vs GAP DataLoader BatchJoin (INV-18)</title>
+    <defs>
+      <marker id="bj-arr-warn" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+        <path d="M 0 1.5 L 9 5 L 0 8.5 z" fill="var(--warn)"/>
+      </marker>
+      <marker id="bj-arr-ok" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+        <path d="M 0 1.5 L 9 5 L 0 8.5 z" fill="var(--ok)"/>
+      </marker>
+    </defs>
+    <rect x="8" y="10" width="356" height="150" rx="10" fill="var(--surface-alt)" stroke="var(--warn)" stroke-width="1.5"/>
+    <text x="24" y="36" fill="var(--warn)" font-size="13" font-weight="700">Direct-MCP: N+1 Loop (4 turns · 814,959 tok)</text>
+    <rect x="24" y="50" width="324" height="36" rx="6" fill="var(--surface)" stroke="var(--border)"/>
+    <text x="186" y="73" text-anchor="middle" fill="var(--text)" font-size="12">LLM calls customers -&gt; receives 50 IDs</text>
+    <line x1="186" y1="86" x2="186" y2="108" stroke="var(--warn)" stroke-width="2" stroke-dasharray="4 3" marker-end="url(#bj-arr-warn)"/>
+    <rect x="24" y="110" width="324" height="36" rx="6" fill="var(--surface)" stroke="var(--warn)"/>
+    <text x="186" y="133" text-anchor="middle" fill="var(--warn)" font-size="12" font-weight="600">Agent fires 50 sequential HTTP calls</text>
+
+    <rect x="396" y="10" width="356" height="150" rx="10" fill="var(--surface-alt)" stroke="var(--ok)" stroke-width="2"/>
+    <text x="412" y="36" fill="var(--ok)" font-size="13" font-weight="700">GAP @join: DataLoader Batch (2 turns · 8,547 tok)</text>
+    <rect x="412" y="50" width="324" height="36" rx="6" fill="var(--surface)" stroke="var(--border)"/>
+    <text x="574" y="73" text-anchor="middle" fill="var(--text)" font-size="12">gap-exec deduplicates keys {1..50}</text>
+    <line x1="574" y1="86" x2="574" y2="108" stroke="var(--ok)" stroke-width="2" marker-end="url(#bj-arr-ok)"/>
+    <rect x="412" y="110" width="324" height="36" rx="6" fill="var(--surface)" stroke="var(--ok)"/>
+    <text x="574" y="133" text-anchor="middle" fill="var(--ok)" font-size="12" font-weight="700">ceil(unique_keys / max_batch) BatchQuery (INV-18)</text>
+  </svg>
+</figure><div tabindex="0" role="region" aria-labelledby="cap-fbff4095" class="table-wrapper">
+  <table class="data-table" style="--col-2: &quot;Direct-MCP (Uncached)&quot;; --col-3: &quot;GAP (Uncached)&quot;; --col-4: &quot;Direct-MCP (Cached)&quot;; --col-5: &quot;GAP (Cached)&quot;; --col-6: &quot;Turns (Direct -&gt; GAP)&quot;;">
+    <caption id="cap-fbff4095">GAP-Bench Measured Tokens (Uncached vs 0.10x Prompt Cache, N=10..1,000)</caption>
     <thead><tr><th scope="col">Suite / Scale N</th><th scope="col">Direct-MCP (Uncached)</th><th scope="col">GAP (Uncached)</th><th scope="col">Direct-MCP (Cached)</th><th scope="col">GAP (Cached)</th><th scope="col">Turns (Direct -&gt; GAP)</th></tr></thead>
     <tbody><tr><th scope="row"><code>cross_branch_join</code> · N=10</th><td>8,891.8</td><td><strong>8,517.9</strong></td><td><strong>2,200.5</strong></td><td>7,383.7</td><td>4 -> 2</td></tr>
 <tr><th scope="row"><code>cross_branch_join</code> · N=50</th><td>41,539.8</td><td><strong>8,547.9</strong></td><td><strong>6,740.7</strong></td><td>7,413.7</td><td>4 -> 2</td></tr>

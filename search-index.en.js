@@ -75,21 +75,21 @@ window.GAP_SEARCH_INDEX = [
     "section": "Start Here",
     "href": "getting-started/quickstart.html#prerequisites",
     "snippet": "Built gap binary (from release assets or ./dist/build-reproducible.sh --offline at ./target/dist/gap ). Python 3.10+ (for the built-in sample REST and MCP fixtures under examples/walking-ske",
-    "keywords": "Prerequisites 10-Minute Quickstart Built gap binary (from release assets or ./dist/build-reproducible.sh --offline at ./target/dist/gap ). Python 3.10+ (for the built-in sample REST and MCP fixtures under examples/walking-skeleton/fixtures/ ). Zero-Setup Browser Shortcut Already running python3 web/serve.py --port 8787 ? You can boot these exact fixtures with one click inside the Interactive Lab ."
+    "keywords": "Prerequisites 10-Minute Quickstart Built gap binary (from release assets or ./dist/build-reproducible.sh --offline at ./target/dist/gap ). Python 3.10+ (for the built-in sample REST and MCP fixtures under examples/walking-skeleton/fixtures/ ). Zero-Setup Browser Shortcut Already running python3 web/serve.py --port 8787 ? You can boot these exact fixtures with one click inside the Interactive Lab . Starting a Fresh Project? You can also scaffold a starter 5-file workspace anywhere "
   },
   {
     "title": "Step-by-Step Setup — 10-Minute Quickstart",
     "section": "Start Here",
     "href": "getting-started/quickstart.html#step-by-step",
     "snippet": "1 Inspect and validate the configuration Run static validation against examples/walking-skeleton/gap.toml before starting listeners. Unknown keys, unreferenced inline secrets, or missing spe",
-    "keywords": "Step-by-Step Setup 10-Minute Quickstart 1 Inspect and validate the configuration Run static validation against examples/walking-skeleton/gap.toml before starting listeners. Unknown keys, unreferenced inline secrets, or missing spec files fail closed immediately: terminal Check output: Both commands exit 0 ( OPS-044 ). Notice the dev-agent API key uses a SHA/BLAKE3 hash—no plaintext secret is ever stored in TOML. 2 Start both upstream fixtures Open two terminal tabs (or run in backgroun"
+    "keywords": "Step-by-Step Setup 10-Minute Quickstart 1 Inspect and validate the configuration Run static validation against examples/walking-skeleton/gap.toml before starting listeners. Unknown keys, unreferenced inline secrets, or missing spec files fail closed immediately: terminal Terminal — Validate gap.toml text Expected Output (Exit 0 · OPS-044) Notice: Both commands exit 0 ( OPS-044 ), and the dev-agent API key is hashed with BLAKE3 in TOML—no plaintext secret is ever persisted. 2 Start both"
   },
   {
-    "title": "Step 5: Connect Claude Desktop or Antigravity via MCP — 10-Minute Quickstart",
+    "title": "Step 5: Connect MCP Hosts or Stream AG-UI Events — 10-Minute Quickstart",
     "section": "Start Here",
     "href": "getting-started/quickstart.html#connect-ai-host",
-    "snippet": "Rather than exposing every REST endpoint individually, attach your AI client to GAP's constant 5-tool MCP 2026-07-28 stdio server. Read full host patterns on MCP, A2A &amp; AG-UI Facades . j",
-    "keywords": "Step 5: Connect Claude Desktop or Antigravity via MCP 10-Minute Quickstart Rather than exposing every REST endpoint individually, attach your AI client to GAP's constant 5-tool MCP 2026-07-28 stdio server. Read full host patterns on MCP, A2A &amp; AG-UI Facades . json"
+    "snippet": "Rather than exposing every REST endpoint individually, attach your AI client to GAP's fixed 5-tool MCP 2026-07-28 server over stdio or HTTP, or stream AG-UI v1.0 events over SSE. Read full h",
+    "keywords": "Step 5: Connect MCP Hosts or Stream AG-UI Events 10-Minute Quickstart Rather than exposing every REST endpoint individually, attach your AI client to GAP's fixed 5-tool MCP 2026-07-28 server over stdio or HTTP, or stream AG-UI v1.0 events over SSE. Read full host details on MCP, A2A &amp; AG-UI Facades . json mcp_servers.json — Stdio Client Config terminal Terminal — Live AG-UI v1.0 SSE Stream"
   },
   {
     "title": "Three-Plane Architecture",
@@ -102,8 +102,8 @@ window.GAP_SEARCH_INDEX = [
     "title": "Strict Plane Separation — Three-Plane Architecture",
     "section": "Core Concepts",
     "href": "concepts/architecture.html#three-planes-diagram",
-    "snippet": "GAP Three-Plane Strict Architectural Separation Plane 2: Progressive Intent Discovery L0/L1/L2 · Visibility Bitset (INV-05) · Baseline 95.24% / Optional S1 (INV-17) Plane 1: Zero-ML Determin",
-    "keywords": "Strict Plane Separation Three-Plane Architecture GAP Three-Plane Strict Architectural Separation Plane 2: Progressive Intent Discovery L0/L1/L2 · Visibility Bitset (INV-05) · Baseline 95.24% / Optional S1 (INV-17) Plane 1: Zero-ML Deterministic Execution (ARC-002) AuthN + Cedar Policy -&gt; PlanCache (TenantId) -&gt; ArcSwap Snapshot -&gt; BatchJoin -&gt; EgressGuard Plane 3: Zero-Trust Control &amp; Ingestion Propose-Not-Activate · Sampled @join Gates · DriftMonitor (desc_hash) · Auto Rollback"
+    "snippet": "GAP Three-Plane Strict Architectural Separation Plane 2: Progressive Intent Discovery L0/L1/L2 · Visibility Bitset (INV-05) · Baseline 95.24% / Optional S1 (INV-17) Selected query Plane 1: Z",
+    "keywords": "Strict Plane Separation Three-Plane Architecture GAP Three-Plane Strict Architectural Separation Plane 2: Progressive Intent Discovery L0/L1/L2 · Visibility Bitset (INV-05) · Baseline 95.24% / Optional S1 (INV-17) Selected query Plane 1: Zero-ML Deterministic Execution (ARC-002) AuthN + Cedar Policy -&gt; PlanCache (TenantId) -&gt; ArcSwap Snapshot -&gt; BatchJoin -&gt; EgressGuard Atomic ArcSwap publish Plane 3: Zero-Trust Control &amp; Ingestion Propose-Not-Activate · Sampled @join Gates · Dr"
   },
   {
     "title": "Interactive 10-Node Architecture Explorer — Three-Plane Architecture",
@@ -130,8 +130,8 @@ window.GAP_SEARCH_INDEX = [
     "title": "Walkthrough: From Intent to Typed Query — Progressive Disclosure (651 Tokens)",
     "section": "Core Concepts",
     "href": "concepts/progressive-disclosure.html#three-levels-walkthrough",
-    "snippet": "1 L0 — Branch Overview ( __metaGraph / gap_describe ) The agent first requests a concise capability directory capped at &lt;= 24 tokens per branch: graphql Returned summary: shop (openapi, 4",
-    "keywords": "Walkthrough: From Intent to Typed Query Progressive Disclosure (651 Tokens) 1 L0 — Branch Overview ( __metaGraph / gap_describe ) The agent first requests a concise capability directory capped at &lt;= 24 tokens per branch: graphql Returned summary: shop (openapi, 4 ops) , notes (mcp, 1 op) —hundreds of branches stay legible in a few hundred tokens. 2 L1 — Authorized Hybrid Search ( __search / gap_search ) The agent searches top-k matching operations using hybrid BM25 + HNSW vectors. GAP applies the caller's Cedar visibi"
+    "snippet": "Progressive Discovery L0 to L2 Flow (Fixed 651-Token tools/list) Static tools/list 5 tools (651 tok) L0: gap_describe overview: true (&lt;=24 tok/branch) L1: gap_search BM25 + Cedar Bitset (",
+    "keywords": "Walkthrough: From Intent to Typed Query Progressive Disclosure (651 Tokens) Progressive Discovery L0 to L2 Flow (Fixed 651-Token tools/list) Static tools/list 5 tools (651 tok) L0: gap_describe overview: true (&lt;=24 tok/branch) L1: gap_search BM25 + Cedar Bitset (INV-05) L2: gap_describe types: [&quot;shop_CustomersResult&quot;] gap_query / mutate Typed batched execution 1 L0 — Branch Overview ( gap_describe{overview: true} / __metaGraph ) Agents start by inspecting a compact directory capped at &lt;= 24 tokens per bra"
   },
   {
     "title": "Security Guarantee: Visibility Filtering Before Ranking (INV-05) — Progressive Disclosure (651 Tokens)",
@@ -151,15 +151,15 @@ window.GAP_SEARCH_INDEX = [
     "title": "Zero Custom Keywords (GQL-001) — GAP-QL & Batched Joins",
     "section": "Core Concepts",
     "href": "concepts/gap-ql-and-joins.html#valid-graphql-profile",
-    "snippet": "Instead of inventing non-standard GraphQL syntax like traverse { ... } , GAP exposes discovery and federation via standard schema root fields and validated directives ( @join , @sideEffect ,",
-    "keywords": "Zero Custom Keywords (GQL-001) GAP-QL & Batched Joins Instead of inventing non-standard GraphQL syntax like traverse { ... } , GAP exposes discovery and federation via standard schema root fields and validated directives ( @join , @sideEffect , @requiresScope ). Every query passes apollo-compiler validation and differential testing against graphql-js 16.13.2 . graphql"
+    "snippet": "Instead of inventing non-standard GraphQL syntax like traverse { ... } , GAP exposes discovery and federation via standard schema root fields and validated directives from spec/02-gap-ql.md ",
+    "keywords": "Zero Custom Keywords (GQL-001) GAP-QL & Batched Joins Instead of inventing non-standard GraphQL syntax like traverse { ... } , GAP exposes discovery and federation via standard schema root fields and validated directives from spec/02-gap-ql.md §5 ( @join , @sideEffect , @auth , @pii ). Every query passes apollo-compiler validation and differential testing against graphql-js 16.13.2 . graphql spec/02-gap-ql.md §5 — Built-in Directives"
   },
   {
     "title": "Preventing N+1 Waterfalls (INV-18) — GAP-QL & Batched Joins",
     "section": "Core Concepts",
     "href": "concepts/gap-ql-and-joins.html#dataloader-batching",
     "snippet": "Suppose a cross-branch query fetches 50 customers and joins their notes from an external MCP or SQL branch. Flat RPC loops fire 50 separate network requests. GAP extracts unique keys, enforc",
-    "keywords": "Preventing N+1 Waterfalls (INV-18) GAP-QL & Batched Joins Suppose a cross-branch query fetches 50 customers and joins their notes from an external MCP or SQL branch. Flat RPC loops fire 50 separate network requests. GAP extracts unique keys, enforces bounded chunks, and sends at most ceil(unique_keys / max_batch) BatchQuery frames—validated on every CI run ( VER-040 ). GAP-Bench Measured Tokens (Uncached vs 0.10x Prompt Cache, N=10..1,000) Suite / Scale N Direct-MCP (Uncached) GAP (Uncached) Direct-MCP "
+    "keywords": "Preventing N+1 Waterfalls (INV-18) GAP-QL & Batched Joins Suppose a cross-branch query fetches 50 customers and joins their notes from an external MCP or SQL branch. Flat RPC loops fire 50 separate network requests. GAP extracts unique keys, enforces bounded chunks, and sends at most ceil(unique_keys / max_batch) BatchQuery frames—validated on every CI run ( VER-040 ). LLM N+1 Waterfall vs GAP DataLoader BatchJoin (INV-18) Direct-MCP: N+1 Loop (4 turns · 814,959 tok) LLM calls customers -&gt; receives 5"
   },
   {
     "title": "Native Graph Connectors (NGC)",
@@ -172,8 +172,8 @@ window.GAP_SEARCH_INDEX = [
     "title": "How a REST API Becomes a Graph Branch — Native Graph Connectors (NGC)",
     "section": "Connect Data & Tools (NGC)",
     "href": "connectors/overview.html#rest-to-gap-walkthrough",
-    "snippet": "Given an upstream REST endpoint GET /orders?customer_id=... or batch endpoint GET /orders?customer_ids=1,2,3 returning JSON: json Declare the branch in gap.toml and mark the OpenAPI paramete",
-    "keywords": "How a REST API Becomes a Graph Branch Native Graph Connectors (NGC) Given an upstream REST endpoint GET /orders?customer_id=... or batch endpoint GET /orders?customer_ids=1,2,3 returning JSON: json Declare the branch in gap.toml and mark the OpenAPI parameter x-gap-in-param in your OpenAPI spec so the executor automatically batches multi-customer joins: toml id = \"shop\" : Stable branch identifier scoping generated GraphQL fields and audit logs. trust = \"T1\" : Admin-approved branch whose OpenAPI spec_hash and oper"
+    "snippet": "Given an upstream REST endpoint like GET /customers/{id} paired with list batching GET /customers?ids=1,2,3 , declare the \"x-gap-in-param\" extension inside your OpenAPI operation (verbatim f",
+    "keywords": "How a REST API Becomes a Graph Branch Native Graph Connectors (NGC) Given an upstream REST endpoint like GET /customers/{id} paired with list batching GET /customers?ids=1,2,3 , declare the \"x-gap-in-param\" extension inside your OpenAPI operation (verbatim from examples/walking-skeleton/shop.openapi.json ): json examples/walking-skeleton/shop.openapi.json Then wire the OpenAPI file into gap.toml : toml gap.toml — OpenAPI Branch id = \"shop\" : Stable branch identifier scoping generated GraphQL types ( shop_Customer"
   },
   {
     "title": "All 6 Shipped NGC Adapters — Native Graph Connectors (NGC)",
@@ -187,7 +187,7 @@ window.GAP_SEARCH_INDEX = [
     "section": "Connect Data & Tools (NGC)",
     "href": "connectors/overview.html#propose-not-activate",
     "snippet": "Newly ingested schemas never auto-publish directly into request execution. Instead, gap ingest once compiles a Candidate Intermediate Schema Graph (CISG), runs sample data verification on pr",
-    "keywords": "Safe Activation: Propose-Not-Activate & @join Verification Native Graph Connectors (NGC) Newly ingested schemas never auto-publish directly into request execution. Instead, gap ingest once compiles a Candidate Intermediate Schema Graph (CISG), runs sample data verification on proposed @join edges (checking containment &amp; null rates, never LLM guesswork), and queues a Proposal for operator review: terminal"
+    "keywords": "Safe Activation: Propose-Not-Activate & @join Verification Native Graph Connectors (NGC) Newly ingested schemas never auto-publish directly into request execution. Instead, gap ingest once compiles a Candidate Intermediate Schema Graph (CISG), runs sample data verification on proposed @join edges (checking containment &amp; null rates, never LLM guesswork), and queues a Proposal for operator review: terminal Terminal — Ingest, Diff &amp; Proposal Approval"
   },
   {
     "title": "MCP, A2A & AG-UI Facades",
@@ -214,8 +214,8 @@ window.GAP_SEARCH_INDEX = [
     "title": "Horizontal A2A v1.0 & Frontend AG-UI v1.0 — MCP, A2A & AG-UI Facades",
     "section": "AI Agent Hosts & Routers",
     "href": "agents/facades-and-hosts.html#a2a-and-agui",
-    "snippet": "A2A v1.0 Peer Binding ( adapters/gap-a2a ): Publishes /.well-known/agent-card.json and handles durable 8-state asynchronous task lifecycles with monotonic hop counters that fail closed on de",
-    "keywords": "Horizontal A2A v1.0 & Frontend AG-UI v1.0 MCP, A2A & AG-UI Facades A2A v1.0 Peer Binding ( adapters/gap-a2a ): Publishes /.well-known/agent-card.json and handles durable 8-state asynchronous task lifecycles with monotonic hop counters that fail closed on delegation loops ( GAP_LOOP_DETECTED , INV-20 ). AG-UI v1.0 Event Streaming ( adapters/gap-agui ): Exposes POST /ag-ui SSE streaming typed events ( RunStarted , StepStarted , TextMessage* , ToolCall* , StateDelta , RunFinished , RunError ). When a Cedar policy r"
+    "snippet": "A2A v1.0 Task Binding ( adapters/gap-a2a ): Builds durable 8-state asynchronous task lifecycles backed by SQLite leases with monotonic hop counters that fail closed on delegation loops ( GAP",
+    "keywords": "Horizontal A2A v1.0 & Frontend AG-UI v1.0 MCP, A2A & AG-UI Facades A2A v1.0 Task Binding ( adapters/gap-a2a ): Builds durable 8-state asynchronous task lifecycles backed by SQLite leases with monotonic hop counters that fail closed on delegation loops ( GAP_LOOP_DETECTED , INV-20 ). AG-UI v1.0 Event Streaming ( adapters/gap-agui ): Exposes POST /ag-ui SSE streaming typed events ( RUN_STARTED , STEP_STARTED , TOOL_CALL_* , STATE_SNAPSHOT , RUN_FINISHED ). When Cedar requires human confirmation on an IRREVERSIBLE "
   },
   {
     "title": "System-1 Routers & HTTP/3 QUIC",
@@ -236,7 +236,7 @@ window.GAP_SEARCH_INDEX = [
     "section": "AI Agent Hosts & Routers",
     "href": "agents/routers-and-http3.html#http3-dual-stack",
     "snippet": "Configured cleanly in gap.toml , gap-transport serves HTTPS/TCP ( HTTP/1.1 + HTTP/2 with Alt-Svc: h3=\":8443\"; ma=86400 ) and UDP QUIC ( quinn + h3 , TLS 1.3 ALPN h3 ) on the same runtime: to",
-    "keywords": "Dual-Stack HTTP/2 + HTTP/3 over QUIC (OPS-005, ADR-026) System-1 Routers & HTTP/3 QUIC Configured cleanly in gap.toml , gap-transport serves HTTPS/TCP ( HTTP/1.1 + HTTP/2 with Alt-Svc: h3=\":8443\"; ma=86400 ) and UDP QUIC ( quinn + h3 , TLS 1.3 ALPN h3 ) on the same runtime: toml Replay Immunity: max_early_data_size = 0 disables QUIC TLS 1.3 0-RTT early data everywhere so replayed packets can never trigger mutations twice. Fail-Closed prod Guard: Booting with profile = \"prod\" and http3_listen without explicit tls_cert_secret / tls_k"
+    "keywords": "Dual-Stack HTTP/2 + HTTP/3 over QUIC (OPS-005, ADR-026) System-1 Routers & HTTP/3 QUIC Configured cleanly in gap.toml , gap-transport serves HTTPS/TCP ( HTTP/1.1 + HTTP/2 with Alt-Svc: h3=\":8443\"; ma=86400 ) and UDP QUIC ( quinn + h3 , TLS 1.3 ALPN h3 ) on the same runtime: toml gap.toml — Dual-Stack HTTP/2 + HTTP/3 Replay Immunity: max_early_data_size = 0 disables QUIC TLS 1.3 0-RTT early data everywhere so replayed packets can never trigger mutations twice. Fail-Closed prod Guard: Booting with profile = \"prod\" and http3_listen wi"
   },
   {
     "title": "Zero-Trust Governance & Cedar",

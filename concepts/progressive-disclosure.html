@@ -198,61 +198,170 @@ GAP keeps MCP `tools/list` fixed at 651 tokens regardless of whether 10 or 1,000
   <h2 id="learn-heading">What you&#x27;ll learn</h2>
   <ul><li>How Level 0 (<code>__metaGraph</code>), Level 1 (<code>__search</code>), and Level 2 (<code>__type</code>) work step-by-step.</li><li>Why permission filtering happens BEFORE search scoring (<code>INV-05</code>).</li><li>Inspect real payload sizes returned at each discovery hop.</li></ul>
 </section>
+        <details class="toc-inline"><summary>On this page</summary><nav class="toc-inline-links" aria-label="On this page"><a class="toc-inline-link" href="#three-levels-walkthrough">Walkthrough: From Intent to Typed Query</a><a class="toc-inline-link" href="#visibility-before-rank">Security Guarantee: Visibility Filtering Before Ranking (INV-05)</a></nav></details>
 
         <section id="three-levels-walkthrough" tabindex="-1" class="doc-section">
   <h2>Walkthrough: From Intent to Typed Query</h2>
-  <ol class="steps-list">
+  <figure class="diagram-frame">
+  <svg role="img" aria-label="Progressive Discovery L0 to L2 Flow (Fixed 651-Token tools/list)" viewBox="0 0 760 130" width="760" height="130" xmlns="http://www.w3.org/2000/svg">
+    <title>Progressive Discovery L0 to L2 Flow (Fixed 651-Token tools/list)</title>
+    <defs>
+      <marker id="pl-arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+        <path d="M 0 1.5 L 9 5 L 0 8.5 z" fill="var(--accent)"/>
+      </marker>
+    </defs>
+    <rect x="8" y="22" width="128" height="82" rx="8" fill="var(--surface-alt)" stroke="var(--accent)" stroke-width="1.5"/>
+    <text x="72" y="54" text-anchor="middle" fill="var(--accent)" font-size="12" font-weight="700">Static tools/list</text>
+    <text x="72" y="78" text-anchor="middle" fill="var(--muted)" font-size="10.5">5 tools (651 tok)</text>
+    <line x1="136" y1="63" x2="156" y2="63" stroke="var(--accent)" stroke-width="2" marker-end="url(#pl-arr)"/>
+
+    <rect x="158" y="22" width="134" height="82" rx="8" fill="var(--surface-alt)" stroke="var(--border)"/>
+    <text x="225" y="54" text-anchor="middle" fill="var(--text)" font-size="12" font-weight="700">L0: gap_describe</text>
+    <text x="225" y="78" text-anchor="middle" fill="var(--muted)" font-size="10">overview: true (&lt;=24 tok/branch)</text>
+    <line x1="292" y1="63" x2="312" y2="63" stroke="var(--accent)" stroke-width="2" marker-end="url(#pl-arr)"/>
+
+    <rect x="314" y="22" width="136" height="82" rx="8" fill="var(--surface-alt)" stroke="var(--warn)" stroke-width="1.5"/>
+    <text x="382" y="54" text-anchor="middle" fill="var(--warn)" font-size="12" font-weight="700">L1: gap_search</text>
+    <text x="382" y="78" text-anchor="middle" fill="var(--muted)" font-size="10">BM25 + Cedar Bitset (INV-05)</text>
+    <line x1="450" y1="63" x2="470" y2="63" stroke="var(--accent)" stroke-width="2" marker-end="url(#pl-arr)"/>
+
+    <rect x="472" y="22" width="134" height="82" rx="8" fill="var(--surface-alt)" stroke="var(--border)"/>
+    <text x="539" y="54" text-anchor="middle" fill="var(--text)" font-size="12" font-weight="700">L2: gap_describe</text>
+    <text x="539" y="78" text-anchor="middle" fill="var(--muted)" font-size="10">types: [&quot;shop_CustomersResult&quot;]</text>
+    <line x1="606" y1="63" x2="626" y2="63" stroke="var(--accent)" stroke-width="2" marker-end="url(#pl-arr)"/>
+
+    <rect x="628" y="22" width="124" height="82" rx="8" fill="var(--surface-alt)" stroke="var(--ok)" stroke-width="2"/>
+    <text x="690" y="54" text-anchor="middle" fill="var(--ok)" font-size="12" font-weight="700">gap_query / mutate</text>
+    <text x="690" y="78" text-anchor="middle" fill="var(--muted)" font-size="10">Typed batched execution</text>
+  </svg>
+</figure><ol class="steps-list">
 <li class="step-item">
   <div class="step-badge" aria-hidden="true">1</div>
   <div class="step-content">
-    <h3>L0 — Branch Overview (<code>__metaGraph</code> / <code>gap_describe</code>)</h3>
-    <p>The agent first requests a concise capability directory capped at &lt;= 24 tokens per branch:</p><figure class="code-figure">
+    <h3>L0 — Branch Overview (<code>gap_describe{overview: true}</code> / <code>__metaGraph</code>)</h3>
+    <p>Agents start by inspecting a compact directory capped at &lt;= 24 tokens per branch over MCP <code>POST /mcp</code> (or inspect the <code>spec/02-gap-ql.md</code> <code>MetaGraph</code> contract):</p><figure class="code-figure">
   <div class="code-toolbar">
-    <span class="code-lang">graphql</span>
+    <div class="code-meta">
+      <span class="code-lang">json</span>
+      <span class="code-title">MCP 2026-07-28 — L0 Overview Call</span>
+    </div>
     <span class="copy">
-      <button type="button" class="copy-button" command="--copy" commandfor="pd-l0" aria-label="Copy graphql code snippet (pd-l0)">
+      <button type="button" class="copy-button" command="--copy" commandfor="pd-l0" aria-label="Copy json code snippet (MCP 2026-07-28 — L0 Overview Call)">
         <span class="icon" aria-hidden="true"></span>
       </button>
       <span class="tip" role="status"></span>
     </span>
   </div>
-  <pre role="region" aria-label="graphql code block" tabindex="0"><code id="pd-l0" class="language-graphql">query { __metaGraph { id kind opCount summary } }</code></pre>
-</figure><ul><li><strong>Returned summary:</strong> <code>shop (openapi, 4 ops)</code>, <code>notes (mcp, 1 op)</code>—hundreds of branches stay legible in a few hundred tokens.</li></ul>
+  <pre role="region" aria-label="MCP 2026-07-28 — L0 Overview Call" tabindex="0"><code id="pd-l0" class="language-json">{
+  &quot;jsonrpc&quot;: &quot;2.0&quot;,
+  &quot;id&quot;: 1,
+  &quot;method&quot;: &quot;tools/call&quot;,
+  &quot;params&quot;: {
+    &quot;name&quot;: &quot;gap_describe&quot;,
+    &quot;arguments&quot;: { &quot;overview&quot;: true }
+  }
+}</code></pre>
+</figure><figure class="code-figure">
+  <div class="code-toolbar">
+    <div class="code-meta">
+      <span class="code-lang">graphql</span>
+      <span class="code-title">GAP-QL Spec Reference (spec/02-gap-ql.md)</span>
+    </div>
+    <span class="copy">
+      <button type="button" class="copy-button" command="--copy" commandfor="pd-l0-sdl" aria-label="Copy graphql code snippet (GAP-QL Spec Reference (spec/02-gap-ql.md))">
+        <span class="icon" aria-hidden="true"></span>
+      </button>
+      <span class="tip" role="status"></span>
+    </span>
+  </div>
+  <pre role="region" aria-label="GAP-QL Spec Reference (spec/02-gap-ql.md)" tabindex="0"><code id="pd-l0-sdl" class="language-graphql"># Spec 02 MetaGraph SDL contract:
+query { __metaGraph { generation groupCount tokensEstimate branches { id protocol trust status synopsis operationCount } } }</code></pre>
+</figure><ul><li><strong>Returned summary:</strong> <code>shop (REST, T1, 4 ops)</code> and <code>notes (MCP, T1, 1 op)</code>—hundreds of upstream services fit comfortably in a few hundred tokens.</li></ul>
   </div>
 </li>
 <li class="step-item">
   <div class="step-badge" aria-hidden="true">2</div>
   <div class="step-content">
-    <h3>L1 — Authorized Hybrid Search (<code>__search</code> / <code>gap_search</code>)</h3>
-    <p>The agent searches top-k matching operations using hybrid BM25 + HNSW vectors. GAP applies the caller's Cedar visibility bitset <strong>first</strong> (<code>INV-05</code>), so forbidden operations never appear in candidate lists or token counts:</p><figure class="code-figure">
+    <h3>L1 — Authorized Hybrid Search (<code>gap_search</code> / <code>__search</code>)</h3>
+    <p>Next, search top-k matching operations via hybrid BM25 + HNSW. GAP applies the caller's Cedar visibility bitset <strong>first</strong> (<code>INV-05</code>), so forbidden operations never appear in candidate lists or token counts:</p><figure class="code-figure">
   <div class="code-toolbar">
-    <span class="code-lang">graphql</span>
+    <div class="code-meta">
+      <span class="code-lang">json</span>
+      <span class="code-title">MCP 2026-07-28 — L1 Authorized Search</span>
+    </div>
     <span class="copy">
-      <button type="button" class="copy-button" command="--copy" commandfor="pd-l1" aria-label="Copy graphql code snippet (pd-l1)">
+      <button type="button" class="copy-button" command="--copy" commandfor="pd-l1" aria-label="Copy json code snippet (MCP 2026-07-28 — L1 Authorized Search)">
         <span class="icon" aria-hidden="true"></span>
       </button>
       <span class="tip" role="status"></span>
     </span>
   </div>
-  <pre role="region" aria-label="graphql code block" tabindex="0"><code id="pd-l1" class="language-graphql">query { __search(query: &quot;customer order notes&quot;, limit: 5) { branch operation kind score } }</code></pre>
+  <pre role="region" aria-label="MCP 2026-07-28 — L1 Authorized Search" tabindex="0"><code id="pd-l1" class="language-json">{
+  &quot;jsonrpc&quot;: &quot;2.0&quot;,
+  &quot;id&quot;: 2,
+  &quot;method&quot;: &quot;tools/call&quot;,
+  &quot;params&quot;: {
+    &quot;name&quot;: &quot;gap_search&quot;,
+    &quot;arguments&quot;: { &quot;query&quot;: &quot;customer order notes&quot;, &quot;limit&quot;: 5 }
+  }
+}</code></pre>
+</figure><figure class="code-figure">
+  <div class="code-toolbar">
+    <div class="code-meta">
+      <span class="code-lang">graphql</span>
+      <span class="code-title">GAP-QL SearchResult SDL (spec/02-gap-ql.md)</span>
+    </div>
+    <span class="copy">
+      <button type="button" class="copy-button" command="--copy" commandfor="pd-l1-sdl" aria-label="Copy graphql code snippet (GAP-QL SearchResult SDL (spec/02-gap-ql.md))">
+        <span class="icon" aria-hidden="true"></span>
+      </button>
+      <span class="tip" role="status"></span>
+    </span>
+  </div>
+  <pre role="region" aria-label="GAP-QL SearchResult SDL (spec/02-gap-ql.md)" tabindex="0"><code id="pd-l1-sdl" class="language-graphql">query { __search(query: &quot;customer order notes&quot;, first: 5) { tokensEstimate abstained hits { score kind name path branch sdl } } }</code></pre>
 </figure>
   </div>
 </li>
 <li class="step-item">
   <div class="step-badge" aria-hidden="true">3</div>
   <div class="step-content">
-    <h3>L2 — On-Demand Type Hydration (<code>__type</code>)</h3>
-    <p>Only after choosing operations does the agent inspect the exact GraphQL input and return fields needed to build its query:</p><figure class="code-figure">
+    <h3>L2 — On-Demand Type Hydration (<code>gap_describe{types: [...]}</code> / <code>__type</code>)</h3>
+    <p>Finally, hydrate only the composed types needed for the query (in Walking Skeleton, OpenAPI ingestion compiles <code>shop_CustomersResult</code> and <code>shop_OrdersResult</code>):</p><figure class="code-figure">
   <div class="code-toolbar">
-    <span class="code-lang">graphql</span>
+    <div class="code-meta">
+      <span class="code-lang">json</span>
+      <span class="code-title">MCP 2026-07-28 — L2 Composed Type Lookup</span>
+    </div>
     <span class="copy">
-      <button type="button" class="copy-button" command="--copy" commandfor="pd-l2" aria-label="Copy graphql code snippet (pd-l2)">
+      <button type="button" class="copy-button" command="--copy" commandfor="pd-l2" aria-label="Copy json code snippet (MCP 2026-07-28 — L2 Composed Type Lookup)">
         <span class="icon" aria-hidden="true"></span>
       </button>
       <span class="tip" role="status"></span>
     </span>
   </div>
-  <pre role="region" aria-label="graphql code block" tabindex="0"><code id="pd-l2" class="language-graphql">query { __type(name: &quot;Customer&quot;) { name fields { name type { name kind } } } }</code></pre>
+  <pre role="region" aria-label="MCP 2026-07-28 — L2 Composed Type Lookup" tabindex="0"><code id="pd-l2" class="language-json">{
+  &quot;jsonrpc&quot;: &quot;2.0&quot;,
+  &quot;id&quot;: 3,
+  &quot;method&quot;: &quot;tools/call&quot;,
+  &quot;params&quot;: {
+    &quot;name&quot;: &quot;gap_describe&quot;,
+    &quot;arguments&quot;: { &quot;types&quot;: [&quot;shop_CustomersResult&quot;, &quot;shop_OrdersResult&quot;], &quot;depth&quot;: 1 }
+  }
+}</code></pre>
+</figure><figure class="code-figure">
+  <div class="code-toolbar">
+    <div class="code-meta">
+      <span class="code-lang">graphql</span>
+      <span class="code-title">GAP-QL Introspection Shape (spec/02-gap-ql.md)</span>
+    </div>
+    <span class="copy">
+      <button type="button" class="copy-button" command="--copy" commandfor="pd-l2-sdl" aria-label="Copy graphql code snippet (GAP-QL Introspection Shape (spec/02-gap-ql.md))">
+        <span class="icon" aria-hidden="true"></span>
+      </button>
+      <span class="tip" role="status"></span>
+    </span>
+  </div>
+  <pre role="region" aria-label="GAP-QL Introspection Shape (spec/02-gap-ql.md)" tabindex="0"><code id="pd-l2-sdl" class="language-graphql">query { __type(name: &quot;shop_CustomersResult&quot;) { name fields { name type { name kind } } } }</code></pre>
 </figure>
   </div>
 </li>

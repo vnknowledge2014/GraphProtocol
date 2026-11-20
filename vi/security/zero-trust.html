@@ -198,6 +198,7 @@
   <h2 id="learn-heading">Bạn sẽ nắm được gì</h2>
   <ul><li>Phân tầng tin cậy <code>T0</code>, <code>T1</code>, <code>T2</code> và viết luật Cedar yêu cầu phê duyệt 2 người.</li><li>Chống MCP Rug-Pull với <code>DriftMonitor</code> và nhốt dữ liệu lạ trong <code>&lt;gap:untrusted&gt;</code>.</li><li>Chặn triệt để kỹ thuật SSRF DNS-rebinding &amp; metadata đám mây (<code>169.254.169.254</code>).</li></ul>
 </section>
+        <details class="toc-inline"><summary>Trong trang này</summary><nav class="toc-inline-links" aria-label="Mục lục bài viết"><a class="toc-inline-link" href="#trust-tiers-cedar">Phân bậc Tin cậy &amp; Luật Cedar (<code>INV-04</code>, <code>INV-11</code>)</a><a class="toc-inline-link" href="#anti-rugpull-ssrf">Chống Rug-Pull, Bọc Dữ liệu T2 &amp; Phòng vệ SSRF</a></nav></details>
 
         <section id="trust-tiers-cedar" tabindex="-1" class="doc-section">
   <h2>Phân bậc Tin cậy &amp; Luật Cedar (<code>INV-04</code>, <code>INV-11</code>)</h2>
@@ -209,30 +210,49 @@
 </ul>
 <p>Phân quyền do bộ đánh giá Cedar thuần hàm (<code>policies/default.cedar</code>) đảm nhiệm, trong đó luật <code>forbid</code> luôn thắng <code>permit</code>:</p><figure class="code-figure">
   <div class="code-toolbar">
-    <span class="code-lang">cedar</span>
+    <div class="code-meta">
+      <span class="code-lang">cedar</span>
+      <span class="code-title">policies/default.cedar — Luật Duyệt 2 Người</span>
+    </div>
     <span class="copy">
-      <button type="button" class="copy-button" command="--copy" commandfor="sec-cedar" aria-label="Sao chép đoạn mã cedar (sec-cedar)">
+      <button type="button" class="copy-button" command="--copy" commandfor="sec-cedar" aria-label="Sao chép đoạn mã cedar (policies/default.cedar — Luật Duyệt 2 Người)">
         <span class="icon" aria-hidden="true"></span>
       </button>
       <span class="tip" role="status"></span>
     </span>
   </div>
-  <pre role="region" aria-label="Đoạn mã cedar" tabindex="0"><code id="sec-cedar" class="language-cedar">forbid (
-  principal,
-  action == Gap::Action::&quot;mutate&quot;,
-  resource
+  <pre role="region" aria-label="policies/default.cedar — Luật Duyệt 2 Người" tabindex="0"><code id="sec-cedar" class="language-cedar">@id(&quot;forbid-mutate-irreversible-or-unknown-unapproved&quot;)
+forbid (
+    principal,
+    action == Action::&quot;Mutate&quot;,
+    resource
 ) when {
-  resource.sideEffect == &quot;IRREVERSIBLE&quot; &amp;&amp;
-  !(context has approverIsDifferent &amp;&amp; context.approverIsDifferent == true)
+    (resource.sideEffect == &quot;IRREVERSIBLE&quot; || resource.sideEffect == &quot;UNKNOWN&quot;)
+        &amp;&amp; !(context.approved &amp;&amp; context.approverIsDifferent)
 };</code></pre>
+</figure><figure class="code-figure">
+  <div class="code-toolbar">
+    <div class="code-meta">
+      <span class="code-lang">terminal</span>
+      <span class="code-title">Terminal — Kiểm tra Cedar &amp; Chuỗi BLAKE3</span>
+    </div>
+    <span class="copy">
+      <button type="button" class="copy-button" command="--copy" commandfor="sec-cli-verify" aria-label="Sao chép đoạn mã terminal (Terminal — Kiểm tra Cedar &amp; Chuỗi BLAKE3)">
+        <span class="icon" aria-hidden="true"></span>
+      </button>
+      <span class="tip" role="status"></span>
+    </span>
+  </div>
+  <pre role="region" aria-label="Terminal — Kiểm tra Cedar &amp; Chuỗi BLAKE3" tabindex="0"><code id="sec-cli-verify" class="language-terminal">./target/dist/gap policy check --dir policies
+./target/dist/gap audit verify --nightly</code></pre>
 </figure><ul>
   <li><strong>Không mô hình ML nào can thiệp AuthZ:</strong> Mọi đánh giá Cedar hoàn toàn tất định (<code>INV-04</code>) và bỏ qua hoàn toàn các gợi ý tự khai báo từ server ngoài như <code>readOnlyHint: true</code>.</li>
 </ul>
 </section><section id="anti-rugpull-ssrf" tabindex="-1" class="doc-section">
   <h2>Chống Rug-Pull, Bọc Dữ liệu T2 &amp; Phòng vệ SSRF</h2>
-  <div tabindex="0" role="region" aria-label="Các cơ chế bảo mật cấp giao thức được kiểm thử trong tests/security/" class="table-wrapper">
-  <table class="data-table">
-    <caption>Các cơ chế bảo mật cấp giao thức được kiểm thử trong tests/security/</caption>
+  <div tabindex="0" role="region" aria-labelledby="cap-be23c45f" class="table-wrapper">
+  <table class="data-table" style="--col-2: &quot;Cơ chế Bảo vệ trong GAP&quot;; --col-3: &quot;Hành vi Cô lập Tất định&quot;;">
+    <caption id="cap-be23c45f">Các cơ chế bảo mật cấp giao thức được kiểm thử trong tests/security/</caption>
     <thead><tr><th scope="col">Mối đe dọa</th><th scope="col">Cơ chế Bảo vệ trong GAP</th><th scope="col">Hành vi Cô lập Tất định</th></tr></thead>
     <tbody><tr><th scope="row"><strong>MCP Tool Rug Pull</strong></th><td><code>DriftMonitor</code> (<code>SEC-082</code>, <code>INV-08</code>)</td><td>Tính lại JCS BLAKE3 <code>desc_hash</code>; sai lệch lập tức đóng băng nhánh sang <code>BranchStatus::Drift</code> và giữ nguyên mô tả đã ghim.</td></tr>
 <tr><th scope="row"><strong>Prompt Injection Gián tiếp</strong></th><td><code>&lt;gap:untrusted&gt;</code> (<code>SEC-080</code>)</td><td>Bọc mọi chuỗi từ nhánh T1/T2 và escape HTML các thẻ đóng giả mạo bên trong payload.</td></tr>

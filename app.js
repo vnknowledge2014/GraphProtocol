@@ -127,6 +127,7 @@
   // 3. Copy Buttons (`command="--copy"` + `commandfor`, single-path fallback)
   // ------------------------------------------------------------------
   const copyTimers = new WeakMap();
+  let lastCopyMessage = "";
 
   function legacyCopy(text) {
     const ta = document.createElement("textarea");
@@ -160,14 +161,24 @@
   function showCopyFeedback(btn, ok) {
     const wrap = btn.closest(".copy");
     const tip = wrap?.querySelector('.tip[role="status"]');
-    const msg = ok ? UI_CHROME.copied : UI_CHROME.copyFailed;
+    let msg = ok ? UI_CHROME.copied : UI_CHROME.copyFailed;
+    if (msg === lastCopyMessage) msg += "\u00A0";
+    lastCopyMessage = msg;
+
     delete btn.dataset.copied;
     delete btn.dataset.failed;
     btn.dataset[ok ? "copied" : "failed"] = "";
     if (tip) {
-      // VoiceOver won't re-announce unchanged text; toggle trailing NBSP cleanly.
-      tip.textContent = tip.textContent === msg ? `${msg}\u00A0` : msg;
-      tip.dataset.visible = "true";
+      tip.textContent = "";
+      const setTip = () => {
+        tip.textContent = msg;
+        tip.dataset.visible = "true";
+      };
+      if (typeof requestAnimationFrame === "function") {
+        requestAnimationFrame(setTip);
+      } else {
+        setTip();
+      }
     }
     const prevTimer = copyTimers.get(btn);
     if (prevTimer) clearTimeout(prevTimer);
@@ -176,7 +187,10 @@
       setTimeout(() => {
         delete btn.dataset.copied;
         delete btn.dataset.failed;
-        if (tip) tip.dataset.visible = "false";
+        if (tip) {
+          tip.dataset.visible = "false";
+          tip.textContent = "";
+        }
       }, 2000)
     );
   }
@@ -610,7 +624,21 @@
           <p><strong>${esc(D.ui.levelGoalLabel)}:</strong> ${esc(lv.goal)}</p>
           <ul>${lv.concepts.map((c) => `<li>${esc(c)}</li>`).join("")}</ul>
           <div><strong>${esc(D.ui.levelCommandsLabel)}:</strong></div>
-          <pre role="region" aria-label="${esc(D.ui.levelCommandsAria)} ${esc(lv.tabLabel)}" tabindex="0"><code>${esc(lv.commands)}</code></pre>
+          <figure class="code-figure">
+            <div class="code-toolbar">
+              <div class="code-meta">
+                <span class="code-lang">terminal</span>
+                <span class="code-title">${esc(D.ui.levelCommandsAria)} ${esc(lv.tabLabel)}</span>
+              </div>
+              <span class="copy">
+                <button type="button" class="copy-button" command="--copy" commandfor="lv-cmd-${esc(lv.id)}" aria-label="${esc(D.ui.levelCommandsAria)} ${esc(lv.tabLabel)}">
+                  <span class="icon" aria-hidden="true"></span>
+                </button>
+                <span class="tip" role="status"></span>
+              </span>
+            </div>
+            <pre role="region" aria-label="${esc(D.ui.levelCommandsAria)} ${esc(lv.tabLabel)}" tabindex="0"><code id="lv-cmd-${esc(lv.id)}" class="language-terminal">${esc(lv.commands)}</code></pre>
+          </figure>
           <div style="font-size:0.86rem;"><strong>${esc(D.ui.levelFilesLabel)}:</strong> ${lv.files.map((f) => `<code>${esc(f)}</code>`).join(" ")}</div>
           <h4 style="margin:0.9rem 0 0.2rem 0;">${esc(D.ui.levelChecklistHeading)}:</h4>
           <ul class="step-checklist">${itemsHtml}</ul>

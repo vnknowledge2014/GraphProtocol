@@ -205,6 +205,7 @@ At N &lt;= 50 flat lookups with prompt caching warm, Direct-MCP uses fewer raw t
   <h2 id="learn-heading">What you&#x27;ll learn</h2>
   <ul><li>Why loading flat tool catalogs directly into prompts breaks down as your system grows.</li><li>Core GAP vocabulary: Gateway, Branch, Connector, Snapshot, and Principal.</li><li>Exact crossover boundary: when to use Direct-MCP vs. when GAP dominates.</li></ul>
 </section>
+        <details class="toc-inline"><summary>On this page</summary><nav class="toc-inline-links" aria-label="On this page"><a class="toc-inline-link" href="#the-four-problems">Why Flat Agent Tooling Hits a Wall</a><a class="toc-inline-link" href="#key-terminology">Five Terms You Need to Know</a><a class="toc-inline-link" href="#when-not-to-use">When Direct-MCP Is Still Simpler (Honest Crossover)</a></nav></details>
 
         <section id="the-four-problems" tabindex="-1" class="doc-section">
   <h2>Why Flat Agent Tooling Hits a Wall</h2>
@@ -217,13 +218,21 @@ At N &lt;= 50 flat lookups with prompt caching warm, Direct-MCP uses fewer raw t
 </ul><figure class="diagram-frame">
   <svg role="img" aria-label="Comparison of flat Direct-MCP vs Unified GAP Supergraph" viewBox="0 0 760 270" width="760" height="270" xmlns="http://www.w3.org/2000/svg">
     <title>Comparison of flat Direct-MCP vs Unified GAP Supergraph</title>
+    <defs>
+      <marker id="mm-arr-warn" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+        <path d="M 0 1.5 L 9 5 L 0 8.5 z" fill="var(--warn)"/>
+      </marker>
+      <marker id="mm-arr-ok" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+        <path d="M 0 1.5 L 9 5 L 0 8.5 z" fill="var(--ok)"/>
+      </marker>
+    </defs>
     <rect x="8" y="8" width="356" height="254" rx="12" fill="var(--surface-alt)" stroke="var(--warn)" stroke-width="1.5"/>
     <text x="26" y="36" fill="var(--warn)" font-size="14" font-weight="700">Without GAP (Flat Direct-MCP)</text>
     <rect x="26" y="54" width="320" height="52" rx="8" fill="var(--surface)" stroke="var(--border)"/>
     <text x="186" y="77" text-anchor="middle" fill="var(--text)" font-size="13" font-weight="700">203,421 Token Prompt Bloat</text>
     <text x="186" y="96" text-anchor="middle" fill="var(--muted)" font-size="12">1,000 raw tool schemas up front</text>
-    <line x1="186" y1="106" x2="186" y2="146" stroke="var(--warn)" stroke-width="2" stroke-dasharray="4 3"/>
-    <text x="186" y="131" text-anchor="middle" fill="var(--warn)" font-size="12" font-weight="600">Agent-orchestrated N+1 loop (4 turns)</text>
+    <line x1="186" y1="106" x2="186" y2="146" stroke="var(--warn)" stroke-width="2" stroke-dasharray="4 3" marker-end="url(#mm-arr-warn)"/>
+    <text x="196" y="131" text-anchor="start" fill="var(--warn)" font-size="11.5" font-weight="600">Agent-orchestrated N+1 loop (4 turns)</text>
     <rect x="26" y="150" width="320" height="90" rx="8" fill="var(--surface)" stroke="var(--border)"/>
     <text x="186" y="185" text-anchor="middle" fill="var(--text)" font-size="13" font-weight="600">Mutable descriptions (Rug-Pull risk)</text>
     <text x="186" y="214" text-anchor="middle" fill="var(--muted)" font-size="12">REST  |  SQL  |  gRPC  |  MCP  |  Code AST</text>
@@ -233,8 +242,8 @@ At N &lt;= 50 flat lookups with prompt caching warm, Direct-MCP uses fewer raw t
     <rect x="414" y="54" width="320" height="52" rx="8" fill="var(--surface)" stroke="var(--accent)"/>
     <text x="574" y="77" text-anchor="middle" fill="var(--accent)" font-size="13" font-weight="700">5 Static MCP Tools (651 tok)</text>
     <text x="574" y="96" text-anchor="middle" fill="var(--muted)" font-size="12">L0 -&gt; L1 -&gt; L2 Discovery + Cedar AuthZ</text>
-    <line x1="574" y1="106" x2="574" y2="146" stroke="var(--ok)" stroke-width="2"/>
-    <text x="574" y="131" text-anchor="middle" fill="var(--ok)" font-size="12" font-weight="600">DataLoader Batching + ArcSwap (2 turns)</text>
+    <line x1="574" y1="106" x2="574" y2="146" stroke="var(--ok)" stroke-width="2" marker-end="url(#mm-arr-ok)"/>
+    <text x="584" y="131" text-anchor="start" fill="var(--ok)" font-size="11.5" font-weight="600">DataLoader Batching + ArcSwap (2 turns)</text>
     <rect x="414" y="150" width="320" height="90" rx="8" fill="var(--surface)" stroke="var(--ok)"/>
     <text x="574" y="185" text-anchor="middle" fill="var(--ok)" font-size="13" font-weight="700">6 NGC Branches · SSRF &amp; Drift Guard</text>
     <text x="574" y="214" text-anchor="middle" fill="var(--muted)" font-size="12">HTTP/3 QUIC  ·  MCP  ·  A2A v1.0  ·  AG-UI</text>
@@ -242,9 +251,9 @@ At N &lt;= 50 flat lookups with prompt caching warm, Direct-MCP uses fewer raw t
 </figure>
 </section><section id="key-terminology" tabindex="-1" class="doc-section">
   <h2>Five Terms You Need to Know</h2>
-  <div tabindex="0" role="region" aria-label="Core Graph Agent Protocol concepts mapped cleanly" class="table-wrapper">
-  <table class="data-table">
-    <caption>Core Graph Agent Protocol concepts mapped cleanly</caption>
+  <div tabindex="0" role="region" aria-labelledby="cap-fe55f86b" class="table-wrapper">
+  <table class="data-table" style="--col-2: &quot;Plain Meaning&quot;; --col-3: &quot;Real Counterpart in Repo&quot;;">
+    <caption id="cap-fe55f86b">Core Graph Agent Protocol concepts mapped cleanly</caption>
     <thead><tr><th scope="col">Term</th><th scope="col">Plain Meaning</th><th scope="col">Real Counterpart in Repo</th></tr></thead>
     <tbody><tr><th scope="row"><code>gateway</code></th><td>Single HTTP/3 QUIC, HTTP/2, or stdio server binary that agents call.</td><td><code>gap-cli</code> / <code>gap-server</code></td></tr>
 <tr><th scope="row"><code>branch</code></th><td>One upstream backend source (an API, DB, CLI, codebase, or MCP server).</td><td>Configured via <code>[[branches]]</code> in <code>gap.toml</code></td></tr>

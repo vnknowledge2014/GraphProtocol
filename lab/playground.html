@@ -199,6 +199,7 @@ Use this interactive page (`lab/playground.html`) in the browser to:
   <h2 id="learn-heading">What you&#x27;ll learn</h2>
   <ul><li>Simulate Direct-MCP vs. GAP token counts across workloads and scales (<code>N=10..1,000</code>).</li><li>Switch from simulation mode to a real local <code>gap serve</code> socket with <code>python3 web/serve.py</code>.</li><li>Save your 18-step hands-on learning progress across sessions (shared across English &amp; Vietnamese).</li></ul>
 </section>
+        <details class="toc-inline"><summary>On this page</summary><nav class="toc-inline-links" aria-label="On this page"><a class="toc-inline-link" href="#interactive-lab-suite">Crossover Calculator &amp; Live Protocol Playground</a><a class="toc-inline-link" href="#curriculum-checklist">6-Level Curriculum (Novice to Master)</a><a class="toc-inline-link" href="#knowledge-quiz">6-Question Architecture &amp; Security Quiz</a></nav></details>
 
         <section id="interactive-lab-suite" tabindex="-1" class="doc-section">
   <h2>Crossover Calculator &amp; Live Protocol Playground</h2>
@@ -237,14 +238,40 @@ Use this interactive page (`lab/playground.html`) in the browser to:
       <select id="play-scenario"></select>
     </div>
     <p id="play-note" class="section-lead"></p>
-    <div><strong>Request to <code id="play-endpoint"></code>:</strong></div>
-    <pre role="region" aria-label="Sample request payload" tabindex="0"><code id="play-request"></code></pre>
+    <figure class="code-figure">
+      <div class="code-toolbar">
+        <div class="code-meta">
+          <span class="code-lang">request</span>
+          <span class="code-title"><code id="play-endpoint"></code></span>
+        </div>
+        <span class="copy">
+          <button type="button" class="copy-button" command="--copy" commandfor="play-request" aria-label="Copy sample request payload">
+            <span class="icon" aria-hidden="true"></span>
+          </button>
+          <span class="tip" role="status"></span>
+        </span>
+      </div>
+      <pre role="region" aria-label="Sample request payload" tabindex="0"><code id="play-request" class="language-json"></code></pre>
+    </figure>
     <div class="control-row">
       <button id="btn-run-play" type="button" class="btn btn-primary">Run scenario</button>
       <span id="play-meta" class="section-lead"></span>
     </div>
-    <div><strong>Response output:</strong></div>
-    <pre role="region" aria-label="Response output" tabindex="0"><code id="play-response"></code></pre>
+    <figure class="code-figure">
+      <div class="code-toolbar">
+        <div class="code-meta">
+          <span class="code-lang">response</span>
+          <span class="code-title">JSON / SSE Output</span>
+        </div>
+        <span class="copy">
+          <button type="button" class="copy-button" command="--copy" commandfor="play-response" aria-label="Copy scenario response output">
+            <span class="icon" aria-hidden="true"></span>
+          </button>
+          <span class="tip" role="status"></span>
+        </span>
+      </div>
+      <pre role="region" aria-label="Response output" tabindex="0"><code id="play-response" class="language-json"></code></pre>
+    </figure>
   </div>
 </div>
 </section><section id="curriculum-checklist" tabindex="-1" class="doc-section">

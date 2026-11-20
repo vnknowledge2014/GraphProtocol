@@ -1,6 +1,7 @@
-"""HTML rendering primitives compliant with modern-web-guidance (`copy-button`, `html`, `accessibility`)."""
+"""HTML rendering primitives compliant with modern-web-guidance (`copy-button`, `responsive-table`, `html`, `accessibility`)."""
 from __future__ import annotations
 
+import hashlib
 import html
 import re
 
@@ -15,24 +16,34 @@ def inline_code(text: str) -> str:
     return re.sub(r"`([^`]+)`", r"<code>\1</code>", esc(text))
 
 
+def _css_str(text: str) -> str:
+    """Escape a string literal safely for inline CSS custom properties."""
+    return text.replace("\\", "\\\\").replace('"', '\\"').replace("\n", " ")
+
+
 def code_block(
     code: str,
     lang_label: str,
     snippet_id: str,
     lang: str = "en",
+    title: str = "",
 ) -> str:
     """Render an accessible copyable code block with Invoker Command markup."""
     if lang == "vi":
-        aria_copy = f"Sao chép đoạn mã {lang_label} ({snippet_id})"
-        aria_region = f"Đoạn mã {lang_label}"
+        aria_copy = f"Sao chép đoạn mã {lang_label} ({title or snippet_id})"
+        aria_region = title or f"Đoạn mã {lang_label}"
     else:
-        aria_copy = f"Copy {lang_label} code snippet ({snippet_id})"
-        aria_region = f"{lang_label} code block"
+        aria_copy = f"Copy {lang_label} code snippet ({title or snippet_id})"
+        aria_region = title or f"{lang_label} code block"
 
     cls = lang_label.lower().replace("/", "").replace(" ", "-")
+    title_html = f'<span class="code-title">{esc(title)}</span>' if title else ""
     return f"""<figure class="code-figure">
   <div class="code-toolbar">
-    <span class="code-lang">{esc(lang_label)}</span>
+    <div class="code-meta">
+      <span class="code-lang">{esc(lang_label)}</span>
+      {title_html}
+    </div>
     <span class="copy">
       <button type="button" class="copy-button" command="--copy" commandfor="{esc(snippet_id)}" aria-label="{esc(aria_copy)}">
         <span class="icon" aria-hidden="true"></span>
@@ -70,7 +81,8 @@ def steps_list(items: list[tuple[str, str]]) -> str:
 
 
 def data_table(caption: str, headers: list[str], rows: list[list[str]], extra_cls: str = "") -> str:
-    """Render an accessible responsive table with `<th scope="col">` headers."""
+    """Render an accessible responsive table with `<th scope="col">` headers and mobile CSS vars."""
+    cap_id = "cap-" + hashlib.sha256(caption.encode("utf-8")).hexdigest()[:8]
     ths = "".join(f'<th scope="col">{esc(h)}</th>' for h in headers)
     trs = []
     for row in rows:
@@ -78,10 +90,14 @@ def data_table(caption: str, headers: list[str], rows: list[list[str]], extra_cl
         rest = "".join(f"<td>{cell}</td>" for cell in row[1:])
         trs.append(f"<tr>{first}{rest}</tr>")
     tbody = "\n".join(trs)
+    col_vars = " ".join(
+        f'--col-{idx + 2}: "{_css_str(h)}";' for idx, h in enumerate(headers[1:])
+    )
+    style_attr = f' style="{esc(col_vars)}"' if col_vars else ""
     cls = f"data-table {extra_cls}".strip()
-    return f"""<div tabindex="0" role="region" aria-label="{esc(caption)}" class="table-wrapper">
-  <table class="{esc(cls)}">
-    <caption>{esc(caption)}</caption>
+    return f"""<div tabindex="0" role="region" aria-labelledby="{esc(cap_id)}" class="table-wrapper">
+  <table class="{esc(cls)}"{style_attr}>
+    <caption id="{esc(cap_id)}">{esc(caption)}</caption>
     <thead><tr>{ths}</tr></thead>
     <tbody>{tbody}</tbody>
   </table>

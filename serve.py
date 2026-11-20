@@ -62,6 +62,17 @@ def free_port() -> int:
         return int(s.getsockname()[1])
 
 
+def wait_tcp_port(port: int, timeout: float = 5.0) -> None:
+    deadline = time.perf_counter() + timeout
+    while time.perf_counter() < deadline:
+        try:
+            with socket.create_connection(("127.0.0.1", port), timeout=0.2):
+                return
+        except OSError:
+            time.sleep(0.03)
+    raise RuntimeError(f"Timed out waiting for upstream fixture TCP port 127.0.0.1:{port}")
+
+
 class DemoManager:
     def __init__(self) -> None:
         self._lock = threading.Lock()
@@ -159,19 +170,27 @@ scopes = ["read"]
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.PIPE,
             )
-            time.sleep(0.25)
+            self.tmpdir = tmp
+            self.procs = [rest_proc, mcp_proc]
+            wait_tcp_port(rest_port, timeout=5.0)
+            wait_tcp_port(mcp_port, timeout=5.0)
             gap_proc = subprocess.Popen(
                 [str(gap_bin), "serve", "--config", str(cfg)],
                 cwd=tmp_dir,
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.PIPE,
             )
-            self.tmpdir = tmp
-            self.procs = [rest_proc, mcp_proc, gap_proc]
+            self.procs.append(gap_proc)
             self.gap_port = gap_port
 
         deadline = time.perf_counter() + 10.0
         while time.perf_counter() < deadline:
+            if gap_proc.poll() is not None:
+                err_txt = ""
+                if gap_proc.stderr is not None:
+                    err_txt = gap_proc.stderr.read().decode("utf-8", errors="replace").strip()
+                self.stop()
+                raise RuntimeError(f"gap serve exited early ({gap_proc.returncode}): {err_txt}")
             try:
                 with urllib.request.urlopen(f"http://127.0.0.1:{gap_port}/readyz", timeout=1.0) as r:
                     if r.status == 200:
@@ -264,7 +283,25 @@ PLAYGROUND_TARGETS = {
                     "io.modelcontextprotocol/clientCapabilities": {},
                 },
                 "name": "gap_describe",
-                "arguments": {"names": ["Customer"]},
+                "arguments": {"types": ["shop_CustomersResult", "shop_OrdersResult"]},
+            },
+        },
+    ),
+    "agui-sse-stream": (
+        "/ag-ui",
+        {
+            "Content-Type": "application/json",
+            "Accept": "text/event-stream",
+            "Authorization": f"Bearer {GAP_KEY}",
+        },
+        {
+            "threadId": "playground-thread",
+            "runId": "playground-run-1",
+            "messages": [],
+            "forwardedProps": {
+                "graphql": {
+                    "query": "{ customer(id: 1) { id name tier } customer_notes(customer_id: 1) }",
+                }
             },
         },
     ),
@@ -426,10 +463,23 @@ class Handler(BaseHTTPRequestHandler):
                 with urllib.request.urlopen(req, timeout=5.0) as resp:
                     body_txt = resp.read().decode("utf-8")
                     lat_ms = round((time.perf_counter() - t0) * 1000.0, 2)
-                    try:
-                        body_obj = json.loads(body_txt)
-                    except Exception:
-                        body_obj = body_txt
+                    ctype_resp = resp.headers.get("Content-Type", "")
+                    if "text/event-stream" in ctype_resp or body_txt.lstrip().startswith("data:"):
+                        events = []
+                        for line in body_txt.splitlines():
+                            if line.startswith("data:"):
+                                chunk = line[5:].strip()
+                                if chunk:
+                                    try:
+                                        events.append(json.loads(chunk))
+                                    except Exception:
+                                        events.append(chunk)
+                        body_obj = {"sse_event_count": len(events), "events": events}
+                    else:
+                        try:
+                            body_obj = json.loads(body_txt)
+                        except Exception:
+                            body_obj = body_txt
                     self.send_json(200, {"http_status": resp.status, "latency_ms": lat_ms, "body": body_obj})
             except urllib.error.HTTPError as err:
                 lat_ms = round((time.perf_counter() - t0) * 1000.0, 2)

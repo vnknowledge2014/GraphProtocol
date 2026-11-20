@@ -202,6 +202,7 @@ Graph Agent Protocol (GAP) là cổng gateway GraphQL định kiểu chặt ch�
   <h2 id="learn-heading">Bạn sẽ nắm được gì</h2>
   <ul><li>Kết nối hàng trăm công cụ mà không làm phình ngữ cảnh LLM (chỉ 651 tokens thay vì 203.421 tokens).</li><li>Dập tắt lỗi vòng lặp N+1 qua gom lô DataLoader (INV-18) và snapshot bất biến ArcSwap.</li><li>Cưỡng chế bảo mật mặc định từ chối Cedar, chống rug-pull mô tả tool và chặn SSRF qua EgressGuard.</li></ul>
 </section>
+        <details class="toc-inline"><summary>Trong trang này</summary><nav class="toc-inline-links" aria-label="Mục lục bài viết"><a class="toc-inline-link" href="#get-started-paths">Chọn Lộ trình Bắt đầu</a><a class="toc-inline-link" href="#core-capabilities">Khám phá Các Trụ cột Kỹ thuật</a><a class="toc-inline-link" href="#measured-highlights">Số liệu Thực nghiệm Đã Kiểm chứng (<code>ADR-021</code>)</a><a class="toc-inline-link" href="#launch-videos">Video Giới thiệu Dự án (1080p)</a></nav></details>
 
         <section id="get-started-paths" tabindex="-1" class="doc-section">
   <h2>Chọn Lộ trình Bắt đầu</h2>
@@ -266,7 +267,23 @@ Graph Agent Protocol (GAP) là cổng gateway GraphQL định kiểu chặt ch�
   <a class="btn" href="../paper/gap-paper.html" target="_blank" rel="noopener">Đọc Bài báo Khoa học (HTML)</a>
   <a class="btn" href="../paper/gap-paper.pdf" target="_blank" rel="noopener">Tải Bài báo PDF</a>
   <a class="btn" href="https://github.com/vnknowledge2014/GraphProtocol" target="_blank" rel="noopener">Kho mã nguồn GitHub</a>
-</div>
+</div><figure class="code-figure">
+  <div class="code-toolbar">
+    <div class="code-meta">
+      <span class="code-lang">terminal</span>
+      <span class="code-title">Thử GAP trong 30 giây — Khởi tạo &amp; Chẩn đoán</span>
+    </div>
+    <span class="copy">
+      <button type="button" class="copy-button" command="--copy" commandfor="home-init" aria-label="Sao chép đoạn mã terminal (Thử GAP trong 30 giây — Khởi tạo &amp; Chẩn đoán)">
+        <span class="icon" aria-hidden="true"></span>
+      </button>
+      <span class="tip" role="status"></span>
+    </span>
+  </div>
+  <pre role="region" aria-label="Thử GAP trong 30 giây — Khởi tạo &amp; Chẩn đoán" tabindex="0"><code id="home-init" class="language-terminal">./target/dist/gap init my-gateway
+./target/dist/gap config check my-gateway/gap.toml
+./target/dist/gap doctor --config my-gateway/gap.toml</code></pre>
+</figure>
 </section><section id="launch-videos" tabindex="-1" class="doc-section">
   <h2>Video Giới thiệu Dự án (1080p)</h2>
   <div class="lab-grid videos-grid">

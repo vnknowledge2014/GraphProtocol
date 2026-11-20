@@ -195,35 +195,48 @@ Cả 6 adapter (`OpenAPI`, `SQL`, `GraphQL`, `gRPC`, `CLI`, `Code AST`) đều d
   <h2 id="learn-heading">Bạn sẽ nắm được gì</h2>
   <ul><li>Ví dụ trực quan đưa một endpoint OpenAPI REST vào <code>gap.toml</code> kèm gom batch <code>x-gap-in-param</code>.</li><li>So sánh 6 adapter NGC chính thức được đóng gói sẵn trong dự án.</li><li>Quy trình kiểm duyệt Propose-Not-Activate trước khi xuất bản snapshot mới.</li></ul>
 </section>
+        <details class="toc-inline"><summary>Trong trang này</summary><nav class="toc-inline-links" aria-label="Mục lục bài viết"><a class="toc-inline-link" href="#rest-to-gap-walkthrough">Từ REST JSON đến Nhánh Đồ thị Chỉ với Khai báo</a><a class="toc-inline-link" href="#six-connectors">Toàn bộ 6 Adapter NGC Đóng gói Sẵn</a><a class="toc-inline-link" href="#propose-not-activate">Quy trình Duyệt An toàn: Propose-Not-Activate</a></nav></details>
 
         <section id="rest-to-gap-walkthrough" tabindex="-1" class="doc-section">
   <h2>Từ REST JSON đến Nhánh Đồ thị Chỉ với Khai báo</h2>
-  <p>Giả sử dịch vụ đơn hàng REST trả về JSON từ <code>GET /orders?customer_id=...</code>:</p><figure class="code-figure">
+  <p>Với endpoint REST <code>GET /customers/{id}</code> đi kèm endpoint gom danh sách <code>GET /customers?ids=1,2,3</code>, chỉ cần gắn khối <code>"x-gap-in-param"</code> ngay trong đặc tả OpenAPI (trích nguyên văn từ <code>examples/walking-skeleton/shop.openapi.json</code>):</p><figure class="code-figure">
   <div class="code-toolbar">
-    <span class="code-lang">json</span>
+    <div class="code-meta">
+      <span class="code-lang">json</span>
+      <span class="code-title">examples/walking-skeleton/shop.openapi.json</span>
+    </div>
     <span class="copy">
-      <button type="button" class="copy-button" command="--copy" commandfor="ngc-json" aria-label="Sao chép đoạn mã json (ngc-json)">
+      <button type="button" class="copy-button" command="--copy" commandfor="ngc-json" aria-label="Sao chép đoạn mã json (examples/walking-skeleton/shop.openapi.json)">
         <span class="icon" aria-hidden="true"></span>
       </button>
       <span class="tip" role="status"></span>
     </span>
   </div>
-  <pre role="region" aria-label="Đoạn mã json" tabindex="0"><code id="ngc-json" class="language-json">{
-  &quot;orders&quot;: [
-    { &quot;id&quot;: 101, &quot;customer_id&quot;: 1, &quot;total_cents&quot;: 4200, &quot;status&quot;: &quot;paid&quot; }
-  ]
+  <pre role="region" aria-label="examples/walking-skeleton/shop.openapi.json" tabindex="0"><code id="ngc-json" class="language-json">&quot;/customers/{id}&quot;: {
+  &quot;get&quot;: {
+    &quot;operationId&quot;: &quot;customer&quot;,
+    &quot;x-gap-in-param&quot;: {
+      &quot;path&quot;: &quot;/customers&quot;,
+      &quot;param&quot;: &quot;ids&quot;,
+      &quot;key_field&quot;: &quot;id&quot;,
+      &quot;max_batch_size&quot;: 50
+    }
+  }
 }</code></pre>
-</figure><p>Chỉ cần khai báo nhánh trong <code>gap.toml</code> và gắn chú thích <code>x-gap-in-param</code> vào OpenAPI spec để bật gom lô tự động:</p><figure class="code-figure">
+</figure><p>Sau đó khai báo nhánh OpenAPI đó trong <code>gap.toml</code>:</p><figure class="code-figure">
   <div class="code-toolbar">
-    <span class="code-lang">toml</span>
+    <div class="code-meta">
+      <span class="code-lang">toml</span>
+      <span class="code-title">gap.toml — Khai báo Nhánh OpenAPI</span>
+    </div>
     <span class="copy">
-      <button type="button" class="copy-button" command="--copy" commandfor="ngc-toml" aria-label="Sao chép đoạn mã toml (ngc-toml)">
+      <button type="button" class="copy-button" command="--copy" commandfor="ngc-toml" aria-label="Sao chép đoạn mã toml (gap.toml — Khai báo Nhánh OpenAPI)">
         <span class="icon" aria-hidden="true"></span>
       </button>
       <span class="tip" role="status"></span>
     </span>
   </div>
-  <pre role="region" aria-label="Đoạn mã toml" tabindex="0"><code id="ngc-toml" class="language-toml">[[branches]]
+  <pre role="region" aria-label="gap.toml — Khai báo Nhánh OpenAPI" tabindex="0"><code id="ngc-toml" class="language-toml">[[branches]]
 id = &quot;shop&quot;
 protocol = &quot;openapi&quot;
 trust = &quot;T1&quot;
@@ -232,14 +245,14 @@ trust = &quot;T1&quot;
 spec = &quot;shop.openapi.json&quot;
 base_url = &quot;http://127.0.0.1:9101&quot;</code></pre>
 </figure><ul>
-  <li><strong><code>id = "shop"</code>:</strong> Định danh nhánh dùng cố định trong khóa bộ nhớ đệm và nhật ký kiểm toán.</li>
+  <li><strong><code>id = "shop"</code>:</strong> Định danh nhánh dùng đặt tiền tố kiểu biên dịch (<code>shop_CustomersResult</code>, <code>shop_OrdersResult</code>) và khóa audit.</li>
   <li><strong><code>trust = "T1"</code>:</strong> Nhánh đã được quản trị viên duyệt và ghim mã băm <code>spec_hash</code> / <code>desc_hash</code> chống sửa lén.</li>
 </ul>
 </section><section id="six-connectors" tabindex="-1" class="doc-section">
   <h2>Toàn bộ 6 Adapter NGC Đóng gói Sẵn</h2>
-  <div tabindex="0" role="region" aria-label="6 Native Graph Connectors chuẩn hóa hợp đồng protobuf NGC v1" class="table-wrapper">
-  <table class="data-table">
-    <caption>6 Native Graph Connectors chuẩn hóa hợp đồng protobuf NGC v1</caption>
+  <div tabindex="0" role="region" aria-labelledby="cap-c53240d9" class="table-wrapper">
+  <table class="data-table" style="--col-2: &quot;Nguồn Dữ liệu&quot;; --col-3: &quot;Cơ chế Batch &amp; Bảo vệ&quot;;">
+    <caption id="cap-c53240d9">6 Native Graph Connectors chuẩn hóa hợp đồng protobuf NGC v1</caption>
     <thead><tr><th scope="col">Crate Adapter</th><th scope="col">Nguồn Dữ liệu</th><th scope="col">Cơ chế Batch &amp; Bảo vệ</th></tr></thead>
     <tbody><tr><th scope="row"><code>gap-ngc-openapi</code></th><td>OpenAPI 3.0 / REST JSON</td><td>Hỗ trợ gom lô qua <code>x-gap-in-param</code> + ghim IP qua <code>EgressGuard</code>.</td></tr>
 <tr><th scope="row"><code>gap-ngc-sql</code></th><td>SQLite / PostgreSQL</td><td>Ánh xạ bảng &amp; khóa ngoại thành cạnh đồ thị gom lô <code>IN (...)</code>.</td></tr>
@@ -253,17 +266,21 @@ base_url = &quot;http://127.0.0.1:9101&quot;</code></pre>
   <h2>Quy trình Duyệt An toàn: Propose-Not-Activate</h2>
   <p>Không một schema mới hay cạnh <code>@join</code> nào tự động lọt vào luồng phục vụ khách hàng. Lệnh <code>gap ingest once</code> trích xuất đồ thị trung gian (CISG), kiểm tra thực tế trên dữ liệu mẫu đối với cạnh nối đề xuất (tỷ lệ khớp tập khóa RHS, tỷ lệ null) rồi tạo Proposal chờ người vận hành duyệt:</p><figure class="code-figure">
   <div class="code-toolbar">
-    <span class="code-lang">terminal</span>
+    <div class="code-meta">
+      <span class="code-lang">terminal</span>
+      <span class="code-title">Terminal — Ingest, Diff &amp; Duyệt Proposal</span>
+    </div>
     <span class="copy">
-      <button type="button" class="copy-button" command="--copy" commandfor="ngc-propose" aria-label="Sao chép đoạn mã terminal (ngc-propose)">
+      <button type="button" class="copy-button" command="--copy" commandfor="ngc-propose" aria-label="Sao chép đoạn mã terminal (Terminal — Ingest, Diff &amp; Duyệt Proposal)">
         <span class="icon" aria-hidden="true"></span>
       </button>
       <span class="tip" role="status"></span>
     </span>
   </div>
-  <pre role="region" aria-label="Đoạn mã terminal" tabindex="0"><code id="ngc-propose" class="language-terminal">./target/dist/gap ingest once --config gap.toml --tenant default
+  <pre role="region" aria-label="Terminal — Ingest, Diff &amp; Duyệt Proposal" tabindex="0"><code id="ngc-propose" class="language-terminal">./target/dist/gap ingest once --config examples/walking-skeleton/gap.toml --tenant default
 ./target/dist/gap proposals list
-./target/dist/gap snapshot diff
+./target/dist/gap snapshot show --config examples/walking-skeleton/gap.toml
+./target/dist/gap snapshot diff --before gap.toml --after gap.next.toml
 ./target/dist/gap proposals approve &lt;proposal-id&gt;</code></pre>
 </figure>
 </section>

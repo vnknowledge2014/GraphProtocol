@@ -49,12 +49,20 @@ def build_en_part2() -> dict[str, dict]:
                         ["<code>gap_task</code>", "Submits, polls, or cancels long-running A2A tasks.", "Persists FSM transitions in SQLite before emission (<code>INV-13</code>)."],
                     ],
                 )
-                + """<p>Configure Claude Desktop, Cursor, or Antigravity using either stdio mode (<code>gap serve --stdio</code>) or Streamable HTTP (<code>POST /mcp</code> with header <code>MCP-Protocol-Version: 2026-07-28</code>):</p>"""
+                + """<p>Configure Claude Desktop, Cursor, or Antigravity via stdio (<code>gap serve --stdio</code>) or call Streamable HTTP (<code>POST /mcp</code>) directly:</p>"""
                 + code_block(
                     '{\n  "mcpServers": {\n    "gap-gateway": {\n      "command": "/usr/local/bin/gap",\n      "args": ["serve", "--config", "/etc/gap/gap.toml", "--stdio"]\n    }\n  }\n}',
                     "json",
                     "host-mcp-stdio",
                     "en",
+                    title="mcp_servers.json — Stdio Client Config",
+                )
+                + code_block(
+                    'curl -sS -X POST http://127.0.0.1:8080/mcp \\\n  -H "Content-Type: application/json" \\\n  -H "Accept: application/json, text/event-stream" \\\n  -H "MCP-Protocol-Version: 2026-07-28" \\\n  -H "Mcp-Method: tools/call" \\\n  -H "Mcp-Name: gap_query" \\\n  -H "Authorization: Bearer gap_dev_skeleton_key_01" \\\n  -d \'{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"_meta":{"io.modelcontextprotocol/protocolVersion":"2026-07-28","io.modelcontextprotocol/clientCapabilities":{}},"name":"gap_query","arguments":{"query":"{ customer(id: 2) { id name } customer_notes(customer_id: 2) }"}}}\'',
+                    "terminal",
+                    "host-mcp-http",
+                    "en",
+                    title="Terminal — Live HTTP MCP 2026-07-28 Call",
                 ),
             },
             {
@@ -62,16 +70,30 @@ def build_en_part2() -> dict[str, dict]:
                 "h2": "Horizontal A2A v1.0 & Frontend AG-UI v1.0",
                 "subheadings": [],
                 "html": """<ul>
-  <li><strong>A2A v1.0 Peer Binding (<code>adapters/gap-a2a</code>):</strong> Publishes <code>/.well-known/agent-card.json</code> and handles durable 8-state asynchronous task lifecycles with monotonic hop counters that fail closed on delegation loops (<code>GAP_LOOP_DETECTED</code>, <code>INV-20</code>).</li>
-  <li><strong>AG-UI v1.0 Event Streaming (<code>adapters/gap-agui</code>):</strong> Exposes <code>POST /ag-ui</code> SSE streaming typed events (<code>RunStarted</code>, <code>StepStarted</code>, <code>TextMessage*</code>, <code>ToolCall*</code>, <code>StateDelta</code>, <code>RunFinished</code>, <code>RunError</code>). When a Cedar policy requires human confirmation on an <code>IRREVERSIBLE</code> mutation, AG-UI pauses via a native <code>RUN_FINISHED</code> interrupt and resumes deterministically after approval.</li>
-</ul>""",
+  <li><strong>A2A v1.0 Task Binding (<code>adapters/gap-a2a</code>):</strong> Builds durable 8-state asynchronous task lifecycles backed by SQLite leases with monotonic hop counters that fail closed on delegation loops (<code>GAP_LOOP_DETECTED</code>, <code>INV-20</code>).</li>
+  <li><strong>AG-UI v1.0 Event Streaming (<code>adapters/gap-agui</code>):</strong> Exposes <code>POST /ag-ui</code> SSE streaming typed events (<code>RUN_STARTED</code>, <code>STEP_STARTED</code>, <code>TOOL_CALL_*</code>, <code>STATE_SNAPSHOT</code>, <code>RUN_FINISHED</code>). When Cedar requires human confirmation on an <code>IRREVERSIBLE</code> mutation, AG-UI pauses via a native <code>RUN_FINISHED</code> interrupt and resumes cleanly after approval.</li>
+</ul>"""
+                + code_block(
+                    'curl -sS -N -X POST http://127.0.0.1:8080/ag-ui \\\n  -H "Content-Type: application/json" \\\n  -H "Accept: text/event-stream" \\\n  -H "Authorization: Bearer gap_dev_skeleton_key_01" \\\n  -d \'{"threadId":"demo-1","runId":"r-1","messages":[],"forwardedProps":{"graphql":{"query":"{ customer(id: 1) { id name tier } customer_notes(customer_id: 1) }"}}}\'',
+                    "terminal",
+                    "host-agui-curl",
+                    "en",
+                    title="Terminal — Stream AG-UI v1.0 SSE",
+                )
+                + code_block(
+                    'data: {"type":"RUN_STARTED","threadId":"demo-1","runId":"r-1","metadata":{"generation":1,"tenant":"default"}}\ndata: {"type":"TOOL_CALL_RESULT","toolCallName":"gap_query",...}\ndata: {"type":"STATE_SNAPSHOT","snapshot":{"generation":1,"lastData":{"customer":{"id":1,"name":"Ada Lovelace","tier":"vip"},...}}}\ndata: {"type":"RUN_FINISHED","outcome":{"type":"success"}}',
+                    "text",
+                    "host-agui-out",
+                    "en",
+                    title="Expected SSE Event Stream",
+                ),
             },
         ],
         "markdown": """# MCP, A2A & AG-UI Facades
 
 GAP simultaneously exposes:
 1. **MCP `2026-07-28` (`gap-mcp`):** 5 static tools (`gap_search`, `gap_describe`, `gap_query`, `gap_mutate`, `gap_task`) at 651 tokens over HTTP or `--stdio`.
-2. **A2A `v1.0` (`gap-a2a`):** `/.well-known/agent-card.json`, SQLite durable task leases (`INV-13`), and cycle prevention (`INV-20`).
+2. **A2A `v1.0` (`gap-a2a`):** 8-state AgentCard & durable SQLite task leases (`INV-13`), plus cycle prevention (`INV-20`).
 3. **AG-UI `v1.0` (`gap-agui`):** `POST /ag-ui` SSE streams, compact `StateDelta`, human-in-the-loop interrupts, and escaped `<gap:untrusted>` envelopes.
 """,
     }
@@ -107,10 +129,11 @@ GAP simultaneously exposes:
                     "<p>If any configured external System-1 provider (<code>@receptron/laya</code>, TypeSafe <code>jev</code> <code>/v1/systemone</code>, or Google <code>gemini_decision_1</code>) times out, returns invalid output, or is turned off, discovery falls back seamlessly to the deterministic baseline router while authorization remains untouched.</p>",
                 )
                 + code_block(
-                    '[router]\nprovider = "gemini_decision_1"   # none | laya_candle | laya_http | jev | gemini_decision_1\nendpoint = "https://generativelanguage.googleapis.com"\napi_key_secret = "env://GEMINI_API_KEY"\ntimeout_ms = 250',
+                    '[router]\n# disabled | laya_candle | laya_ort | http_sidecar | receptron_laya | jev | gemini_decision_1\nprovider = "gemini_decision_1"\nendpoint = "https://generativelanguage.googleapis.com"\nmodel = "gemini-decision-1"\napi_key_secret = "env://GEMINI_API_KEY"\ntimeout_ms = 400',
                     "toml",
                     "rt-s1-toml",
                     "en",
+                    title="gap.toml — Optional [router] Config",
                 ),
             },
             {
@@ -123,10 +146,11 @@ GAP simultaneously exposes:
                     "toml",
                     "rt-h3-toml",
                     "en",
+                    title="gap.toml — Dual-Stack HTTP/2 + HTTP/3",
                 )
                 + """<ul>
   <li><strong>Replay Immunity:</strong> <code>max_early_data_size = 0</code> disables QUIC TLS 1.3 <code>0-RTT</code> early data everywhere so replayed packets can never trigger mutations twice.</li>
-  <li><strong>Fail-Closed <code>prod</code> Guard:</strong> Booting with <code>profile = "prod"</code> and <code>http3_listen</code> without explicit <code>tls_cert_secret</code> / <code>tls_key_secret</code> refuses to start; <code>tls_self_signed_dev = true</code> is permitted only in <code>dev</code>.</li>
+  <li><strong>Fail-Closed <code>prod</code> Guard:</strong> Booting with <code>profile = "prod"</code> and <code>http3_listen</code> without explicit <code>tls_cert_secret</code> / <code>tls_key_secret</code> refuses to start; under <code>profile = "dev"</code>, omitting TLS secrets generates an ephemeral self-signed TLS 1.3 certificate automatically.</li>
   <li><strong>Measured Local Benchmark:</strong> <strong>5,013.1 req/s</strong> over multiplexed QUIC (<strong>1.626 ms</strong> p50 / <strong>2.364 ms</strong> p95 / <code>0</code> errors) alongside <strong>1,063.6 req/s</strong> TCP HTTP/1.1+2 (<code>11.544 ms</code> p95).</li>
 </ul>""",
             },
@@ -167,10 +191,18 @@ GAP simultaneously exposes:
 </ul>
 <p>Access decisions are pure functions evaluated in Cedar (<code>policies/default.cedar</code>) where <code>forbid</code> always beats <code>permit</code>:</p>"""
                 + code_block(
-                    'forbid (\n  principal,\n  action == Gap::Action::"mutate",\n  resource\n) when {\n  resource.sideEffect == "IRREVERSIBLE" &&\n  !(context has approverIsDifferent && context.approverIsDifferent == true)\n};',
+                    '@id("forbid-mutate-irreversible-or-unknown-unapproved")\nforbid (\n    principal,\n    action == Action::"Mutate",\n    resource\n) when {\n    (resource.sideEffect == "IRREVERSIBLE" || resource.sideEffect == "UNKNOWN")\n        && !(context.approved && context.approverIsDifferent)\n};',
                     "cedar",
                     "sec-cedar",
                     "en",
+                    title="policies/default.cedar — Two-Person Approval Rule",
+                )
+                + code_block(
+                    "./target/dist/gap policy check --dir policies\n./target/dist/gap audit verify --nightly",
+                    "terminal",
+                    "sec-cli-verify",
+                    "en",
+                    title="Terminal — Verify Cedar Policies & BLAKE3 Chain",
                 )
                 + """<ul>
   <li><strong>Zero model involvement:</strong> No LLM confidence score can relax Cedar enforcement (<code>INV-04</code>), and spoofed MCP annotations like <code>readOnlyHint: true</code> are ignored.</li>
@@ -254,14 +286,40 @@ GAP enforces defense in depth across 17 protocol attack vectors (`spec/07-securi
       <select id="play-scenario"></select>
     </div>
     <p id="play-note" class="section-lead"></p>
-    <div><strong>Request to <code id="play-endpoint"></code>:</strong></div>
-    <pre role="region" aria-label="Sample request payload" tabindex="0"><code id="play-request"></code></pre>
+    <figure class="code-figure">
+      <div class="code-toolbar">
+        <div class="code-meta">
+          <span class="code-lang">request</span>
+          <span class="code-title"><code id="play-endpoint"></code></span>
+        </div>
+        <span class="copy">
+          <button type="button" class="copy-button" command="--copy" commandfor="play-request" aria-label="Copy sample request payload">
+            <span class="icon" aria-hidden="true"></span>
+          </button>
+          <span class="tip" role="status"></span>
+        </span>
+      </div>
+      <pre role="region" aria-label="Sample request payload" tabindex="0"><code id="play-request" class="language-json"></code></pre>
+    </figure>
     <div class="control-row">
       <button id="btn-run-play" type="button" class="btn btn-primary">Run scenario</button>
       <span id="play-meta" class="section-lead"></span>
     </div>
-    <div><strong>Response output:</strong></div>
-    <pre role="region" aria-label="Response output" tabindex="0"><code id="play-response"></code></pre>
+    <figure class="code-figure">
+      <div class="code-toolbar">
+        <div class="code-meta">
+          <span class="code-lang">response</span>
+          <span class="code-title">JSON / SSE Output</span>
+        </div>
+        <span class="copy">
+          <button type="button" class="copy-button" command="--copy" commandfor="play-response" aria-label="Copy scenario response output">
+            <span class="icon" aria-hidden="true"></span>
+          </button>
+          <span class="tip" role="status"></span>
+        </span>
+      </div>
+      <pre role="region" aria-label="Response output" tabindex="0"><code id="play-response" class="language-json"></code></pre>
+    </figure>
   </div>
 </div>""",
             },
