@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Local interactive Vietnamese GAP Learning Server (HTTP on 127.0.0.1)."""
+"""Local interactive bilingual (EN / VI) GAP Learning Server (HTTP on 127.0.0.1)."""
 
 from __future__ import annotations
 
@@ -314,17 +314,61 @@ class Handler(BaseHTTPRequestHandler):
 
         rel = "index.html" if parsed.path in ("/", "") else parsed.path.lstrip("/")
         candidate = (WEB_DIR / rel).resolve()
-        if not str(candidate).startswith(str(WEB_DIR.resolve())) or not candidate.is_file():
+        web_root = WEB_DIR.resolve()
+        if not str(candidate).startswith(str(web_root)):
+            self.send_error(404, "Not found")
+            return
+        if candidate.is_dir():
+            candidate = (candidate / "index.html").resolve()
+        if not str(candidate).startswith(str(web_root)) or not candidate.is_file():
             self.send_error(404, "Not found")
             return
         mime, _ = mimetypes.guess_type(str(candidate))
         ctype = f"{mime or 'application/octet-stream'}; charset=utf-8" if (mime or "").startswith("text/") or mime in ("application/javascript", "application/json") else (mime or "application/octet-stream")
         data = candidate.read_bytes()
+        total = len(data)
+        range_hdr = self.headers.get("Range")
+        if range_hdr and range_hdr.startswith("bytes=") and total > 0:
+            spec = range_hdr[6:].split(",", 1)[0].strip()
+            if "-" in spec:
+                start_s, end_s = spec.split("-", 1)
+                try:
+                    if start_s == "":
+                        suffix = int(end_s)
+                        start = max(0, total - suffix)
+                        end = total - 1
+                    else:
+                        start = int(start_s)
+                        end = total - 1 if end_s == "" else min(int(end_s), total - 1)
+                    if 0 <= start <= end < total:
+                        chunk = data[start : end + 1]
+                        self.send_response(206)
+                        self.send_header("Content-Type", ctype)
+                        self.send_header("Accept-Ranges", "bytes")
+                        self.send_header("Content-Range", f"bytes {start}-{end}/{total}")
+                        self.send_header("Content-Length", str(len(chunk)))
+                        self.end_headers()
+                        try:
+                            self.wfile.write(chunk)
+                        except (BrokenPipeError, ConnectionResetError):
+                            pass
+                        return
+                except ValueError:
+                    pass
+                self.send_response(416)
+                self.send_header("Content-Range", f"bytes */{total}")
+                self.send_header("Content-Length", "0")
+                self.end_headers()
+                return
         self.send_response(200)
         self.send_header("Content-Type", ctype)
-        self.send_header("Content-Length", str(len(data)))
+        self.send_header("Accept-Ranges", "bytes")
+        self.send_header("Content-Length", str(total))
         self.end_headers()
-        self.wfile.write(data)
+        try:
+            self.wfile.write(data)
+        except (BrokenPipeError, ConnectionResetError):
+            pass
 
     def do_POST(self) -> None:  # noqa: N802
         parsed = urllib.parse.urlparse(self.path)
@@ -378,11 +422,11 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def main() -> int:
-    ap = argparse.ArgumentParser(description="Run local Vietnamese GAP learning portal server")
+    ap = argparse.ArgumentParser(description="Run local bilingual (EN/VI) GAP learning portal server")
     ap.add_argument("--port", type=int, default=8787, help="Loopback TCP port (default 8787)")
     args = ap.parse_args()
     server = ThreadingHTTPServer(("127.0.0.1", args.port), Handler)
-    print(f"GAP Vietnamese Learning Portal listening at http://127.0.0.1:{args.port}", flush=True)
+    print(f"GAP Bilingual Learning Portal (EN/VI) listening at http://127.0.0.1:{args.port}", flush=True)
     try:
         server.serve_forever()
     except KeyboardInterrupt:

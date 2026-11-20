@@ -1,7 +1,67 @@
-// Dữ liệu thực tế từ repository Graph Agent Protocol (0.1.0-rc.1) cho website học tiếng Việt.
+// Dữ liệu thực tế từ repository Graph Agent Protocol (0.1.0-rc.1) cho phiên bản Tiếng Việt (`vi.html`).
 "use strict";
 
 window.GAP_DATA = {
+  lang: "vi",
+  ui: {
+    locale: "vi-VN",
+    anchors: {
+      overview: "#tong-quan",
+      levels: "#lo-trinh-6-cap",
+      lab: "#phong-thi-nghiem",
+      crates: "#ban-do-crates",
+      cli: "#cli-va-runbooks",
+      inv: "#bat-bien-va-tu-dien"
+    },
+    cratesLabel: "Crates",
+    invariantsLabel: "Bất biến",
+    sourceFilesLabel: "Mã nguồn",
+    levelGoalLabel: "Mục tiêu",
+    levelCommandsLabel: "Lệnh thực hành",
+    levelCommandsAria: "Lệnh thực hành cho",
+    levelFilesLabel: "Tệp nên đọc trong repo",
+    levelChecklistHeading: "Checklist tự luyện cấp độ này",
+    gapWinsPrefix: "GAP thắng",
+    gapWinsMiddle: "ít token hơn · tiết kiệm",
+    gapWinsSuffix: "nên dùng GAP Facade ngay.",
+    directWinsPrefix: "Direct-MCP tốn ít token hơn",
+    directWinsSuffix:
+      "ở cấu hình nhỏ bật Prompt Cache này, chỉ nên bật GAP vì lý do bảo mật (Cedar, chống rug-pull, SSRF guard).",
+    schemaCostLabel: "Schema tools/list",
+    turnsLabel: "Số lượt LLM",
+    playMetaReadyLive: "Sẵn sàng gửi tới `gap serve` thật",
+    playMetaSimulated: "Dữ liệu mẫu chuẩn hóa",
+    statusGithubPages: "GitHub Pages (Mô phỏng tương tác)",
+    statusLiveRunningPrefix: "Lab sống đang chạy (:",
+    statusWebReadyIdle: "Kết nối máy chủ web (Lab chưa bật)",
+    statusWebNoBin: "Máy chủ web sẵn (chưa build gap)",
+    demoBadgeRunningPrefix: "Đang chạy port ",
+    demoBadgeSimulated: "Chế độ Mô phỏng",
+    btnStopLab: "Tắt Lab Thực Hành",
+    btnStartLab: "Bật Lab Thực Hành (gap serve)",
+    playNeedServePy: "Hãy chạy `python3 web/serve.py` để bật Lab tiến trình thật.",
+    playErrorPrefix: "Lỗi: ",
+    playLivePrefix: "Phản hồi thật từ gap serve",
+    playLiveErrorPrefix: "Lỗi gọi live: ",
+    playSimulatedNote: "Kết quả mô phỏng chuẩn xác từ fixture repo (bấm Bật Lab nếu muốn gọi socket thật).",
+    allLayersLabel: "Tất cả (32)",
+    cliRunPrefix: "Chạy",
+    cliHelpAriaPrefix: "Kết quả trợ giúp của lệnh",
+    cliOfflineHint: "Hãy chạy qua `python3 web/serve.py` để thực thi trực tiếp từ binary `gap`",
+    cliLoading: "Đang gọi ./target/dist/gap ...",
+    cliEmpty: "(trống)",
+    runbookTriggerLabel: "Điều kiện kích hoạt",
+    runbookActionLabel: "Cách xử lý",
+    quizCorrectPrefix: "Chính xác!",
+    quizWrongPrefix: "Chưa đúng. Gợi ý:",
+    quizScorePrefix: "Điểm hiện tại",
+    searchArchPrefix: "Kiến trúc",
+    searchLevelPrefix: "Lộ trình",
+    searchCratePrefix: "Crate",
+    searchCliPrefix: "CLI",
+    searchNoHits: "Không tìm thấy mục phù hợp."
+  },
+
   architectureNodes: [
     {
       id: "authn-cedar",
@@ -181,7 +241,7 @@ window.GAP_DATA = {
       checklist: [
         "Thử lần lượt L0 -> L1 -> L2 trong Phòng thí nghiệm để thấy số token giảm mạnh",
         "Chạy thành công bộ test conformance_gql bằng cargo nextest",
-        "Dùng thanh trượt Crossover ở Mục 3 để nắm rõ mốc N nào GAP thắng và mốc nào Direct-MCP thắng"
+        "Dùng bộ chọn Crossover ở Mục 3 để nắm rõ mốc N nào GAP thắng và mốc nào Direct-MCP thắng"
       ]
     },
     {
@@ -268,7 +328,7 @@ window.GAP_DATA = {
         "Nắm toàn quyền làm chủ kiến trúc 32 crates Rust, đọc hiểu mọi quyết định thiết kế (ADR-001..028), quy trình benchmark tái lập, HTTP/3 QUIC, AG-UI v1.0, Laya/Jev/Gemini Decision 1 và chuẩn ASD-STE100.",
       concepts: [
         "Mọi crate đều phải tuân thủ phân tầng L0 -> L6 và luật ARC-002 (cấm tuyệt đối gap-exec, gap-plan, gap-transport, gap-snapshot, gap-balance phụ thuộc vào crate ML). Supply chain sạch 0 lỗ hổng RUSTSEC nhờ AVL OrdMap tự chủ và rustls-pki-types.",
-        "100% yêu cầu MUST trong spec/00..09 (89 MUST / 362 tổng yêu cầu) đều được gắn thẻ // spec: <ID> trên bài test thực tế và kiểm tra nghiêm ngặt qua tools/spec_trace.py --strict (2.515 markers).",
+        "100% yêu cầu MUST trong spec/00..09 (89 MUST / 362 tổng yêu cầu) đều được gắn thẻ // spec: <ID> trên bài test thực tế và kiểm tra nghiêm ngặt qua tools/spec_trace.py --strict (2.516 markers).",
         "Theo tinh thần ADR-021, toàn bộ số liệu đều kèm đường dẫn tái lập (./bench/results/gapbench/reproduce.sh, python3 dist/verify-ga-local.py) và công khai cả vùng thua cuộc (N<=50 cached, X-1 columnar, S1 f32 fallback)."
       ],
       commands: `# Toàn bộ cổng kiểm chứng kiến trúc & truy vết chuẩn Master\npython3 tools/check_layers.py\npython3 tools/spec_trace.py --strict\npython3 tools/check_refs.py\npython3 dist/check-ste100.py`,
@@ -287,7 +347,6 @@ window.GAP_DATA = {
     }
   ],
 
-  // Dữ liệu đo thật 100% từ bench/results/gapbench/baseline.json (commit e31d7e0 / báo cáo 1.0-RC)
   gapbench: {
     api_lookup: {
       10: { dTools: 1904, gTools: 651, dUnc: 2041.6, gUnc: 5823.0, dCac: 547.2, gCac: 4691.9, dTurns: 1.0, gTurns: 2.0, dLat: 0.029, gLat: 1.190 },
@@ -463,7 +522,6 @@ window.GAP_DATA = {
     }
   ],
 
-  // Chính xác 32 workspace crates theo tools/layers.toml
   crates: [
     { name: "gap-core", layer: "L0", role: "Kiểu cốt lõi (TenantScope, Snapshot, AVL OrdMap, Config TLS/HTTP3/[router], Secret<T>)" },
     { name: "gap-proto", layer: "L1", role: "Biên dịch .proto thuần Rust bằng protox (NGC v1, Gateway v1, A2A)" },
