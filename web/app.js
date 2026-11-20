@@ -16,6 +16,16 @@
       githubPagesStatus: "GitHub Pages (Static Docs)",
       cliOfflineHint: "Run python3 web/serve.py locally to inspect live CLI output.",
       statusNeedLocal: "Start local server with: python3 web/serve.py",
+      qbStats: (calls) => `1 GAP request · vs. ${calls} Direct call${calls > 1 ? "s" : ""}`,
+      chalEmpty: "Type an answer or click a hint chip first.",
+      chalCorrect: "Correct! ",
+      chalWrong: "Not quite — check the hint chips or lesson snippet and try again.",
+      pracCorrect: "Correct! ",
+      pracWrong: "Not quite. ",
+      markComplete: "Mark Lesson Complete",
+      completedLabel: "Completed ✓",
+      courseUnit: "lessons",
+      courseCompletedSuffix: "completed",
     },
     vi: {
       copied: "Đã sao chép!",
@@ -24,6 +34,16 @@
       githubPagesStatus: "GitHub Pages (Chế độ Tĩnh)",
       cliOfflineHint: "Chạy python3 web/serve.py tại máy để xem trợ giúp CLI sống.",
       statusNeedLocal: "Khởi động máy chủ cục bộ: python3 web/serve.py",
+      qbStats: (calls) => `1 request GAP · thay vì ${calls} lượt Direct`,
+      chalEmpty: "Hãy nhập đáp án hoặc bấm vào gợi ý trước khi kiểm tra.",
+      chalCorrect: "Chính xác! ",
+      chalWrong: "Chưa đúng — hãy xem lại gợi ý hoặc đoạn mã trong bài và thử lại.",
+      pracCorrect: "Chính xác! ",
+      pracWrong: "Chưa đúng. ",
+      markComplete: "Đánh dấu Hoàn thành Bài học",
+      completedLabel: "Đã hoàn thành ✓",
+      courseUnit: "bài",
+      courseCompletedSuffix: "hoàn thành",
     },
   }[pageLang];
 
@@ -490,6 +510,209 @@
     });
   }
 
+  // ------------------------------------------------------------------
+  // 6.5 Learn Interactive Query Builder, Challenges & GAP Academy Progress
+  // ------------------------------------------------------------------
+  const qbWidget = document.getElementById("query-builder-widget");
+  if (qbWidget) {
+    const qbName = document.getElementById("qb-name");
+    const qbTier = document.getElementById("qb-tier");
+    const qbOrders = document.getElementById("qb-orders");
+    const qbNotes = document.getElementById("qb-notes");
+    const qbGql = document.getElementById("qb-graphql-code");
+    const qbJson = document.getElementById("qb-json-code");
+    const qbStats = document.getElementById("qb-stats-pill");
+
+    function updateQueryBuilder() {
+      const custFields = ["id"];
+      const custObj = { id: 1 };
+      if (qbName?.checked) {
+        custFields.push("name");
+        custObj.name = "Ada Lovelace";
+      }
+      if (qbTier?.checked) {
+        custFields.push("tier");
+        custObj.tier = "vip";
+      }
+
+      const blocks = [
+        `  customer(id: 1) {\n${custFields.map((f) => `    ${f}`).join("\n")}\n  }`,
+      ];
+      const dataObj = { customer: custObj };
+      let directCalls = 1;
+
+      if (qbOrders?.checked) {
+        blocks.push("  orders(customer_id: 1) {\n    id\n    status\n    total_cents\n  }");
+        dataObj.orders = [
+          { id: 101, status: "paid", total_cents: 4200 },
+          { id: 103, status: "pending", total_cents: 8500 },
+        ];
+        directCalls += 1;
+      }
+
+      if (qbNotes?.checked) {
+        blocks.push("  customer_notes(customer_id: 1)");
+        dataObj.customer_notes = {
+          customer_id: 1,
+          notes: [
+            {
+              note_id: "n-1",
+              summary: "Prefers consolidated monthly invoice",
+            },
+          ],
+        };
+        directCalls += 1;
+      }
+
+      if (qbGql) qbGql.textContent = `query {\n${blocks.join("\n")}\n}`;
+      if (qbJson) qbJson.textContent = JSON.stringify({ data: dataObj }, null, 2);
+      if (qbStats) qbStats.textContent = UI_CHROME.qbStats(directCalls);
+    }
+
+    [qbName, qbTier, qbOrders, qbNotes].forEach((el) =>
+      el?.addEventListener("change", updateQueryBuilder)
+    );
+    updateQueryBuilder();
+  }
+
+  for (const box of document.querySelectorAll(".challenge-box")) {
+    const input = box.querySelector(".chal-input");
+    const btn = box.querySelector(".chal-check-btn");
+    const feedback = box.querySelector(".chal-feedback");
+    const expectedList = (box.dataset.answers || "")
+      .split("|")
+      .map((s) => s.trim().toLowerCase())
+      .filter(Boolean);
+    const explain = box.dataset.explain || "";
+
+    function evaluateChallenge() {
+      if (!input || !feedback) return;
+      const val = input.value.trim().toLowerCase();
+      if (!val) {
+        feedback.className = "chal-feedback is-err";
+        feedback.textContent = UI_CHROME.chalEmpty;
+        return;
+      }
+      if (expectedList.includes(val)) {
+        feedback.className = "chal-feedback is-ok";
+        feedback.textContent = UI_CHROME.chalCorrect + explain;
+      } else {
+        feedback.className = "chal-feedback is-err";
+        feedback.textContent = UI_CHROME.chalWrong;
+      }
+    }
+
+    btn?.addEventListener("click", evaluateChallenge);
+    input?.addEventListener("keydown", (ev) => {
+      if (ev.key === "Enter") {
+        ev.preventDefault();
+        evaluateChallenge();
+      }
+    });
+    for (const chip of box.querySelectorAll(".chal-hint-chip")) {
+      chip.addEventListener("click", () => {
+        if (input) {
+          input.value = chip.dataset.fill || "";
+          input.focus();
+        }
+      });
+    }
+  }
+
+  for (const pbox of document.querySelectorAll(".practice-box")) {
+    const correctIdx = Number(pbox.dataset.correct);
+    const explain = pbox.dataset.explain || "";
+    const feedback = pbox.querySelector(".practice-feedback");
+    const opts = Array.from(pbox.querySelectorAll(".practice-opt"));
+    opts.forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const chosen = Number(btn.dataset.idx);
+        opts.forEach((o) => o.classList.remove("correct", "wrong"));
+        const isOk = chosen === correctIdx;
+        btn.classList.add(isOk ? "correct" : "wrong");
+        if (feedback) {
+          feedback.className = `practice-feedback ${isOk ? "is-ok" : "is-err"}`;
+          feedback.textContent = (isOk ? UI_CHROME.pracCorrect : UI_CHROME.pracWrong) + explain;
+        }
+      });
+    });
+  }
+
+  const ACADEMY_COURSES = {
+    liftoff: ["liftoff-1", "liftoff-2", "liftoff-3", "liftoff-4"],
+    mcp: ["mcp-1", "mcp-2", "mcp-3", "mcp-4"],
+    batch: ["batch-1", "batch-2", "batch-3", "batch-4"],
+    sec: ["sec-1", "sec-2", "sec-3", "sec-4"],
+  };
+  const ALL_ACADEMY_LESSONS = Object.values(ACADEMY_COURSES).flat();
+
+  function loadAcademyProgress() {
+    try {
+      const parsed = JSON.parse(localStorage.getItem("gap-academy-progress") || "{}");
+      return parsed && typeof parsed === "object" ? parsed : {};
+    } catch (_e) {
+      return {};
+    }
+  }
+
+  function saveAcademyProgress(map) {
+    try {
+      localStorage.setItem("gap-academy-progress", JSON.stringify(map));
+    } catch (_e) {}
+  }
+
+  function refreshAcademyUI() {
+    const map = loadAcademyProgress();
+    for (const btn of document.querySelectorAll(".lesson-complete-btn[data-lesson-key]")) {
+      const key = btn.dataset.lessonKey;
+      const done = Boolean(map[key]);
+      btn.setAttribute("aria-pressed", done ? "true" : "false");
+      btn.textContent = done ? UI_CHROME.completedLabel : UI_CHROME.markComplete;
+    }
+    for (const pill of document.querySelectorAll(".lesson-step-pill[data-lesson-pill]")) {
+      pill.classList.toggle("is-done", Boolean(map[pill.dataset.lessonPill]));
+    }
+    for (const badge of document.querySelectorAll("[data-course-progress]")) {
+      const cid = badge.dataset.courseProgress;
+      const keys = ACADEMY_COURSES[cid] || [];
+      const doneCount = keys.filter((k) => Boolean(map[k])).length;
+      const inBanner = Boolean(badge.closest(".course-banner"));
+      badge.textContent = inBanner
+        ? `${doneCount} / ${keys.length} ${UI_CHROME.courseCompletedSuffix}`
+        : `${doneCount} / ${keys.length} ${UI_CHROME.courseUnit}`;
+    }
+    const totalDone = ALL_ACADEMY_LESSONS.filter((k) => Boolean(map[k])).length;
+    const totalCountEl = document.getElementById("academy-total-count");
+    const totalFillEl = document.getElementById("academy-total-fill");
+    if (totalCountEl) totalCountEl.textContent = `${totalDone} / ${ALL_ACADEMY_LESSONS.length}`;
+    if (totalFillEl) {
+      const pct = ALL_ACADEMY_LESSONS.length
+        ? Math.round((totalDone * 100) / ALL_ACADEMY_LESSONS.length)
+        : 0;
+      totalFillEl.style.inlineSize = `${pct}%`;
+    }
+  }
+
+  for (const btn of document.querySelectorAll(".lesson-complete-btn[data-lesson-key]")) {
+    btn.addEventListener("click", () => {
+      const map = loadAcademyProgress();
+      const key = btn.dataset.lessonKey;
+      if (map[key]) delete map[key];
+      else map[key] = true;
+      saveAcademyProgress(map);
+      refreshAcademyUI();
+    });
+  }
+
+  const academyResetBtn = document.getElementById("academy-reset-btn");
+  if (academyResetBtn) {
+    academyResetBtn.addEventListener("click", () => {
+      saveAcademyProgress({});
+      refreshAcademyUI();
+    });
+  }
+  refreshAcademyUI();
+
   // Stop here cleanly on non-widget documentation pages when GAP_DATA is absent.
   if (!D) return;
 
@@ -610,8 +833,9 @@
       const itemsHtml = lv.checklist
         .map((label, cIdx) => {
           const key = `${lv.id}:${cIdx}`;
+          const cid = `chk-${lv.id}-${cIdx}`;
           const checked = progressMap[key] ? "checked" : "";
-          return `<li><label><input type="checkbox" data-key="${key}" ${checked} /> <span>${esc(label)}</span></label></li>`;
+          return `<div class="check-row"><label for="${esc(cid)}"><input id="${esc(cid)}" type="checkbox" data-key="${esc(key)}" ${checked} /> <span>${esc(label)}</span></label></div>`;
         })
         .join("");
 
@@ -640,8 +864,10 @@
             <pre role="region" aria-label="${esc(D.ui.levelCommandsAria)} ${esc(lv.tabLabel)}" tabindex="0"><code id="lv-cmd-${esc(lv.id)}" class="language-terminal">${esc(lv.commands)}</code></pre>
           </figure>
           <div style="font-size:0.86rem;"><strong>${esc(D.ui.levelFilesLabel)}:</strong> ${lv.files.map((f) => `<code>${esc(f)}</code>`).join(" ")}</div>
-          <h4 style="margin:0.9rem 0 0.2rem 0;">${esc(D.ui.levelChecklistHeading)}:</h4>
-          <ul class="step-checklist">${itemsHtml}</ul>
+          <fieldset class="step-checklist">
+            <legend style="font-weight:700;margin:0.9rem 0 0.35rem 0;">${esc(D.ui.levelChecklistHeading)}:</legend>
+            ${itemsHtml}
+          </fieldset>
         </div>
       `;
       tabpanels.appendChild(panel);
@@ -729,6 +955,8 @@
       const directTok = cached ? row.dCac : row.dUnc;
       const gapTok = cached ? row.gCac : row.gUnc;
       const maxTok = Math.max(directTok, gapTok, 1);
+      const pct = (val) =>
+        val <= 0 ? 0 : Math.max(2.5, Number(((val * 100) / maxTok).toFixed(1)));
       const ratio = gapTok / directTok;
       const gapWins = ratio < 1.0;
       const pctSaved = ((1 - ratio) * 100).toFixed(1);
@@ -740,12 +968,12 @@
       calcOutput.innerHTML = `
         <div class="bar-row">
           <span>Direct-MCP:</span>
-          <div class="bar-track"><div class="bar-fill direct" style="inline-size:${Math.round((directTok * 100) / maxTok)}%"></div></div>
+          <div class="bar-track"><div class="bar-fill direct" style="inline-size:${pct(directTok)}%"></div></div>
           <strong>${directTok.toLocaleString(D.ui.locale)} tok</strong>
         </div>
         <div class="bar-row">
           <span>GAP Facade:</span>
-          <div class="bar-track"><div class="bar-fill" style="inline-size:${Math.round((gapTok * 100) / maxTok)}%"></div></div>
+          <div class="bar-track"><div class="bar-fill" style="inline-size:${pct(gapTok)}%"></div></div>
           <strong>${gapTok.toLocaleString(D.ui.locale)} tok</strong>
         </div>
         <div style="font-size:0.86rem;margin-top:0.55rem;">

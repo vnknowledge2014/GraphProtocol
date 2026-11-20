@@ -8,7 +8,7 @@ from .diagrams import (
     svg_three_planes,
 )
 from .nav import link_to_asset, link_to_mirror, link_to_page
-from .render import callout, code_block, data_table, esc, steps_list
+from .render import callout, code_block, data_table, esc, metric_bar_chart, steps_list
 
 
 def _ctx(slug: str):
@@ -41,10 +41,15 @@ def build_en_part1() -> dict[str, dict]:
                 "subheadings": [],
                 "html": f"""<p>Pick the path that fits your goal today. Each guide explains one focused concept cleanly before showing real commands from the repository.</p>
 <div class="path-cards-grid">
-  <a class="path-card" href="{esc(u('what-is-gap'))}">
-    <span class="path-tag">Concept · 5 min</span>
-    <h3>New to GAP? Start Here</h3>
-    <p>Learn the 3 core problems GAP solves, how a supergraph organizes branches, and when Direct-MCP is still simpler.</p>
+  <a class="path-card" href="{esc(u('learn-graphql-and-gap'))}">
+    <span class="path-tag">Learn Basics · 8 min</span>
+    <h3>New to GraphQL or GAP? Start Here</h3>
+    <p>Zero-jargon foundations: Supergraph analogy, Types &amp; Scalars, <code>!</code> guarantees, and interactive Query-to-JSON Builder.</p>
+  </a>
+  <a class="path-card" href="{esc(u('academy-hub'))}">
+    <span class="path-tag">Academy · 4 Courses</span>
+    <h3>GAP Academy (16 Lessons)</h3>
+    <p>Hands-on Odyssey-style courses: Lift-Off Supergraph, MCP/AG-UI Assistants, REST/SQL Batching, and Enterprise Zero-Trust.</p>
   </a>
   <a class="path-card" href="{esc(u('quickstart'))}">
     <span class="path-tag">Tutorial · 10 min</span>
@@ -487,12 +492,36 @@ GAP divides gateway execution into three non-overlapping planes enforced in CI v
             },
             {
                 "id": "visibility-before-rank",
-                "h2": "Security Guarantee: Visibility Filtering Before Ranking (INV-05)",
+                "h2": "Security Guarantee: Visibility Filtering Before Ranking (`INV-05`) & Scaling Curve",
                 "subheadings": [],
                 "html": callout(
                     "important",
                     "No Existence Leakage",
                     "<p>If a restricted tenant or unprivileged agent queries <code>__search</code>, restricted branches and operations are masked out via the per-principal visibility bitset <em>before</em> scoring, ranking, or returning total counts.</p>",
+                )
+                + metric_bar_chart(
+                    "pd-scaling",
+                    "MCP tools/list Prompt Tax by Catalog Scale (N = 10 to 1,000)",
+                    "Measured schema tokens sent to LLM before user prompt arrives (ADR-021)",
+                    [
+                        ("<code>GAP Static 5-Tool (All N)</code>", 651, "651 tok (constant)", "ok"),
+                        ("Direct-MCP (N = 10)", 1904, "1,904 tok", "warn"),
+                        ("Direct-MCP (N = 50)", 10066, "10,066 tok", "warn"),
+                        ("Direct-MCP (N = 200)", 40586, "40,586 tok", "warn"),
+                        ("Direct-MCP (N = 1,000)", 203421, "203,421 tok (312x larger)", "warn"),
+                    ],
+                    203421,
+                    "en",
+                )
+                + data_table(
+                    "MCP tools/list schema overhead comparison (N = 10 to 1,000)",
+                    ["Scale N", "Direct-MCP tools/list", "GAP Static tools/list", "Schema Token Reduction"],
+                    [
+                        ["N = 10 tools", "1,904 tokens", "<strong>651 tokens</strong>", "65.8%"],
+                        ["N = 50 tools", "10,066 tokens", "<strong>651 tokens</strong>", "93.5%"],
+                        ["N = 200 tools", "40,586 tokens", "<strong>651 tokens</strong>", "98.4%"],
+                        ["N = 1,000 tools", "203,421 tokens", "<strong>651 tokens</strong>", "<strong>99.7% (312x)</strong>"],
+                    ],
                 ),
             },
         ],
@@ -534,8 +563,21 @@ GAP keeps MCP `tools/list` fixed at 651 tokens regardless of whether 10 or 1,000
                 "id": "dataloader-batching",
                 "h2": "Preventing N+1 Waterfalls (`INV-18`)",
                 "subheadings": [],
-                "html": f"""<p>Suppose a cross-branch query fetches 50 customers and joins their notes from an external MCP or SQL branch. Flat RPC loops fire 50 separate network requests. GAP extracts unique keys, enforces bounded chunks, and sends at most <code>ceil(unique_keys / max_batch)</code> <code>BatchQuery</code> frames—validated on every CI run (<code>VER-040</code>).</p>"""
+                "html": """<p>Suppose a cross-branch query fetches 50 customers and joins their notes from an external MCP or SQL branch. Flat RPC loops fire 50 separate network requests. GAP extracts unique keys, enforces bounded chunks, and sends at most <code>ceil(unique_keys / max_batch)</code> <code>BatchQuery</code> frames—validated on every CI run (<code>VER-040</code>).</p>"""
                 + svg_batch_join("en")
+                + metric_bar_chart(
+                    "gapbench-highlight",
+                    "GAP-Bench Total Workload Tokens (Uncached Join & Cached Code Graph)",
+                    "Measured against Direct-MCP across multi-turn joins and AST code navigation",
+                    [
+                        ("Join N=1,000 · Direct-MCP", 814959.8, "814,959.8 tok (4 turns)", "warn"),
+                        ("<code>Join N=1,000 · GAP BatchJoin</code>", 8547.9, "8,547.9 tok (-99.0% · 2 turns)", "ok"),
+                        ("Code Graph (24) · Direct-MCP", 137810.4, "137,810.4 tok (11 turns)", "warn"),
+                        ("<code>Code Graph (24) · GAP AST</code>", 660.4, "660.4 tok (208.7x · 1 turn)", "accent"),
+                    ],
+                    814959.8,
+                    "en",
+                )
                 + data_table(
                     "GAP-Bench Measured Tokens (Uncached vs 0.10x Prompt Cache, N=10..1,000)",
                     ["Suite / Scale N", "Direct-MCP (Uncached)", "GAP (Uncached)", "Direct-MCP (Cached)", "GAP (Cached)", "Turns (Direct -> GAP)"],

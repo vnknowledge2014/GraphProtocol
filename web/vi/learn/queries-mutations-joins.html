@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="color-scheme" content="light dark" />
+  <script>
+    try {
+      var s = localStorage.getItem("gap-color-scheme");
+      if (s === "light" || s === "dark") {
+        document.querySelector('meta[name="color-scheme"]').content = s;
+      }
+    } catch (_e) {}
+  </script>
+  <title>Tham số, Mutation &amp; Nối nhánh — Tài liệu GAP</title>
+  <meta name="description" content="Lọc dữ liệu với biến tham số, chạy mutation an toàn qua @sideEffect và đối chiếu tư duy cho kỹ sư REST &amp; Direct-MCP." />
+  <link rel="canonical" href="https://vnknowledge2014.github.io/GraphProtocol/vi/learn/queries-mutations-joins.html" />
+  <link rel="alternate" hreflang="en" href="../../learn/queries-mutations-joins.html" />
+  <link rel="alternate" hreflang="vi" href="queries-mutations-joins.html" />
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns=&#x27;http://www.w3.org/2000/svg&#x27; viewBox=&#x27;0 0 32 32&#x27;%3E%3Crect width=&#x27;32&#x27; height=&#x27;32&#x27; rx=&#x27;8&#x27; fill=&#x27;%230f4c81&#x27;/%3E%3Ctext x=&#x27;16&#x27; y=&#x27;22&#x27; text-anchor=&#x27;middle&#x27; font-family=&#x27;system-ui,sans-serif&#x27; font-weight=&#x27;800&#x27; font-size=&#x27;18&#x27; fill=&#x27;%23ffffff&#x27;%3EG%3C/text%3E%3C/svg%3E" />
+  <link rel="stylesheet" href="../../styles.css" />
+</head>
+<body data-slug="learn-queries-mutations-joins" data-lang="vi" data-section="learn" data-web-root="../../">
+  <a class="skip-link" href="#article-title">Chuyển tới nội dung bài viết</a>
+
+  <header class="topbar">
+    <div class="topbar-inner">
+      <div class="topbar-left">
+        <button type="button" id="drawer-open" class="drawer-open-btn" aria-label="Mở danh mục tài liệu" aria-controls="docs-drawer">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+            <path d="M4 6h16M4 12h16M4 18h16" />
+          </svg>
+        </button>
+        <a class="brand-link" href="../index.html">
+          <span class="brand-mark" aria-hidden="true">G</span>
+          <span class="brand-text"><strong>GAP</strong> <span class="brand-sub">Tài liệu GAP</span></span>
+          <span class="badge-ver">v0.1.0-rc.1</span>
+        </a>
+      </div>
+
+      <nav class="top-nav" aria-label="Nhóm tài liệu chính">
+        <a href="../getting-started/what-is-gap.html" class="top-link">Bắt đầu</a><a href="graphql-and-gap-basics.html" aria-current="true" class="top-link is-active">Kiến thức Nền</a><a href="../academy/index.html" class="top-link">Học viện</a><a href="../concepts/architecture.html" class="top-link">Kiến trúc</a><a href="../security/zero-trust.html" class="top-link">Bảo mật</a><a href="../lab/playground.html" class="top-link">Phòng Lab</a><a href="../reference/cli-and-ops.html" class="top-link">Tra cứu</a>
+      </nav>
+
+      <div class="topbar-controls">
+        <search class="search-wrap">
+          <label class="visually-hidden" for="global-search">Tìm kiếm trên toàn bộ tài liệu và Học viện GAP</label>
+          <input id="global-search" type="search" placeholder="Tìm tài liệu, Học viện, INV... [/]" autocomplete="off" />
+          <div id="search-results" class="search-results scroller" role="region" aria-live="polite" hidden></div>
+        </search>
+        <nav class="lang-switch" aria-label="Ngôn ngữ">
+          <span class="lang-current" aria-current="true">VI</span>
+          <a class="lang-alt" href="../../learn/queries-mutations-joins.html" hreflang="en" lang="en">EN</a>
+        </nav>
+        <button type="button" id="theme-toggle-btn" class="theme-toggle" aria-label="Chuyển giao diện Sáng / Tối">
+          <span class="icon-to-dark" aria-hidden="true">☽</span>
+          <span class="icon-to-light" aria-hidden="true">☀</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <dialog class="Drawer scroller" id="docs-drawer" aria-label="Ngăn điều hướng tài liệu">
+    <nav class="Drawer-nav scroller" aria-label="Danh mục tài liệu">
+      <div class="Drawer-head">
+        <span class="Drawer-brand"><strong>GAP</strong> Tài liệu GAP</span>
+        <button type="button" id="drawer-close" class="drawer-close-btn" aria-label="Đóng danh mục tài liệu">&times;</button>
+      </div>
+      <div class="nav-group" data-section-id="start-here">
+  <p class="nav-group-title" id="drawer-start-here">Bắt đầu</p>
+  <ul aria-labelledby="drawer-start-here">
+    <li><a class="nav-link" href="../index.html">Trang chủ Tài liệu GAP</a></li><li><a class="nav-link" href="../getting-started/what-is-gap.html">GAP là gì?</a></li><li><a class="nav-link" href="../getting-started/quickstart.html">Khởi chạy Nhanh (10 phút)</a></li>
+  </ul>
+</div>
+<div class="nav-group" data-section-id="learn">
+  <p class="nav-group-title" id="drawer-learn">Kiến thức Nền tảng</p>
+  <ul aria-labelledby="drawer-learn">
+    <li><a class="nav-link" href="graphql-and-gap-basics.html">Nhập môn GraphQL &amp; GAP</a></li><li><a class="nav-link is-active" href="queries-mutations-joins.html" aria-current="page">Tham số, Mutation &amp; Nối nhánh</a></li>
+  </ul>
+</div>
+<div class="nav-group" data-section-id="academy">
+  <p class="nav-group-title" id="drawer-academy">Học viện GAP (Thực chiến)</p>
+  <ul aria-labelledby="drawer-academy">
+    <li><a class="nav-link" href="../academy/index.html">Học viện GAP — Khóa học Thực chiến</a></li><li><a class="nav-link" href="../academy/liftoff-first-supergraph.html">Khóa 1: Lift-Off — Siêu đồ thị Đầu tiên</a></li><li><a class="nav-link" href="../academy/mcp-and-ai-assistants.html">Khóa 2: MCP, AG-UI &amp; Trợ lý AI</a></li><li><a class="nav-link" href="../academy/connectors-and-batching.html">Khóa 3: REST, SQL &amp; Gom lô N+1</a></li><li><a class="nav-link" href="../academy/enterprise-zero-trust.html">Khóa 4: Zero-Trust, Cedar &amp; HTTP/3</a></li>
+  </ul>
+</div>
+<div class="nav-group" data-section-id="concepts">
+  <p class="nav-group-title" id="drawer-concepts">Kiến trúc Cốt lõi</p>
+  <ul aria-labelledby="drawer-concepts">
+    <li><a class="nav-link" href="../concepts/architecture.html">Kiến trúc 3 Mặt phẳng</a></li><li><a class="nav-link" href="../concepts/progressive-disclosure.html">Khám phá Lũy tiến (651 Tokens)</a></li><li><a class="nav-link" href="../concepts/gap-ql-and-joins.html">GAP-QL &amp; Gom Lô Join</a></li>
+  </ul>
+</div>
+<div class="nav-group" data-section-id="connectors">
+  <p class="nav-group-title" id="drawer-connectors">Kết nối Dữ liệu (NGC)</p>
+  <ul aria-labelledby="drawer-connectors">
+    <li><a class="nav-link" href="../connectors/overview.html">Kết nối Dữ liệu (NGC)</a></li>
+  </ul>
+</div>
+<div class="nav-group" data-section-id="agents">
+  <p class="nav-group-title" id="drawer-agents">Tích hợp AI Agent</p>
+  <ul aria-labelledby="drawer-agents">
+    <li><a class="nav-link" href="../agents/facades-and-hosts.html">Tích hợp MCP, A2A &amp; AG-UI</a></li><li><a class="nav-link" href="../agents/routers-and-http3.html">Định tuyến System-1 &amp; HTTP/3 QUIC</a></li>
+  </ul>
+</div>
+<div class="nav-group" data-section-id="security">
+  <p class="nav-group-title" id="drawer-security">Bảo mật Zero-Trust</p>
+  <ul aria-labelledby="drawer-security">
+    <li><a class="nav-link" href="../security/zero-trust.html">Bảo mật Zero-Trust &amp; Cedar</a></li>
+  </ul>
+</div>
+<div class="nav-group" data-section-id="lab">
+  <p class="nav-group-title" id="drawer-lab">Phòng Lab Thực hành</p>
+  <ul aria-labelledby="drawer-lab">
+    <li><a class="nav-link" href="../lab/playground.html">Phòng Lab &amp; Bộ tính Token</a></li>
+  </ul>
+</div>
+<div class="nav-group" data-section-id="reference">
+  <p class="nav-group-title" id="drawer-reference">Vận hành &amp; Tra cứu</p>
+  <ul aria-labelledby="drawer-reference">
+    <li><a class="nav-link" href="../reference/cli-and-ops.html">Tra cứu CLI, Runbooks &amp; 32 Crates</a></li><li><a class="nav-link" href="../reference/invariants-and-glossary.html">20 Bất biến, STE-100 &amp; Bài báo</a></li>
+  </ul>
+</div>
+    </nav>
+    <button type="button" id="drawer-backdrop-close" class="Drawer-backdrop" aria-label="Đóng danh mục tài liệu"></button>
+  </dialog>
+
+  <div class="docs-shell">
+    <aside class="sidebar scroller" aria-label="Danh mục tài liệu">
+      <nav aria-label="Danh mục tài liệu">
+        <div class="nav-group" data-section-id="start-here">
+  <p class="nav-group-title" id="side-start-here">Bắt đầu</p>
+  <ul aria-labelledby="side-start-here">
+    <li><a class="nav-link" href="../index.html">Trang chủ Tài liệu GAP</a></li><li><a class="nav-link" href="../getting-started/what-is-gap.html">GAP là gì?</a></li><li><a class="nav-link" href="../getting-started/quickstart.html">Khởi chạy Nhanh (10 phút)</a></li>
+  </ul>
+</div>
+<div class="nav-group" data-section-id="learn">
+  <p class="nav-group-title" id="side-learn">Kiến thức Nền tảng</p>
+  <ul aria-labelledby="side-learn">
+    <li><a class="nav-link" href="graphql-and-gap-basics.html">Nhập môn GraphQL &amp; GAP</a></li><li><a class="nav-link is-active" href="queries-mutations-joins.html" aria-current="page">Tham số, Mutation &amp; Nối nhánh</a></li>
+  </ul>
+</div>
+<div class="nav-group" data-section-id="academy">
+  <p class="nav-group-title" id="side-academy">Học viện GAP (Thực chiến)</p>
+  <ul aria-labelledby="side-academy">
+    <li><a class="nav-link" href="../academy/index.html">Học viện GAP — Khóa học Thực chiến</a></li><li><a class="nav-link" href="../academy/liftoff-first-supergraph.html">Khóa 1: Lift-Off — Siêu đồ thị Đầu tiên</a></li><li><a class="nav-link" href="../academy/mcp-and-ai-assistants.html">Khóa 2: MCP, AG-UI &amp; Trợ lý AI</a></li><li><a class="nav-link" href="../academy/connectors-and-batching.html">Khóa 3: REST, SQL &amp; Gom lô N+1</a></li><li><a class="nav-link" href="../academy/enterprise-zero-trust.html">Khóa 4: Zero-Trust, Cedar &amp; HTTP/3</a></li>
+  </ul>
+</div>
+<div class="nav-group" data-section-id="concepts">
+  <p class="nav-group-title" id="side-concepts">Kiến trúc Cốt lõi</p>
+  <ul aria-labelledby="side-concepts">
+    <li><a class="nav-link" href="../concepts/architecture.html">Kiến trúc 3 Mặt phẳng</a></li><li><a class="nav-link" href="../concepts/progressive-disclosure.html">Khám phá Lũy tiến (651 Tokens)</a></li><li><a class="nav-link" href="../concepts/gap-ql-and-joins.html">GAP-QL &amp; Gom Lô Join</a></li>
+  </ul>
+</div>
+<div class="nav-group" data-section-id="connectors">
+  <p class="nav-group-title" id="side-connectors">Kết nối Dữ liệu (NGC)</p>
+  <ul aria-labelledby="side-connectors">
+    <li><a class="nav-link" href="../connectors/overview.html">Kết nối Dữ liệu (NGC)</a></li>
+  </ul>
+</div>
+<div class="nav-group" data-section-id="agents">
+  <p class="nav-group-title" id="side-agents">Tích hợp AI Agent</p>
+  <ul aria-labelledby="side-agents">
+    <li><a class="nav-link" href="../agents/facades-and-hosts.html">Tích hợp MCP, A2A &amp; AG-UI</a></li><li><a class="nav-link" href="../agents/routers-and-http3.html">Định tuyến System-1 &amp; HTTP/3 QUIC</a></li>
+  </ul>
+</div>
+<div class="nav-group" data-section-id="security">
+  <p class="nav-group-title" id="side-security">Bảo mật Zero-Trust</p>
+  <ul aria-labelledby="side-security">
+    <li><a class="nav-link" href="../security/zero-trust.html">Bảo mật Zero-Trust &amp; Cedar</a></li>
+  </ul>
+</div>
+<div class="nav-group" data-section-id="lab">
+  <p class="nav-group-title" id="side-lab">Phòng Lab Thực hành</p>
+  <ul aria-labelledby="side-lab">
+    <li><a class="nav-link" href="../lab/playground.html">Phòng Lab &amp; Bộ tính Token</a></li>
+  </ul>
+</div>
+<div class="nav-group" data-section-id="reference">
+  <p class="nav-group-title" id="side-reference">Vận hành &amp; Tra cứu</p>
+  <ul aria-labelledby="side-reference">
+    <li><a class="nav-link" href="../reference/cli-and-ops.html">Tra cứu CLI, Runbooks &amp; 32 Crates</a></li><li><a class="nav-link" href="../reference/invariants-and-glossary.html">20 Bất biến, STE-100 &amp; Bài báo</a></li>
+  </ul>
+</div>
+      </nav>
+      <div class="sidebar-status" role="status" aria-live="polite">
+        <span id="server-status-dot" class="status-dot" aria-hidden="true"></span>
+        <span id="server-status-text">Chế độ Tĩnh (HTML)</span>
+      </div>
+    </aside>
+
+    <main id="main-content" class="doc-main">
+      <article class="doc-article">
+        <nav class="breadcrumb" aria-label="Đường dẫn vị trí">
+  <ol>
+    <li><a href="../index.html">Tài liệu</a></li>
+    <li><a href="graphql-and-gap-basics.html">Kiến thức Nền tảng</a></li>
+    <li><a href="queries-mutations-joins.html" aria-current="page">Tham số, Mutation &amp; Nối nhánh</a></li>
+  </ol>
+</nav>
+        <div class="article-meta-bar">
+          <span class="read-time">8 phút</span>
+          <span class="copy copy-md-wrap">
+            <button type="button" class="copy-button copy-md-btn" command="--copy" commandfor="page-markdown-src">
+              <span class="icon" aria-hidden="true"></span>
+              <span class="btn-label">Sao chép Markdown</span>
+            </button>
+            <span class="tip" role="status"></span>
+          </span>
+        </div>
+
+        <textarea id="page-markdown-src" class="visually-hidden" readonly tabindex="-1" aria-hidden="true"># Tham số, Mutation &amp; Nối nhánh
+
+- Luôn truyền biến `variables` (`$cid: Int!`) tách khỏi câu query để `PlanCache` tái sử dụng theo khóa `(TenantId, generation, query_hash)`.
+- Mọi mutation đi qua phân loại `@sideEffect` và `dry_run`; mức `IRREVERSIBLE` bắt buộc 2 người duyệt khác nhau theo luật Cedar.
+- REST OpenAPI và MCP server hiện hữu được giữ nguyên hoàn toàn và gắn vào supergraph dưới dạng Branch khai báo.</textarea>
+
+        <h1 id="article-title" tabindex="-1">Tham số, Mutation &amp; Nối nhánh</h1>
+        <p class="article-lead">Làm chủ việc truyền tham số qua variables, cập nhật dữ liệu an toàn với <code>@sideEffect</code> mutation, nối nhiều nhánh bằng gom lô và chuyển đổi mượt tư duy từ REST / Direct-MCP sang GAP.</p>
+
+        <section class="learn-card" aria-labelledby="learn-heading">
+  <h2 id="learn-heading">Bạn sẽ nắm được gì</h2>
+  <ul><li>Truyền GraphQL <code>variables</code> chuẩn định kiểu thay cho nối chuỗi để tận dụng tối đa <code>PlanCache</code>.</li><li>Phân biệt rạch ròi <code>query</code> (chỉ đọc) với <code>mutation</code> <code>@sideEffect</code> có chế độ thử nghiệm <code>dry_run</code> và Cedar duyệt 2 người.</li><li>Đối chiếu từng thói quen lập trình REST và Direct-MCP sang cơ chế tương ứng trong GAP.</li></ul>
+</section>
+        <details class="toc-inline"><summary>Trong trang này</summary><nav class="toc-inline-links" aria-label="Mục lục bài viết"><a class="toc-inline-link" href="#arguments-and-variables">Tham số &amp; Biến Định kiểu (<code>PlanCache</code> Reuse)</a><a class="toc-inline-link" href="#mutations-and-side-effects">Mutation &amp; Hàng rào An toàn <code>@sideEffect</code></a><a class="toc-inline-link" href="#joins-and-mental-model-map">Bảng Chuyển đổi Tư duy cho Kỹ sư REST &amp; Direct-MCP</a></nav></details>
+
+        <section id="arguments-and-variables" tabindex="-1" class="doc-section">
+  <h2>Tham số &amp; Biến Định kiểu (<code>PlanCache</code> Reuse)</h2>
+  <p>Tương tự tham số query trong REST URL, các trường GraphQL nhận đối số rõ kiểu như <code>customer(id: 1)</code> hay <code>orders(customer_id: 1)</code>. Đừng bao giờ nối chuỗi input từ người dùng hoặc LLM trực tiếp vào nội dung truy vấn — hãy khai báo biến tham số (<code>$cid: Int!</code>):</p><figure class="code-figure">
+  <div class="code-toolbar">
+    <div class="code-meta">
+      <span class="code-lang">graphql</span>
+      <span class="code-title">Truy vấn Tham số hóa + Variables JSON</span>
+    </div>
+    <span class="copy">
+      <button type="button" class="copy-button" command="--copy" commandfor="lrn-vars" aria-label="Sao chép đoạn mã graphql (Truy vấn Tham số hóa + Variables JSON)">
+        <span class="icon" aria-hidden="true"></span>
+      </button>
+      <span class="tip" role="status"></span>
+    </span>
+  </div>
+  <pre role="region" aria-label="Truy vấn Tham số hóa + Variables JSON" tabindex="0"><code id="lrn-vars" class="language-graphql">query GetCustomerDossier($cid: Int!) {
+  customer(id: $cid) { id name tier }
+  orders(customer_id: $cid) { id status total_cents }
+  customer_notes(customer_id: $cid)
+}
+
+# JSON biến tách riêng:
+# { &quot;cid&quot;: 1 }</code></pre>
+</figure><ul>
+  <li><strong>Không sợ chèn mã cú pháp:</strong> Biến tách riêng hoàn toàn khỏi cây cú pháp GraphQL.</li>
+  <li><strong>Tái sử dụng Kế hoạch Nóng:</strong> Nhờ chuỗi query giữ nguyên cho mọi khách hàng, GAP dùng lại kế hoạch thực thi đã biên dịch trong <code>PlanCache</code> gắn khóa <code>(TenantId, snapshot_generation, query_hash)</code> (<code>INV-09</code>).</li>
+</ul>
+</section><section id="mutations-and-side-effects" tabindex="-1" class="doc-section">
+  <h2>Mutation &amp; Hàng rào An toàn <code>@sideEffect</code></h2>
+  <p>Trong khi <code>query</code> chỉ đọc dữ liệu trên snapshot bất biến, mọi thao tác làm thay đổi trạng thái bắt buộc đi qua <code>mutation</code> (hoặc tool MCP <code>gap_mutate</code>) có gắn chỉ thị <code>@sideEffect</code>:</p><div tabindex="0" role="region" aria-labelledby="cap-a3bcf27d" class="table-wrapper">
+  <table class="data-table" style="--col-2: &quot;Bản chất Tác động&quot;; --col-3: &quot;Ứng xử Mặc định của Cedar Policy&quot;;">
+    <caption id="cap-a3bcf27d">Phân cấp @sideEffect trong spec/02-gap-ql.md §5 và phản ứng của Cedar</caption>
+    <thead><tr><th scope="col">Cấp độ SideEffectLevel</th><th scope="col">Bản chất Tác động</th><th scope="col">Ứng xử Mặc định của Cedar Policy</th></tr></thead>
+    <tbody><tr><th scope="row"><code>NONE</code></th><td>Thao tác chỉ đọc, không sửa đổi trạng thái.</td><td>Cho phép đối với principal có quyền <code>Read</code> hợp lệ.</td></tr>
+<tr><th scope="row"><code>REVERSIBLE</code></th><td>Ghi nháp hoặc thao tác có thể hoàn tác.</td><td>Cho phép khi có quyền <code>Mutate</code>; mọi lệnh ghi thẳng vào chuỗi băm BLAKE3.</td></tr>
+<tr><th scope="row"><code>IRREVERSIBLE</code> / <code>UNKNOWN</code></th><td>Chuyển tiền, xóa sổ cái hoặc công cụ chưa phân loại rủi ro.</td><td>Từ chối cứng trừ khi thỏa mãn <code>context.approved &amp;&amp; context.approverIsDifferent</code>.</td></tr></tbody>
+  </table>
+</div><figure class="code-figure">
+  <div class="code-toolbar">
+    <div class="code-meta">
+      <span class="code-lang">json</span>
+      <span class="code-title">MCP 2026-07-28 — Chạy thử an toàn với dry_run qua gap_mutate</span>
+    </div>
+    <span class="copy">
+      <button type="button" class="copy-button" command="--copy" commandfor="lrn-dryrun" aria-label="Sao chép đoạn mã json (MCP 2026-07-28 — Chạy thử an toàn với dry_run qua gap_mutate)">
+        <span class="icon" aria-hidden="true"></span>
+      </button>
+      <span class="tip" role="status"></span>
+    </span>
+  </div>
+  <pre role="region" aria-label="MCP 2026-07-28 — Chạy thử an toàn với dry_run qua gap_mutate" tabindex="0"><code id="lrn-dryrun" class="language-json">{
+  &quot;jsonrpc&quot;: &quot;2.0&quot;,
+  &quot;id&quot;: 10,
+  &quot;method&quot;: &quot;tools/call&quot;,
+  &quot;params&quot;: {
+    &quot;name&quot;: &quot;gap_mutate&quot;,
+    &quot;arguments&quot;: {
+      &quot;query&quot;: &quot;mutation { issue_refund(order_id: 101) { ok } }&quot;,
+      &quot;dry_run&quot;: true
+    }
+  }
+}</code></pre>
+</figure>
+</section><section id="joins-and-mental-model-map" tabindex="-1" class="doc-section">
+  <h2>Bảng Chuyển đổi Tư duy cho Kỹ sư REST &amp; Direct-MCP</h2>
+  <p>Bạn không cần viết lại các hệ thống REST API hay máy chủ MCP đang chạy ổn định — chỉ cần giữ nguyên chúng và ánh xạ vào <code>gap.toml</code> qua các NGC Connector.</p><div tabindex="0" role="region" aria-labelledby="cap-87524d0b" class="table-wrapper">
+  <table class="data-table" style="--col-2: &quot;Thành phần Tương ứng trong GAP&quot;; --col-3: &quot;Lợi ích Kỹ thuật Cốt lõi&quot;;">
+    <caption id="cap-87524d0b">Đối chiếu từng thói quen REST / Direct-MCP sang mô hình GAP</caption>
+    <thead><tr><th scope="col">Cách làm Cũ (REST / Direct-MCP)</th><th scope="col">Thành phần Tương ứng trong GAP</th><th scope="col">Lợi ích Kỹ thuật Cốt lõi</th></tr></thead>
+    <tbody><tr><th scope="row">Nhiều URL dịch vụ lẻ / nhiều file cấu hình MCP</th><td>Một cổng gateway duy nhất (<code>/graphql</code>, <code>/mcp</code>, <code>/ag-ui</code>)</td><td>Dùng chung tầng xác thực, truyền tải TLS 1.3 QUIC và ranh giới snapshot.</td></tr>
+<tr><th scope="row">Tải <code>tools/list</code> chứa 500 JSON Schema</th><td>5 tool tĩnh (<code>651 tokens</code>) + <code>gap_describe</code> / <code>gap_search</code></td><td>Giảm tới 99% chi phí schema đồng thời giấu kín tool không có quyền (<code>INV-05</code>).</td></tr>
+<tr><th scope="row">Tự viết vòng lặp <code>for id in ids: fetch(...)</code></th><td><code>@join</code> + tiện ích OpenAPI <code>x-gap-in-param</code></td><td>Khử trùng lặp khóa ngoại thành <code>ceil(K/max_batch)</code> request (<code>INV-18</code>).</td></tr>
+<tr><th scope="row">Viết hàm kiểm tra quyền rải rác hoặc tin lời nhắc LLM</th><td>Luật Cedar thuần hàm tất định (<code>policies/default.cedar</code>)</td><td>Mặc định từ chối, tách biệt 2 người duyệt cho thao tác không thể hoàn tác.</td></tr>
+<tr><th scope="row">Tin tưởng mù quáng chuỗi mô tả từ upstream</th><td>Ghim băm JCS BLAKE3 <code>desc_hash</code> + bọc <code>&lt;gap:untrusted&gt;</code></td><td>Đóng băng tự động trạng thái <code>BranchStatus::Drift</code> nếu phát hiện rug-pull.</td></tr></tbody>
+  </table>
+</div><details class="going-deeper">
+  <summary>Tìm hiểu sâu hơn: Vì sao GAP dùng cú pháp GraphQL chuẩn thay vì tự sáng chế ngôn ngữ mới?</summary>
+  <div class="details-body"><p>Theo chuẩn <code>GQL-001</code> trong <code>spec/02-gap-ql.md</code>, việc chế thêm từ khóa lạ như <code>traverse</code> sẽ làm hỏng mọi trình kiểm tra cú pháp, IDE plugin và thư viện phân tích có sẵn. Giữ 100% GraphQL chuẩn cho phép GAP phân tích bằng bộ biên dịch <code>apollo-compiler</code> bằng Rust, vượt qua 136/136 bài kiểm thử đối chiếu với <code>graphql-js 16.13.2</code> và biểu diễn toàn bộ nối nhánh qua directive chuẩn <code>@join</code>, <code>@sideEffect</code>. Sẵn sàng viết lệnh? Bắt đầu ngay tại <a href="../academy/index.html">Học viện GAP</a>.</p></div>
+</details>
+</section>
+
+        <nav class="doc-pager" aria-label="Chuyển bài trước / tiếp"><a class="pager-card pager-prev" href="graphql-and-gap-basics.html"><span class="pager-dir">&larr; Bài trước</span><span class="pager-title">Nhập môn GraphQL &amp; GAP</span></a><a class="pager-card pager-next" href="../academy/index.html"><span class="pager-dir">Tiếp theo &rarr;</span><span class="pager-title">Học viện GAP — Khóa học Thực chiến</span></a></nav>
+      </article>
+
+      <footer class="doc-footer">
+        <p class="footer-note">Tài liệu, Kiến thức Nền &amp; Học viện dựa 100% trên mã nguồn Rust, đặc tả 00-09 và số liệu đo thật ADR-021.</p>
+        <div class="footer-links">
+          <a href="../../paper/gap-paper.html">Bài báo (HTML)</a>
+          <a href="../../paper/gap-paper.pdf">PDF</a>
+          <a href="../../llms.txt">llms.txt</a>
+          <a href="../../learn/queries-mutations-joins.html" hreflang="en" lang="en">English</a>
+        </div>
+      </footer>
+    </main>
+
+    <aside class="toc-right" aria-label="Mục lục bài viết">
+      <div class="toc-sticky scroller">
+        <p class="toc-title">Trong trang này</p>
+        <nav id="on-this-page-nav" class="toc-links" aria-label="Mục lục bài viết">
+          <a class="toc-link" href="#arguments-and-variables">Tham số &amp; Biến Định kiểu (<code>PlanCache</code> Reuse)</a><a class="toc-link" href="#mutations-and-side-effects">Mutation &amp; Hàng rào An toàn <code>@sideEffect</code></a><a class="toc-link" href="#joins-and-mental-model-map">Bảng Chuyển đổi Tư duy cho Kỹ sư REST &amp; Direct-MCP</a>
+        </nav>
+      </div>
+    </aside>
+  </div>
+
+  <script src="../../search-index.vi.js"></script>
+  <script src="../../app.js"></script>
+</body>
+</html>

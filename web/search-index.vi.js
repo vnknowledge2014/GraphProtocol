@@ -11,8 +11,8 @@ window.GAP_SEARCH_INDEX = [
     "title": "Chọn Lộ trình Bắt đầu — Trang chủ Tài liệu GAP",
     "section": "Bắt đầu",
     "href": "vi/index.html#get-started-paths",
-    "snippet": "Chọn điểm khởi đầu phù hợp với nhu cầu của bạn. Mỗi trang con chỉ tập trung giải thích thấu đáo đúng một chủ đề kèm ví dụ chạy được ngay từ kho mã nguồn. Khái niệm · 5 phút Mới tìm hiểu GAP?",
-    "keywords": "Chọn Lộ trình Bắt đầu Trang chủ Tài liệu GAP Chọn điểm khởi đầu phù hợp với nhu cầu của bạn. Mỗi trang con chỉ tập trung giải thích thấu đáo đúng một chủ đề kèm ví dụ chạy được ngay từ kho mã nguồn. Khái niệm · 5 phút Mới tìm hiểu GAP? Bắt đầu tại đây Hiểu rõ 4 nút thắt của Direct-MCP, khái niệm Supergraph / Branch và ngưỡng nào Direct-MCP vẫn gọn hơn. Thực hành · 10 phút Khởi chạy Nhanh trong 10 phút Kiểm tra gap.toml , bật Walking Skeleton REST + MCP và gửi truy vấn gộp liên nhánh đầu tiê"
+    "snippet": "Chọn điểm khởi đầu phù hợp với nhu cầu của bạn. Mỗi trang con chỉ tập trung giải thích thấu đáo đúng một chủ đề kèm ví dụ chạy được ngay từ kho mã nguồn. Kiến thức Nền · 8 phút Mới học Graph",
+    "keywords": "Chọn Lộ trình Bắt đầu Trang chủ Tài liệu GAP Chọn điểm khởi đầu phù hợp với nhu cầu của bạn. Mỗi trang con chỉ tập trung giải thích thấu đáo đúng một chủ đề kèm ví dụ chạy được ngay từ kho mã nguồn. Kiến thức Nền · 8 phút Mới học GraphQL &amp; GAP? Giải thích trực giác từ gốc: ẩn dụ Supergraph, Kiểu &amp; Scalar, quy tắc ! và Bộ dựng Truy vấn 1:1. Học viện · 4 Khóa học Học viện GAP (16 Bài thực chiến) Lộ trình bài bản theo dự án: Siêu đồ thị đầu tiên, MCP/AG-UI, Gom lô REST/SQL N+1 và Bảo m"
   },
   {
     "title": "Khám phá Các Trụ cột Kỹ thuật — Trang chủ Tài liệu GAP",
@@ -92,6 +92,223 @@ window.GAP_SEARCH_INDEX = [
     "keywords": "Bước 5: Gắn vào MCP Host hoặc Phát Luồng AG-UI Khởi chạy Nhanh (10 phút) Thay vì cấu hình từng công cụ REST rời rạc, hãy trỏ AI host vào MCP server 5 tool cố định của GAP qua stdio, hoặc nhận luồng sự kiện AG-UI v1.0 qua SSE. Xem chi tiết tích hợp tại Tích hợp MCP, A2A &amp; AG-UI . json mcp_servers.json — Cấu hình Client Stdio terminal Terminal — Luồng SSE AG-UI v1.0 Trực tiếp"
   },
   {
+    "title": "Nhập môn GraphQL & GAP",
+    "section": "Kiến thức Nền tảng",
+    "href": "vi/learn/graphql-and-gap-basics.html",
+    "snippet": "Kiến thức nền dễ hiểu: ẩn dụ siêu đồ thị thống nhất, kiểu dữ liệu, scalar, quy tắc khác null (!) và bộ dựng truy vấn 1:1.",
+    "keywords": "Nhập môn GraphQL & GAP Kiến thức nền dễ hiểu: ẩn dụ siêu đồ thị thống nhất, kiểu dữ liệu, scalar, quy tắc khác null (!) và bộ dựng truy vấn 1:1. Mới làm quen với GraphQL hay AI Gateway? Tài liệu nền tảng không dùng biệt ngữ này giúp bạn nắm trực giác từ gốc: vì sao Agent cần một thực đơn thống nhất, Kiểu dữ liệu giống hộp dán nhãn ra sao, và cách truy vấn phản chiếu JSON 1:1."
+  },
+  {
+    "title": "Tư duy Nền: Một Quầy Gọi Món so với Hai Mươi Xe Hàng Rời Rạc — Nhập môn GraphQL & GAP",
+    "section": "Kiến thức Nền tảng",
+    "href": "vi/learn/graphql-and-gap-basics.html#what-is-a-supergraph",
+    "snippet": "Hãy tưởng tượng AI Agent là một thực khách bước vào khu ẩm thực lớn có 20 gian bếp riêng: gian bán hồ sơ khách hàng (REST API), gian theo dõi đơn hàng (SQL), và gian giữ ghi chú hỗ trợ (MCP ",
+    "keywords": "Tư duy Nền: Một Quầy Gọi Món so với Hai Mươi Xe Hàng Rời Rạc Nhập môn GraphQL & GAP Hãy tưởng tượng AI Agent là một thực khách bước vào khu ẩm thực lớn có 20 gian bếp riêng: gian bán hồ sơ khách hàng (REST API), gian theo dõi đơn hàng (SQL), và gian giữ ghi chú hỗ trợ (MCP server). Khi chưa có GAP (Direct-MCP phẳng): Trước khi kịp gọi món đầu tiên, hệ thống dúi cả 20 cuốn thực đơn dày cộp vào tay Agent — tiêu tốn hàng trăm nghìn tokens JSON lặp đi lặp lại. Tệ hơn, muốn ghép khách hàng với ghi chú, Agent phải tự chạy đi chạy lại "
+  },
+  {
+    "title": "Kiểu Dữ liệu Như Chiếc Hộp Dán Nhãn (! Là Cam kết Không Rỗng) — Nhập môn GraphQL & GAP",
+    "section": "Kiến thức Nền tảng",
+    "href": "vi/learn/graphql-and-gap-basics.html#types-scalars-nullability",
+    "snippet": "Schema trong GraphQL và GAP thực chất chỉ là bản hợp đồng mô tả rõ có những chiếc hộp dán nhãn nào và bên trong mỗi hộp chứa kiểu dữ liệu gì: Các thành phần cấu tạo schema minh họa qua Walki",
+    "keywords": "Kiểu Dữ liệu Như Chiếc Hộp Dán Nhãn (! Là Cam kết Không Rỗng) Nhập môn GraphQL & GAP Schema trong GraphQL và GAP thực chất chỉ là bản hợp đồng mô tả rõ có những chiếc hộp dán nhãn nào và bên trong mỗi hộp chứa kiểu dữ liệu gì: Các thành phần cấu tạo schema minh họa qua Walking Skeleton Thành phần Schema Ví dụ Minh họa Ý nghĩa Dễ hiểu Object Type (Đối tượng) type shop_CustomersResult &#123; id: Int! name: String! tier: ... &#125; Một bản ghi có cấu trúc đại diện cho thực thể (ví dụ dòng khách hàng lấy từ OpenAPI). Scalar (Giá trị "
+  },
+  {
+    "title": "Truy vấn Phản chiếu JSON 1:1 (Bộ dựng Truy vấn Tương tác) — Nhập môn GraphQL & GAP",
+    "section": "Kiến thức Nền tảng",
+    "href": "vi/learn/graphql-and-gap-basics.html#query-mirrors-json",
+    "snippet": "Khác với REST URL nơi server trả về cố định toàn bộ 40 trường dù bạn chỉ cần tên, câu truy vấn GAP-QL đóng vai trò như một khuôn mẫu JSON: bạn hỏi trường nào thì kết quả trả về đúng cấu trúc",
+    "keywords": "Truy vấn Phản chiếu JSON 1:1 (Bộ dựng Truy vấn Tương tác) Nhập môn GraphQL & GAP Khác với REST URL nơi server trả về cố định toàn bộ 40 trường dù bạn chỉ cần tên, câu truy vấn GAP-QL đóng vai trò như một khuôn mẫu JSON: bạn hỏi trường nào thì kết quả trả về đúng cấu trúc y hệt trường đó, không thừa một byte . Truy vấn GAP-QL phản chiếu đúng 1:1 cấu trúc JSON nhận về 1. Truy vấn bạn viết (GAP-QL) query { customer(id: 1) { id name tier } customer_notes(customer_id: 1) } Thực thi song song 1 HTTP Request 2. Kết quả JSON đúng hìn"
+  },
+  {
+    "title": "Tham số, Mutation & Nối nhánh",
+    "section": "Kiến thức Nền tảng",
+    "href": "vi/learn/queries-mutations-joins.html",
+    "snippet": "Lọc dữ liệu với biến tham số, chạy mutation an toàn qua @sideEffect và đối chiếu tư duy cho kỹ sư REST & Direct-MCP.",
+    "keywords": "Tham số, Mutation & Nối nhánh Lọc dữ liệu với biến tham số, chạy mutation an toàn qua @sideEffect và đối chiếu tư duy cho kỹ sư REST & Direct-MCP. Làm chủ việc truyền tham số qua variables, cập nhật dữ liệu an toàn với `@sideEffect` mutation, nối nhiều nhánh bằng gom lô và chuyển đổi mượt tư duy từ REST / Direct-MCP sang GAP."
+  },
+  {
+    "title": "Tham số & Biến Định kiểu (PlanCache Reuse) — Tham số, Mutation & Nối nhánh",
+    "section": "Kiến thức Nền tảng",
+    "href": "vi/learn/queries-mutations-joins.html#arguments-and-variables",
+    "snippet": "Tương tự tham số query trong REST URL, các trường GraphQL nhận đối số rõ kiểu như customer(id: 1) hay orders(customer_id: 1) . Đừng bao giờ nối chuỗi input từ người dùng hoặc LLM trực tiếp v",
+    "keywords": "Tham số & Biến Định kiểu (PlanCache Reuse) Tham số, Mutation & Nối nhánh Tương tự tham số query trong REST URL, các trường GraphQL nhận đối số rõ kiểu như customer(id: 1) hay orders(customer_id: 1) . Đừng bao giờ nối chuỗi input từ người dùng hoặc LLM trực tiếp vào nội dung truy vấn — hãy khai báo biến tham số ( $cid: Int! ): graphql Truy vấn Tham số hóa + Variables JSON Không sợ chèn mã cú pháp: Biến tách riêng hoàn toàn khỏi cây cú pháp GraphQL. Tái sử dụng Kế hoạch Nóng: Nhờ chuỗi query giữ nguyên cho mọi khách hàn"
+  },
+  {
+    "title": "Mutation & Hàng rào An toàn @sideEffect — Tham số, Mutation & Nối nhánh",
+    "section": "Kiến thức Nền tảng",
+    "href": "vi/learn/queries-mutations-joins.html#mutations-and-side-effects",
+    "snippet": "Trong khi query chỉ đọc dữ liệu trên snapshot bất biến, mọi thao tác làm thay đổi trạng thái bắt buộc đi qua mutation (hoặc tool MCP gap_mutate ) có gắn chỉ thị @sideEffect : Phân cấp @sideE",
+    "keywords": "Mutation & Hàng rào An toàn @sideEffect Tham số, Mutation & Nối nhánh Trong khi query chỉ đọc dữ liệu trên snapshot bất biến, mọi thao tác làm thay đổi trạng thái bắt buộc đi qua mutation (hoặc tool MCP gap_mutate ) có gắn chỉ thị @sideEffect : Phân cấp @sideEffect trong spec/02-gap-ql.md §5 và phản ứng của Cedar Cấp độ SideEffectLevel Bản chất Tác động Ứng xử Mặc định của Cedar Policy NONE Thao tác chỉ đọc, không sửa đổi trạng thái. Cho phép đối với principal có quyền Read hợp lệ. REVERSIBLE Ghi nháp hoặc thao tác"
+  },
+  {
+    "title": "Bảng Chuyển đổi Tư duy cho Kỹ sư REST & Direct-MCP — Tham số, Mutation & Nối nhánh",
+    "section": "Kiến thức Nền tảng",
+    "href": "vi/learn/queries-mutations-joins.html#joins-and-mental-model-map",
+    "snippet": "Bạn không cần viết lại các hệ thống REST API hay máy chủ MCP đang chạy ổn định — chỉ cần giữ nguyên chúng và ánh xạ vào gap.toml qua các NGC Connector. Đối chiếu từng thói quen REST / Direct",
+    "keywords": "Bảng Chuyển đổi Tư duy cho Kỹ sư REST & Direct-MCP Tham số, Mutation & Nối nhánh Bạn không cần viết lại các hệ thống REST API hay máy chủ MCP đang chạy ổn định — chỉ cần giữ nguyên chúng và ánh xạ vào gap.toml qua các NGC Connector. Đối chiếu từng thói quen REST / Direct-MCP sang mô hình GAP Cách làm Cũ (REST / Direct-MCP) Thành phần Tương ứng trong GAP Lợi ích Kỹ thuật Cốt lõi Nhiều URL dịch vụ lẻ / nhiều file cấu hình MCP Một cổng gateway duy nhất ( /graphql , /mcp , /ag-ui ) Dùng chung tầng xác thực, truyền tải TLS 1.3 QUI"
+  },
+  {
+    "title": "Học viện GAP — Khóa học Thực chiến",
+    "section": "Học viện GAP (Thực chiến)",
+    "href": "vi/academy/index.html",
+    "snippet": "Lộ trình học tập thực chiến kiểu Odyssey kết hợp lý thuyết, bài tập điền khuyết lệnh thật và lưu tiến độ tự động.",
+    "keywords": "Học viện GAP — Khóa học Thực chiến Lộ trình học tập thực chiến kiểu Odyssey kết hợp lý thuyết, bài tập điền khuyết lệnh thật và lưu tiến độ tự động. Chào mừng tới Học viện GAP — chuỗi khóa học thực chiến nhiều bài giảng lấy cảm hứng từ Apollo Odyssey. Kết hợp nền tảng giao thức với câu lệnh thật, bài tập điền mã, kiểm tra nhanh và lưu tự động tiến độ học tập trên 16 bài học."
+  },
+  {
+    "title": "Tiến độ Học viện của Bạn — Học viện GAP — Khóa học Thực chiến",
+    "section": "Học viện GAP (Thực chiến)",
+    "href": "vi/academy/index.html#academy-progress",
+    "snippet": "Tổng tiến độ Học viện: Đã hoàn thành 0 / 16 bài học Đặt lại Tiến độ Chưa quen schema hay cách truy vấn phản chiếu JSON? Hãy lướt qua Nhập môn GraphQL &amp; GAP trước khi vào Khóa 1.",
+    "keywords": "Tiến độ Học viện của Bạn Học viện GAP — Khóa học Thực chiến Tổng tiến độ Học viện: Đã hoàn thành 0 / 16 bài học Đặt lại Tiến độ Chưa quen schema hay cách truy vấn phản chiếu JSON? Hãy lướt qua Nhập môn GraphQL &amp; GAP trước khi vào Khóa 1."
+  },
+  {
+    "title": "Chọn Khóa học Thực chiến (4 Chặng · 16 Bài học) — Học viện GAP — Khóa học Thực chiến",
+    "section": "Học viện GAP (Thực chiến)",
+    "href": "vi/academy/index.html#course-catalog",
+    "snippet": "Cơ bản · 20 phút · 4 bài 0 / 4 bài Khóa 1: Lift-Off — Siêu đồ thị Đầu tiên Khởi tạo dự án bằng gap init , gắn nhánh OpenAPI shop và MCP notes , kiểm tra qua gap doctor và thực thi câu truy v",
+    "keywords": "Chọn Khóa học Thực chiến (4 Chặng · 16 Bài học) Học viện GAP — Khóa học Thực chiến Cơ bản · 20 phút · 4 bài 0 / 4 bài Khóa 1: Lift-Off — Siêu đồ thị Đầu tiên Khởi tạo dự án bằng gap init , gắn nhánh OpenAPI shop và MCP notes , kiểm tra qua gap doctor và thực thi câu truy vấn gộp đầu tiên. Bắt đầu Khóa 1 &rarr; AI Agent · 20 phút · 4 bài 0 / 4 bài Khóa 2: MCP, AG-UI &amp; Trợ lý AI Thay thế khối schema phình to 203.421 token bằng 651 token khám phá lũy tiến ( L0 -&gt; L1 -&gt; L2 ), kết nối Claude/Cursor --stdio và phát SSE AG-U"
+  },
+  {
+    "title": "Khóa 1: Lift-Off — Siêu đồ thị Đầu tiên",
+    "section": "Học viện GAP (Thực chiến)",
+    "href": "vi/academy/liftoff-first-supergraph.html",
+    "snippet": "4 bài thực hành: khởi tạo bằng gap init, nối OpenAPI + MCP, kiểm tra /readyz và gửi truy vấn gộp liên nhánh đầu tiên.",
+    "keywords": "Khóa 1: Lift-Off — Siêu đồ thị Đầu tiên 4 bài thực hành: khởi tạo bằng gap init, nối OpenAPI + MCP, kiểm tra /readyz và gửi truy vấn gộp liên nhánh đầu tiên. Khóa 1 đưa bạn từ màn hình terminal trống tới một siêu đồ thị chạy thật gồm hai nhánh: cửa hàng REST OpenAPI (shop) và máy chủ MCP (notes) sau cổng `/graphql` và `/mcp`."
+  },
+  {
+    "title": "Bài 1: Khởi tạo Workspace Mới (gap init) — Khóa 1: Lift-Off — Siêu đồ thị Đầu tiên",
+    "section": "Học viện GAP (Thực chiến)",
+    "href": "vi/academy/liftoff-first-supergraph.html#liftoff-lesson-1",
+    "snippet": "Khóa 1: Lift-Off · 20 phút · 4 bài học 0 / 4 hoàn thành 1 Khởi tạo 2 Config &amp; Doctor 3 Bật &amp; Kiểm tra 4 Truy vấn Gộp Trong thực tế triển khai, bạn không cần tự gõ cấu hình TOML từ đầ",
+    "keywords": "Bài 1: Khởi tạo Workspace Mới (gap init) Khóa 1: Lift-Off — Siêu đồ thị Đầu tiên Khóa 1: Lift-Off · 20 phút · 4 bài học 0 / 4 hoàn thành 1 Khởi tạo 2 Config &amp; Doctor 3 Bật &amp; Kiểm tra 4 Truy vấn Gộp Trong thực tế triển khai, bạn không cần tự gõ cấu hình TOML từ đầu. Lệnh gap init tạo ngay bộ khung 5 tệp tiêu chuẩn gồm gap.toml , đặc tả OpenAPI mẫu, kịch bản fixture giả lập và mã khóa Bearer phát triển băm sẵn bằng BLAKE3-256 : terminal Terminal — Khởi tạo Cổng Gateway Mẫu Không bao giờ lưu Secret gốc trong Cấu hình Tệp"
+  },
+  {
+    "title": "Bài 2: Kết nối Nhánh OpenAPI & MCP (gap config check & doctor) — Khóa 1: Lift-Off — Siêu đồ thị Đầu tiên",
+    "section": "Học viện GAP (Thực chiến)",
+    "href": "vi/academy/liftoff-first-supergraph.html#liftoff-lesson-2",
+    "snippet": "Hãy mở examples/walking-skeleton/gap.toml . Bạn sẽ thấy hai khối [[branches]] : id = \"shop\" (OpenAPI 3.0 chạy ở cổng 9101 ) và id = \"notes\" (MCP HTTP tại cổng 9102/mcp ). Kiểm tra cú pháp cấ",
+    "keywords": "Bài 2: Kết nối Nhánh OpenAPI & MCP (gap config check & doctor) Khóa 1: Lift-Off — Siêu đồ thị Đầu tiên Hãy mở examples/walking-skeleton/gap.toml . Bạn sẽ thấy hai khối [[branches]] : id = \"shop\" (OpenAPI 3.0 chạy ở cổng 9101 ) và id = \"notes\" (MCP HTTP tại cổng 9102/mcp ). Kiểm tra cú pháp cấu hình và điều kiện môi trường trước khi chạy: terminal Terminal — Kiểm tra Cấu hình &amp; Chẩn đoán Hệ thống text Kết quả Chẩn đoán Chuẩn Điểm Cốt lõi Cần Nhớ Đánh dấu Hoàn thành Bài học gap config check từ chối khởi động ngay nếu phát hiện cấu hình, cổng mạn"
+  },
+  {
+    "title": "Bài 3: Khởi động Dịch vụ Upstream & Kiểm tra /readyz — Khóa 1: Lift-Off — Siêu đồ thị Đầu tiên",
+    "section": "Học viện GAP (Thực chiến)",
+    "href": "vi/academy/liftoff-first-supergraph.html#liftoff-lesson-3",
+    "snippet": "Chạy hai tiến trình giả lập upstream bằng Python trước, rồi bật gap serve và thăm dò trạng thái /healthz cùng /readyz : terminal Terminal — Chạy Upstream, Gateway &amp; Kiểm tra /readyz Điểm",
+    "keywords": "Bài 3: Khởi động Dịch vụ Upstream & Kiểm tra /readyz Khóa 1: Lift-Off — Siêu đồ thị Đầu tiên Chạy hai tiến trình giả lập upstream bằng Python trước, rồi bật gap serve và thăm dò trạng thái /healthz cùng /readyz : terminal Terminal — Chạy Upstream, Gateway &amp; Kiểm tra /readyz Điểm cuối /readyz chỉ trả về &#123;\"status\":\"ready\",\"generation\":1&#125; sau khi Snapshot thế hệ 1 biên dịch hoàn tất và nạp nguyên tử vào con trỏ không khóa ArcSwap . Điểm Cốt lõi Cần Nhớ Đánh dấu Hoàn thành Bài học /healthz báo tiến trình còn sống; /readyz chỉ x"
+  },
+  {
+    "title": "Bài 4: Truy vấn Gộp Liên Nhánh Đầu Tiên & Thực hành Điền mã — Khóa 1: Lift-Off — Siêu đồ thị Đầu tiên",
+    "section": "Học viện GAP (Thực chiến)",
+    "href": "vi/academy/liftoff-first-supergraph.html#liftoff-lesson-4",
+    "snippet": "Bây giờ hãy gửi một yêu cầu POST /graphql duy nhất vừa lấy khách hàng số 1 và các đơn hàng từ nhánh REST shop , vừa đọc ghi chú từ nhánh MCP notes : terminal Terminal — Gộp Dữ liệu REST shop",
+    "keywords": "Bài 4: Truy vấn Gộp Liên Nhánh Đầu Tiên & Thực hành Điền mã Khóa 1: Lift-Off — Siêu đồ thị Đầu tiên Bây giờ hãy gửi một yêu cầu POST /graphql duy nhất vừa lấy khách hàng số 1 và các đơn hàng từ nhánh REST shop , vừa đọc ghi chú từ nhánh MCP notes : terminal Terminal — Gộp Dữ liệu REST shop + MCP notes Trong 1 Lượt Thử thách Điền mã Hoàn thiện Tên Tham số Truy vấn MCP Điền đúng tên tham số vào customer_notes(____: 1) để khớp hợp đồng của nhánh MCP notes (lưu ý: customer_notes trả về scalar lá JSON ): Nhập từ khóa / trường còn thiếu: Kiểm tra Đáp"
+  },
+  {
+    "title": "Khóa 2: MCP, AG-UI & Trợ lý AI",
+    "section": "Học viện GAP (Thực chiến)",
+    "href": "vi/academy/mcp-and-ai-assistants.html",
+    "snippet": "4 bài thực hành: thoát bẫy 203.421 token, làm chủ khám phá L0->L1->L2, nối Claude/Cursor --stdio và phát luồng SSE AG-UI.",
+    "keywords": "Khóa 2: MCP, AG-UI & Trợ lý AI 4 bài thực hành: thoát bẫy 203.421 token, làm chủ khám phá L0->L1->L2, nối Claude/Cursor --stdio và phát luồng SSE AG-UI. Khóa 2 hướng dẫn cách kết nối trợ lý AI với hàng trăm dịch vụ mà không làm tràn bộ nhớ ngữ cảnh LLM — dùng cơ chế khám phá lũy tiến MCP 2026-07-28 (`L0 -> L1 -> L2`) và luồng sự kiện sống AG-UI v1.0 SSE."
+  },
+  {
+    "title": "Bài 1: Chặn đứng Lạm phát 203.421 Token (tools/list Cố định 651 Tokens) — Khóa 2: MCP, AG-UI & Trợ lý AI",
+    "section": "Học viện GAP (Thực chiến)",
+    "href": "vi/academy/mcp-and-ai-assistants.html#mcp-lesson-1",
+    "snippet": "Khóa 2: MCP &amp; Trợ lý AI · 20 phút · 4 bài học 0 / 4 hoàn thành 1 Bề mặt 651 Token 2 L0 -&gt; L1 -&gt; L2 3 Host --stdio 4 Luồng AG-UI SSE Trong tích hợp MCP thông thường, nối 100 dịch vụ",
+    "keywords": "Bài 1: Chặn đứng Lạm phát 203.421 Token (tools/list Cố định 651 Tokens) Khóa 2: MCP, AG-UI & Trợ lý AI Khóa 2: MCP &amp; Trợ lý AI · 20 phút · 4 bài học 0 / 4 hoàn thành 1 Bề mặt 651 Token 2 L0 -&gt; L1 -&gt; L2 3 Host --stdio 4 Luồng AG-UI SSE Trong tích hợp MCP thông thường, nối 100 dịch vụ đồng nghĩa lệnh tools/list đổ khoảng 1.000 JSON Schema nặng tới 203.421 tokens vào prompt ngay cả khi người dùng mới hỏi câu đầu tiên. GAP giữ bề mặt MCP cố định ở đúng 5 tool tĩnh (651 tokens) bất kể quy mô N=10 hay N=1.000 : Quy trình Khám phá Lũy tiến 3 tầ"
+  },
+  {
+    "title": "Bài 2: Làm chủ Quy trình Khám phá Lũy tiến (L0 -> L1 -> L2 -> gap_query) — Khóa 2: MCP, AG-UI & Trợ lý AI",
+    "section": "Học viện GAP (Thực chiến)",
+    "href": "vi/academy/mcp-and-ai-assistants.html#mcp-lesson-2",
+    "snippet": "Trợ lý AI đi qua 3 bước gọn nhẹ — trong đó bước tìm kiếm luôn áp dụng Cedar visibility bitset của người gọi trước khi xếp hạng điểm BM25/HNSW ( INV-05 ): json MCP 2026-07-28 — Chuỗi Khám phá",
+    "keywords": "Bài 2: Làm chủ Quy trình Khám phá Lũy tiến (L0 -> L1 -> L2 -> gap_query) Khóa 2: MCP, AG-UI & Trợ lý AI Trợ lý AI đi qua 3 bước gọn nhẹ — trong đó bước tìm kiếm luôn áp dụng Cedar visibility bitset của người gọi trước khi xếp hạng điểm BM25/HNSW ( INV-05 ): json MCP 2026-07-28 — Chuỗi Khám phá L0, L1 và L2 Thử thách Điền mã Mở Đúng Tên Kiểu Supergraph ở Tầng L2 Điền chính xác tên kiểu khách hàng đã được OpenAPI biên dịch vào tham số types của lệnh gap_describe : Nhập từ khóa / trường còn thiếu: Kiểm tra Đáp án Gợi ý nhanh: shop_CustomersResult shop"
+  },
+  {
+    "title": "Bài 3: Tích hợp Claude, Cursor & Antigravity qua --stdio hoặc HTTP — Khóa 2: MCP, AG-UI & Trợ lý AI",
+    "section": "Học viện GAP (Thực chiến)",
+    "href": "vi/academy/mcp-and-ai-assistants.html#mcp-lesson-3",
+    "snippet": "Các ứng dụng AI trên máy cá nhân kết nối trực tiếp qua JSON-RPC từng dòng ở chế độ --stdio hoặc qua HTTP POST /mcp (kèm header MCP-Protocol-Version: 2026-07-28 ). Với --stdio , GAP chỉ xuất ",
+    "keywords": "Bài 3: Tích hợp Claude, Cursor & Antigravity qua --stdio hoặc HTTP Khóa 2: MCP, AG-UI & Trợ lý AI Các ứng dụng AI trên máy cá nhân kết nối trực tiếp qua JSON-RPC từng dòng ở chế độ --stdio hoặc qua HTTP POST /mcp (kèm header MCP-Protocol-Version: 2026-07-28 ). Với --stdio , GAP chỉ xuất khung JSON-RPC lên stdout và chuyển toàn bộ log vận hành sang stderr : json Cấu hình Máy chủ MCP cho AI Host (--stdio) Điểm Cốt lõi Cần Nhớ Đánh dấu Hoàn thành Bài học Chế độ --stdio bảo đảm stdout sạch 100% khung JSON-RPC trong khi log cấu trúc ghi ra stderr "
+  },
+  {
+    "title": "Bài 4: Phát Sự kiện Trực quan AG-UI v1.0 & Nhắc Duyệt Người Dùng — Khóa 2: MCP, AG-UI & Trợ lý AI",
+    "section": "Học viện GAP (Thực chiến)",
+    "href": "vi/academy/mcp-and-ai-assistants.html#mcp-lesson-4",
+    "snippet": "Giao diện web tương tác kết nối qua luồng Server-Sent Events POST /ag-ui , nhận lần lượt các sự kiện RUN_STARTED , TOOL_CALL_RESULT , STATE_SNAPSHOT , điểm tạm dừng chờ người dùng duyệt, và ",
+    "keywords": "Bài 4: Phát Sự kiện Trực quan AG-UI v1.0 & Nhắc Duyệt Người Dùng Khóa 2: MCP, AG-UI & Trợ lý AI Giao diện web tương tác kết nối qua luồng Server-Sent Events POST /ag-ui , nhận lần lượt các sự kiện RUN_STARTED , TOOL_CALL_RESULT , STATE_SNAPSHOT , điểm tạm dừng chờ người dùng duyệt, và chuỗi dữ liệu ngoài được bọc kín trong &lt;gap:untrusted&gt; : terminal Terminal — Theo dõi Luồng SSE AG-UI v1.0 Trực tiếp Kiểm tra Nhanh GAP ngăn chặn AI Agent thiếu quyền phát hiện ra sự tồn tại của các tool quản trị bằng cách nào? Áp dụng Cedar visibility b"
+  },
+  {
+    "title": "Khóa 3: REST, SQL & Gom lô N+1",
+    "section": "Học viện GAP (Thực chiến)",
+    "href": "vi/academy/connectors-and-batching.html",
+    "snippet": "4 bài thực hành: bắt bệnh thác nước N+1, gom lô x-gap-in-param (INV-18), thêm SQL & Code AST và duyệt snapshot an toàn.",
+    "keywords": "Khóa 3: REST, SQL & Gom lô N+1 4 bài thực hành: bắt bệnh thác nước N+1, gom lô x-gap-in-param (INV-18), thêm SQL & Code AST và duyệt snapshot an toàn. Khóa 3 giúp bạn giải quyết bài toán hiệu năng thực tế trong GAP: bắt bệnh thác nước N+1, cấu hình gom lô khai báo `x-gap-in-param` (`INV-18`), kết nối SQL cùng đồ thị AST mã nguồn `tree-sitter`, và phát hành schema mới an toàn qua quy trình Propose-Not-Activate."
+  },
+  {
+    "title": "Bài 1: Nhận diện Lỗi Thác nước N+1 Trong Hệ thống Agent — Khóa 3: REST, SQL & Gom lô N+1",
+    "section": "Học viện GAP (Thực chiến)",
+    "href": "vi/academy/connectors-and-batching.html#batch-lesson-1",
+    "snippet": "Khóa 3: REST, SQL &amp; Gom lô N+1 · 25 phút · 4 bài học 0 / 4 hoàn thành 1 Thác nước N+1 2 x-gap-in-param 3 SQL &amp; Code AST 4 Duyệt Snapshot Khi một LLM sử dụng các tool đơn lẻ để lấy 50",
+    "keywords": "Bài 1: Nhận diện Lỗi Thác nước N+1 Trong Hệ thống Agent Khóa 3: REST, SQL & Gom lô N+1 Khóa 3: REST, SQL &amp; Gom lô N+1 · 25 phút · 4 bài học 0 / 4 hoàn thành 1 Thác nước N+1 2 x-gap-in-param 3 SQL &amp; Code AST 4 Duyệt Snapshot Khi một LLM sử dụng các tool đơn lẻ để lấy 50 khách hàng rồi vòng lặp gọi đơn hàng và ghi chú cho từng người, mô hình phải đọc lại toàn bộ lịch sử hội thoại qua nhiều lượt trong khi phát ra hàng chục HTTP request rời rạc. Theo số liệu đo thật GAP-Bench , ở N=1.000 tool cách làm này tốn tới 814.959,8 toke"
+  },
+  {
+    "title": "Bài 2: Khai báo Gom lô REST Bằng \"x-gap-in-param\" (INV-18) — Khóa 3: REST, SQL & Gom lô N+1",
+    "section": "Học viện GAP (Thực chiến)",
+    "href": "vi/academy/connectors-and-batching.html#batch-lesson-2",
+    "snippet": "Giống cơ chế gom khóa $batch trên các hệ thống REST Connector hiện đại, adapter OpenAPI của GAP nhận diện phần mở rộng \"x-gap-in-param\" ngay trong đặc tả OpenAPI (trích từ examples/walking-s",
+    "keywords": "Bài 2: Khai báo Gom lô REST Bằng \"x-gap-in-param\" (INV-18) Khóa 3: REST, SQL & Gom lô N+1 Giống cơ chế gom khóa $batch trên các hệ thống REST Connector hiện đại, adapter OpenAPI của GAP nhận diện phần mở rộng \"x-gap-in-param\" ngay trong đặc tả OpenAPI (trích từ examples/walking-skeleton/shop.openapi.json ): json examples/walking-skeleton/shop.openapi.json Thử thách Điền mã Kích hoạt Gom Lô Khóa Cho Endpoint REST Điền chính xác tên trường mở rộng OpenAPI được gap-ngc-openapi sử dụng để gom 50 lần gọi rời thành ceil(unique_keys / max_ba"
+  },
+  {
+    "title": "Bài 3: Gắn Cơ sở dữ liệu SQL & Đồ thị Mã nguồn tree-sitter (208,7x) — Khóa 3: REST, SQL & Gom lô N+1",
+    "section": "Học viện GAP (Thực chiến)",
+    "href": "vi/academy/connectors-and-batching.html#batch-lesson-3",
+    "snippet": "Bên cạnh REST, cùng một siêu đồ thị có thể nạp bảng dữ liệu SQL ( gap-ngc-sql tự tạo mệnh đề IN (...) tham số hóa chống SQL injection) và mã nguồn phần mềm ( gap-ngc-code lập chỉ mục hàm gọi",
+    "keywords": "Bài 3: Gắn Cơ sở dữ liệu SQL & Đồ thị Mã nguồn tree-sitter (208,7x) Khóa 3: REST, SQL & Gom lô N+1 Bên cạnh REST, cùng một siêu đồ thị có thể nạp bảng dữ liệu SQL ( gap-ngc-sql tự tạo mệnh đề IN (...) tham số hóa chống SQL injection) và mã nguồn phần mềm ( gap-ngc-code lập chỉ mục hàm gọi/được gọi qua tree-sitter ): toml Mẫu Khai báo Nhánh Code AST (TOML) Trên bài chuẩn code_graph (24 symbols), việc truy vấn quan hệ mã nguồn qua GAP thay thế 11 lượt tìm đọc file ( 137.810,4 tokens có cache) chỉ còn 1 lượt duy nhất ( 660,4 tokens — hiệu suất gấ"
+  },
+  {
+    "title": "Bài 4: Đưa Schema Mới Vào Chạy An toàn (Propose-Not-Activate) — Khóa 3: REST, SQL & Gom lô N+1",
+    "section": "Học viện GAP (Thực chiến)",
+    "href": "vi/academy/connectors-and-batching.html#batch-lesson-4",
+    "snippet": "Không một schema mới hoặc cạnh @join nào tự ý kích hoạt vào đường phục vụ trực tiếp ( INV-06 ). GAP chạy kiểm thử mẫu dữ liệu thực tế cho cạnh nối (không bao giờ tin suy đoán LLM) và chờ ngư",
+    "keywords": "Bài 4: Đưa Schema Mới Vào Chạy An toàn (Propose-Not-Activate) Khóa 3: REST, SQL & Gom lô N+1 Không một schema mới hoặc cạnh @join nào tự ý kích hoạt vào đường phục vụ trực tiếp ( INV-06 ). GAP chạy kiểm thử mẫu dữ liệu thực tế cho cạnh nối (không bao giờ tin suy đoán LLM) và chờ người vận hành duyệt trước khi tráo nguyên tử ArcSwap : terminal Terminal — Trích xuất, So sánh Diff &amp; Duyệt Proposal Kiểm tra Nhanh Điều gì xảy ra nếu gap ingest tìm thấy một cạnh @join tiềm năng mới, nhưng kỹ sư vận hành chưa chạy lệnh gap proposals approve"
+  },
+  {
+    "title": "Khóa 4: Zero-Trust, Cedar & HTTP/3",
+    "section": "Học viện GAP (Thực chiến)",
+    "href": "vi/academy/enterprise-zero-trust.html",
+    "snippet": "4 bài thực hành: phân tầng T0/T1/T2, viết luật Cedar duyệt 2 người, chặn rug-pull & SSRF và vận hành HTTP/3 QUIC.",
+    "keywords": "Khóa 4: Zero-Trust, Cedar & HTTP/3 4 bài thực hành: phân tầng T0/T1/T2, viết luật Cedar duyệt 2 người, chặn rug-pull & SSRF và vận hành HTTP/3 QUIC. Khóa 4 chuẩn bị cho bạn triển khai GAP trong môi trường doanh nghiệp khắc nghiệt: cô lập tool `T2` thiếu tin cậy, thực thi luật Cedar duyệt 2 người cho thao tác `IRREVERSIBLE`, chặn rug-pull & SSRF, và bật HTTP/3 QUIC kèm chuỗi kiểm toán BLAKE3."
+  },
+  {
+    "title": "Bài 1: Phân tầng Tin cậy (T0/T1/T2) & Bọc Dữ liệu <gap:untrusted> — Khóa 4: Zero-Trust, Cedar & HTTP/3",
+    "section": "Học viện GAP (Thực chiến)",
+    "href": "vi/academy/enterprise-zero-trust.html#sec-lesson-1",
+    "snippet": "Khóa 4: Zero-Trust, Cedar &amp; HTTP/3 · 25 phút · 4 bài học 0 / 4 hoàn thành 1 T0/T1/T2 &amp; Escaping 2 Luật Cedar 3 Rug-Pull &amp; SSRF 4 HTTP/3 &amp; Audit Mỗi nhánh upstream mang một nh",
+    "keywords": "Bài 1: Phân tầng Tin cậy (T0/T1/T2) & Bọc Dữ liệu <gap:untrusted> Khóa 4: Zero-Trust, Cedar & HTTP/3 Khóa 4: Zero-Trust, Cedar &amp; HTTP/3 · 25 phút · 4 bài học 0 / 4 hoàn thành 1 T0/T1/T2 &amp; Escaping 2 Luật Cedar 3 Rug-Pull &amp; SSRF 4 HTTP/3 &amp; Audit Mỗi nhánh upstream mang một nhãn tin cậy bắt buộc: T0 (có chữ ký tổ chức Ed25519 hợp lệ; sai chữ ký lập tức hạ xuống T2 ), T1 (admin phê duyệt và ghim mã băm JCS BLAKE3), hoặc T2 (ngoài / chưa tin cậy). Tiến trình T2 stdio bắt buộc chạy trong OS sandbox (Bubblewrap/nsjail trên Linux, Seatb"
+  },
+  {
+    "title": "Bài 2: Luật Phân quyền Cedar Duyệt 2 Người (INV-04, INV-11) — Khóa 4: Zero-Trust, Cedar & HTTP/3",
+    "section": "Học viện GAP (Thực chiến)",
+    "href": "vi/academy/enterprise-zero-trust.html#sec-lesson-2",
+    "snippet": "Trong GAP, mọi quyết định cho phép hay từ chối hoàn toàn tách khỏi suy đoán của LLM ( INV-04 ). Bộ đánh giá Cedar thuần hàm chạy trên (principal, action, resource, context) , trong đó luật f",
+    "keywords": "Bài 2: Luật Phân quyền Cedar Duyệt 2 Người (INV-04, INV-11) Khóa 4: Zero-Trust, Cedar & HTTP/3 Trong GAP, mọi quyết định cho phép hay từ chối hoàn toàn tách khỏi suy đoán của LLM ( INV-04 ). Bộ đánh giá Cedar thuần hàm chạy trên (principal, action, resource, context) , trong đó luật forbid luôn thắng permit . Xem quy tắc gốc tại policies/default.cedar : cedar policies/default.cedar &amp; Lệnh Kiểm định Policy Thử thách Điền mã Bắt Buộc Người Duyệt Độc lập Thứ Hai Trong Cedar Điền điều kiện bối cảnh cuối cùng của luật policies/default.cedar"
+  },
+  {
+    "title": "Bài 3: Chặn MCP Rug-Pull (DriftMonitor) & SSRF (EgressGuard) — Khóa 4: Zero-Trust, Cedar & HTTP/3",
+    "section": "Học viện GAP (Thực chiến)",
+    "href": "vi/academy/enterprise-zero-trust.html#sec-lesson-3",
+    "snippet": "Chống Rug-Pull Mô tả Tool ( SEC-082 , INV-08 ): Nếu một dịch vụ ngoài lén sửa mô tả công cụ để nhét chỉ thị ẩn sau khi quản trị viên đã duyệt, DriftMonitor phát hiện sai lệch mã băm JCS BLAK",
+    "keywords": "Bài 3: Chặn MCP Rug-Pull (DriftMonitor) & SSRF (EgressGuard) Khóa 4: Zero-Trust, Cedar & HTTP/3 Chống Rug-Pull Mô tả Tool ( SEC-082 , INV-08 ): Nếu một dịch vụ ngoài lén sửa mô tả công cụ để nhét chỉ thị ẩn sau khi quản trị viên đã duyệt, DriftMonitor phát hiện sai lệch mã băm JCS BLAKE3 desc_hash , đóng băng nhánh ngay về BranchStatus::Drift và chỉ cung cấp cho Agent đúng mô tả cũ đã ghim. Phòng vệ SSRF Không Kẽ hở ( SEC-075 ): Trước khi mở kết nối ra ngoài, EgressGuard phân giải DNS đúng một lần duy nhất, loại bỏ toàn bộ địa chỉ nội bộ/lo"
+  },
+  {
+    "title": "Bài 4: HTTP/3 QUIC, Chuỗi Băm BLAKE3 & Phục hồi Sự cố (28,86 ms) — Khóa 4: Zero-Trust, Cedar & HTTP/3",
+    "section": "Học viện GAP (Thực chiến)",
+    "href": "vi/academy/enterprise-zero-trust.html#sec-lesson-4",
+    "snippet": "Khi lên production, bật song song HTTP/2 và HTTP/3 trên UDP QUIC (đo thực tế đạt 5.013 req/s ở 2,36 ms p95, 0 lỗi , và phục hồi /readyz chỉ trong 28,86 ms sau khi bị SIGKILL ), với max_early",
+    "keywords": "Bài 4: HTTP/3 QUIC, Chuỗi Băm BLAKE3 & Phục hồi Sự cố (28,86 ms) Khóa 4: Zero-Trust, Cedar & HTTP/3 Khi lên production, bật song song HTTP/2 và HTTP/3 trên UDP QUIC (đo thực tế đạt 5.013 req/s ở 2,36 ms p95, 0 lỗi , và phục hồi /readyz chỉ trong 28,86 ms sau khi bị SIGKILL ), với max_early_data_size = 0 tắt hoàn toàn rủi ro phát lại 0-RTT : Luồng kết nối AI Host qua MCP 2026-07-28, A2A v1.0, AG-UI v1.0 và NGC AI Hosts &amp; UI Claude · Cursor Antigravity Web AG-UI HTTP/2 + HTTP/3 QUIC TLS 1.3 (tắt 0-RTT) /graphql · /mcp /ag-ui · A2A v1.0 Cổng G"
+  },
+  {
     "title": "Kiến trúc 3 Mặt phẳng",
     "section": "Kiến trúc Cốt lõi",
     "href": "vi/concepts/architecture.html",
@@ -102,8 +319,8 @@ window.GAP_SEARCH_INDEX = [
     "title": "Phân tách Cứng 3 Mặt phẳng — Kiến trúc 3 Mặt phẳng",
     "section": "Kiến trúc Cốt lõi",
     "href": "vi/concepts/architecture.html#three-planes-diagram",
-    "snippet": "Kiến trúc 3 Mặt phẳng tách biệt hoàn toàn trong GAP Mặt phẳng 2: Khám phá Lũy tiến L0/L1/L2 · Visibility Bitset (INV-05) · Baseline / S1 tùy chọn (INV-17) Truy vấn đã chọn Mặt phẳng 1: Thực ",
-    "keywords": "Phân tách Cứng 3 Mặt phẳng Kiến trúc 3 Mặt phẳng Kiến trúc 3 Mặt phẳng tách biệt hoàn toàn trong GAP Mặt phẳng 2: Khám phá Lũy tiến L0/L1/L2 · Visibility Bitset (INV-05) · Baseline / S1 tùy chọn (INV-17) Truy vấn đã chọn Mặt phẳng 1: Thực thi Tất định (CẤM ML — ARC-002) AuthN + Cedar Policy -&gt; PlanCache (TenantId) -&gt; ArcSwap Snapshot -&gt; BatchJoin -&gt; EgressGuard Đổi ArcSwap (nguyên tử) Mặt phẳng 3: Kiểm soát &amp; Ingest Zero-Trust Propose-Not-Activate · Kiểm chứng @join · DriftMonit"
+    "snippet": "Kiến trúc 3 Mặt phẳng tách biệt hoàn toàn trong GAP Mặt phẳng 2: Khám phá Lũy tiến L0/L1/L2 · Visibility Bitset (INV-05) · Baseline 95,24% / S1 tùy chọn (INV-17) Truy vấn đã chọn Mặt phẳng 1",
+    "keywords": "Phân tách Cứng 3 Mặt phẳng Kiến trúc 3 Mặt phẳng Kiến trúc 3 Mặt phẳng tách biệt hoàn toàn trong GAP Mặt phẳng 2: Khám phá Lũy tiến L0/L1/L2 · Visibility Bitset (INV-05) · Baseline 95,24% / S1 tùy chọn (INV-17) Truy vấn đã chọn Mặt phẳng 1: Thực thi Tất định (CẤM ML — ARC-002) AuthN + Cedar Policy -&gt; PlanCache (TenantId) -&gt; ArcSwap Snapshot -&gt; BatchJoin -&gt; EgressGuard Đổi ArcSwap (nguyên tử) Mặt phẳng 3: Kiểm soát &amp; Ingest Zero-Trust Propose-Not-Activate · Kiểm chứng @join · Dri"
   },
   {
     "title": "Sơ đồ Tương tác 10 Khối Kiến trúc — Kiến trúc 3 Mặt phẳng",
@@ -130,15 +347,15 @@ window.GAP_SEARCH_INDEX = [
     "title": "Quy trình 3 Tầng Từ Ý định Đến Truy vấn — Khám phá Lũy tiến (651 Tokens)",
     "section": "Kiến trúc Cốt lõi",
     "href": "vi/concepts/progressive-disclosure.html#three-levels-walkthrough",
-    "snippet": "Quy trình Khám phá Lũy tiến 3 tầng (651 tokens) so với tải phẳng tools/list tĩnh 5 tool (651 tok) L0: gap_describe overview: true (&lt;=24 tok/nhánh) L1: gap_search BM25 + Cedar Bitset (INV-",
-    "keywords": "Quy trình 3 Tầng Từ Ý định Đến Truy vấn Khám phá Lũy tiến (651 Tokens) Quy trình Khám phá Lũy tiến 3 tầng (651 tokens) so với tải phẳng tools/list tĩnh 5 tool (651 tok) L0: gap_describe overview: true (&lt;=24 tok/nhánh) L1: gap_search BM25 + Cedar Bitset (INV-05) L2: gap_describe types: [&quot;shop_CustomersResult&quot;] gap_query / mutate Thực thi GraphQL có batch 1 Tầng L0 — Tổng quan Nhánh ( gap_describe{overview: true} / __metaGraph ) Agent xem danh mục tóm tắt các nhánh hiện có qua MCP POST /mcp , giới hạn &lt"
+    "snippet": "Quy trình Khám phá Lũy tiến 3 tầng (giữ tools/list cố định ở 651 tokens) 1 -> 2 --> 0. tools/list tĩnh 5 tool cố định (651 tok) 1. L0: gap_describe overview: true (&lt;=24 tok/nhánh) 2. L1: ",
+    "keywords": "Quy trình 3 Tầng Từ Ý định Đến Truy vấn Khám phá Lũy tiến (651 Tokens) Quy trình Khám phá Lũy tiến 3 tầng (giữ tools/list cố định ở 651 tokens) 1 -> 2 --> 0. tools/list tĩnh 5 tool cố định (651 tok) 1. L0: gap_describe overview: true (&lt;=24 tok/nhánh) 2. L1: gap_search BM25 + Cedar Bitset (INV-05) 4 --> 3. L2: gap_describe types: [&quot;shop_CustomersResult&quot;] 4. gap_query / gap_mutate Thực thi GraphQL định kiểu &amp; batch Quy trình Khám phá Lũy tiến 3 tầng (giữ tools/list cố định ở 651 tokens) 1 Tầng L0 — Tổ"
   },
   {
-    "title": "Bảo đảm Không Rò rỉ Sự tồn tại (INV-05) — Khám phá Lũy tiến (651 Tokens)",
+    "title": "Bảo đảm Không Rò rỉ Sự tồn tại (INV-05) & Biểu đồ Mở rộng — Khám phá Lũy tiến (651 Tokens)",
     "section": "Kiến trúc Cốt lõi",
     "href": "vi/concepts/progressive-disclosure.html#visibility-before-rank",
-    "snippet": "Lọc Quyền trước Xếp hạng Nếu một tenant hoặc principal bị hạn chế quyền gọi __search , visibility bitset loại bỏ toàn bộ thao tác bị cấm trước khi tính điểm BM25 hay đếm số lượng kết quả.",
-    "keywords": "Bảo đảm Không Rò rỉ Sự tồn tại (INV-05) Khám phá Lũy tiến (651 Tokens) Lọc Quyền trước Xếp hạng Nếu một tenant hoặc principal bị hạn chế quyền gọi __search , visibility bitset loại bỏ toàn bộ thao tác bị cấm trước khi tính điểm BM25 hay đếm số lượng kết quả."
+    "snippet": "Lọc Quyền trước Xếp hạng Nếu một tenant hoặc principal bị hạn chế quyền gọi __search , visibility bitset loại bỏ toàn bộ thao tác bị cấm trước khi tính điểm BM25 hay đếm số lượng kết quả. Th",
+    "keywords": "Bảo đảm Không Rò rỉ Sự tồn tại (INV-05) & Biểu đồ Mở rộng Khám phá Lũy tiến (651 Tokens) Lọc Quyền trước Xếp hạng Nếu một tenant hoặc principal bị hạn chế quyền gọi __search , visibility bitset loại bỏ toàn bộ thao tác bị cấm trước khi tính điểm BM25 hay đếm số lượng kết quả. Thuế Schema MCP tools/list Theo Quy mô N (N = 10 đến 1.000) Số token định nghĩa công cụ gửi sẵn tới LLM trước khi có câu hỏi (ADR-021) GAP 5 Tool Tĩnh (Mọi N) 651 tok (cố định) Direct-MCP (N = 10) 1.904 tok Direct-MCP (N = 50) 10.066 tok Direct-MCP (N = 200) 40."
   },
   {
     "title": "GAP-QL & Gom Lô Join",
@@ -200,8 +417,8 @@ window.GAP_SEARCH_INDEX = [
     "title": "Kiến trúc Tương tác 3 Trục — Tích hợp MCP, A2A & AG-UI",
     "section": "Tích hợp AI Agent",
     "href": "vi/agents/facades-and-hosts.html#three-axis-flow",
-    "snippet": "Luồng kết nối AI Host qua MCP 2026-07-28, A2A v1.0, AG-UI v1.0 và NGC AI Hosts &amp; UI Claude Cursor · Antigravity Web AG-UI HTTP/2 + HTTP/3 QUIC TLS 1.3 (tắt 0-RTT) /graphql · /mcp /ag-ui ",
-    "keywords": "Kiến trúc Tương tác 3 Trục Tích hợp MCP, A2A & AG-UI Luồng kết nối AI Host qua MCP 2026-07-28, A2A v1.0, AG-UI v1.0 và NGC AI Hosts &amp; UI Claude Cursor · Antigravity Web AG-UI HTTP/2 + HTTP/3 QUIC TLS 1.3 (tắt 0-RTT) /graphql · /mcp /ag-ui · A2A v1.0 Cổng GAP (gap-server) Cedar · ArcSwap DataLoader · BLAKE3 5,013 req/s H3 · 28.86ms 6 NGC Connectors OpenAPI · SQL GraphQL · gRPC CLI · Code AST Hãy hình dung các facade của GAP như tầng phiên dịch đặt trước một động cơ lõi duy nhất: AI host dọc dùng"
+    "snippet": "Luồng kết nối AI Host qua MCP 2026-07-28, A2A v1.0, AG-UI v1.0 và NGC AI Hosts &amp; UI Claude · Cursor Antigravity Web AG-UI HTTP/2 + HTTP/3 QUIC TLS 1.3 (tắt 0-RTT) /graphql · /mcp /ag-ui ",
+    "keywords": "Kiến trúc Tương tác 3 Trục Tích hợp MCP, A2A & AG-UI Luồng kết nối AI Host qua MCP 2026-07-28, A2A v1.0, AG-UI v1.0 và NGC AI Hosts &amp; UI Claude · Cursor Antigravity Web AG-UI HTTP/2 + HTTP/3 QUIC TLS 1.3 (tắt 0-RTT) /graphql · /mcp /ag-ui · A2A v1.0 Cổng GAP (gap-server) Cedar · ArcSwap DataLoader · BLAKE3 5,013 req/s H3 · 28.86ms 6 NGC Connectors OpenAPI · SQL GraphQL · gRPC CLI · Code AST Luồng kết nối AI Host qua MCP 2026-07-28, A2A v1.0, AG-UI v1.0 và NGC Hãy hình dung các facade của GAP nh"
   },
   {
     "title": "Facade Công cụ Dọc: MCP 2026-07-28 (651 Tokens) — Tích hợp MCP, A2A & AG-UI",

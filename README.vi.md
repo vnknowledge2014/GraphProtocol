@@ -46,7 +46,7 @@ python3 tools/wp.py validate && python3 tools/check_layers.py && python3 tools/s
 
 | Hạng mục | Đường dẫn |
 |---|---|
-| **Cổng Tài liệu Song ngữ Đa trang & Phòng Lab (26 trang VI/EN)** | [`web/README.vi.md`](web/README.vi.md) · [`web/vi/index.html`](web/vi/index.html) (VI) · [`web/index.html`](web/index.html) (EN) · [`web/llms.txt`](web/llms.txt) · `python3 web/build_site.py` · `python3 web/serve.py --port 8787` |
+| **Cổng Tài liệu, Kiến thức Nền & Học viện Song ngữ (40 trang VI/EN)** | [`web/README.vi.md`](web/README.vi.md) · [`web/vi/index.html`](web/vi/index.html) (VI) · [`web/vi/learn/graphql-and-gap-basics.html`](web/vi/learn/graphql-and-gap-basics.html) · [`web/vi/academy/index.html`](web/vi/academy/index.html) · [`web/index.html`](web/index.html) (EN) · [`web/llms.txt`](web/llms.txt) · `python3 web/build_site.py` · `python3 web/serve.py --port 8787` |
 | **Bài báo Khoa học (LaTeX / HTML / PDF / Markdown)** | [`paper/main.tex`](paper/main.tex) · [`paper/gap-paper.pdf`](paper/gap-paper.pdf) · [`docs/paper/GAP-PAPER.md`](docs/paper/GAP-PAPER.md) |
 | **Sổ tay Kỹ thuật Chuẩn ASD-STE100 (Kèm Linter)** | [`docs/ste100/README.md`](docs/ste100/README.md) · `python3 dist/check-ste100.py` |
 | **Hướng dẫn Nộp arXiv / Zenodo DOI & Chạy GA Linux** | [`docs/paper/PUBLICATION-AND-GA-PLAYBOOK.md`](docs/paper/PUBLICATION-AND-GA-PLAYBOOK.md) · [`dist/set-author.py`](dist/set-author.py) |

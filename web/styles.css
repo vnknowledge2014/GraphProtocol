@@ -1261,15 +1261,21 @@ video.promo-video {
 }
 
 .step-checklist {
-  list-style: none;
+  border: 0;
   padding: 0;
   margin: 0.85rem 0 0 0;
+  min-inline-size: 0;
   display: flex;
   flex-direction: column;
   gap: 0.45rem;
 }
 
+.step-checklist .check-row {
+  display: flex;
+}
+
 .step-checklist label {
+  flex: 1 1 auto;
   display: flex;
   align-items: flex-start;
   gap: 0.55rem;
@@ -1322,11 +1328,26 @@ video.promo-video {
 
 .bar-row {
   display: grid;
-  grid-template-columns: 120px 1fr 85px;
-  gap: 0.5rem;
+  grid-template-columns: minmax(105px, 128px) minmax(90px, 1fr) minmax(112px, auto);
+  gap: 0.55rem;
   align-items: center;
   font-size: 0.85rem;
   margin: 0.45rem 0;
+}
+
+.bar-row strong {
+  white-space: nowrap;
+  text-align: end;
+}
+
+@media (width < 520px) {
+  .bar-row {
+    grid-template-columns: 1fr auto;
+  }
+  .bar-row .bar-track {
+    grid-column: 1 / -1;
+    order: 3;
+  }
 }
 
 .bar-track {
@@ -1340,10 +1361,15 @@ video.promo-video {
 .bar-fill {
   block-size: 100%;
   background: var(--accent);
+  border-radius: 3px;
 }
 
 .bar-fill.direct {
-  background: var(--warn);
+  background: repeating-linear-gradient(
+    135deg,
+    var(--warn) 0 6px,
+    color-mix(in srgb, var(--warn) 76%, var(--surface)) 6px 12px
+  );
 }
 
 /* Crates filter grid */
@@ -1714,6 +1740,14 @@ table.data-table tbody tr:last-child td {
   margin-inline: auto;
 }
 
+.diagram-caption {
+  margin: 0.65rem 0 0 0;
+  text-align: center;
+  font-size: 0.83rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+
 .callout {
   margin: 1rem 0;
   padding: 0.85rem 1.05rem;
@@ -1787,7 +1821,6 @@ table.data-table tbody tr:last-child td {
   margin: 0.85rem 0 1.1rem 0;
   border: 1px solid var(--border);
   border-radius: 10px;
-  overflow: hidden;
   background: var(--code-bg);
 }
 
@@ -1797,6 +1830,7 @@ table.data-table tbody tr:last-child td {
   justify-content: space-between;
   gap: 0.5rem;
   padding: 0.38rem 0.75rem;
+  border-radius: 9px 9px 0 0;
   background: #0b1222;
   color: #cbd5e1;
   border-bottom: 1px solid #1e293b;
@@ -1832,7 +1866,7 @@ table.data-table tbody tr:last-child td {
 
 .code-figure pre {
   margin: 0;
-  border-radius: 0;
+  border-radius: 0 0 9px 9px;
 }
 
 .copy {
@@ -1887,12 +1921,14 @@ table.data-table tbody tr:last-child td {
   border-color: var(--danger);
 }
 
-/* IMPORTANT: toggle feedback bubble ONLY via opacity so aria-live / role="status" remains in a11y tree */
+/* IMPORTANT: toggle feedback bubble ONLY via opacity so aria-live / role="status" remains in a11y tree.
+ * Place inline-start of the copy button so neither .code-figure nor right viewport edges clip it. */
 .copy .tip {
   position: absolute;
-  inset-block-end: calc(100% + 6px);
-  inset-inline-end: 0;
-  padding: 0.2rem 0.5rem;
+  inset-block-start: 50%;
+  inset-inline-end: calc(100% + 8px);
+  transform: translateY(-50%);
+  padding: 0.22rem 0.55rem;
   border-radius: 6px;
   background: var(--text);
   color: var(--surface);
@@ -1903,6 +1939,7 @@ table.data-table tbody tr:last-child td {
   opacity: 0;
   transition: opacity 0.16s ease;
   z-index: 40;
+  box-shadow: 0 4px 12px rgb(0 0 0 / 0.22);
 }
 
 .copy .tip[data-visible="true"] {
@@ -2002,4 +2039,459 @@ footer.doc-footer {
   border: 1px solid var(--border);
   border-radius: 12px;
   padding: 1.5rem;
+}
+
+/* Going Deeper Disclosure (`graphql.com/learn` pattern) */
+details.going-deeper {
+  margin: 1rem 0 1.25rem 0;
+  border: 1px solid var(--border);
+  border-inline-start: 4px solid var(--accent);
+  border-radius: 10px;
+  background: var(--surface-alt);
+}
+
+details.going-deeper summary {
+  padding: 0.75rem 1rem;
+  font-weight: 700;
+  font-size: 0.94rem;
+  color: var(--accent);
+  cursor: pointer;
+}
+
+details.going-deeper .details-body {
+  padding: 0.2rem 1rem 0.9rem 1rem;
+  border-top: 1px solid var(--border);
+}
+
+/* Responsive Benchmark Comparison Bar Charts */
+.metric-chart {
+  margin: 1rem 0 1.25rem 0;
+  padding: 1rem 1.1rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-alt);
+}
+
+.metric-chart-head {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  margin-bottom: 0.85rem;
+}
+
+.metric-chart-head strong {
+  font-size: 0.98rem;
+  color: var(--text);
+}
+
+.metric-chart-head span {
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
+.metric-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.metric-row {
+  display: grid;
+  grid-template-columns: minmax(145px, 210px) minmax(90px, 1fr) minmax(130px, auto);
+  gap: 0.65rem;
+  align-items: center;
+  font-size: 0.85rem;
+}
+
+.metric-label {
+  min-inline-size: 0;
+}
+
+.metric-track {
+  block-size: 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  overflow: hidden;
+}
+
+.metric-bar-fill {
+  block-size: 100%;
+  min-inline-size: 6px;
+  border-radius: 4px;
+}
+
+.metric-bar-fill.is-accent {
+  background: var(--accent);
+}
+
+.metric-bar-fill.is-ok {
+  background: var(--ok);
+}
+
+.metric-bar-fill.is-warn {
+  background: repeating-linear-gradient(
+    135deg,
+    var(--warn) 0 6px,
+    color-mix(in srgb, var(--warn) 76%, var(--surface)) 6px 12px
+  );
+}
+
+.metric-val {
+  white-space: nowrap;
+  text-align: end;
+  font-variant-numeric: tabular-nums;
+}
+
+.metric-footnote {
+  margin: 0.65rem 0 0 0;
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+@media (width < 640px) {
+  .metric-row {
+    grid-template-columns: 1fr auto;
+  }
+  .metric-row .metric-track {
+    grid-column: 1 / -1;
+    order: 3;
+  }
+}
+
+/* Interactive Query-to-JSON Builder (`learn/graphql-and-gap-basics.html`) */
+.query-builder {
+  margin: 1rem 0 1.25rem 0;
+  padding: 1.05rem;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface-alt);
+}
+
+.qb-header {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.qb-header h3 {
+  margin: 0;
+  font-size: 1.02rem;
+}
+
+.qb-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.45rem 0.85rem;
+  padding: 0.65rem 0.75rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  margin-bottom: 0.85rem;
+}
+
+.qb-group-title {
+  font-size: 0.84rem;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.qb-check-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.86rem;
+}
+
+.qb-check-row label {
+  cursor: pointer;
+}
+
+.qb-panes {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.85rem;
+}
+
+.qb-panes .code-figure {
+  margin: 0;
+}
+
+@media (width < 760px) {
+  .qb-panes {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* GAP Academy Catalog, Lesson Stepper, Code Challenges & Practice Checks */
+.academy-progress-banner,
+.course-banner {
+  background: var(--surface-alt);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 0.9rem 1.05rem;
+  margin: 0.75rem 0 1.25rem 0;
+}
+
+.academy-prog-top,
+.course-banner-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.course-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(290px, 1fr));
+  gap: 0.95rem;
+  margin: 1rem 0;
+}
+
+.course-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 1.05rem 1.15rem;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface-alt);
+}
+
+.course-card h3 {
+  margin: 0.15rem 0 0 0;
+  font-size: 1.05rem;
+}
+
+.course-card p {
+  margin: 0 0 auto 0;
+  font-size: 0.88rem;
+  color: var(--muted);
+}
+
+.course-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.4rem;
+}
+
+.lesson-stepper {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin-top: 0.7rem;
+}
+
+.lesson-step-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.3rem 0.65rem;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 0.82rem;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.lesson-step-pill:hover {
+  border-color: var(--accent);
+}
+
+.lesson-step-pill.is-done {
+  border-color: var(--ok);
+  background: color-mix(in srgb, var(--ok) 14%, transparent);
+}
+
+.lesson-step-pill .step-num {
+  display: inline-grid;
+  place-items: center;
+  inline-size: 20px;
+  block-size: 20px;
+  border-radius: 50%;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 0.74rem;
+  font-weight: 800;
+}
+
+.lesson-step-pill.is-done .step-num {
+  background: var(--ok);
+  color: var(--accent-ink);
+}
+
+.challenge-box,
+.practice-box,
+.takeaways-box {
+  margin: 1rem 0 1.25rem 0;
+  padding: 1rem 1.1rem;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--surface-alt);
+}
+
+.challenge-box {
+  border-inline-start: 4px solid var(--accent);
+}
+
+.practice-box {
+  border-inline-start: 4px solid var(--warn);
+}
+
+.takeaways-box {
+  border-inline-start: 4px solid var(--ok);
+}
+
+.chal-head,
+.takeaways-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.45rem;
+}
+
+.chal-head {
+  justify-content: flex-start;
+}
+
+.chal-head h3,
+.practice-box h3,
+.takeaways-head h3 {
+  margin: 0.25rem 0;
+  font-size: 1rem;
+}
+
+.chal-badge {
+  display: inline-block;
+  padding: 0.14rem 0.48rem;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.chal-code {
+  margin: 0.55rem 0;
+}
+
+.chal-input-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0.55rem 0;
+}
+
+.chal-input-row label {
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.chal-input {
+  min-inline-size: 180px;
+  flex: 1 1 200px;
+  padding: 0.4rem 0.65rem;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.86rem;
+}
+
+.chal-hints {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
+.chal-hint-chip {
+  padding: 0.18rem 0.5rem;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.chal-hint-chip:hover {
+  border-color: var(--accent);
+}
+
+.chal-feedback,
+.practice-feedback {
+  margin: 0.5rem 0 0 0;
+  font-size: 0.86rem;
+  font-weight: 600;
+  min-block-size: 1.2em;
+}
+
+.chal-feedback.is-ok,
+.practice-feedback.is-ok {
+  color: var(--ok);
+}
+
+.chal-feedback.is-err,
+.practice-feedback.is-err {
+  color: var(--danger);
+}
+
+.practice-options {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin-top: 0.5rem;
+}
+
+.practice-opt {
+  text-align: start;
+  padding: 0.48rem 0.7rem;
+  border-radius: 7px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 0.88rem;
+  cursor: pointer;
+}
+
+.practice-opt:hover {
+  border-color: var(--accent);
+}
+
+.practice-opt.correct {
+  border-color: var(--ok);
+  background: color-mix(in srgb, var(--ok) 14%, transparent);
+}
+
+.practice-opt.wrong {
+  border-color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 14%, transparent);
+}
+
+.takeaways-box ul {
+  margin: 0.35rem 0 0 0;
+  padding-inline-start: 1.2rem;
+}
+
+.lesson-complete-btn[aria-pressed="true"] {
+  background: var(--ok);
+  border-color: var(--ok);
+  color: var(--accent-ink);
 }

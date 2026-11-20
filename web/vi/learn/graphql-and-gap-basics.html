@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="color-scheme" content="light dark" />
+  <script>
+    try {
+      var s = localStorage.getItem("gap-color-scheme");
+      if (s === "light" || s === "dark") {
+        document.querySelector('meta[name="color-scheme"]').content = s;
+      }
+    } catch (_e) {}
+  </script>
+  <title>Nhập môn GraphQL &amp; GAP — Tài liệu GAP</title>
+  <meta name="description" content="Kiến thức nền dễ hiểu: ẩn dụ siêu đồ thị thống nhất, kiểu dữ liệu, scalar, quy tắc khác null (!) và bộ dựng truy vấn 1:1." />
+  <link rel="canonical" href="https://vnknowledge2014.github.io/GraphProtocol/vi/learn/graphql-and-gap-basics.html" />
+  <link rel="alternate" hreflang="en" href="../../learn/graphql-and-gap-basics.html" />
+  <link rel="alternate" hreflang="vi" href="graphql-and-gap-basics.html" />
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns=&#x27;http://www.w3.org/2000/svg&#x27; viewBox=&#x27;0 0 32 32&#x27;%3E%3Crect width=&#x27;32&#x27; height=&#x27;32&#x27; rx=&#x27;8&#x27; fill=&#x27;%230f4c81&#x27;/%3E%3Ctext x=&#x27;16&#x27; y=&#x27;22&#x27; text-anchor=&#x27;middle&#x27; font-family=&#x27;system-ui,sans-serif&#x27; font-weight=&#x27;800&#x27; font-size=&#x27;18&#x27; fill=&#x27;%23ffffff&#x27;%3EG%3C/text%3E%3C/svg%3E" />
+  <link rel="stylesheet" href="../../styles.css" />
+</head>
+<body data-slug="learn-graphql-and-gap" data-lang="vi" data-section="learn" data-web-root="../../">
+  <a class="skip-link" href="#article-title">Chuyển tới nội dung bài viết</a>
+
+  <header class="topbar">
+    <div class="topbar-inner">
+      <div class="topbar-left">
+        <button type="button" id="drawer-open" class="drawer-open-btn" aria-label="Mở danh mục tài liệu" aria-controls="docs-drawer">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+            <path d="M4 6h16M4 12h16M4 18h16" />
+          </svg>
+        </button>
+        <a class="brand-link" href="../index.html">
+          <span class="brand-mark" aria-hidden="true">G</span>
+          <span class="brand-text"><strong>GAP</strong> <span class="brand-sub">Tài liệu GAP</span></span>
+          <span class="badge-ver">v0.1.0-rc.1</span>
+        </a>
+      </div>
+
+      <nav class="top-nav" aria-label="Nhóm tài liệu chính">
+        <a href="../getting-started/what-is-gap.html" class="top-link">Bắt đầu</a><a href="graphql-and-gap-basics.html" aria-current="true" class="top-link is-active">Kiến thức Nền</a><a href="../academy/index.html" class="top-link">Học viện</a><a href="../concepts/architecture.html" class="top-link">Kiến trúc</a><a href="../security/zero-trust.html" class="top-link">Bảo mật</a><a href="../lab/playground.html" class="top-link">Phòng Lab</a><a href="../reference/cli-and-ops.html" class="top-link">Tra cứu</a>
+      </nav>
+
+      <div class="topbar-controls">
+        <search class="search-wrap">
+          <label class="visually-hidden" for="global-search">Tìm kiếm trên toàn bộ tài liệu và Học viện GAP</label>
+          <input id="global-search" type="search" placeholder="Tìm tài liệu, Học viện, INV... [/]" autocomplete="off" />
+          <div id="search-results" class="search-results scroller" role="region" aria-live="polite" hidden></div>
+        </search>
+        <nav class="lang-switch" aria-label="Ngôn ngữ">
+          <span class="lang-current" aria-current="true">VI</span>
+          <a class="lang-alt" href="../../learn/graphql-and-gap-basics.html" hreflang="en" lang="en">EN</a>
+        </nav>
+        <button type="button" id="theme-toggle-btn" class="theme-toggle" aria-label="Chuyển giao diện Sáng / Tối">
+          <span class="icon-to-dark" aria-hidden="true">☽</span>
+          <span class="icon-to-light" aria-hidden="true">☀</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <dialog class="Drawer scroller" id="docs-drawer" aria-label="Ngăn điều hướng tài liệu">
+    <nav class="Drawer-nav scroller" aria-label="Danh mục tài liệu">
+      <div class="Drawer-head">
+        <span class="Drawer-brand"><strong>GAP</strong> Tài liệu GAP</span>
+        <button type="button" id="drawer-close" class="drawer-close-btn" aria-label="Đóng danh mục tài liệu">&times;</button>
+      </div>
+      <div class="nav-group" data-section-id="start-here">
+  <p class="nav-group-title" id="drawer-start-here">Bắt đầu</p>
+  <ul aria-labelledby="drawer-start-here">
+    <li><a class="nav-link" href="../index.html">Trang chủ Tài liệu GAP</a></li><li><a class="nav-link" href="../getting-started/what-is-gap.html">GAP là gì?</a></li><li><a class="nav-link" href="../getting-started/quickstart.html">Khởi chạy Nhanh (10 phút)</a></li>
+  </ul>
+</div>
+<div class="nav-group" data-section-id="learn">
+  <p class="nav-group-title" id="drawer-learn">Kiến thức Nền tảng</p>
+  <ul aria-labelledby="drawer-learn">
+    <li><a class="nav-link is-active" href="graphql-and-gap-basics.html" aria-current="page">Nhập môn GraphQL &amp; GAP</a></li><li><a class="nav-link" href="queries-mutations-joins.html">Tham số, Mutation &amp; Nối nhánh</a></li>
+  </ul>
+</div>
+<div class="nav-group" data-section-id="academy">
+  <p class="nav-group-title" id="drawer-academy">Học viện GAP (Thực chiến)</p>
+  <ul aria-labelledby="drawer-academy">
+    <li><a class="nav-link" href="../academy/index.html">Học viện GAP — Khóa học Thực chiến</a></li><li><a class="nav-link" href="../academy/liftoff-first-supergraph.html">Khóa 1: Lift-Off — Siêu đồ thị Đầu tiên</a></li><li><a class="nav-link" href="../academy/mcp-and-ai-assistants.html">Khóa 2: MCP, AG-UI &amp; Trợ lý AI</a></li><li><a class="nav-link" href="../academy/connectors-and-batching.html">Khóa 3: REST, SQL &amp; Gom lô N+1</a></li><li><a class="nav-link" href="../academy/enterprise-zero-trust.html">Khóa 4: Zero-Trust, Cedar &amp; HTTP/3</a></li>
+  </ul>
+</div>
+<div class="nav-group" data-section-id="concepts">
+  <p class="nav-group-title" id="drawer-concepts">Kiến trúc Cốt lõi</p>
+  <ul aria-labelledby="drawer-concepts">
+    <li><a class="nav-link" href="../concepts/architecture.html">Kiến trúc 3 Mặt phẳng</a></li><li><a class="nav-link" href="../concepts/progressive-disclosure.html">Khám phá Lũy tiến (651 Tokens)</a></li><li><a class="nav-link" href="../concepts/gap-ql-and-joins.html">GAP-QL &amp; Gom Lô Join</a></li>
+  </ul>
+</div>
+<div class="nav-group" data-section-id="connectors">
+  <p class="nav-group-title" id="drawer-connectors">Kết nối Dữ liệu (NGC)</p>
+  <ul aria-labelledby="drawer-connectors">
+    <li><a class="nav-link" href="../connectors/overview.html">Kết nối Dữ liệu (NGC)</a></li>
+  </ul>
+</div>
+<div class="nav-group" data-section-id="agents">
+  <p class="nav-group-title" id="drawer-agents">Tích hợp AI Agent</p>
+  <ul aria-labelledby="drawer-agents">
+    <li><a class="nav-link" href="../agents/facades-and-hosts.html">Tích hợp MCP, A2A &amp; AG-UI</a></li><li><a class="nav-link" href="../agents/routers-and-http3.html">Định tuyến System-1 &amp; HTTP/3 QUIC</a></li>
+  </ul>
+</div>
+<div class="nav-group" data-section-id="security">
+  <p class="nav-group-title" id="drawer-security">Bảo mật Zero-Trust</p>
+  <ul aria-labelledby="drawer-security">
+    <li><a class="nav-link" href="../security/zero-trust.html">Bảo mật Zero-Trust &amp; Cedar</a></li>
+  </ul>
+</div>
+<div class="nav-group" data-section-id="lab">
+  <p class="nav-group-title" id="drawer-lab">Phòng Lab Thực hành</p>
+  <ul aria-labelledby="drawer-lab">
+    <li><a class="nav-link" href="../lab/playground.html">Phòng Lab &amp; Bộ tính Token</a></li>
+  </ul>
+</div>
+<div class="nav-group" data-section-id="reference">
+  <p class="nav-group-title" id="drawer-reference">Vận hành &amp; Tra cứu</p>
+  <ul aria-labelledby="drawer-reference">
+    <li><a class="nav-link" href="../reference/cli-and-ops.html">Tra cứu CLI, Runbooks &amp; 32 Crates</a></li><li><a class="nav-link" href="../reference/invariants-and-glossary.html">20 Bất biến, STE-100 &amp; Bài báo</a></li>
+  </ul>
+</div>
+    </nav>
+    <button type="button" id="drawer-backdrop-close" class="Drawer-backdrop" aria-label="Đóng danh mục tài liệu"></button>
+  </dialog>
+
+  <div class="docs-shell">
+    <aside class="sidebar scroller" aria-label="Danh mục tài liệu">
+      <nav aria-label="Danh mục tài liệu">
+        <div class="nav-group" data-section-id="start-here">
+  <p class="nav-group-title" id="side-start-here">Bắt đầu</p>
+  <ul aria-labelledby="side-start-here">
+    <li><a class="nav-link" href="../index.html">Trang chủ Tài liệu GAP</a></li><li><a class="nav-link" href="../getting-started/what-is-gap.html">GAP là gì?</a></li><li><a class="nav-link" href="../getting-started/quickstart.html">Khởi chạy Nhanh (10 phút)</a></li>
+  </ul>
+</div>
+<div class="nav-group" data-section-id="learn">
+  <p class="nav-group-title" id="side-learn">Kiến thức Nền tảng</p>
+  <ul aria-labelledby="side-learn">
+    <li><a class="nav-link is-active" href="graphql-and-gap-basics.html" aria-current="page">Nhập môn GraphQL &amp; GAP</a></li><li><a class="nav-link" href="queries-mutations-joins.html">Tham số, Mutation &amp; Nối nhánh</a></li>
+  </ul>
+</div>
+<div class="nav-group" data-section-id="academy">
+  <p class="nav-group-title" id="side-academy">Học viện GAP (Thực chiến)</p>
+  <ul aria-labelledby="side-academy">
+    <li><a class="nav-link" href="../academy/index.html">Học viện GAP — Khóa học Thực chiến</a></li><li><a class="nav-link" href="../academy/liftoff-first-supergraph.html">Khóa 1: Lift-Off — Siêu đồ thị Đầu tiên</a></li><li><a class="nav-link" href="../academy/mcp-and-ai-assistants.html">Khóa 2: MCP, AG-UI &amp; Trợ lý AI</a></li><li><a class="nav-link" href="../academy/connectors-and-batching.html">Khóa 3: REST, SQL &amp; Gom lô N+1</a></li><li><a class="nav-link" href="../academy/enterprise-zero-trust.html">Khóa 4: Zero-Trust, Cedar &amp; HTTP/3</a></li>
+  </ul>
+</div>
+<div class="nav-group" data-section-id="concepts">
+  <p class="nav-group-title" id="side-concepts">Kiến trúc Cốt lõi</p>
+  <ul aria-labelledby="side-concepts">
+    <li><a class="nav-link" href="../concepts/architecture.html">Kiến trúc 3 Mặt phẳng</a></li><li><a class="nav-link" href="../concepts/progressive-disclosure.html">Khám phá Lũy tiến (651 Tokens)</a></li><li><a class="nav-link" href="../concepts/gap-ql-and-joins.html">GAP-QL &amp; Gom Lô Join</a></li>
+  </ul>
+</div>
+<div class="nav-group" data-section-id="connectors">
+  <p class="nav-group-title" id="side-connectors">Kết nối Dữ liệu (NGC)</p>
+  <ul aria-labelledby="side-connectors">
+    <li><a class="nav-link" href="../connectors/overview.html">Kết nối Dữ liệu (NGC)</a></li>
+  </ul>
+</div>
+<div class="nav-group" data-section-id="agents">
+  <p class="nav-group-title" id="side-agents">Tích hợp AI Agent</p>
+  <ul aria-labelledby="side-agents">
+    <li><a class="nav-link" href="../agents/facades-and-hosts.html">Tích hợp MCP, A2A &amp; AG-UI</a></li><li><a class="nav-link" href="../agents/routers-and-http3.html">Định tuyến System-1 &amp; HTTP/3 QUIC</a></li>
+  </ul>
+</div>
+<div class="nav-group" data-section-id="security">
+  <p class="nav-group-title" id="side-security">Bảo mật Zero-Trust</p>
+  <ul aria-labelledby="side-security">
+    <li><a class="nav-link" href="../security/zero-trust.html">Bảo mật Zero-Trust &amp; Cedar</a></li>
+  </ul>
+</div>
+<div class="nav-group" data-section-id="lab">
+  <p class="nav-group-title" id="side-lab">Phòng Lab Thực hành</p>
+  <ul aria-labelledby="side-lab">
+    <li><a class="nav-link" href="../lab/playground.html">Phòng Lab &amp; Bộ tính Token</a></li>
+  </ul>
+</div>
+<div class="nav-group" data-section-id="reference">
+  <p class="nav-group-title" id="side-reference">Vận hành &amp; Tra cứu</p>
+  <ul aria-labelledby="side-reference">
+    <li><a class="nav-link" href="../reference/cli-and-ops.html">Tra cứu CLI, Runbooks &amp; 32 Crates</a></li><li><a class="nav-link" href="../reference/invariants-and-glossary.html">20 Bất biến, STE-100 &amp; Bài báo</a></li>
+  </ul>
+</div>
+      </nav>
+      <div class="sidebar-status" role="status" aria-live="polite">
+        <span id="server-status-dot" class="status-dot" aria-hidden="true"></span>
+        <span id="server-status-text">Chế độ Tĩnh (HTML)</span>
+      </div>
+    </aside>
+
+    <main id="main-content" class="doc-main">
+      <article class="doc-article">
+        <nav class="breadcrumb" aria-label="Đường dẫn vị trí">
+  <ol>
+    <li><a href="../index.html">Tài liệu</a></li>
+    <li><a href="graphql-and-gap-basics.html">Kiến thức Nền tảng</a></li>
+    <li><a href="graphql-and-gap-basics.html" aria-current="page">Nhập môn GraphQL &amp; GAP</a></li>
+  </ol>
+</nav>
+        <div class="article-meta-bar">
+          <span class="read-time">8 phút</span>
+          <span class="copy copy-md-wrap">
+            <button type="button" class="copy-button copy-md-btn" command="--copy" commandfor="page-markdown-src">
+              <span class="icon" aria-hidden="true"></span>
+              <span class="btn-label">Sao chép Markdown</span>
+            </button>
+            <span class="tip" role="status"></span>
+          </span>
+        </div>
+
+        <textarea id="page-markdown-src" class="visually-hidden" readonly tabindex="-1" aria-hidden="true"># Nhập môn GraphQL &amp; GAP
+
+- **Supergraph &amp; Branch**: GAP đóng vai trò một quầy thực đơn định kiểu thống nhất trước REST, SQL, GraphQL, gRPC, CLI, Code AST và MCP.
+- **Kiểu dữ liệu &amp; Non-Null**: Kiểu Object mở `{ ... }`; kiểu scalar lá (`Int`, `String`, `JSON`) dừng tại chỗ; dấu `!` đảm bảo khác null.
+- **Phản chiếu 1:1**: Hình dáng truy vấn khớp đúng 1:1 cấu trúc JSON nhận về trong một request duy nhất.</textarea>
+
+        <h1 id="article-title" tabindex="-1">Nhập môn GraphQL &amp; GAP</h1>
+        <p class="article-lead">Mới làm quen với GraphQL hay AI Gateway? Tài liệu nền tảng không dùng biệt ngữ này giúp bạn nắm trực giác từ gốc: vì sao Agent cần một thực đơn thống nhất, Kiểu dữ liệu giống hộp dán nhãn ra sao, và cách truy vấn phản chiếu JSON 1:1.</p>
+
+        <section class="learn-card" aria-labelledby="learn-heading">
+  <h2 id="learn-heading">Bạn sẽ nắm được gì</h2>
+  <ul><li>Hình dung Supergraph GAP giống một quầy gọi món trung tâm trước hàng chục bếp REST, SQL, gRPC, MCP và Code.</li><li>Đọc thông thạo schema: Kiểu Object (<code>shop_CustomersResult</code>), Scalar (<code>Int</code>, <code>String</code>, <code>JSON</code>), Enum, Mảng và Non-Null (<code>!</code>).</li><li>Bấm chọn trường ngay trong Bộ dựng Truy vấn Tương tác bên dưới để xem GAP-QL khớp JSON đầu ra 1:1.</li></ul>
+</section>
+        <details class="toc-inline"><summary>Trong trang này</summary><nav class="toc-inline-links" aria-label="Mục lục bài viết"><a class="toc-inline-link" href="#what-is-a-supergraph">Tư duy Nền: Một Quầy Gọi Món so với Hai Mươi Xe Hàng Rời Rạc</a><a class="toc-inline-link" href="#types-scalars-nullability">Kiểu Dữ liệu Như Chiếc Hộp Dán Nhãn (<code>!</code> Là Cam kết Không Rỗng)</a><a class="toc-inline-link" href="#query-mirrors-json">Truy vấn Phản chiếu JSON 1:1 (Bộ dựng Truy vấn Tương tác)</a></nav></details>
+
+        <section id="what-is-a-supergraph" tabindex="-1" class="doc-section">
+  <h2>Tư duy Nền: Một Quầy Gọi Món so với Hai Mươi Xe Hàng Rời Rạc</h2>
+  <p>Hãy tưởng tượng AI Agent là một thực khách bước vào khu ẩm thực lớn có 20 gian bếp riêng: gian bán hồ sơ khách hàng (REST API), gian theo dõi đơn hàng (SQL), và gian giữ ghi chú hỗ trợ (MCP server).</p>
+<ul>
+  <li><strong>Khi chưa có GAP (Direct-MCP phẳng):</strong> Trước khi kịp gọi món đầu tiên, hệ thống dúi cả 20 cuốn thực đơn dày cộp vào tay Agent — tiêu tốn hàng trăm nghìn tokens JSON lặp đi lặp lại. Tệ hơn, muốn ghép khách hàng với ghi chú, Agent phải tự chạy đi chạy lại từng lượt một.</li>
+  <li><strong>Khi có GAP (Supergraph định kiểu chặt chẽ):</strong> GAP đặt <strong>duy nhất một quầy tiếp nhận đã đánh chỉ mục</strong> ở phía trước mọi backend. Thay vì nhồi toàn bộ công thức ngay từ đầu (<code>203.421</code> tokens ở 1.000 tools), Agent chỉ cầm <strong>5 công cụ chuẩn (651 tokens)</strong>, tra đúng món mình cần và gửi một phiếu yêu cầu gộp.</li>
+</ul><aside class="callout callout-note">
+  <p class="callout-title">Hiểu nhanh Supergraph &amp; Branch</p>
+  <div class="callout-body"><p><strong>Supergraph</strong> là bản thực đơn hợp nhất do GAP biên dịch sẵn, còn mỗi hệ thống phía sau (<code>shop</code>, <code>notes</code>, <code>billing_sql</code>) chính là một <strong>Branch (nhánh)</strong> nằm trong thực đơn đó.</p></div>
+</aside>
+</section><section id="types-scalars-nullability" tabindex="-1" class="doc-section">
+  <h2>Kiểu Dữ liệu Như Chiếc Hộp Dán Nhãn (<code>!</code> Là Cam kết Không Rỗng)</h2>
+  <p>Schema trong GraphQL và GAP thực chất chỉ là bản hợp đồng mô tả rõ có những chiếc hộp dán nhãn nào và bên trong mỗi hộp chứa kiểu dữ liệu gì:</p><div tabindex="0" role="region" aria-labelledby="cap-d91f29ad" class="table-wrapper">
+  <table class="data-table" style="--col-2: &quot;Ví dụ Minh họa&quot;; --col-3: &quot;Ý nghĩa Dễ hiểu&quot;;">
+    <caption id="cap-d91f29ad">Các thành phần cấu tạo schema minh họa qua Walking Skeleton</caption>
+    <thead><tr><th scope="col">Thành phần Schema</th><th scope="col">Ví dụ Minh họa</th><th scope="col">Ý nghĩa Dễ hiểu</th></tr></thead>
+    <tbody><tr><th scope="row"><strong>Object Type (Đối tượng)</strong></th><td><code>type shop_CustomersResult &#123; id: Int! name: String! tier: ... &#125;</code></td><td>Một bản ghi có cấu trúc đại diện cho thực thể (ví dụ dòng khách hàng lấy từ OpenAPI).</td></tr>
+<tr><th scope="row"><strong>Scalar (Giá trị lá)</strong></th><td><code>Int</code>, <code>String</code>, <code>Boolean</code>, <code>JSON</code></td><td>Giá trị nguyên thủy nơi câu truy vấn dừng lại — không bao giờ mở ngoặc <code>&#123; ... &#125;</code> chọn tiếp bên trong scalar.</td></tr>
+<tr><th scope="row"><strong>Non-Null (<code>!</code>)</strong></th><td><code>id: Int!</code> so với <code>name: String</code></td><td>Dấu chấm than cam kết GAP không bao giờ trả về <code>null</code> cho trường này khi truy vấn thành công.</td></tr>
+<tr><th scope="row"><strong>List (Mảng <code>[...]</code>)</strong></th><td><code>orders(customer_id: Int): [shop_OrdersResult!]</code></td><td>Trả về một danh sách chứa không, một hoặc nhiều phần tử cùng kiểu.</td></tr>
+<tr><th scope="row"><strong>Enum (Tập chọn cố định)</strong></th><td><code>shop_CustomersResultTier</code> (<code>vip</code>, <code>standard</code>)</td><td>Danh sách hằng số định sẵn được kiểm tra hợp lệ trước khi chạm tới backend.</td></tr></tbody>
+  </table>
+</div><details class="going-deeper">
+  <summary>Tìm hiểu sâu hơn: Vì sao <code>customer_notes(customer_id: 1)</code> KHÔNG mở ngoặc nhọn phía sau?</summary>
+  <div class="details-body"><p>Trong <code>examples/walking-skeleton</code>, hai endpoint REST OpenAPI (<code>shop_CustomersResult</code>, <code>shop_OrdersResult</code>) được biên dịch thành Object Type định kiểu rõ các trường nên bạn chọn <code>&#123; id name tier &#125;</code>. Ngược lại, công cụ MCP ngoài <code>customer_notes(customer_id: Int!): JSON</code> trả về kiểu scalar lá <code>JSON</code> — nên viết <code>customer_notes(customer_id: 1) &#123; notes &#125;</code> sẽ bị lỗi cú pháp GraphQL ngay! Hãy nhớ: scalar là điểm lá, không mở ngoặc chọn con.</p></div>
+</details>
+</section><section id="query-mirrors-json" tabindex="-1" class="doc-section">
+  <h2>Truy vấn Phản chiếu JSON 1:1 (Bộ dựng Truy vấn Tương tác)</h2>
+  <p>Khác với REST URL nơi server trả về cố định toàn bộ 40 trường dù bạn chỉ cần tên, câu truy vấn GAP-QL đóng vai trò như một khuôn mẫu JSON: <strong>bạn hỏi trường nào thì kết quả trả về đúng cấu trúc y hệt trường đó, không thừa một byte</strong>.</p><figure class="diagram-frame">
+  <svg role="img" aria-label="Truy vấn GAP-QL phản chiếu đúng 1:1 cấu trúc JSON nhận về" viewBox="0 0 860 220" width="860" height="220" xmlns="http://www.w3.org/2000/svg">
+    <title>Truy vấn GAP-QL phản chiếu đúng 1:1 cấu trúc JSON nhận về</title>
+    <defs>
+      <marker id="qm-arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+        <path d="M 0 1.5 L 9 5 L 0 8.5 z" fill="var(--accent)"/>
+      </marker>
+    </defs>
+    <rect x="14" y="14" width="338" height="192" rx="10" fill="var(--surface-alt)" stroke="var(--accent)" stroke-width="1.5"/>
+    <text x="30" y="40" fill="var(--accent)" font-size="13" font-weight="700">1. Truy vấn bạn viết (GAP-QL)</text>
+    <text x="30" y="68" fill="var(--text)" font-size="11.5" font-family="ui-monospace,monospace">query {</text>
+    <text x="44" y="90" fill="var(--text)" font-size="11.5" font-family="ui-monospace,monospace">customer(id: 1) {</text>
+    <text x="58" y="112" fill="var(--accent)" font-size="11.5" font-weight="700" font-family="ui-monospace,monospace">id   name   tier</text>
+    <text x="44" y="134" fill="var(--text)" font-size="11.5" font-family="ui-monospace,monospace">}</text>
+    <text x="44" y="156" fill="var(--ok)" font-size="11.5" font-weight="700" font-family="ui-monospace,monospace">customer_notes(customer_id: 1)</text>
+    <text x="30" y="178" fill="var(--text)" font-size="11.5" font-family="ui-monospace,monospace">}</text>
+
+    <line x1="354" y1="110" x2="504" y2="110" stroke="var(--accent)" stroke-width="2" marker-end="url(#qm-arr)"/>
+    <rect x="358" y="76" width="144" height="26" rx="13" fill="var(--surface)" stroke="var(--accent)"/>
+    <text x="430" y="93" text-anchor="middle" fill="var(--accent)" font-size="11" font-weight="700">Thực thi song song</text>
+    <text x="430" y="132" text-anchor="middle" fill="var(--muted)" font-size="11">1 HTTP Request</text>
+
+    <rect x="508" y="14" width="338" height="192" rx="10" fill="var(--surface-alt)" stroke="var(--ok)" stroke-width="1.5"/>
+    <text x="524" y="40" fill="var(--ok)" font-size="13" font-weight="700">2. Kết quả JSON đúng hình dáng 1:1</text>
+    <text x="524" y="68" fill="var(--text)" font-size="11.5" font-family="ui-monospace,monospace">{ "data": {</text>
+    <text x="538" y="90" fill="var(--text)" font-size="11.5" font-family="ui-monospace,monospace">"customer": {</text>
+    <text x="552" y="112" fill="var(--accent)" font-size="11.5" font-weight="700" font-family="ui-monospace,monospace">"id": 1, "name": "Ada", "tier": "vip"</text>
+    <text x="538" y="134" fill="var(--text)" font-size="11.5" font-family="ui-monospace,monospace">},</text>
+    <text x="538" y="156" fill="var(--ok)" font-size="11.5" font-weight="700" font-family="ui-monospace,monospace">"customer_notes": { "notes": [...] }</text>
+    <text x="524" y="178" fill="var(--text)" font-size="11.5" font-family="ui-monospace,monospace">} }</text>
+  </svg>
+  <figcaption class="diagram-caption">Truy vấn GAP-QL phản chiếu đúng 1:1 cấu trúc JSON nhận về</figcaption>
+</figure><div class="query-builder" id="query-builder-widget">
+  <div class="qb-header">
+    <h3>Tích chọn Trường để Dựng Câu Truy vấn Walking Skeleton Sống</h3>
+    <span class="pill" id="qb-stats-pill">1 request GAP · thay vì 3 lượt Direct</span>
+  </div>
+  <div class="qb-controls">
+    <span class="qb-group-title">Chọn trường muốn lấy:</span>
+    <div class="qb-check-row">
+      <input type="checkbox" id="qb-id" checked disabled />
+      <label for="qb-id"><code>customer.id</code> (luôn kèm định danh)</label>
+    </div>
+    <div class="qb-check-row">
+      <input type="checkbox" id="qb-name" checked />
+      <label for="qb-name"><code>customer.name</code></label>
+    </div>
+    <div class="qb-check-row">
+      <input type="checkbox" id="qb-tier" checked />
+      <label for="qb-tier"><code>customer.tier</code></label>
+    </div>
+    <div class="qb-check-row">
+      <input type="checkbox" id="qb-orders" />
+      <label for="qb-orders"><code>orders(customer_id: 1)</code> (nhánh REST shop)</label>
+    </div>
+    <div class="qb-check-row">
+      <input type="checkbox" id="qb-notes" checked />
+      <label for="qb-notes"><code>customer_notes(customer_id: 1)</code> (scalar JSON từ MCP)</label>
+    </div>
+  </div>
+  <div class="qb-panes">
+    <figure class="code-figure">
+      <div class="code-toolbar">
+        <div class="code-meta">
+          <span class="code-lang">graphql</span>
+          <span class="code-title">Câu Truy vấn GAP-QL Tạo Tự động</span>
+        </div>
+        <span class="copy">
+          <button type="button" class="copy-button" command="--copy" commandfor="qb-graphql-code" aria-label="Sao chép truy vấn GAP-QL vừa dựng">
+            <span class="icon" aria-hidden="true"></span>
+          </button>
+          <span class="tip" role="status"></span>
+        </span>
+      </div>
+      <pre role="region" aria-label="Truy vấn GAP-QL vừa dựng" tabindex="0"><code id="qb-graphql-code" class="language-graphql">query &#123;
+  customer(id: 1) &#123;
+    id
+    name
+    tier
+  &#125;
+  customer_notes(customer_id: 1)
+&#125;</code></pre>
+    </figure>
+    <figure class="code-figure">
+      <div class="code-toolbar">
+        <div class="code-meta">
+          <span class="code-lang">json</span>
+          <span class="code-title">JSON Trả về Tương ứng 1:1</span>
+        </div>
+        <span class="copy">
+          <button type="button" class="copy-button" command="--copy" commandfor="qb-json-code" aria-label="Sao chép kết quả JSON phản chiếu">
+            <span class="icon" aria-hidden="true"></span>
+          </button>
+          <span class="tip" role="status"></span>
+        </span>
+      </div>
+      <pre role="region" aria-label="Kết quả JSON phản chiếu" tabindex="0"><code id="qb-json-code" class="language-json">&#123;
+  "data": &#123;
+    "customer": &#123;
+      "id": 1,
+      "name": "Ada Lovelace",
+      "tier": "vip"
+    &#125;,
+    "customer_notes": &#123;
+      "customer_id": 1,
+      "notes": [
+        &#123;
+          "note_id": "n-1",
+          "summary": "Prefers consolidated monthly invoice"
+        &#125;
+      ]
+    &#125;
+  &#125;
+&#125;</code></pre>
+    </figure>
+  </div>
+  <p class="section-lead" style="margin-top:0.65rem;">Tiếp tục sang <a href="queries-mutations-joins.html">Tham số, Mutation &amp; Nối nhánh</a> hoặc bước vào thực chiến ngay tại <a href="../academy/index.html">Học viện GAP</a>.</p>
+</div>
+</section>
+
+        <nav class="doc-pager" aria-label="Chuyển bài trước / tiếp"><a class="pager-card pager-prev" href="../getting-started/quickstart.html"><span class="pager-dir">&larr; Bài trước</span><span class="pager-title">Khởi chạy Nhanh (10 phút)</span></a><a class="pager-card pager-next" href="queries-mutations-joins.html"><span class="pager-dir">Tiếp theo &rarr;</span><span class="pager-title">Tham số, Mutation &amp; Nối nhánh</span></a></nav>
+      </article>
+
+      <footer class="doc-footer">
+        <p class="footer-note">Tài liệu, Kiến thức Nền &amp; Học viện dựa 100% trên mã nguồn Rust, đặc tả 00-09 và số liệu đo thật ADR-021.</p>
+        <div class="footer-links">
+          <a href="../../paper/gap-paper.html">Bài báo (HTML)</a>
+          <a href="../../paper/gap-paper.pdf">PDF</a>
+          <a href="../../llms.txt">llms.txt</a>
+          <a href="../../learn/graphql-and-gap-basics.html" hreflang="en" lang="en">English</a>
+        </div>
+      </footer>
+    </main>
+
+    <aside class="toc-right" aria-label="Mục lục bài viết">
+      <div class="toc-sticky scroller">
+        <p class="toc-title">Trong trang này</p>
+        <nav id="on-this-page-nav" class="toc-links" aria-label="Mục lục bài viết">
+          <a class="toc-link" href="#what-is-a-supergraph">Tư duy Nền: Một Quầy Gọi Món so với Hai Mươi Xe Hàng Rời Rạc</a><a class="toc-link" href="#types-scalars-nullability">Kiểu Dữ liệu Như Chiếc Hộp Dán Nhãn (<code>!</code> Là Cam kết Không Rỗng)</a><a class="toc-link" href="#query-mirrors-json">Truy vấn Phản chiếu JSON 1:1 (Bộ dựng Truy vấn Tương tác)</a>
+        </nav>
+      </div>
+    </aside>
+  </div>
+
+  <script src="../../search-index.vi.js"></script>
+  <script src="../../app.js"></script>
+</body>
+</html>

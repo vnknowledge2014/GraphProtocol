@@ -39,13 +39,13 @@
       </div>
 
       <nav class="top-nav" aria-label="Primary sections">
-        <a href="../getting-started/what-is-gap.html" class="top-link">Get Started</a><a href="../concepts/architecture.html" class="top-link">Architecture</a><a href="../connectors/overview.html" class="top-link">Connectors</a><a href="zero-trust.html" aria-current="true" class="top-link is-active">Security</a><a href="../lab/playground.html" class="top-link">Interactive Lab</a><a href="../reference/cli-and-ops.html" class="top-link">Reference</a>
+        <a href="../getting-started/what-is-gap.html" class="top-link">Get Started</a><a href="../learn/graphql-and-gap-basics.html" class="top-link">Learn</a><a href="../academy/index.html" class="top-link">Academy</a><a href="../concepts/architecture.html" class="top-link">Architecture</a><a href="zero-trust.html" aria-current="true" class="top-link is-active">Security</a><a href="../lab/playground.html" class="top-link">Lab</a><a href="../reference/cli-and-ops.html" class="top-link">Reference</a>
       </nav>
 
       <div class="topbar-controls">
         <search class="search-wrap">
           <label class="visually-hidden" for="global-search">Search GAP documentation across all guides</label>
-          <input id="global-search" type="search" placeholder="Search docs, INV, CLI... [/]" autocomplete="off" />
+          <input id="global-search" type="search" placeholder="Search docs, Academy, INV... [/]" autocomplete="off" />
           <div id="search-results" class="search-results scroller" role="region" aria-live="polite" hidden></div>
         </search>
         <nav class="lang-switch" aria-label="Language">
@@ -70,6 +70,18 @@
   <p class="nav-group-title" id="drawer-start-here">Start Here</p>
   <ul aria-labelledby="drawer-start-here">
     <li><a class="nav-link" href="../index.html">GAP Documentation Hub</a></li><li><a class="nav-link" href="../getting-started/what-is-gap.html">What is GAP?</a></li><li><a class="nav-link" href="../getting-started/quickstart.html">10-Minute Quickstart</a></li>
+  </ul>
+</div>
+<div class="nav-group" data-section-id="learn">
+  <p class="nav-group-title" id="drawer-learn">Learn Basics</p>
+  <ul aria-labelledby="drawer-learn">
+    <li><a class="nav-link" href="../learn/graphql-and-gap-basics.html">GraphQL &amp; GAP Basics</a></li><li><a class="nav-link" href="../learn/queries-mutations-joins.html">Arguments, Mutations &amp; Joins</a></li>
+  </ul>
+</div>
+<div class="nav-group" data-section-id="academy">
+  <p class="nav-group-title" id="drawer-academy">GAP Academy (Courses)</p>
+  <ul aria-labelledby="drawer-academy">
+    <li><a class="nav-link" href="../academy/index.html">GAP Academy — Hands-On Courses</a></li><li><a class="nav-link" href="../academy/liftoff-first-supergraph.html">Course 1: Lift-Off — First Supergraph</a></li><li><a class="nav-link" href="../academy/mcp-and-ai-assistants.html">Course 2: MCP, AG-UI &amp; AI Assistants</a></li><li><a class="nav-link" href="../academy/connectors-and-batching.html">Course 3: REST, SQL &amp; N+1 Batching</a></li><li><a class="nav-link" href="../academy/enterprise-zero-trust.html">Course 4: Zero-Trust, Cedar &amp; HTTP/3</a></li>
   </ul>
 </div>
 <div class="nav-group" data-section-id="concepts">
@@ -119,6 +131,18 @@
   <p class="nav-group-title" id="side-start-here">Start Here</p>
   <ul aria-labelledby="side-start-here">
     <li><a class="nav-link" href="../index.html">GAP Documentation Hub</a></li><li><a class="nav-link" href="../getting-started/what-is-gap.html">What is GAP?</a></li><li><a class="nav-link" href="../getting-started/quickstart.html">10-Minute Quickstart</a></li>
+  </ul>
+</div>
+<div class="nav-group" data-section-id="learn">
+  <p class="nav-group-title" id="side-learn">Learn Basics</p>
+  <ul aria-labelledby="side-learn">
+    <li><a class="nav-link" href="../learn/graphql-and-gap-basics.html">GraphQL &amp; GAP Basics</a></li><li><a class="nav-link" href="../learn/queries-mutations-joins.html">Arguments, Mutations &amp; Joins</a></li>
+  </ul>
+</div>
+<div class="nav-group" data-section-id="academy">
+  <p class="nav-group-title" id="side-academy">GAP Academy (Courses)</p>
+  <ul aria-labelledby="side-academy">
+    <li><a class="nav-link" href="../academy/index.html">GAP Academy — Hands-On Courses</a></li><li><a class="nav-link" href="../academy/liftoff-first-supergraph.html">Course 1: Lift-Off — First Supergraph</a></li><li><a class="nav-link" href="../academy/mcp-and-ai-assistants.html">Course 2: MCP, AG-UI &amp; AI Assistants</a></li><li><a class="nav-link" href="../academy/connectors-and-batching.html">Course 3: REST, SQL &amp; N+1 Batching</a></li><li><a class="nav-link" href="../academy/enterprise-zero-trust.html">Course 4: Zero-Trust, Cedar &amp; HTTP/3</a></li>
   </ul>
 </div>
 <div class="nav-group" data-section-id="concepts">
@@ -174,7 +198,7 @@
   </ol>
 </nav>
         <div class="article-meta-bar">
-          <span class="read-time">8 min read</span>
+          <span class="read-time">8 min</span>
           <span class="copy copy-md-wrap">
             <button type="button" class="copy-button copy-md-btn" command="--copy" commandfor="page-markdown-src">
               <span class="icon" aria-hidden="true"></span>
@@ -268,7 +292,7 @@ forbid (
       </article>
 
       <footer class="doc-footer">
-        <p class="footer-note">Documentation portal grounded 100% in repository source code, specs 00-09, and ADR-021 measurements.</p>
+        <p class="footer-note">Documentation, Learn &amp; Academy grounded 100% in repository source code, specs 00-09, and ADR-021 measurements.</p>
         <div class="footer-links">
           <a href="../paper/gap-paper.html">Paper (HTML)</a>
           <a href="../paper/gap-paper.pdf">PDF</a>

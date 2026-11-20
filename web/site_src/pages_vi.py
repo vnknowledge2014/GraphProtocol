@@ -8,7 +8,7 @@ from .diagrams import (
     svg_three_planes,
 )
 from .nav import link_to_asset, link_to_page
-from .render import callout, code_block, data_table, esc, steps_list
+from .render import callout, code_block, data_table, esc, metric_bar_chart, steps_list
 
 
 def _ctx(slug: str):
@@ -39,10 +39,15 @@ def build_vi_part1() -> dict[str, dict]:
                 "subheadings": [],
                 "html": f"""<p>Chọn điểm khởi đầu phù hợp với nhu cầu của bạn. Mỗi trang con chỉ tập trung giải thích thấu đáo đúng một chủ đề kèm ví dụ chạy được ngay từ kho mã nguồn.</p>
 <div class="path-cards-grid">
-  <a class="path-card" href="{esc(u('what-is-gap'))}">
-    <span class="path-tag">Khái niệm · 5 phút</span>
-    <h3>Mới tìm hiểu GAP? Bắt đầu tại đây</h3>
-    <p>Hiểu rõ 4 nút thắt của Direct-MCP, khái niệm Supergraph / Branch và ngưỡng nào Direct-MCP vẫn gọn hơn.</p>
+  <a class="path-card" href="{esc(u('learn-graphql-and-gap'))}">
+    <span class="path-tag">Kiến thức Nền · 8 phút</span>
+    <h3>Mới học GraphQL &amp; GAP?</h3>
+    <p>Giải thích trực giác từ gốc: ẩn dụ Supergraph, Kiểu &amp; Scalar, quy tắc <code>!</code> và Bộ dựng Truy vấn 1:1.</p>
+  </a>
+  <a class="path-card" href="{esc(u('academy-hub'))}">
+    <span class="path-tag">Học viện · 4 Khóa học</span>
+    <h3>Học viện GAP (16 Bài thực chiến)</h3>
+    <p>Lộ trình bài bản theo dự án: Siêu đồ thị đầu tiên, MCP/AG-UI, Gom lô REST/SQL N+1 và Bảo mật Zero-Trust.</p>
   </a>
   <a class="path-card" href="{esc(u('quickstart'))}">
     <span class="path-tag">Thực hành · 10 phút</span>
@@ -464,12 +469,36 @@ GAP tách hệ thống thành 3 mặt phẳng không chồng chéo (cưỡng ch�
             },
             {
                 "id": "visibility-before-rank",
-                "h2": "Bảo đảm Không Rò rỉ Sự tồn tại (`INV-05`)",
+                "h2": "Bảo đảm Không Rò rỉ Sự tồn tại (`INV-05`) & Biểu đồ Mở rộng",
                 "subheadings": [],
                 "html": callout(
                     "important",
                     "Lọc Quyền trước Xếp hạng",
                     "<p>Nếu một tenant hoặc principal bị hạn chế quyền gọi <code>__search</code>, visibility bitset loại bỏ toàn bộ thao tác bị cấm trước khi tính điểm BM25 hay đếm số lượng kết quả.</p>",
+                )
+                + metric_bar_chart(
+                    "pd-scaling",
+                    "Thuế Schema MCP tools/list Theo Quy mô N (N = 10 đến 1.000)",
+                    "Số token định nghĩa công cụ gửi sẵn tới LLM trước khi có câu hỏi (ADR-021)",
+                    [
+                        ("<code>GAP 5 Tool Tĩnh (Mọi N)</code>", 651, "651 tok (cố định)", "ok"),
+                        ("Direct-MCP (N = 10)", 1904, "1.904 tok", "warn"),
+                        ("Direct-MCP (N = 50)", 10066, "10.066 tok", "warn"),
+                        ("Direct-MCP (N = 200)", 40586, "40.586 tok", "warn"),
+                        ("Direct-MCP (N = 1.000)", 203421, "203.421 tok (nặng hơn 312x)", "warn"),
+                    ],
+                    203421,
+                    "vi",
+                )
+                + data_table(
+                    "Bảng so sánh dung lượng schema tools/list theo quy mô (N = 10 đến 1.000)",
+                    ["Quy mô N", "Direct-MCP tools/list", "GAP Static tools/list", "Mức Giảm Token Schema"],
+                    [
+                        ["N = 10 tools", "1.904 tokens", "<strong>651 tokens</strong>", "65,8%"],
+                        ["N = 50 tools", "10.066 tokens", "<strong>651 tokens</strong>", "93,5%"],
+                        ["N = 200 tools", "40.586 tokens", "<strong>651 tokens</strong>", "98,4%"],
+                        ["N = 1.000 tools", "203.421 tokens", "<strong>651 tokens</strong>", "<strong>99,7% (312x)</strong>"],
+                    ],
                 ),
             },
         ],
@@ -513,6 +542,19 @@ GAP giữ MCP `tools/list` cố định ở 651 tokens từ 10 đến 1.000 côn
                 "subheadings": [],
                 "html": """<p>Khi một truy vấn lấy 50 khách hàng kèm ghi chú từ nhánh MCP hoặc SQL khác, client phẳng sẽ phát 50 lần gọi nối tiếp. Bộ thực thi GAP rút trích các khóa duy nhất, chia lô đúng giới hạn <code>maxBatch</code> và chỉ gửi tối đa <code>ceil(unique_keys / max_batch)</code> khung <code>BatchQuery</code> — được kiểm tra tự động qua <code>VER-040</code>.</p>"""
                 + svg_batch_join("vi")
+                + metric_bar_chart(
+                    "gapbench-highlight",
+                    "Tổng Lượng Token Thực nghiệm GAP-Bench (Join N=1.000 & Code Graph)",
+                    "Đối chứng trực tiếp với Direct-MCP trên bài toán join đa nhánh và duyệt AST",
+                    [
+                        ("Join N=1.000 · Direct-MCP", 814959.8, "814.959,8 tok (4 lượt)", "warn"),
+                        ("<code>Join N=1.000 · GAP BatchJoin</code>", 8547.9, "8.547,9 tok (-99,0% · 2 lượt)", "ok"),
+                        ("Code Graph (24) · Direct-MCP", 137810.4, "137.810,4 tok (11 lượt)", "warn"),
+                        ("<code>Code Graph (24) · GAP AST</code>", 660.4, "660,4 tok (208,7x · 1 lượt)", "accent"),
+                    ],
+                    814959.8,
+                    "vi",
+                )
                 + data_table(
                     "Số liệu GAP-Bench đo thật (Không Cache vs Prompt Cache 0,10x, N=10..1.000)",
                     ["Kịch bản / Quy mô N", "Direct-MCP (Không Cache)", "GAP (Không Cache)", "Direct-MCP (Có Cache)", "GAP (Có Cache)", "Số lượt (Direct -> GAP)"],

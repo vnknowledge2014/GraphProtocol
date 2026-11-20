@@ -46,7 +46,7 @@ python3 tools/wp.py validate && python3 tools/check_layers.py && python3 tools/s
 
 | Resource | Location |
 |---|---|
-| **Bilingual Documentation Hub & Interactive Lab (26 EN/VI Pages)** | [`web/README.md`](web/README.md) · [`web/index.html`](web/index.html) (EN) · [`web/vi/index.html`](web/vi/index.html) (VI) · [`web/llms.txt`](web/llms.txt) · `python3 web/build_site.py` · `python3 web/serve.py --port 8787` |
+| **Bilingual Documentation, Learn & Academy Hub (40 EN/VI Pages)** | [`web/README.md`](web/README.md) · [`web/index.html`](web/index.html) (EN) · [`web/learn/graphql-and-gap-basics.html`](web/learn/graphql-and-gap-basics.html) · [`web/academy/index.html`](web/academy/index.html) · [`web/vi/index.html`](web/vi/index.html) (VI) · [`web/llms.txt`](web/llms.txt) · `python3 web/build_site.py` · `python3 web/serve.py --port 8787` |
 | **Academic Paper (LaTeX / HTML / PDF / Markdown)** | [`paper/main.tex`](paper/main.tex) · [`paper/gap-paper.pdf`](paper/gap-paper.pdf) · [`docs/paper/GAP-PAPER.md`](docs/paper/GAP-PAPER.md) |
 | **ASD-STE100 Aircraft Manual (Karpathy Style + Linter)** | [`docs/ste100/README.md`](docs/ste100/README.md) · `python3 dist/check-ste100.py` |
 | **arXiv / Zenodo DOI Publication & Linux GA Playbook** | [`docs/paper/PUBLICATION-AND-GA-PLAYBOOK.md`](docs/paper/PUBLICATION-AND-GA-PLAYBOOK.md) · [`dist/set-author.py`](dist/set-author.py) |

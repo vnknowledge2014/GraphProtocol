@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="color-scheme" content="light dark" />
+  <script>
+    try {
+      var s = localStorage.getItem("gap-color-scheme");
+      if (s === "light" || s === "dark") {
+        document.querySelector('meta[name="color-scheme"]').content = s;
+      }
+    } catch (_e) {}
+  </script>
+  <title>Khóa 3: REST, SQL &amp; Gom lô N+1 — Tài liệu GAP</title>
+  <meta name="description" content="4 bài thực hành: bắt bệnh thác nước N+1, gom lô x-gap-in-param (INV-18), thêm SQL &amp; Code AST và duyệt snapshot an toàn." />
+  <link rel="canonical" href="https://vnknowledge2014.github.io/GraphProtocol/vi/academy/connectors-and-batching.html" />
+  <link rel="alternate" hreflang="en" href="../../academy/connectors-and-batching.html" />
+  <link rel="alternate" hreflang="vi" href="connectors-and-batching.html" />
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns=&#x27;http://www.w3.org/2000/svg&#x27; viewBox=&#x27;0 0 32 32&#x27;%3E%3Crect width=&#x27;32&#x27; height=&#x27;32&#x27; rx=&#x27;8&#x27; fill=&#x27;%230f4c81&#x27;/%3E%3Ctext x=&#x27;16&#x27; y=&#x27;22&#x27; text-anchor=&#x27;middle&#x27; font-family=&#x27;system-ui,sans-serif&#x27; font-weight=&#x27;800&#x27; font-size=&#x27;18&#x27; fill=&#x27;%23ffffff&#x27;%3EG%3C/text%3E%3C/svg%3E" />
+  <link rel="stylesheet" href="../../styles.css" />
+</head>
+<body data-slug="course-connectors-batching" data-lang="vi" data-section="academy" data-web-root="../../">
+  <a class="skip-link" href="#article-title">Chuyển tới nội dung bài viết</a>
+
+  <header class="topbar">
+    <div class="topbar-inner">
+      <div class="topbar-left">
+        <button type="button" id="drawer-open" class="drawer-open-btn" aria-label="Mở danh mục tài liệu" aria-controls="docs-drawer">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+            <path d="M4 6h16M4 12h16M4 18h16" />
+          </svg>
+        </button>
+        <a class="brand-link" href="../index.html">
+          <span class="brand-mark" aria-hidden="true">G</span>
+          <span class="brand-text"><strong>GAP</strong> <span class="brand-sub">Tài liệu GAP</span></span>
+          <span class="badge-ver">v0.1.0-rc.1</span>
+        </a>
+      </div>
+
+      <nav class="top-nav" aria-label="Nhóm tài liệu chính">
+        <a href="../getting-started/what-is-gap.html" class="top-link">Bắt đầu</a><a href="../learn/graphql-and-gap-basics.html" class="top-link">Kiến thức Nền</a><a href="index.html" aria-current="true" class="top-link is-active">Học viện</a><a href="../concepts/architecture.html" class="top-link">Kiến trúc</a><a href="../security/zero-trust.html" class="top-link">Bảo mật</a><a href="../lab/playground.html" class="top-link">Phòng Lab</a><a href="../reference/cli-and-ops.html" class="top-link">Tra cứu</a>
+      </nav>
+
+      <div class="topbar-controls">
+        <search class="search-wrap">
+          <label class="visually-hidden" for="global-search">Tìm kiếm trên toàn bộ tài liệu và Học viện GAP</label>
+          <input id="global-search" type="search" placeholder="Tìm tài liệu, Học viện, INV... [/]" autocomplete="off" />
+          <div id="search-results" class="search-results scroller" role="region" aria-live="polite" hidden></div>
+        </search>
+        <nav class="lang-switch" aria-label="Ngôn ngữ">
+          <span class="lang-current" aria-current="true">VI</span>
+          <a class="lang-alt" href="../../academy/connectors-and-batching.html" hreflang="en" lang="en">EN</a>
+        </nav>
+        <button type="button" id="theme-toggle-btn" class="theme-toggle" aria-label="Chuyển giao diện Sáng / Tối">
+          <span class="icon-to-dark" aria-hidden="true">☽</span>
+          <span class="icon-to-light" aria-hidden="true">☀</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <dialog class="Drawer scroller" id="docs-drawer" aria-label="Ngăn điều hướng tài liệu">
+    <nav class="Drawer-nav scroller" aria-label="Danh mục tài liệu">
+      <div class="Drawer-head">
+        <span class="Drawer-brand"><strong>GAP</strong> Tài liệu GAP</span>
+        <button type="button" id="drawer-close" class="drawer-close-btn" aria-label="Đóng danh mục tài liệu">&times;</button>
+      </div>
+      <div class="nav-group" data-section-id="start-here">
+  <p class="nav-group-title" id="drawer-start-here">Bắt đầu</p>
+  <ul aria-labelledby="drawer-start-here">
+    <li><a class="nav-link" href="../index.html">Trang chủ Tài liệu GAP</a></li><li><a class="nav-link" href="../getting-started/what-is-gap.html">GAP là gì?</a></li><li><a class="nav-link" href="../getting-started/quickstart.html">Khởi chạy Nhanh (10 phút)</a></li>
+  </ul>
+</div>
+<div class="nav-group" data-section-id="learn">
+  <p class="nav-group-title" id="drawer-learn">Kiến thức Nền tảng</p>
+  <ul aria-labelledby="drawer-learn">
+    <li><a class="nav-link" href="../learn/graphql-and-gap-basics.html">Nhập môn GraphQL &amp; GAP</a></li><li><a class="nav-link" href="../learn/queries-mutations-joins.html">Tham số, Mutation &amp; Nối nhánh</a></li>
+  </ul>
+</div>
+<div class="nav-group" data-section-id="academy">
+  <p class="nav-group-title" id="drawer-academy">Học viện GAP (Thực chiến)</p>
+  <ul aria-labelledby="drawer-academy">
+    <li><a class="nav-link" href="index.html">Học viện GAP — Khóa học Thực chiến</a></li><li><a class="nav-link" href="liftoff-first-supergraph.html">Khóa 1: Lift-Off — Siêu đồ thị Đầu tiên</a></li><li><a class="nav-link" href="mcp-and-ai-assistants.html">Khóa 2: MCP, AG-UI &amp; Trợ lý AI</a></li><li><a class="nav-link is-active" href="connectors-and-batching.html" aria-current="page">Khóa 3: REST, SQL &amp; Gom lô N+1</a></li><li><a class="nav-link" href="enterprise-zero-trust.html">Khóa 4: Zero-Trust, Cedar &amp; HTTP/3</a></li>
+  </ul>
+</div>
+<div class="nav-group" data-section-id="concepts">
+  <p class="nav-group-title" id="drawer-concepts">Kiến trúc Cốt lõi</p>
+  <ul aria-labelledby="drawer-concepts">
+    <li><a class="nav-link" href="../concepts/architecture.html">Kiến trúc 3 Mặt phẳng</a></li><li><a class="nav-link" href="../concepts/progressive-disclosure.html">Khám phá Lũy tiến (651 Tokens)</a></li><li><a class="nav-link" href="../concepts/gap-ql-and-joins.html">GAP-QL &amp; Gom Lô Join</a></li>
+  </ul>
+</div>
+<div class="nav-group" data-section-id="connectors">
+  <p class="nav-group-title" id="drawer-connectors">Kết nối Dữ liệu (NGC)</p>
+  <ul aria-labelledby="drawer-connectors">
+    <li><a class="nav-link" href="../connectors/overview.html">Kết nối Dữ liệu (NGC)</a></li>
+  </ul>
+</div>
+<div class="nav-group" data-section-id="agents">
+  <p class="nav-group-title" id="drawer-agents">Tích hợp AI Agent</p>
+  <ul aria-labelledby="drawer-agents">
+    <li><a class="nav-link" href="../agents/facades-and-hosts.html">Tích hợp MCP, A2A &amp; AG-UI</a></li><li><a class="nav-link" href="../agents/routers-and-http3.html">Định tuyến System-1 &amp; HTTP/3 QUIC</a></li>
+  </ul>
+</div>
+<div class="nav-group" data-section-id="security">
+  <p class="nav-group-title" id="drawer-security">Bảo mật Zero-Trust</p>
+  <ul aria-labelledby="drawer-security">
+    <li><a class="nav-link" href="../security/zero-trust.html">Bảo mật Zero-Trust &amp; Cedar</a></li>
+  </ul>
+</div>
+<div class="nav-group" data-section-id="lab">
+  <p class="nav-group-title" id="drawer-lab">Phòng Lab Thực hành</p>
+  <ul aria-labelledby="drawer-lab">
+    <li><a class="nav-link" href="../lab/playground.html">Phòng Lab &amp; Bộ tính Token</a></li>
+  </ul>
+</div>
+<div class="nav-group" data-section-id="reference">
+  <p class="nav-group-title" id="drawer-reference">Vận hành &amp; Tra cứu</p>
+  <ul aria-labelledby="drawer-reference">
+    <li><a class="nav-link" href="../reference/cli-and-ops.html">Tra cứu CLI, Runbooks &amp; 32 Crates</a></li><li><a class="nav-link" href="../reference/invariants-and-glossary.html">20 Bất biến, STE-100 &amp; Bài báo</a></li>
+  </ul>
+</div>
+    </nav>
+    <button type="button" id="drawer-backdrop-close" class="Drawer-backdrop" aria-label="Đóng danh mục tài liệu"></button>
+  </dialog>
+
+  <div class="docs-shell">
+    <aside class="sidebar scroller" aria-label="Danh mục tài liệu">
+      <nav aria-label="Danh mục tài liệu">
+        <div class="nav-group" data-section-id="start-here">
+  <p class="nav-group-title" id="side-start-here">Bắt đầu</p>
+  <ul aria-labelledby="side-start-here">
+    <li><a class="nav-link" href="../index.html">Trang chủ Tài liệu GAP</a></li><li><a class="nav-link" href="../getting-started/what-is-gap.html">GAP là gì?</a></li><li><a class="nav-link" href="../getting-started/quickstart.html">Khởi chạy Nhanh (10 phút)</a></li>
+  </ul>
+</div>
+<div class="nav-group" data-section-id="learn">
+  <p class="nav-group-title" id="side-learn">Kiến thức Nền tảng</p>
+  <ul aria-labelledby="side-learn">
+    <li><a class="nav-link" href="../learn/graphql-and-gap-basics.html">Nhập môn GraphQL &amp; GAP</a></li><li><a class="nav-link" href="../learn/queries-mutations-joins.html">Tham số, Mutation &amp; Nối nhánh</a></li>
+  </ul>
+</div>
+<div class="nav-group" data-section-id="academy">
+  <p class="nav-group-title" id="side-academy">Học viện GAP (Thực chiến)</p>
+  <ul aria-labelledby="side-academy">
+    <li><a class="nav-link" href="index.html">Học viện GAP — Khóa học Thực chiến</a></li><li><a class="nav-link" href="liftoff-first-supergraph.html">Khóa 1: Lift-Off — Siêu đồ thị Đầu tiên</a></li><li><a class="nav-link" href="mcp-and-ai-assistants.html">Khóa 2: MCP, AG-UI &amp; Trợ lý AI</a></li><li><a class="nav-link is-active" href="connectors-and-batching.html" aria-current="page">Khóa 3: REST, SQL &amp; Gom lô N+1</a></li><li><a class="nav-link" href="enterprise-zero-trust.html">Khóa 4: Zero-Trust, Cedar &amp; HTTP/3</a></li>
+  </ul>
+</div>
+<div class="nav-group" data-section-id="concepts">
+  <p class="nav-group-title" id="side-concepts">Kiến trúc Cốt lõi</p>
+  <ul aria-labelledby="side-concepts">
+    <li><a class="nav-link" href="../concepts/architecture.html">Kiến trúc 3 Mặt phẳng</a></li><li><a class="nav-link" href="../concepts/progressive-disclosure.html">Khám phá Lũy tiến (651 Tokens)</a></li><li><a class="nav-link" href="../concepts/gap-ql-and-joins.html">GAP-QL &amp; Gom Lô Join</a></li>
+  </ul>
+</div>
+<div class="nav-group" data-section-id="connectors">
+  <p class="nav-group-title" id="side-connectors">Kết nối Dữ liệu (NGC)</p>
+  <ul aria-labelledby="side-connectors">
+    <li><a class="nav-link" href="../connectors/overview.html">Kết nối Dữ liệu (NGC)</a></li>
+  </ul>
+</div>
+<div class="nav-group" data-section-id="agents">
+  <p class="nav-group-title" id="side-agents">Tích hợp AI Agent</p>
+  <ul aria-labelledby="side-agents">
+    <li><a class="nav-link" href="../agents/facades-and-hosts.html">Tích hợp MCP, A2A &amp; AG-UI</a></li><li><a class="nav-link" href="../agents/routers-and-http3.html">Định tuyến System-1 &amp; HTTP/3 QUIC</a></li>
+  </ul>
+</div>
+<div class="nav-group" data-section-id="security">
+  <p class="nav-group-title" id="side-security">Bảo mật Zero-Trust</p>
+  <ul aria-labelledby="side-security">
+    <li><a class="nav-link" href="../security/zero-trust.html">Bảo mật Zero-Trust &amp; Cedar</a></li>
+  </ul>
+</div>
+<div class="nav-group" data-section-id="lab">
+  <p class="nav-group-title" id="side-lab">Phòng Lab Thực hành</p>
+  <ul aria-labelledby="side-lab">
+    <li><a class="nav-link" href="../lab/playground.html">Phòng Lab &amp; Bộ tính Token</a></li>
+  </ul>
+</div>
+<div class="nav-group" data-section-id="reference">
+  <p class="nav-group-title" id="side-reference">Vận hành &amp; Tra cứu</p>
+  <ul aria-labelledby="side-reference">
+    <li><a class="nav-link" href="../reference/cli-and-ops.html">Tra cứu CLI, Runbooks &amp; 32 Crates</a></li><li><a class="nav-link" href="../reference/invariants-and-glossary.html">20 Bất biến, STE-100 &amp; Bài báo</a></li>
+  </ul>
+</div>
+      </nav>
+      <div class="sidebar-status" role="status" aria-live="polite">
+        <span id="server-status-dot" class="status-dot" aria-hidden="true"></span>
+        <span id="server-status-text">Chế độ Tĩnh (HTML)</span>
+      </div>
+    </aside>
+
+    <main id="main-content" class="doc-main">
+      <article class="doc-article">
+        <nav class="breadcrumb" aria-label="Đường dẫn vị trí">
+  <ol>
+    <li><a href="../index.html">Tài liệu</a></li>
+    <li><a href="index.html">Học viện GAP (Thực chiến)</a></li>
+    <li><a href="connectors-and-batching.html" aria-current="page">Khóa 3: REST, SQL &amp; Gom lô N+1</a></li>
+  </ol>
+</nav>
+        <div class="article-meta-bar">
+          <span class="read-time">25 phút</span>
+          <span class="copy copy-md-wrap">
+            <button type="button" class="copy-button copy-md-btn" command="--copy" commandfor="page-markdown-src">
+              <span class="icon" aria-hidden="true"></span>
+              <span class="btn-label">Sao chép Markdown</span>
+            </button>
+            <span class="tip" role="status"></span>
+          </span>
+        </div>
+
+        <textarea id="page-markdown-src" class="visually-hidden" readonly tabindex="-1" aria-hidden="true"># Khóa 3: REST, SQL &amp; Gom lô N+1
+
+1. Vòng lặp N+1 tốn tới `814.959` token; `INV-18` chặn trần số request ở mức `ceil(unique_keys / max_batch)`.
+2. Khai báo `&quot;x-gap-in-param&quot;` trong OpenAPI để tự động gom lô REST.
+3. Gắn chung SQL (`IN (...)`) và Code AST `tree-sitter` (`208,7x` hiệu quả token) vào một siêu đồ thị.
+4. Phát hành thay đổi có kiểm soát qua `gap ingest once` -&gt; `gap snapshot diff` -&gt; `gap proposals approve` (`INV-06`).</textarea>
+
+        <h1 id="article-title" tabindex="-1">Khóa 3: REST, SQL &amp; Gom lô N+1</h1>
+        <p class="article-lead">Khóa 3 giúp bạn giải quyết bài toán hiệu năng thực tế trong GAP: bắt bệnh thác nước N+1, cấu hình gom lô khai báo <code>x-gap-in-param</code> (<code>INV-18</code>), kết nối SQL cùng đồ thị AST mã nguồn <code>tree-sitter</code>, và phát hành schema mới an toàn qua quy trình Propose-Not-Activate.</p>
+
+        <section class="learn-card" aria-labelledby="learn-heading">
+  <h2 id="learn-heading">Bạn sẽ nắm được gì</h2>
+  <ul><li>Hiểu vì sao join 50 bản ghi bằng LLM phẳng tiêu tốn 4 lượt hội thoại và hàng trăm nghìn tokens.</li><li>Cấu hình phần mở rộng OpenAPI <code>&quot;x-gap-in-param&quot;</code> (<code>INV-18</code>) và truy vấn gom nhóm SQL <code>IN (...)</code>.</li><li>Thành thạo chu trình <code>gap ingest once</code> -&gt; <code>gap proposals list</code> -&gt; <code>gap snapshot diff</code> -&gt; <code>gap proposals approve</code>.</li></ul>
+</section>
+        <details class="toc-inline"><summary>Trong trang này</summary><nav class="toc-inline-links" aria-label="Mục lục bài viết"><a class="toc-inline-link" href="#batch-lesson-1">Bài 1: Nhận diện Lỗi Thác nước N+1 Trong Hệ thống Agent</a><a class="toc-inline-link" href="#batch-lesson-2">Bài 2: Khai báo Gom lô REST Bằng <code>&quot;x-gap-in-param&quot;</code> (<code>INV-18</code>)</a><a class="toc-inline-link" href="#batch-lesson-3">Bài 3: Gắn Cơ sở dữ liệu SQL &amp; Đồ thị Mã nguồn <code>tree-sitter</code> (<code>208,7x</code>)</a><a class="toc-inline-link" href="#batch-lesson-4">Bài 4: Đưa Schema Mới Vào Chạy An toàn (<code>Propose-Not-Activate</code>)</a></nav></details>
+
+        <section id="batch-lesson-1" tabindex="-1" class="doc-section">
+  <h2>Bài 1: Nhận diện Lỗi Thác nước N+1 Trong Hệ thống Agent</h2>
+  <div class="course-banner" data-course-id="batch">
+  <div class="course-banner-top">
+    <span><strong>Khóa 3: REST, SQL &amp; Gom lô N+1</strong> · 25 phút · 4 bài học</span>
+    <span class="pill" data-course-progress="batch">0 / 4 hoàn thành</span>
+  </div>
+  <nav class="lesson-stepper" aria-label="Danh sách bài học trong khóa"><a class="lesson-step-pill" href="#batch-lesson-1" data-lesson-pill="batch-1"><span class="step-num">1</span><span>Thác nước N+1</span></a><a class="lesson-step-pill" href="#batch-lesson-2" data-lesson-pill="batch-2"><span class="step-num">2</span><span>x-gap-in-param</span></a><a class="lesson-step-pill" href="#batch-lesson-3" data-lesson-pill="batch-3"><span class="step-num">3</span><span>SQL &amp; Code AST</span></a><a class="lesson-step-pill" href="#batch-lesson-4" data-lesson-pill="batch-4"><span class="step-num">4</span><span>Duyệt Snapshot</span></a></nav>
+</div><p>Khi một LLM sử dụng các tool đơn lẻ để lấy 50 khách hàng rồi vòng lặp gọi đơn hàng và ghi chú cho từng người, mô hình phải đọc lại toàn bộ lịch sử hội thoại qua nhiều lượt trong khi phát ra hàng chục HTTP request rời rạc. Theo số liệu đo thật <code>GAP-Bench</code>, ở <code>N=1.000</code> tool cách làm này tốn tới <strong>814.959,8 tokens</strong> (không cache) so với chỉ <strong>8.547,9 tokens</strong> (-99,0%) của GAP:</p><figure class="diagram-frame">
+  <svg role="img" aria-label="So sánh thác nước N+1 qua LLM và gom lô DataLoader BatchJoin INV-18" viewBox="0 0 860 198" width="860" height="198" xmlns="http://www.w3.org/2000/svg">
+    <title>So sánh thác nước N+1 qua LLM và gom lô DataLoader BatchJoin INV-18</title>
+    <defs>
+      <marker id="bj-arr-warn" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+        <path d="M 0 1.5 L 9 5 L 0 8.5 z" fill="var(--warn)"/>
+      </marker>
+      <marker id="bj-arr-ok" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+        <path d="M 0 1.5 L 9 5 L 0 8.5 z" fill="var(--ok)"/>
+      </marker>
+    </defs>
+    <rect x="12" y="10" width="406" height="178" rx="10" fill="var(--surface-alt)" stroke="var(--warn)" stroke-width="1.5"/>
+    <text x="215" y="37" text-anchor="middle" fill="var(--warn)" font-size="13" font-weight="700">Direct-MCP: Vòng lặp N+1 (4 lượt · 814.959 tok)</text>
+    <rect x="28" y="54" width="374" height="40" rx="6" fill="var(--surface)" stroke="var(--border)"/>
+    <text x="215" y="79" text-anchor="middle" fill="var(--text)" font-size="12">LLM gọi customers -&gt; nhận 50 ID</text>
+    <line x1="215" y1="94" x2="215" y2="128" stroke="var(--warn)" stroke-width="2" stroke-dasharray="4 3" marker-end="url(#bj-arr-warn)"/>
+    <rect x="28" y="130" width="374" height="42" rx="6" fill="var(--surface)" stroke="var(--warn)"/>
+    <text x="215" y="156" text-anchor="middle" fill="var(--warn)" font-size="12" font-weight="600">LLM tự phát 50 HTTP rời: /orders?c=1 .. 50</text>
+
+    <rect x="442" y="10" width="406" height="178" rx="10" fill="var(--surface-alt)" stroke="var(--ok)" stroke-width="2"/>
+    <text x="645" y="37" text-anchor="middle" fill="var(--ok)" font-size="13" font-weight="700">GAP @join: BatchJoin (2 lượt · 8.547 tok)</text>
+    <rect x="458" y="54" width="374" height="40" rx="6" fill="var(--surface)" stroke="var(--border)"/>
+    <text x="645" y="79" text-anchor="middle" fill="var(--text)" font-size="12">gap-exec gom khóa duy nhất {1..50}</text>
+    <line x1="645" y1="94" x2="645" y2="128" stroke="var(--ok)" stroke-width="2" marker-end="url(#bj-arr-ok)"/>
+    <rect x="458" y="130" width="374" height="42" rx="6" fill="var(--surface)" stroke="var(--ok)"/>
+    <text x="645" y="156" text-anchor="middle" fill="var(--ok)" font-size="12" font-weight="700">1 khung BatchQuery ceil(K/max_batch) (INV-18)</text>
+  </svg>
+  <figcaption class="diagram-caption">So sánh thác nước N+1 qua LLM và gom lô DataLoader BatchJoin INV-18</figcaption>
+</figure><div class="takeaways-box">
+  <div class="takeaways-head">
+    <h3>Điểm Cốt lõi Cần Nhớ</h3>
+    <button type="button" class="btn lesson-complete-btn" data-lesson-key="batch-1" aria-pressed="false">Đánh dấu Hoàn thành Bài học</button>
+  </div>
+  <ul><li>Thao tác lặp của LLM biến câu join quan hệ thành hàng loạt lượt gọi chậm và đắt đỏ.</li><li>GAP khử trùng lặp tập khóa ngoại ngay bên trong bộ thực thi <code>gap-exec</code>.</li></ul>
+</div>
+</section><section id="batch-lesson-2" tabindex="-1" class="doc-section">
+  <h2>Bài 2: Khai báo Gom lô REST Bằng <code>&quot;x-gap-in-param&quot;</code> (<code>INV-18</code>)</h2>
+  <p>Giống cơ chế gom khóa <code>$batch</code> trên các hệ thống REST Connector hiện đại, adapter OpenAPI của GAP nhận diện phần mở rộng <code>"x-gap-in-param"</code> ngay trong đặc tả OpenAPI (trích từ <code>examples/walking-skeleton/shop.openapi.json</code>):</p><figure class="code-figure">
+  <div class="code-toolbar">
+    <div class="code-meta">
+      <span class="code-lang">json</span>
+      <span class="code-title">examples/walking-skeleton/shop.openapi.json</span>
+    </div>
+    <span class="copy">
+      <button type="button" class="copy-button" command="--copy" commandfor="c3-l2-batch" aria-label="Sao chép đoạn mã json (examples/walking-skeleton/shop.openapi.json)">
+        <span class="icon" aria-hidden="true"></span>
+      </button>
+      <span class="tip" role="status"></span>
+    </span>
+  </div>
+  <pre role="region" aria-label="examples/walking-skeleton/shop.openapi.json" tabindex="0"><code id="c3-l2-batch" class="language-json">&quot;/customers/{id}&quot;: {
+  &quot;get&quot;: {
+    &quot;operationId&quot;: &quot;customer&quot;,
+    &quot;x-gap-in-param&quot;: {
+      &quot;path&quot;: &quot;/customers&quot;,
+      &quot;param&quot;: &quot;ids&quot;,
+      &quot;key_field&quot;: &quot;id&quot;,
+      &quot;max_batch_size&quot;: 50
+    }
+  }
+}</code></pre>
+</figure><div class="challenge-box" id="chal-c3-x-gap" data-answers="x-gap-in-param|&quot;x-gap-in-param&quot;" data-explain="Khai báo &quot;x-gap-in-param&quot; hướng dẫn gap-ngc-openapi và gap-exec tự động gộp các khóa {id} đơn lẻ thành /customers?ids=1,2,... giới hạn bởi max_batch_size (INV-18).">
+  <div class="chal-head">
+    <span class="chal-badge">Thử thách Điền mã</span>
+    <h3>Kích hoạt Gom Lô Khóa Cho Endpoint REST</h3>
+  </div>
+  <div class="chal-prompt"><p>Điền chính xác tên trường mở rộng OpenAPI được <code>gap-ngc-openapi</code> sử dụng để gom 50 lần gọi rời thành <code>ceil(unique_keys / max_batch_size)</code> lượt gọi (<code>INV-18</code>):</p></div>
+  <pre class="chal-code"><code>&quot;operationId&quot;: &quot;customer&quot;,
+&quot;____&quot;: {
+  &quot;path&quot;: &quot;/customers&quot;,
+  &quot;param&quot;: &quot;ids&quot;,
+  &quot;key_field&quot;: &quot;id&quot;,
+  &quot;max_batch_size&quot;: 50
+}</code></pre>
+  <div class="chal-input-row">
+    <label for="chal-input-c3-x-gap">Nhập từ khóa / trường còn thiếu:</label>
+    <input id="chal-input-c3-x-gap" type="text" class="chal-input" placeholder="Điền vào chỗ ____" autocomplete="off" spellcheck="false" />
+    <button type="button" class="btn btn-primary chal-check-btn">Kiểm tra Đáp án</button>
+  </div>
+  <div class="chal-hints"><span>Gợi ý nhanh:</span> <button type="button" class="chal-hint-chip" data-fill="x-gap-in-param"><code>x-gap-in-param</code></button><button type="button" class="chal-hint-chip" data-fill="x-gap-batch"><code>x-gap-batch</code></button><button type="button" class="chal-hint-chip" data-fill="x-batch-keys"><code>x-batch-keys</code></button></div>
+  <p class="chal-feedback" role="status" aria-live="polite"></p>
+</div><div class="takeaways-box">
+  <div class="takeaways-head">
+    <h3>Điểm Cốt lõi Cần Nhớ</h3>
+    <button type="button" class="btn lesson-complete-btn" data-lesson-key="batch-2" aria-pressed="false">Đánh dấu Hoàn thành Bài học</button>
+  </div>
+  <ul><li>Bất biến <code>INV-18</code> đảm bảo mỗi cạnh <code>@join</code> chỉ gửi tối đa <code>ceil(unique_keys / max_batch)</code> yêu cầu sang nhánh đích.</li><li>Không cần viết mã Rust kết nối thủ công — chỉ cần khai báo JSON trong tệp OpenAPI.</li></ul>
+</div>
+</section><section id="batch-lesson-3" tabindex="-1" class="doc-section">
+  <h2>Bài 3: Gắn Cơ sở dữ liệu SQL &amp; Đồ thị Mã nguồn <code>tree-sitter</code> (<code>208,7x</code>)</h2>
+  <p>Bên cạnh REST, cùng một siêu đồ thị có thể nạp bảng dữ liệu SQL (<code>gap-ngc-sql</code> tự tạo mệnh đề <code>IN (...)</code> tham số hóa chống SQL injection) và mã nguồn phần mềm (<code>gap-ngc-code</code> lập chỉ mục hàm gọi/được gọi qua <code>tree-sitter</code>):</p><figure class="code-figure">
+  <div class="code-toolbar">
+    <div class="code-meta">
+      <span class="code-lang">toml</span>
+      <span class="code-title">Mẫu Khai báo Nhánh Code AST (TOML)</span>
+    </div>
+    <span class="copy">
+      <button type="button" class="copy-button" command="--copy" commandfor="c3-l3-code" aria-label="Sao chép đoạn mã toml (Mẫu Khai báo Nhánh Code AST (TOML))">
+        <span class="icon" aria-hidden="true"></span>
+      </button>
+      <span class="tip" role="status"></span>
+    </span>
+  </div>
+  <pre role="region" aria-label="Mẫu Khai báo Nhánh Code AST (TOML)" tabindex="0"><code id="c3-l3-code" class="language-toml">[[branches]]
+id = &quot;codebase&quot;
+protocol = &quot;code&quot;
+trust = &quot;T0&quot;
+
+[branches.code]
+root = &quot;.&quot;
+languages = [&quot;rust&quot;, &quot;python&quot;, &quot;typescript&quot;]</code></pre>
+</figure><p>Trên bài chuẩn <code>code_graph</code> (24 symbols), việc truy vấn quan hệ mã nguồn qua GAP thay thế 11 lượt tìm đọc file (<code>137.810,4</code> tokens có cache) chỉ còn <strong>1 lượt duy nhất (<code>660,4</code> tokens — hiệu suất gấp <code>208,7x</code>)</strong>.</p><div class="takeaways-box">
+  <div class="takeaways-head">
+    <h3>Điểm Cốt lõi Cần Nhớ</h3>
+    <button type="button" class="btn lesson-complete-btn" data-lesson-key="batch-3" aria-pressed="false">Đánh dấu Hoàn thành Bài học</button>
+  </div>
+  <ul><li><code>gap-ngc-sql</code> chuyển các khóa ngoại thành cạnh đồ thị và thực thi qua truy vấn SQL <code>IN</code> tham số hóa.</li><li><code>gap-ngc-code</code> phân tích cú pháp AST <code>tree-sitter</code> giúp tiết kiệm tới 208,7 lần chi phí duyệt mã.</li></ul>
+</div>
+</section><section id="batch-lesson-4" tabindex="-1" class="doc-section">
+  <h2>Bài 4: Đưa Schema Mới Vào Chạy An toàn (<code>Propose-Not-Activate</code>)</h2>
+  <p>Không một schema mới hoặc cạnh <code>@join</code> nào tự ý kích hoạt vào đường phục vụ trực tiếp (<code>INV-06</code>). GAP chạy kiểm thử mẫu dữ liệu thực tế cho cạnh nối (không bao giờ tin suy đoán LLM) và chờ người vận hành duyệt trước khi tráo nguyên tử <code>ArcSwap</code>:</p><figure class="code-figure">
+  <div class="code-toolbar">
+    <div class="code-meta">
+      <span class="code-lang">terminal</span>
+      <span class="code-title">Terminal — Trích xuất, So sánh Diff &amp; Duyệt Proposal</span>
+    </div>
+    <span class="copy">
+      <button type="button" class="copy-button" command="--copy" commandfor="c3-l4-diff" aria-label="Sao chép đoạn mã terminal (Terminal — Trích xuất, So sánh Diff &amp; Duyệt Proposal)">
+        <span class="icon" aria-hidden="true"></span>
+      </button>
+      <span class="tip" role="status"></span>
+    </span>
+  </div>
+  <pre role="region" aria-label="Terminal — Trích xuất, So sánh Diff &amp; Duyệt Proposal" tabindex="0"><code id="c3-l4-diff" class="language-terminal">./target/dist/gap ingest once --config examples/walking-skeleton/gap.toml --tenant default
+./target/dist/gap proposals list
+./target/dist/gap snapshot diff --before examples/walking-skeleton/gap.toml --after next.toml
+./target/dist/gap proposals approve &lt;proposal-id&gt;</code></pre>
+</figure><div class="practice-box" id="prac-c3-q1" data-correct="0" data-explain="Chỉ những cạnh nối mang trạng thái ACTIVE đã được người vận hành phê duyệt (sau bước kiểm mẫu) mới được phép tham gia lập kế hoạch thực thi (INV-06).">
+  <span class="chal-badge">Kiểm tra Nhanh</span>
+  <h3>Điều gì xảy ra nếu <code>gap ingest</code> tìm thấy một cạnh <code>@join</code> tiềm năng mới, nhưng kỹ sư vận hành chưa chạy lệnh <code>gap proposals approve</code>?</h3>
+  <div class="practice-options"><button type="button" class="practice-opt" data-idx="0">Cạnh nối giữ ở trạng thái <code>PROPOSED</code> và bị loại hoàn toàn khỏi bộ lập kế hoạch Mặt phẳng 1 (<code>INV-06</code>).</button><button type="button" class="practice-opt" data-idx="1">GAP tự động kích hoạt sau 30 giây nếu thấy không có lỗi.</button><button type="button" class="practice-opt" data-idx="2">Một mô hình neural tự chọn kích hoạt ngẫu nhiên theo từng request.</button></div>
+  <p class="practice-feedback" role="status" aria-live="polite"></p>
+</div><div class="takeaways-box">
+  <div class="takeaways-head">
+    <h3>Điểm Cốt lõi Cần Nhớ</h3>
+    <button type="button" class="btn lesson-complete-btn" data-lesson-key="batch-4" aria-pressed="false">Đánh dấu Hoàn thành Bài học</button>
+  </div>
+  <ul><li>Mặt phẳng 1 chỉ lập kế hoạch trên các cạnh <code>@join</code> ở trạng thái <code>ACTIVE</code> (<code>INV-06</code>).</li><li><code>gap snapshot diff</code> giúp kiểm soát toàn bộ thay đổi cấu trúc trước khi nhấn duyệt.</li></ul>
+</div>
+</section>
+
+        <nav class="doc-pager" aria-label="Chuyển bài trước / tiếp"><a class="pager-card pager-prev" href="mcp-and-ai-assistants.html"><span class="pager-dir">&larr; Bài trước</span><span class="pager-title">Khóa 2: MCP, AG-UI &amp; Trợ lý AI</span></a><a class="pager-card pager-next" href="enterprise-zero-trust.html"><span class="pager-dir">Tiếp theo &rarr;</span><span class="pager-title">Khóa 4: Zero-Trust, Cedar &amp; HTTP/3</span></a></nav>
+      </article>
+
+      <footer class="doc-footer">
+        <p class="footer-note">Tài liệu, Kiến thức Nền &amp; Học viện dựa 100% trên mã nguồn Rust, đặc tả 00-09 và số liệu đo thật ADR-021.</p>
+        <div class="footer-links">
+          <a href="../../paper/gap-paper.html">Bài báo (HTML)</a>
+          <a href="../../paper/gap-paper.pdf">PDF</a>
+          <a href="../../llms.txt">llms.txt</a>
+          <a href="../../academy/connectors-and-batching.html" hreflang="en" lang="en">English</a>
+        </div>
+      </footer>
+    </main>
+
+    <aside class="toc-right" aria-label="Mục lục bài viết">
+      <div class="toc-sticky scroller">
+        <p class="toc-title">Trong trang này</p>
+        <nav id="on-this-page-nav" class="toc-links" aria-label="Mục lục bài viết">
+          <a class="toc-link" href="#batch-lesson-1">Bài 1: Nhận diện Lỗi Thác nước N+1 Trong Hệ thống Agent</a><a class="toc-link" href="#batch-lesson-2">Bài 2: Khai báo Gom lô REST Bằng <code>&quot;x-gap-in-param&quot;</code> (<code>INV-18</code>)</a><a class="toc-link" href="#batch-lesson-3">Bài 3: Gắn Cơ sở dữ liệu SQL &amp; Đồ thị Mã nguồn <code>tree-sitter</code> (<code>208,7x</code>)</a><a class="toc-link" href="#batch-lesson-4">Bài 4: Đưa Schema Mới Vào Chạy An toàn (<code>Propose-Not-Activate</code>)</a>
+        </nav>
+      </div>
+    </aside>
+  </div>
+
+  <script src="../../search-index.vi.js"></script>
+  <script src="../../app.js"></script>
+</body>
+</html>

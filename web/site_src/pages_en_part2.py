@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from .diagrams import svg_facade_flow
 from .nav import link_to_asset, link_to_page
-from .render import callout, code_block, data_table, esc
+from .render import callout, code_block, data_table, esc, metric_bar_chart
 
 
 def _ctx(slug: str):
@@ -152,7 +152,26 @@ GAP simultaneously exposes:
   <li><strong>Replay Immunity:</strong> <code>max_early_data_size = 0</code> disables QUIC TLS 1.3 <code>0-RTT</code> early data everywhere so replayed packets can never trigger mutations twice.</li>
   <li><strong>Fail-Closed <code>prod</code> Guard:</strong> Booting with <code>profile = "prod"</code> and <code>http3_listen</code> without explicit <code>tls_cert_secret</code> / <code>tls_key_secret</code> refuses to start; under <code>profile = "dev"</code>, omitting TLS secrets generates an ephemeral self-signed TLS 1.3 certificate automatically.</li>
   <li><strong>Measured Local Benchmark:</strong> <strong>5,013.1 req/s</strong> over multiplexed QUIC (<strong>1.626 ms</strong> p50 / <strong>2.364 ms</strong> p95 / <code>0</code> errors) alongside <strong>1,063.6 req/s</strong> TCP HTTP/1.1+2 (<code>11.544 ms</code> p95).</li>
-</ul>""",
+</ul>"""
+                + metric_bar_chart(
+                    "transport-throughput",
+                    "Dual-Stack Transport Throughput (HTTP/3 QUIC vs TCP HTTP/1.1+2)",
+                    "Measured against the compiled release binary (bench/results/ga_local/report.json)",
+                    [
+                        ("<code>HTTP/3 QUIC (h3, 0-RTT off)</code>", 5013.1, "5,013.1 req/s (2.364 ms p95)", "ok"),
+                        ("TCP HTTP/1.1 + HTTP/2", 1063.6, "1,063.6 req/s (11.544 ms p95)", "accent"),
+                    ],
+                    5013.1,
+                    "en",
+                )
+                + data_table(
+                    "Dual-stack local load test summary (bench/results/ga_local/report.json)",
+                    ["Protocol Transport", "Sustained Throughput", "p50 / p95 Latency", "Errors / 0-RTT Policy"],
+                    [
+                        ["<strong>UDP HTTP/3 QUIC (<code>h3</code>)</strong>", "<strong>5,013.1 req/s</strong>", "1.626 ms / <strong>2.364 ms</strong>", "0 errors · 0-RTT disabled"],
+                        ["<strong>TCP HTTP/1.1 + HTTP/2</strong>", "1,063.6 req/s", "Measured TCP / 11.544 ms", "0 errors · Alt-Svc h3 advertised"],
+                    ],
+                ),
             },
         ],
         "markdown": """# System-1 Routers & HTTP/3 QUIC
@@ -270,7 +289,7 @@ GAP enforces defense in depth across 17 protocol attack vectors (`spec/07-securi
         <option value="200">N = 200 tools (20 branches)</option>
         <option value="1000" selected>N = 1000 tools (100 branches)</option>
       </select>
-      <label><input id="calc-cached" type="checkbox" checked /> Enable Prompt Cache (0.10x)</label>
+      <label for="calc-cached"><input id="calc-cached" type="checkbox" checked /> Enable Prompt Cache (0.10x)</label>
     </div>
     <div id="calc-output"></div>
   </div>

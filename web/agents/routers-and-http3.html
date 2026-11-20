@@ -39,13 +39,13 @@
       </div>
 
       <nav class="top-nav" aria-label="Primary sections">
-        <a href="../getting-started/what-is-gap.html" class="top-link">Get Started</a><a href="../concepts/architecture.html" class="top-link">Architecture</a><a href="../connectors/overview.html" class="top-link">Connectors</a><a href="../security/zero-trust.html" class="top-link">Security</a><a href="../lab/playground.html" class="top-link">Interactive Lab</a><a href="../reference/cli-and-ops.html" class="top-link">Reference</a>
+        <a href="../getting-started/what-is-gap.html" class="top-link">Get Started</a><a href="../learn/graphql-and-gap-basics.html" class="top-link">Learn</a><a href="../academy/index.html" class="top-link">Academy</a><a href="../concepts/architecture.html" class="top-link">Architecture</a><a href="../security/zero-trust.html" class="top-link">Security</a><a href="../lab/playground.html" class="top-link">Lab</a><a href="../reference/cli-and-ops.html" class="top-link">Reference</a>
       </nav>
 
       <div class="topbar-controls">
         <search class="search-wrap">
           <label class="visually-hidden" for="global-search">Search GAP documentation across all guides</label>
-          <input id="global-search" type="search" placeholder="Search docs, INV, CLI... [/]" autocomplete="off" />
+          <input id="global-search" type="search" placeholder="Search docs, Academy, INV... [/]" autocomplete="off" />
           <div id="search-results" class="search-results scroller" role="region" aria-live="polite" hidden></div>
         </search>
         <nav class="lang-switch" aria-label="Language">
@@ -70,6 +70,18 @@
   <p class="nav-group-title" id="drawer-start-here">Start Here</p>
   <ul aria-labelledby="drawer-start-here">
     <li><a class="nav-link" href="../index.html">GAP Documentation Hub</a></li><li><a class="nav-link" href="../getting-started/what-is-gap.html">What is GAP?</a></li><li><a class="nav-link" href="../getting-started/quickstart.html">10-Minute Quickstart</a></li>
+  </ul>
+</div>
+<div class="nav-group" data-section-id="learn">
+  <p class="nav-group-title" id="drawer-learn">Learn Basics</p>
+  <ul aria-labelledby="drawer-learn">
+    <li><a class="nav-link" href="../learn/graphql-and-gap-basics.html">GraphQL &amp; GAP Basics</a></li><li><a class="nav-link" href="../learn/queries-mutations-joins.html">Arguments, Mutations &amp; Joins</a></li>
+  </ul>
+</div>
+<div class="nav-group" data-section-id="academy">
+  <p class="nav-group-title" id="drawer-academy">GAP Academy (Courses)</p>
+  <ul aria-labelledby="drawer-academy">
+    <li><a class="nav-link" href="../academy/index.html">GAP Academy — Hands-On Courses</a></li><li><a class="nav-link" href="../academy/liftoff-first-supergraph.html">Course 1: Lift-Off — First Supergraph</a></li><li><a class="nav-link" href="../academy/mcp-and-ai-assistants.html">Course 2: MCP, AG-UI &amp; AI Assistants</a></li><li><a class="nav-link" href="../academy/connectors-and-batching.html">Course 3: REST, SQL &amp; N+1 Batching</a></li><li><a class="nav-link" href="../academy/enterprise-zero-trust.html">Course 4: Zero-Trust, Cedar &amp; HTTP/3</a></li>
   </ul>
 </div>
 <div class="nav-group" data-section-id="concepts">
@@ -119,6 +131,18 @@
   <p class="nav-group-title" id="side-start-here">Start Here</p>
   <ul aria-labelledby="side-start-here">
     <li><a class="nav-link" href="../index.html">GAP Documentation Hub</a></li><li><a class="nav-link" href="../getting-started/what-is-gap.html">What is GAP?</a></li><li><a class="nav-link" href="../getting-started/quickstart.html">10-Minute Quickstart</a></li>
+  </ul>
+</div>
+<div class="nav-group" data-section-id="learn">
+  <p class="nav-group-title" id="side-learn">Learn Basics</p>
+  <ul aria-labelledby="side-learn">
+    <li><a class="nav-link" href="../learn/graphql-and-gap-basics.html">GraphQL &amp; GAP Basics</a></li><li><a class="nav-link" href="../learn/queries-mutations-joins.html">Arguments, Mutations &amp; Joins</a></li>
+  </ul>
+</div>
+<div class="nav-group" data-section-id="academy">
+  <p class="nav-group-title" id="side-academy">GAP Academy (Courses)</p>
+  <ul aria-labelledby="side-academy">
+    <li><a class="nav-link" href="../academy/index.html">GAP Academy — Hands-On Courses</a></li><li><a class="nav-link" href="../academy/liftoff-first-supergraph.html">Course 1: Lift-Off — First Supergraph</a></li><li><a class="nav-link" href="../academy/mcp-and-ai-assistants.html">Course 2: MCP, AG-UI &amp; AI Assistants</a></li><li><a class="nav-link" href="../academy/connectors-and-batching.html">Course 3: REST, SQL &amp; N+1 Batching</a></li><li><a class="nav-link" href="../academy/enterprise-zero-trust.html">Course 4: Zero-Trust, Cedar &amp; HTTP/3</a></li>
   </ul>
 </div>
 <div class="nav-group" data-section-id="concepts">
@@ -174,7 +198,7 @@
   </ol>
 </nav>
         <div class="article-meta-bar">
-          <span class="read-time">7 min read</span>
+          <span class="read-time">7 min</span>
           <span class="copy copy-md-wrap">
             <button type="button" class="copy-button copy-md-btn" command="--copy" commandfor="page-markdown-src">
               <span class="icon" aria-hidden="true"></span>
@@ -262,14 +286,42 @@ tls_key_secret = &quot;file:///etc/gap/key.pem&quot;</code></pre>
   <li><strong>Replay Immunity:</strong> <code>max_early_data_size = 0</code> disables QUIC TLS 1.3 <code>0-RTT</code> early data everywhere so replayed packets can never trigger mutations twice.</li>
   <li><strong>Fail-Closed <code>prod</code> Guard:</strong> Booting with <code>profile = "prod"</code> and <code>http3_listen</code> without explicit <code>tls_cert_secret</code> / <code>tls_key_secret</code> refuses to start; under <code>profile = "dev"</code>, omitting TLS secrets generates an ephemeral self-signed TLS 1.3 certificate automatically.</li>
   <li><strong>Measured Local Benchmark:</strong> <strong>5,013.1 req/s</strong> over multiplexed QUIC (<strong>1.626 ms</strong> p50 / <strong>2.364 ms</strong> p95 / <code>0</code> errors) alongside <strong>1,063.6 req/s</strong> TCP HTTP/1.1+2 (<code>11.544 ms</code> p95).</li>
-</ul>
+</ul><figure class="metric-chart" id="chart-transport-throughput" aria-labelledby="transport-throughput-cap">
+  <figcaption id="transport-throughput-cap" class="metric-chart-head">
+    <strong>Dual-Stack Transport Throughput (HTTP/3 QUIC vs TCP HTTP/1.1+2)</strong>
+    <span>Measured against the compiled release binary (bench/results/ga_local/report.json)</span>
+  </figcaption>
+  <div class="metric-rows">
+    <div class="metric-row">
+    <span class="metric-label"><code>HTTP/3 QUIC (h3, 0-RTT off)</code></span>
+    <div class="metric-track" role="img" aria-label="5,013.1 req/s (2.364 ms p95)">
+      <div class="metric-bar-fill is-ok" style="inline-size:100.0%"></div>
+    </div>
+    <strong class="metric-val">5,013.1 req/s (2.364 ms p95)</strong>
+  </div><div class="metric-row">
+    <span class="metric-label">TCP HTTP/1.1 + HTTP/2</span>
+    <div class="metric-track" role="img" aria-label="1,063.6 req/s (11.544 ms p95)">
+      <div class="metric-bar-fill is-accent" style="inline-size:21.2%"></div>
+    </div>
+    <strong class="metric-val">1,063.6 req/s (11.544 ms p95)</strong>
+  </div>
+  </div>
+  <p class="metric-footnote">Visual bar comparison (min-width clamped for clarity on log-scale ratios).</p>
+</figure><div tabindex="0" role="region" aria-labelledby="cap-385b4535" class="table-wrapper">
+  <table class="data-table" style="--col-2: &quot;Sustained Throughput&quot;; --col-3: &quot;p50 / p95 Latency&quot;; --col-4: &quot;Errors / 0-RTT Policy&quot;;">
+    <caption id="cap-385b4535">Dual-stack local load test summary (bench/results/ga_local/report.json)</caption>
+    <thead><tr><th scope="col">Protocol Transport</th><th scope="col">Sustained Throughput</th><th scope="col">p50 / p95 Latency</th><th scope="col">Errors / 0-RTT Policy</th></tr></thead>
+    <tbody><tr><th scope="row"><strong>UDP HTTP/3 QUIC (<code>h3</code>)</strong></th><td><strong>5,013.1 req/s</strong></td><td>1.626 ms / <strong>2.364 ms</strong></td><td>0 errors · 0-RTT disabled</td></tr>
+<tr><th scope="row"><strong>TCP HTTP/1.1 + HTTP/2</strong></th><td>1,063.6 req/s</td><td>Measured TCP / 11.544 ms</td><td>0 errors · Alt-Svc h3 advertised</td></tr></tbody>
+  </table>
+</div>
 </section>
 
         <nav class="doc-pager" aria-label="Article pagination"><a class="pager-card pager-prev" href="facades-and-hosts.html"><span class="pager-dir">&larr; Previous</span><span class="pager-title">MCP, A2A &amp; AG-UI Facades</span></a><a class="pager-card pager-next" href="../security/zero-trust.html"><span class="pager-dir">Next &rarr;</span><span class="pager-title">Zero-Trust Governance &amp; Cedar</span></a></nav>
       </article>
 
       <footer class="doc-footer">
-        <p class="footer-note">Documentation portal grounded 100% in repository source code, specs 00-09, and ADR-021 measurements.</p>
+        <p class="footer-note">Documentation, Learn &amp; Academy grounded 100% in repository source code, specs 00-09, and ADR-021 measurements.</p>
         <div class="footer-links">
           <a href="../paper/gap-paper.html">Paper (HTML)</a>
           <a href="../paper/gap-paper.pdf">PDF</a>

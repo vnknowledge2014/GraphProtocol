@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from .diagrams import svg_facade_flow
 from .nav import link_to_asset, link_to_page
-from .render import callout, code_block, data_table, esc
+from .render import callout, code_block, data_table, esc, metric_bar_chart
 
 
 def _ctx(slug: str):
@@ -152,7 +152,26 @@ Một gateway GAP duy nhất đồng thời phục vụ:
   <li><strong>Chống Replay Attack:</strong> Thiết lập <code>max_early_data_size = 0</code> để tắt hoàn toàn TLS 1.3 <code>0-RTT</code> trên QUIC, ngăn chặn phát lại các thao tác thay đổi dữ liệu.</li>
   <li><strong>Fail-Closed ở <code>prod</code>:</strong> Nếu chạy <code>profile = "prod"</code> có <code>http3_listen</code> nhưng thiếu chứng chỉ <code>tls_cert_secret</code> / <code>tls_key_secret</code>, cổng từ chối khởi động ngay; ở <code>profile = "dev"</code>, hệ thống tự sinh chứng chỉ TLS 1.3 tự ký tạm thời nếu chưa truyền file chứng chỉ.</li>
   <li><strong>Hiệu năng đo thực tế:</strong> Đạt <strong>5.013,1 req/s</strong> qua kết nối QUIC đa luồng (<strong>1,626 ms</strong> p50 / <strong>2,364 ms</strong> p95 / <code>0</code> lỗi) song hành cùng <strong>1.063,6 req/s</strong> qua TCP HTTP/1.1+2 (<code>11,544 ms</code> p95).</li>
-</ul>""",
+</ul>"""
+                + metric_bar_chart(
+                    "transport-throughput",
+                    "Thông lượng Truyền tải Dual-Stack (HTTP/3 QUIC so với TCP HTTP/1.1+2)",
+                    "Đo trực tiếp trên binary release (bench/results/ga_local/report.json)",
+                    [
+                        ("<code>HTTP/3 QUIC (h3, tắt 0-RTT)</code>", 5013.1, "5.013,1 req/s (2,364 ms p95)", "ok"),
+                        ("TCP HTTP/1.1 + HTTP/2", 1063.6, "1.063,6 req/s (11,544 ms p95)", "accent"),
+                    ],
+                    5013.1,
+                    "vi",
+                )
+                + data_table(
+                    "Tổng hợp đo tải cục bộ dual-stack (bench/results/ga_local/report.json)",
+                    ["Giao thức Truyền tải", "Thông lượng Ổn định", "Độ trễ p50 / p95", "Lỗi / Chính sách 0-RTT"],
+                    [
+                        ["<strong>UDP HTTP/3 QUIC (<code>h3</code>)</strong>", "<strong>5.013,1 req/s</strong>", "1,626 ms / <strong>2,364 ms</strong>", "0 lỗi · Đã tắt 0-RTT"],
+                        ["<strong>TCP HTTP/1.1 + HTTP/2</strong>", "1.063,6 req/s", "Đo TCP / 11,544 ms", "0 lỗi · Kèm Alt-Svc h3"],
+                    ],
+                ),
             },
         ],
         "markdown": """# Định tuyến System-1 & HTTP/3 QUIC
@@ -269,7 +288,7 @@ Một gateway GAP duy nhất đồng thời phục vụ:
         <option value="200">N = 200 tools (20 nhánh)</option>
         <option value="1000" selected>N = 1000 tools (100 nhánh)</option>
       </select>
-      <label><input id="calc-cached" type="checkbox" checked /> Bật Prompt Cache (0.10x)</label>
+      <label for="calc-cached"><input id="calc-cached" type="checkbox" checked /> Bật Prompt Cache (0.10x)</label>
     </div>
     <div id="calc-output"></div>
   </div>
