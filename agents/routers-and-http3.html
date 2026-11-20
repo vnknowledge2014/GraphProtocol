@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="color-scheme" content="light dark" />
+  <script>
+    try {
+      var s = localStorage.getItem("gap-color-scheme");
+      if (s === "light" || s === "dark") {
+        document.querySelector('meta[name="color-scheme"]').content = s;
+      }
+    } catch (_e) {}
+  </script>
+  <title>System-1 Routers &amp; HTTP/3 QUIC — GAP Docs</title>
+  <meta name="description" content="Compare measured BASELINE_FALLBACK vs System-1 providers (Laya, Jev, Gemini Decision 1) and dual-stack HTTP/3 QUIC transport." />
+  <link rel="canonical" href="https://vnknowledge2014.github.io/GraphProtocol/agents/routers-and-http3.html" />
+  <link rel="alternate" hreflang="en" href="routers-and-http3.html" />
+  <link rel="alternate" hreflang="vi" href="../vi/agents/routers-and-http3.html" />
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns=&#x27;http://www.w3.org/2000/svg&#x27; viewBox=&#x27;0 0 32 32&#x27;%3E%3Crect width=&#x27;32&#x27; height=&#x27;32&#x27; rx=&#x27;8&#x27; fill=&#x27;%230f4c81&#x27;/%3E%3Ctext x=&#x27;16&#x27; y=&#x27;22&#x27; text-anchor=&#x27;middle&#x27; font-family=&#x27;system-ui,sans-serif&#x27; font-weight=&#x27;800&#x27; font-size=&#x27;18&#x27; fill=&#x27;%23ffffff&#x27;%3EG%3C/text%3E%3C/svg%3E" />
+  <link rel="stylesheet" href="../styles.css" />
+</head>
+<body data-slug="routers-and-http3" data-lang="en" data-section="agents" data-web-root="../">
+  <a class="skip-link" href="#article-title">Skip to article content</a>
+
+  <header class="topbar">
+    <div class="topbar-inner">
+      <div class="topbar-left">
+        <button type="button" id="drawer-open" class="drawer-open-btn" aria-label="Open documentation menu" aria-controls="docs-drawer">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+            <path d="M4 6h16M4 12h16M4 18h16" />
+          </svg>
+        </button>
+        <a class="brand-link" href="../index.html">
+          <span class="brand-mark" aria-hidden="true">G</span>
+          <span class="brand-text"><strong>GAP</strong> <span class="brand-sub">GAP Docs</span></span>
+          <span class="badge-ver">v0.1.0-rc.1</span>
+        </a>
+      </div>
+
+      <nav class="top-nav" aria-label="Primary sections">
+        <a href="../getting-started/what-is-gap.html" class="top-link">Get Started</a><a href="../concepts/architecture.html" class="top-link">Architecture</a><a href="../connectors/overview.html" class="top-link">Connectors</a><a href="../security/zero-trust.html" class="top-link">Security</a><a href="../lab/playground.html" class="top-link">Interactive Lab</a><a href="../reference/cli-and-ops.html" class="top-link">Reference</a>
+      </nav>
+
+      <div class="topbar-controls">
+        <search class="search-wrap">
+          <label class="visually-hidden" for="global-search">Search GAP documentation across all guides</label>
+          <input id="global-search" type="search" placeholder="Search docs, INV, CLI... [/]" autocomplete="off" />
+          <div id="search-results" class="search-results scroller" role="region" aria-live="polite" hidden></div>
+        </search>
+        <nav class="lang-switch" aria-label="Language">
+          <span class="lang-current" aria-current="true">EN</span>
+          <a class="lang-alt" href="../vi/agents/routers-and-http3.html" hreflang="vi" lang="vi">VI</a>
+        </nav>
+        <button type="button" id="theme-toggle-btn" class="theme-toggle" aria-label="Toggle Light / Dark theme">
+          <span class="icon-to-dark" aria-hidden="true">☽</span>
+          <span class="icon-to-light" aria-hidden="true">☀</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <dialog class="Drawer scroller" id="docs-drawer" aria-label="Documentation navigation drawer">
+    <nav class="Drawer-nav scroller" aria-label="Documentation sections">
+      <div class="Drawer-head">
+        <span class="Drawer-brand"><strong>GAP</strong> GAP Docs</span>
+        <button type="button" id="drawer-close" class="drawer-close-btn" aria-label="Close documentation menu">&times;</button>
+      </div>
+      <div class="nav-group" data-section-id="start-here">
+  <p class="nav-group-title" id="drawer-start-here">Start Here</p>
+  <ul aria-labelledby="drawer-start-here">
+    <li><a class="nav-link" href="../index.html">GAP Documentation Hub</a></li><li><a class="nav-link" href="../getting-started/what-is-gap.html">What is GAP?</a></li><li><a class="nav-link" href="../getting-started/quickstart.html">10-Minute Quickstart</a></li>
+  </ul>
+</div>
+<div class="nav-group" data-section-id="concepts">
+  <p class="nav-group-title" id="drawer-concepts">Core Concepts</p>
+  <ul aria-labelledby="drawer-concepts">
+    <li><a class="nav-link" href="../concepts/architecture.html">Three-Plane Architecture</a></li><li><a class="nav-link" href="../concepts/progressive-disclosure.html">Progressive Disclosure (651 Tokens)</a></li><li><a class="nav-link" href="../concepts/gap-ql-and-joins.html">GAP-QL &amp; Batched Joins</a></li>
+  </ul>
+</div>
+<div class="nav-group" data-section-id="connectors">
+  <p class="nav-group-title" id="drawer-connectors">Connect Data &amp; Tools (NGC)</p>
+  <ul aria-labelledby="drawer-connectors">
+    <li><a class="nav-link" href="../connectors/overview.html">Native Graph Connectors (NGC)</a></li>
+  </ul>
+</div>
+<div class="nav-group" data-section-id="agents">
+  <p class="nav-group-title" id="drawer-agents">AI Agent Hosts &amp; Routers</p>
+  <ul aria-labelledby="drawer-agents">
+    <li><a class="nav-link" href="facades-and-hosts.html">MCP, A2A &amp; AG-UI Facades</a></li><li><a class="nav-link is-active" href="routers-and-http3.html" aria-current="page">System-1 Routers &amp; HTTP/3 QUIC</a></li>
+  </ul>
+</div>
+<div class="nav-group" data-section-id="security">
+  <p class="nav-group-title" id="drawer-security">Zero-Trust Governance</p>
+  <ul aria-labelledby="drawer-security">
+    <li><a class="nav-link" href="../security/zero-trust.html">Zero-Trust Governance &amp; Cedar</a></li>
+  </ul>
+</div>
+<div class="nav-group" data-section-id="lab">
+  <p class="nav-group-title" id="drawer-lab">Interactive Lab</p>
+  <ul aria-labelledby="drawer-lab">
+    <li><a class="nav-link" href="../lab/playground.html">Interactive Lab &amp; Calculator</a></li>
+  </ul>
+</div>
+<div class="nav-group" data-section-id="reference">
+  <p class="nav-group-title" id="drawer-reference">Operations &amp; Reference</p>
+  <ul aria-labelledby="drawer-reference">
+    <li><a class="nav-link" href="../reference/cli-and-ops.html">CLI, Runbooks &amp; 32 Crates</a></li><li><a class="nav-link" href="../reference/invariants-and-glossary.html">20 Invariants, STE-100 &amp; Paper</a></li>
+  </ul>
+</div>
+    </nav>
+    <button type="button" id="drawer-backdrop-close" class="Drawer-backdrop" aria-label="Close documentation menu"></button>
+  </dialog>
+
+  <div class="docs-shell">
+    <aside class="sidebar scroller" aria-label="Documentation sections">
+      <nav aria-label="Documentation sections">
+        <div class="nav-group" data-section-id="start-here">
+  <p class="nav-group-title" id="side-start-here">Start Here</p>
+  <ul aria-labelledby="side-start-here">
+    <li><a class="nav-link" href="../index.html">GAP Documentation Hub</a></li><li><a class="nav-link" href="../getting-started/what-is-gap.html">What is GAP?</a></li><li><a class="nav-link" href="../getting-started/quickstart.html">10-Minute Quickstart</a></li>
+  </ul>
+</div>
+<div class="nav-group" data-section-id="concepts">
+  <p class="nav-group-title" id="side-concepts">Core Concepts</p>
+  <ul aria-labelledby="side-concepts">
+    <li><a class="nav-link" href="../concepts/architecture.html">Three-Plane Architecture</a></li><li><a class="nav-link" href="../concepts/progressive-disclosure.html">Progressive Disclosure (651 Tokens)</a></li><li><a class="nav-link" href="../concepts/gap-ql-and-joins.html">GAP-QL &amp; Batched Joins</a></li>
+  </ul>
+</div>
+<div class="nav-group" data-section-id="connectors">
+  <p class="nav-group-title" id="side-connectors">Connect Data &amp; Tools (NGC)</p>
+  <ul aria-labelledby="side-connectors">
+    <li><a class="nav-link" href="../connectors/overview.html">Native Graph Connectors (NGC)</a></li>
+  </ul>
+</div>
+<div class="nav-group" data-section-id="agents">
+  <p class="nav-group-title" id="side-agents">AI Agent Hosts &amp; Routers</p>
+  <ul aria-labelledby="side-agents">
+    <li><a class="nav-link" href="facades-and-hosts.html">MCP, A2A &amp; AG-UI Facades</a></li><li><a class="nav-link is-active" href="routers-and-http3.html" aria-current="page">System-1 Routers &amp; HTTP/3 QUIC</a></li>
+  </ul>
+</div>
+<div class="nav-group" data-section-id="security">
+  <p class="nav-group-title" id="side-security">Zero-Trust Governance</p>
+  <ul aria-labelledby="side-security">
+    <li><a class="nav-link" href="../security/zero-trust.html">Zero-Trust Governance &amp; Cedar</a></li>
+  </ul>
+</div>
+<div class="nav-group" data-section-id="lab">
+  <p class="nav-group-title" id="side-lab">Interactive Lab</p>
+  <ul aria-labelledby="side-lab">
+    <li><a class="nav-link" href="../lab/playground.html">Interactive Lab &amp; Calculator</a></li>
+  </ul>
+</div>
+<div class="nav-group" data-section-id="reference">
+  <p class="nav-group-title" id="side-reference">Operations &amp; Reference</p>
+  <ul aria-labelledby="side-reference">
+    <li><a class="nav-link" href="../reference/cli-and-ops.html">CLI, Runbooks &amp; 32 Crates</a></li><li><a class="nav-link" href="../reference/invariants-and-glossary.html">20 Invariants, STE-100 &amp; Paper</a></li>
+  </ul>
+</div>
+      </nav>
+      <div class="sidebar-status" role="status" aria-live="polite">
+        <span id="server-status-dot" class="status-dot" aria-hidden="true"></span>
+        <span id="server-status-text">Static Docs Mode</span>
+      </div>
+    </aside>
+
+    <main id="main-content" class="doc-main">
+      <article class="doc-article">
+        <nav class="breadcrumb" aria-label="Breadcrumbs">
+  <ol>
+    <li><a href="../index.html">Docs</a></li>
+    <li><a href="facades-and-hosts.html">AI Agent Hosts &amp; Routers</a></li>
+    <li><a href="routers-and-http3.html" aria-current="page">System-1 Routers &amp; HTTP/3 QUIC</a></li>
+  </ol>
+</nav>
+        <div class="article-meta-bar">
+          <span class="read-time">7 min read</span>
+          <span class="copy copy-md-wrap">
+            <button type="button" class="copy-button copy-md-btn" command="--copy" commandfor="page-markdown-src">
+              <span class="icon" aria-hidden="true"></span>
+              <span class="btn-label">Copy as Markdown</span>
+            </button>
+            <span class="tip" role="status"></span>
+          </span>
+        </div>
+
+        <textarea id="page-markdown-src" class="visually-hidden" readonly tabindex="-1" aria-hidden="true"># System-1 Routers &amp; HTTP/3 QUIC
+
+## System-1 vs Baseline (`G-S1`, `INV-17`)
+- Baseline lexical+structural router achieves **97.22%** held-out / **95.24%** test top-1 at **0.887 ms** p95 and ships as default.
+- Optional `[router]` providers (`laya_candle`, `laya_http`, `jev`, `gemini_decision_1`) fail open to baseline on timeout or error (`INV-17`).
+
+## HTTP/3 QUIC (`OPS-005`, `ADR-026`)
+- Dual-stack TCP HTTP/1.1+2 (`Alt-Svc`) + UDP QUIC `h3` via `quinn` + `h3`.
+- **0-RTT explicitly disabled** (`max_early_data_size = 0`); `profile = &quot;prod&quot;` enforces explicit TLS secret references.</textarea>
+
+        <h1 id="article-title" tabindex="-1">System-1 Routers &amp; HTTP/3 QUIC</h1>
+        <p class="article-lead">GAP decouples optional System-1 neural decision models (<code>@receptron/laya</code>, TypeSafe <code>Jev</code>, Google <code>gemini-decision-1</code>) from the deterministic runtime, and delivers dual-stack HTTP/2 + native HTTP/3 over QUIC with <code>0-RTT</code> disabled against replay attacks.</p>
+
+        <section class="learn-card" aria-labelledby="learn-heading">
+  <h2 id="learn-heading">What you&#x27;ll learn</h2>
+  <ul><li>Why GAP ships in <code>BASELINE_FALLBACK</code> routing mode rather than uncalibrated neural weights (<code>G-S1</code>).</li><li>Configure optional <code>[router]</code> decision providers with egress allowlists and secret redaction.</li><li>Enable native HTTP/3 QUIC (<code>RFC 9114</code>) with fail-closed <code>prod</code> TLS verification.</li></ul>
+</section>
+
+        <section id="baseline-vs-s1" tabindex="-1" class="doc-section">
+  <h2>System-1 Decision Routing &amp; Gate <code>G-S1</code></h2>
+  <p>Small neural routers only help if they beat fast lexical+structural ranking cleanly. Evaluated via <code>routebench</code> on held-out and debiased splits (<code>docs/decisions/G-S1.md</code>):</p><div tabindex="0" role="region" aria-label="RouteBench Measured Accuracy and Latency (G-S1)" class="table-wrapper">
+  <table class="data-table">
+    <caption>RouteBench Measured Accuracy and Latency (G-S1)</caption>
+    <thead><tr><th scope="col">Router Implementation</th><th scope="col">Held-Out / Test Top-1</th><th scope="col">Debiased Top-1</th><th scope="col">p95 Latency</th><th scope="col">Default Shipping Mode</th></tr></thead>
+    <tbody><tr><th scope="row"><strong>Baseline (BM25 + Structural)</strong></th><td><strong>97.22% / 95.24%</strong></td><td>Measured baseline</td><td><strong>0.887 ms</strong></td><td><strong>Enabled (Default)</strong></td></tr>
+<tr><th scope="row"><code>laya-candle:f32</code> (zero-shot)</th><td>Below G-S1 gate</td><td>14.29%</td><td>73.85 ms</td><td>Opt-in via <code>[router]</code> (<code>INV-17</code>)</td></tr></tbody>
+  </table>
+</div><aside class="callout callout-important">
+  <p class="callout-title">INV-17 Fail-Open Safety</p>
+  <div class="callout-body"><p>If any configured external System-1 provider (<code>@receptron/laya</code>, TypeSafe <code>jev</code> <code>/v1/systemone</code>, or Google <code>gemini_decision_1</code>) times out, returns invalid output, or is turned off, discovery falls back seamlessly to the deterministic baseline router while authorization remains untouched.</p></div>
+</aside><figure class="code-figure">
+  <div class="code-toolbar">
+    <span class="code-lang">toml</span>
+    <span class="copy">
+      <button type="button" class="copy-button" command="--copy" commandfor="rt-s1-toml" aria-label="Copy toml code snippet (rt-s1-toml)">
+        <span class="icon" aria-hidden="true"></span>
+      </button>
+      <span class="tip" role="status"></span>
+    </span>
+  </div>
+  <pre role="region" aria-label="toml code block" tabindex="0"><code id="rt-s1-toml" class="language-toml">[router]
+provider = &quot;gemini_decision_1&quot;   # none | laya_candle | laya_http | jev | gemini_decision_1
+endpoint = &quot;https://generativelanguage.googleapis.com&quot;
+api_key_secret = &quot;env://GEMINI_API_KEY&quot;
+timeout_ms = 250</code></pre>
+</figure>
+</section><section id="http3-dual-stack" tabindex="-1" class="doc-section">
+  <h2>Dual-Stack HTTP/2 + HTTP/3 over QUIC (<code>OPS-005</code>, <code>ADR-026</code>)</h2>
+  <p>Configured cleanly in <code>gap.toml</code>, <code>gap-transport</code> serves HTTPS/TCP (<code>HTTP/1.1</code> + <code>HTTP/2</code> with <code>Alt-Svc: h3=":8443"; ma=86400</code>) and UDP QUIC (<code>quinn</code> + <code>h3</code>, TLS 1.3 ALPN <code>h3</code>) on the same runtime:</p><figure class="code-figure">
+  <div class="code-toolbar">
+    <span class="code-lang">toml</span>
+    <span class="copy">
+      <button type="button" class="copy-button" command="--copy" commandfor="rt-h3-toml" aria-label="Copy toml code snippet (rt-h3-toml)">
+        <span class="icon" aria-hidden="true"></span>
+      </button>
+      <span class="tip" role="status"></span>
+    </span>
+  </div>
+  <pre role="region" aria-label="toml code block" tabindex="0"><code id="rt-h3-toml" class="language-toml">profile = &quot;prod&quot;
+
+[server]
+listen = &quot;0.0.0.0:8443&quot;
+http3_listen = &quot;0.0.0.0:8443&quot;
+tls_cert_secret = &quot;file:///etc/gap/cert.pem&quot;
+tls_key_secret = &quot;file:///etc/gap/key.pem&quot;</code></pre>
+</figure><ul>
+  <li><strong>Replay Immunity:</strong> <code>max_early_data_size = 0</code> disables QUIC TLS 1.3 <code>0-RTT</code> early data everywhere so replayed packets can never trigger mutations twice.</li>
+  <li><strong>Fail-Closed <code>prod</code> Guard:</strong> Booting with <code>profile = "prod"</code> and <code>http3_listen</code> without explicit <code>tls_cert_secret</code> / <code>tls_key_secret</code> refuses to start; <code>tls_self_signed_dev = true</code> is permitted only in <code>dev</code>.</li>
+  <li><strong>Measured Local Benchmark:</strong> <strong>5,013.1 req/s</strong> over multiplexed QUIC (<strong>1.626 ms</strong> p50 / <strong>2.364 ms</strong> p95 / <code>0</code> errors) alongside <strong>1,063.6 req/s</strong> TCP HTTP/1.1+2 (<code>11.544 ms</code> p95).</li>
+</ul>
+</section>
+
+        <nav class="doc-pager" aria-label="Article pagination"><a class="pager-card pager-prev" href="facades-and-hosts.html"><span class="pager-dir">&larr; Previous</span><span class="pager-title">MCP, A2A &amp; AG-UI Facades</span></a><a class="pager-card pager-next" href="../security/zero-trust.html"><span class="pager-dir">Next &rarr;</span><span class="pager-title">Zero-Trust Governance &amp; Cedar</span></a></nav>
+      </article>
+
+      <footer class="doc-footer">
+        <p class="footer-note">Documentation portal grounded 100% in repository source code, specs 00-09, and ADR-021 measurements.</p>
+        <div class="footer-links">
+          <a href="../paper/gap-paper.html">Paper (HTML)</a>
+          <a href="../paper/gap-paper.pdf">PDF</a>
+          <a href="../llms.txt">llms.txt</a>
+          <a href="../vi/agents/routers-and-http3.html" hreflang="vi" lang="vi">Tiếng Việt</a>
+        </div>
+      </footer>
+    </main>
+
+    <aside class="toc-right" aria-label="On this page">
+      <div class="toc-sticky scroller">
+        <p class="toc-title">On this page</p>
+        <nav id="on-this-page-nav" class="toc-links" aria-label="On this page">
+          <a class="toc-link" href="#baseline-vs-s1">System-1 Decision Routing &amp; Gate <code>G-S1</code></a><a class="toc-link" href="#http3-dual-stack">Dual-Stack HTTP/2 + HTTP/3 over QUIC (<code>OPS-005</code>, <code>ADR-026</code>)</a>
+        </nav>
+      </div>
+    </aside>
+  </div>
+
+  <script src="../search-index.en.js"></script>
+  <script src="../app.js"></script>
+</body>
+</html>

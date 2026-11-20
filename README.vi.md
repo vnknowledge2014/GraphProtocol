@@ -1,68 +1,27 @@
-# GAP — Graph Agent Protocol
+# Cổng Tài liệu Đa trang & Lab Tương tác Graph Agent Protocol (Tiếng Việt · [English](README.md))
 
-> **Ngôn ngữ:** [English (README.md)](README.md) · **Tiếng Việt**
+Bộ **website tài liệu song ngữ 26 trang theo từng chủ đề riêng biệt** (13 trang Tiếng Anh + 13 trang Tiếng Việt đồng bộ 1-1 tại [`vi/`](vi/index.html)), thiết kế trực quan theo mạch giải thích khái niệm – sơ đồ tư duy – từng bước thực hành – bảng đánh đổi minh bạch:
 
-**Graph Agent Protocol (GAP)** là cổng gateway định kiểu chặt chẽ theo profile GraphQL kèm tầng quản trị an toàn (giấy phép Apache-2.0, `Copyright 2026 Nguyễn Duy Đức (Infinite Agent Labs)`), giúp hợp nhất các backend AI Agent không đồng nhất (OpenAPI REST, GraphQL subgraph, gRPC, SQL, CLI tool, AST code/doc graph, MCP server ngoài, tác vụ ngang hàng A2A và giao diện AG-UI v1.0) phía sau **khám phá lũy tiến (progressive disclosure)**, **liên kết gom lô (batched federation)**, **tầng truyền tải dual-stack HTTP/2 + HTTP/3 (QUIC)**, **mô hình quyết định System-1 đa nhà cung cấp (`Laya`, `Jev`, `gemini-decision-1`)**, **phân quyền tất định Cedar**, và **bản chụp snapshot bất biến không khóa**.
+- **7 nhóm chuyên mục / 13 trang mỗi ngôn ngữ:** Bắt đầu (`GAP là gì?`, `Khởi chạy nhanh 10 phút`), Kiến trúc Cốt lõi (3 Mặt phẳng, Khám phá lũy tiến 651 tokens, GAP-QL & DataLoader), Kết nối Dữ liệu (NGC), Tích hợp AI Agent (MCP/A2A/AG-UI + System-1 & HTTP/3 QUIC), Bảo mật Zero-Trust & Cedar, Phòng Lab Thực hành (Bộ tính Crossover GAP-Bench, `gap serve` sống, Checklist 6 cấp độ, Trắc nghiệm), và Tra cứu & Vận hành (15 lệnh CLI, 9 Runbook, 32 Crates, 20 Bất biến `INV-01..20`, ASD-STE100, Bài báo PDF/HTML).
+- **Biên dịch & kiểm định tự động:** Sinh từ [`web/site_src/`](site_src/nav.py) qua `python3 web/build_site.py`, kèm danh mục [`llms.txt`](llms.txt), tìm kiếm toàn site (`search-index.vi.js` / `search-index.en.js`), nút **Sao chép Markdown** & copy snippet, mục lục Scrollspy bên phải và [`vi.html`](vi.html) chuyển hướng mượt sang [`vi/index.html`](vi/index.html).
 
-**Trạng thái (`0.1.0-rc.1` · `2026-11-20`):** **87 / 87 work packages hoàn tất (`main`)**, đã kiểm chứng đầu-cuối (`362` yêu cầu đặc tả / `89` MUST / `2.516` test markers, `136/136` conformance tests kèm `graphql-js 16.13.2`, `32` crates Rust trong workspace, `0` lỗ hổng `RUSTSEC` với cấu trúc AVL `OrdMap` tự sở hữu). Kho mã nguồn chính thức: [`github.com/vnknowledge2014/GraphProtocol`](https://github.com/vnknowledge2014/GraphProtocol) · Cổng học tập (VI / EN), video & bài báo trực tuyến: [Cổng Tiếng Việt](https://vnknowledge2014.github.io/GraphProtocol/vi.html) · [Cổng Tiếng Anh](https://vnknowledge2014.github.io/GraphProtocol/) · [`/paper/`](https://vnknowledge2014.github.io/GraphProtocol/paper/) · [Video Tiếng Việt](web/media/gap-promo-vi.mp4) · [Video Tiếng Anh](web/media/gap-promo-en.mp4).
+Truy cập bản công khai trực tuyến cùng bài báo HTML/PDF tại:
+- **Tiếng Việt:** [https://vnknowledge2014.github.io/GraphProtocol/vi/](https://vnknowledge2014.github.io/GraphProtocol/vi/) (hoặc [`/vi.html`](https://vnknowledge2014.github.io/GraphProtocol/vi.html))
+- **English:** [https://vnknowledge2014.github.io/GraphProtocol/](https://vnknowledge2014.github.io/GraphProtocol/)
 
----
-
-## Kết quả Thực nghiệm Nổi bật (`0.1.0-rc.1`, `ADR-021`)
-
-| Hạng mục đo đạc | Giá trị thực nghiệm | Bằng chứng đối chiếu |
-|---|---|---|
-| Chi phí schema MCP tĩnh `2026-07-28` | Cố định **`651` token** cho `N trong {10..1.000}` (so với `203.421` của Direct-MCP ở `N=1.000`) | [`docs/benchmarks/REPORT.md`](docs/benchmarks/REPORT.md) |
-| Giảm token khi join liên nhánh (`N=1.000`) | **`99,0%`** không cache (`95,34x`) · **`93,5%`** có cache (`15,42x`) · số lượt `4 -> 2` | [`bench/results/gapbench/baseline.json`](bench/results/gapbench/baseline.json) |
-| Duyệt đồ thị mã nguồn (`24` symbols) | **`119,32x`** không cache · **`208,68x`** có cache · số lượt `11 -> 1` | [`bench/results/gapbench/baseline.json`](bench/results/gapbench/baseline.json) |
-| Ngưỡng đối chứng trung thực (`ADR-017`) | Direct-MCP vẫn ít token hơn ở tập phẳng nhỏ có cache: `N=10` (`547` vs `4.692`) và `N=50` (`2.385` vs `4.728`) | [`docs/benchmarks/REPORT.md`](docs/benchmarks/REPORT.md) |
-| Bộ định tuyến tất định so với System-1 (`G-S1`) | Baseline đạt **`95,24%`** tập test / **`97,22%`** tập held-out top-1 ở **`0,887 ms`** p95 (dự phòng `INV-17`) | [`docs/decisions/G-S1.md`](docs/decisions/G-S1.md) |
-| Binary release `--locked` tái lập từng bit | **`28,1 MB`** (`28.084.064` B), SHA-256 hai lần build giống hệt (`d3220637...ee965d4c2`), **`0` lỗ hổng RUSTSEC** | [`bench/results/ga_local/report.json`](bench/results/ga_local/report.json) |
-| Cold start / RSS / TCP + HTTP/3 QUIC / `SIGKILL` | **`1.055 ms`** khởi động · **`9,32 MiB`** idle RSS · **`1.064 req/s`** TCP (`11,54 ms` p95) · **`5.013 req/s`** HTTP/3 QUIC (`2,36 ms` p95, tắt `0-RTT`, `0` lỗi) · **`28,86 ms`** phục hồi sau `kill -9` | [`bench/results/ga_local/report.json`](bench/results/ga_local/report.json) |
-
----
-
-## Khởi chạy Nhanh & Kiểm chứng Cục bộ
+## 1. Tạo lại & Kiểm tra Cổng Tài liệu Tĩnh
 
 ```bash
-# 1. Chạy thử Walking Skeleton 5 phút (REST shop + MCP notes + gateway GraphQL/MCP)
-./target/dist/gap config check examples/walking-skeleton/gap.toml
-python3 examples/walking-skeleton/fixtures/rest_fixture.py --port 9101 &
-python3 examples/walking-skeleton/fixtures/mcp_fixture.py --port 9102 &
-./target/dist/gap serve --config examples/walking-skeleton/gap.toml
-
-# 2. Tái lập GAP-Bench & các bài kiểm tra runtime / SIGKILL / reproducible build cục bộ
-./bench/results/gapbench/reproduce.sh
-python3 dist/verify-ga-local.py
-
-# 3. Kiểm tra đặc tả, phân tầng crate workspace, ma trận truy vết và gói bài báo
-python3 tools/wp.py validate && python3 tools/check_layers.py && python3 tools/spec_trace.py --strict
-./paper/build-arxiv-bundle.sh
+python3 web/build_site.py
+python3 web/build_site.py --check
 ```
 
----
+## 2. Chạy chế độ Lab Thực hành Sống (`gap serve` + MCP/GraphQL thật)
 
-## Tài liệu, Đặc tả & Bài báo Khoa học
-
-| Hạng mục | Đường dẫn |
-|---|---|
-| **Website Học tập Tương tác & Video Demo EN/VI** | [`web/README.vi.md`](web/README.vi.md) · [`web/vi.html`](web/vi.html) (VI) · [`web/index.html`](web/index.html) (EN) · [`gap-promo-vi.mp4`](web/media/gap-promo-vi.mp4) · [`gap-promo-en.mp4`](web/media/gap-promo-en.mp4) · `python3 web/serve.py --port 8787` |
-| **Bài báo Khoa học (LaTeX / HTML / PDF / Markdown)** | [`paper/main.tex`](paper/main.tex) · [`paper/gap-paper.pdf`](paper/gap-paper.pdf) · [`docs/paper/GAP-PAPER.md`](docs/paper/GAP-PAPER.md) |
-| **Sổ tay Kỹ thuật Chuẩn ASD-STE100 (Kèm Linter)** | [`docs/ste100/README.md`](docs/ste100/README.md) · `python3 dist/check-ste100.py` |
-| **Hướng dẫn Nộp arXiv / Zenodo DOI & Chạy GA Linux** | [`docs/paper/PUBLICATION-AND-GA-PLAYBOOK.md`](docs/paper/PUBLICATION-AND-GA-PLAYBOOK.md) · [`dist/set-author.py`](dist/set-author.py) |
-| **Cổng Kiểm định Phát hành `1.0-RC` & Ma trận Truy vết** | [`docs/gates/RC.md`](docs/gates/RC.md) · [`docs/traceability.md`](docs/traceability.md) |
-| **Hướng dẫn Bắt đầu Nhanh, Khái niệm, Connector & Bảo mật** | [`docs/guides/quickstart.md`](docs/guides/quickstart.md) · [`docs/guides/concepts.md`](docs/guides/concepts.md) · [`docs/guides/connector-authoring.md`](docs/guides/connector-authoring.md) · [`docs/guides/security-hardening.md`](docs/guides/security-hardening.md) |
-| **Đặc tả Chuẩn (`00`–`09`), Quyết định Kiến trúc (ADRs) & Rà soát** | [`spec/`](spec/) · [`docs/01-DECISIONS.md`](docs/01-DECISIONS.md) · [`docs/00-REVIEW.md`](docs/00-REVIEW.md) |
-| **Hợp đồng Wire Proto & Gói Công việc (`87/87` hoàn tất)** | [`proto/`](proto/) · [`work/work-packages.toml`](work/work-packages.toml) · [`work/status.toml`](work/status.toml) |
-
----
-
-## Trích dẫn Học thuật
-
-Siêu dữ liệu trích dẫn chuẩn cho phần mềm và bài báo nằm trong [`CITATION.cff`](CITATION.cff) và [`.zenodo.json`](.zenodo.json). Có thể kiểm tra tính đồng nhất thông tin tác giả và URL kho mã nguồn bằng lệnh:
+Từ thư mục gốc của repository:
 
 ```bash
-python3 dist/set-author.py --check
+python3 web/serve.py --port 8787
 ```
 
-`Copyright 2026 Nguyễn Duy Đức (Infinite Agent Labs)` · Giấy phép: [Apache-2.0](LICENSE) · Thông báo Bản quyền & Thành phần Bên thứ ba: [`NOTICE`](NOTICE)
+Sau đó mở `http://127.0.0.1:8787/vi/` (hoặc `http://127.0.0.1:8787/` cho bản Tiếng Anh), vào `/vi/lab/playground.html` và bấm nút **Bật Lab Thực Hành (`gap serve`)** để máy chủ tự động khởi chạy Walking Skeleton cục bộ trên cổng nội bộ, gửi request GraphQL, MCP `2026-07-28` thật hoặc xem `--help` từ binary `./target/dist/gap`.

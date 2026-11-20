@@ -313,16 +313,34 @@ class Handler(BaseHTTPRequestHandler):
             return
 
         rel = "index.html" if parsed.path in ("/", "") else parsed.path.lstrip("/")
-        candidate = (WEB_DIR / rel).resolve()
-        web_root = WEB_DIR.resolve()
-        if not str(candidate).startswith(str(web_root)):
-            self.send_error(404, "Not found")
-            return
-        if candidate.is_dir():
-            candidate = (candidate / "index.html").resolve()
-        if not str(candidate).startswith(str(web_root)) or not candidate.is_file():
-            self.send_error(404, "Not found")
-            return
+        if rel == "CITATION.cff":
+            root_ref = (ROOT / "CITATION.cff").resolve()
+            if not root_ref.is_file():
+                self.send_error(404, "Not found")
+                return
+            candidate = root_ref
+        elif rel == "paper" or rel.startswith("paper/"):
+            paper_root = (ROOT / "paper").resolve()
+            candidate = (paper_root / "gap-paper.html").resolve() if rel in ("paper", "paper/") else (ROOT / rel).resolve()
+            if not candidate.is_relative_to(paper_root):
+                self.send_error(404, "Not found")
+                return
+            if candidate.is_dir():
+                candidate = (paper_root / "gap-paper.html").resolve()
+            if not candidate.is_relative_to(paper_root) or not candidate.is_file():
+                self.send_error(404, "Not found")
+                return
+        else:
+            web_root = WEB_DIR.resolve()
+            candidate = (WEB_DIR / rel).resolve()
+            if not candidate.is_relative_to(web_root):
+                self.send_error(404, "Not found")
+                return
+            if candidate.is_dir():
+                candidate = (candidate / "index.html").resolve()
+            if not candidate.is_relative_to(web_root) or not candidate.is_file():
+                self.send_error(404, "Not found")
+                return
         mime, _ = mimetypes.guess_type(str(candidate))
         ctype = f"{mime or 'application/octet-stream'}; charset=utf-8" if (mime or "").startswith("text/") or mime in ("application/javascript", "application/json") else (mime or "application/octet-stream")
         data = candidate.read_bytes()

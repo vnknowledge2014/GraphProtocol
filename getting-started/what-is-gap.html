@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="color-scheme" content="light dark" />
+  <script>
+    try {
+      var s = localStorage.getItem("gap-color-scheme");
+      if (s === "light" || s === "dark") {
+        document.querySelector('meta[name="color-scheme"]').content = s;
+      }
+    } catch (_e) {}
+  </script>
+  <title>What is GAP? — GAP Docs</title>
+  <meta name="description" content="Understand why Direct-MCP hits prompt bloat and N+1 waterfalls, and how a unified GAP supergraph solves both." />
+  <link rel="canonical" href="https://vnknowledge2014.github.io/GraphProtocol/getting-started/what-is-gap.html" />
+  <link rel="alternate" hreflang="en" href="what-is-gap.html" />
+  <link rel="alternate" hreflang="vi" href="../vi/getting-started/what-is-gap.html" />
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns=&#x27;http://www.w3.org/2000/svg&#x27; viewBox=&#x27;0 0 32 32&#x27;%3E%3Crect width=&#x27;32&#x27; height=&#x27;32&#x27; rx=&#x27;8&#x27; fill=&#x27;%230f4c81&#x27;/%3E%3Ctext x=&#x27;16&#x27; y=&#x27;22&#x27; text-anchor=&#x27;middle&#x27; font-family=&#x27;system-ui,sans-serif&#x27; font-weight=&#x27;800&#x27; font-size=&#x27;18&#x27; fill=&#x27;%23ffffff&#x27;%3EG%3C/text%3E%3C/svg%3E" />
+  <link rel="stylesheet" href="../styles.css" />
+</head>
+<body data-slug="what-is-gap" data-lang="en" data-section="start-here" data-web-root="../">
+  <a class="skip-link" href="#article-title">Skip to article content</a>
+
+  <header class="topbar">
+    <div class="topbar-inner">
+      <div class="topbar-left">
+        <button type="button" id="drawer-open" class="drawer-open-btn" aria-label="Open documentation menu" aria-controls="docs-drawer">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+            <path d="M4 6h16M4 12h16M4 18h16" />
+          </svg>
+        </button>
+        <a class="brand-link" href="../index.html">
+          <span class="brand-mark" aria-hidden="true">G</span>
+          <span class="brand-text"><strong>GAP</strong> <span class="brand-sub">GAP Docs</span></span>
+          <span class="badge-ver">v0.1.0-rc.1</span>
+        </a>
+      </div>
+
+      <nav class="top-nav" aria-label="Primary sections">
+        <a href="what-is-gap.html" aria-current="true" class="top-link is-active">Get Started</a><a href="../concepts/architecture.html" class="top-link">Architecture</a><a href="../connectors/overview.html" class="top-link">Connectors</a><a href="../security/zero-trust.html" class="top-link">Security</a><a href="../lab/playground.html" class="top-link">Interactive Lab</a><a href="../reference/cli-and-ops.html" class="top-link">Reference</a>
+      </nav>
+
+      <div class="topbar-controls">
+        <search class="search-wrap">
+          <label class="visually-hidden" for="global-search">Search GAP documentation across all guides</label>
+          <input id="global-search" type="search" placeholder="Search docs, INV, CLI... [/]" autocomplete="off" />
+          <div id="search-results" class="search-results scroller" role="region" aria-live="polite" hidden></div>
+        </search>
+        <nav class="lang-switch" aria-label="Language">
+          <span class="lang-current" aria-current="true">EN</span>
+          <a class="lang-alt" href="../vi/getting-started/what-is-gap.html" hreflang="vi" lang="vi">VI</a>
+        </nav>
+        <button type="button" id="theme-toggle-btn" class="theme-toggle" aria-label="Toggle Light / Dark theme">
+          <span class="icon-to-dark" aria-hidden="true">☽</span>
+          <span class="icon-to-light" aria-hidden="true">☀</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <dialog class="Drawer scroller" id="docs-drawer" aria-label="Documentation navigation drawer">
+    <nav class="Drawer-nav scroller" aria-label="Documentation sections">
+      <div class="Drawer-head">
+        <span class="Drawer-brand"><strong>GAP</strong> GAP Docs</span>
+        <button type="button" id="drawer-close" class="drawer-close-btn" aria-label="Close documentation menu">&times;</button>
+      </div>
+      <div class="nav-group" data-section-id="start-here">
+  <p class="nav-group-title" id="drawer-start-here">Start Here</p>
+  <ul aria-labelledby="drawer-start-here">
+    <li><a class="nav-link" href="../index.html">GAP Documentation Hub</a></li><li><a class="nav-link is-active" href="what-is-gap.html" aria-current="page">What is GAP?</a></li><li><a class="nav-link" href="quickstart.html">10-Minute Quickstart</a></li>
+  </ul>
+</div>
+<div class="nav-group" data-section-id="concepts">
+  <p class="nav-group-title" id="drawer-concepts">Core Concepts</p>
+  <ul aria-labelledby="drawer-concepts">
+    <li><a class="nav-link" href="../concepts/architecture.html">Three-Plane Architecture</a></li><li><a class="nav-link" href="../concepts/progressive-disclosure.html">Progressive Disclosure (651 Tokens)</a></li><li><a class="nav-link" href="../concepts/gap-ql-and-joins.html">GAP-QL &amp; Batched Joins</a></li>
+  </ul>
+</div>
+<div class="nav-group" data-section-id="connectors">
+  <p class="nav-group-title" id="drawer-connectors">Connect Data &amp; Tools (NGC)</p>
+  <ul aria-labelledby="drawer-connectors">
+    <li><a class="nav-link" href="../connectors/overview.html">Native Graph Connectors (NGC)</a></li>
+  </ul>
+</div>
+<div class="nav-group" data-section-id="agents">
+  <p class="nav-group-title" id="drawer-agents">AI Agent Hosts &amp; Routers</p>
+  <ul aria-labelledby="drawer-agents">
+    <li><a class="nav-link" href="../agents/facades-and-hosts.html">MCP, A2A &amp; AG-UI Facades</a></li><li><a class="nav-link" href="../agents/routers-and-http3.html">System-1 Routers &amp; HTTP/3 QUIC</a></li>
+  </ul>
+</div>
+<div class="nav-group" data-section-id="security">
+  <p class="nav-group-title" id="drawer-security">Zero-Trust Governance</p>
+  <ul aria-labelledby="drawer-security">
+    <li><a class="nav-link" href="../security/zero-trust.html">Zero-Trust Governance &amp; Cedar</a></li>
+  </ul>
+</div>
+<div class="nav-group" data-section-id="lab">
+  <p class="nav-group-title" id="drawer-lab">Interactive Lab</p>
+  <ul aria-labelledby="drawer-lab">
+    <li><a class="nav-link" href="../lab/playground.html">Interactive Lab &amp; Calculator</a></li>
+  </ul>
+</div>
+<div class="nav-group" data-section-id="reference">
+  <p class="nav-group-title" id="drawer-reference">Operations &amp; Reference</p>
+  <ul aria-labelledby="drawer-reference">
+    <li><a class="nav-link" href="../reference/cli-and-ops.html">CLI, Runbooks &amp; 32 Crates</a></li><li><a class="nav-link" href="../reference/invariants-and-glossary.html">20 Invariants, STE-100 &amp; Paper</a></li>
+  </ul>
+</div>
+    </nav>
+    <button type="button" id="drawer-backdrop-close" class="Drawer-backdrop" aria-label="Close documentation menu"></button>
+  </dialog>
+
+  <div class="docs-shell">
+    <aside class="sidebar scroller" aria-label="Documentation sections">
+      <nav aria-label="Documentation sections">
+        <div class="nav-group" data-section-id="start-here">
+  <p class="nav-group-title" id="side-start-here">Start Here</p>
+  <ul aria-labelledby="side-start-here">
+    <li><a class="nav-link" href="../index.html">GAP Documentation Hub</a></li><li><a class="nav-link is-active" href="what-is-gap.html" aria-current="page">What is GAP?</a></li><li><a class="nav-link" href="quickstart.html">10-Minute Quickstart</a></li>
+  </ul>
+</div>
+<div class="nav-group" data-section-id="concepts">
+  <p class="nav-group-title" id="side-concepts">Core Concepts</p>
+  <ul aria-labelledby="side-concepts">
+    <li><a class="nav-link" href="../concepts/architecture.html">Three-Plane Architecture</a></li><li><a class="nav-link" href="../concepts/progressive-disclosure.html">Progressive Disclosure (651 Tokens)</a></li><li><a class="nav-link" href="../concepts/gap-ql-and-joins.html">GAP-QL &amp; Batched Joins</a></li>
+  </ul>
+</div>
+<div class="nav-group" data-section-id="connectors">
+  <p class="nav-group-title" id="side-connectors">Connect Data &amp; Tools (NGC)</p>
+  <ul aria-labelledby="side-connectors">
+    <li><a class="nav-link" href="../connectors/overview.html">Native Graph Connectors (NGC)</a></li>
+  </ul>
+</div>
+<div class="nav-group" data-section-id="agents">
+  <p class="nav-group-title" id="side-agents">AI Agent Hosts &amp; Routers</p>
+  <ul aria-labelledby="side-agents">
+    <li><a class="nav-link" href="../agents/facades-and-hosts.html">MCP, A2A &amp; AG-UI Facades</a></li><li><a class="nav-link" href="../agents/routers-and-http3.html">System-1 Routers &amp; HTTP/3 QUIC</a></li>
+  </ul>
+</div>
+<div class="nav-group" data-section-id="security">
+  <p class="nav-group-title" id="side-security">Zero-Trust Governance</p>
+  <ul aria-labelledby="side-security">
+    <li><a class="nav-link" href="../security/zero-trust.html">Zero-Trust Governance &amp; Cedar</a></li>
+  </ul>
+</div>
+<div class="nav-group" data-section-id="lab">
+  <p class="nav-group-title" id="side-lab">Interactive Lab</p>
+  <ul aria-labelledby="side-lab">
+    <li><a class="nav-link" href="../lab/playground.html">Interactive Lab &amp; Calculator</a></li>
+  </ul>
+</div>
+<div class="nav-group" data-section-id="reference">
+  <p class="nav-group-title" id="side-reference">Operations &amp; Reference</p>
+  <ul aria-labelledby="side-reference">
+    <li><a class="nav-link" href="../reference/cli-and-ops.html">CLI, Runbooks &amp; 32 Crates</a></li><li><a class="nav-link" href="../reference/invariants-and-glossary.html">20 Invariants, STE-100 &amp; Paper</a></li>
+  </ul>
+</div>
+      </nav>
+      <div class="sidebar-status" role="status" aria-live="polite">
+        <span id="server-status-dot" class="status-dot" aria-hidden="true"></span>
+        <span id="server-status-text">Static Docs Mode</span>
+      </div>
+    </aside>
+
+    <main id="main-content" class="doc-main">
+      <article class="doc-article">
+        <nav class="breadcrumb" aria-label="Breadcrumbs">
+  <ol>
+    <li><a href="../index.html">Docs</a></li>
+    <li><a href="../index.html">Start Here</a></li>
+    <li><a href="what-is-gap.html" aria-current="page">What is GAP?</a></li>
+  </ol>
+</nav>
+        <div class="article-meta-bar">
+          <span class="read-time">5 min read</span>
+          <span class="copy copy-md-wrap">
+            <button type="button" class="copy-button copy-md-btn" command="--copy" commandfor="page-markdown-src">
+              <span class="icon" aria-hidden="true"></span>
+              <span class="btn-label">Copy as Markdown</span>
+            </button>
+            <span class="tip" role="status"></span>
+          </span>
+        </div>
+
+        <textarea id="page-markdown-src" class="visually-hidden" readonly tabindex="-1" aria-hidden="true"># What is GAP?
+
+GAP gives AI agents one safe, typed entry point to REST APIs, SQL databases, gRPC services, GraphQL subgraphs, CLIs, and code repositories without prompt bloat.
+
+## Core Terminology
+- **Gateway**: Single Rust binary serving `/graphql`, `/mcp`, `/ag-ui`, and A2A `v1.0`.
+- **Branch**: Registered upstream source (`shop`, `notes`, `billing_sql`, etc.).
+- **Connector (NGC)**: Translates external protocols into one typed GraphQL profile.
+- **Snapshot**: Immutable compiled supergraph + search indexes + Cedar policy bundle.
+- **Principal**: Authenticated caller evaluated by default-deny Cedar rules.
+
+## Honest Tradeoff (ADR-021)
+At N &lt;= 50 flat lookups with prompt caching warm, Direct-MCP uses fewer raw tokens. GAP dominates once N &gt;= 200, across multi-branch joins, code-graph traversal, or zero-trust deployments.</textarea>
+
+        <h1 id="article-title" tabindex="-1">What is GAP?</h1>
+        <p class="article-lead">GAP gives AI agents one safe, typed entry point to call REST APIs, SQL databases, gRPC services, GraphQL subgraphs, CLIs, and code repositories—without stuffing thousands of JSON tool definitions into the LLM context window.</p>
+
+        <section class="learn-card" aria-labelledby="learn-heading">
+  <h2 id="learn-heading">What you&#x27;ll learn</h2>
+  <ul><li>Why loading flat tool catalogs directly into prompts breaks down as your system grows.</li><li>Core GAP vocabulary: Gateway, Branch, Connector, Snapshot, and Principal.</li><li>Exact crossover boundary: when to use Direct-MCP vs. when GAP dominates.</li></ul>
+</section>
+
+        <section id="the-four-problems" tabindex="-1" class="doc-section">
+  <h2>Why Flat Agent Tooling Hits a Wall</h2>
+  <p>Most agent integrations connect an LLM directly to individual Model Context Protocol (MCP) or HTTP endpoints. That works cleanly for 5–10 small tools, then fails in four predictable ways in production:</p>
+<ul>
+  <li><strong>Context Explosion:</strong> Serializing 1,000 flat JSON Schema tools up front consumes <strong>203,421 tokens</strong> before the user even asks a question.</li>
+  <li><strong>N+1 Agent Waterfalls:</strong> Without a shared join planner, the model fetches a customer, loops through orders turn-by-turn, then queries notes separately—wasting latency and tokens.</li>
+  <li><strong>Mutable Descriptions (Rug Pulls):</strong> If an untrusted upstream edits a tool description after approval to inject hidden instructions, flat clients forward the poisoned text straight to the LLM.</li>
+  <li><strong>Probabilistic Authorization Leaks:</strong> Letting an LLM or neural classifier enforce access control introduces bypass risk. Access decisions must be deterministic code.</li>
+</ul><figure class="diagram-frame">
+  <svg role="img" aria-label="Comparison of flat Direct-MCP vs Unified GAP Supergraph" viewBox="0 0 760 270" width="760" height="270" xmlns="http://www.w3.org/2000/svg">
+    <title>Comparison of flat Direct-MCP vs Unified GAP Supergraph</title>
+    <rect x="8" y="8" width="356" height="254" rx="12" fill="var(--surface-alt)" stroke="var(--warn)" stroke-width="1.5"/>
+    <text x="26" y="36" fill="var(--warn)" font-size="14" font-weight="700">Without GAP (Flat Direct-MCP)</text>
+    <rect x="26" y="54" width="320" height="52" rx="8" fill="var(--surface)" stroke="var(--border)"/>
+    <text x="186" y="77" text-anchor="middle" fill="var(--text)" font-size="13" font-weight="700">203,421 Token Prompt Bloat</text>
+    <text x="186" y="96" text-anchor="middle" fill="var(--muted)" font-size="12">1,000 raw tool schemas up front</text>
+    <line x1="186" y1="106" x2="186" y2="146" stroke="var(--warn)" stroke-width="2" stroke-dasharray="4 3"/>
+    <text x="186" y="131" text-anchor="middle" fill="var(--warn)" font-size="12" font-weight="600">Agent-orchestrated N+1 loop (4 turns)</text>
+    <rect x="26" y="150" width="320" height="90" rx="8" fill="var(--surface)" stroke="var(--border)"/>
+    <text x="186" y="185" text-anchor="middle" fill="var(--text)" font-size="13" font-weight="600">Mutable descriptions (Rug-Pull risk)</text>
+    <text x="186" y="214" text-anchor="middle" fill="var(--muted)" font-size="12">REST  |  SQL  |  gRPC  |  MCP  |  Code AST</text>
+
+    <rect x="396" y="8" width="356" height="254" rx="12" fill="var(--surface-alt)" stroke="var(--accent)" stroke-width="2"/>
+    <text x="414" y="36" fill="var(--accent)" font-size="14" font-weight="700">With GAP (Typed Supergraph)</text>
+    <rect x="414" y="54" width="320" height="52" rx="8" fill="var(--surface)" stroke="var(--accent)"/>
+    <text x="574" y="77" text-anchor="middle" fill="var(--accent)" font-size="13" font-weight="700">5 Static MCP Tools (651 tok)</text>
+    <text x="574" y="96" text-anchor="middle" fill="var(--muted)" font-size="12">L0 -&gt; L1 -&gt; L2 Discovery + Cedar AuthZ</text>
+    <line x1="574" y1="106" x2="574" y2="146" stroke="var(--ok)" stroke-width="2"/>
+    <text x="574" y="131" text-anchor="middle" fill="var(--ok)" font-size="12" font-weight="600">DataLoader Batching + ArcSwap (2 turns)</text>
+    <rect x="414" y="150" width="320" height="90" rx="8" fill="var(--surface)" stroke="var(--ok)"/>
+    <text x="574" y="185" text-anchor="middle" fill="var(--ok)" font-size="13" font-weight="700">6 NGC Branches · SSRF &amp; Drift Guard</text>
+    <text x="574" y="214" text-anchor="middle" fill="var(--muted)" font-size="12">HTTP/3 QUIC  ·  MCP  ·  A2A v1.0  ·  AG-UI</text>
+  </svg>
+</figure>
+</section><section id="key-terminology" tabindex="-1" class="doc-section">
+  <h2>Five Terms You Need to Know</h2>
+  <div tabindex="0" role="region" aria-label="Core Graph Agent Protocol concepts mapped cleanly" class="table-wrapper">
+  <table class="data-table">
+    <caption>Core Graph Agent Protocol concepts mapped cleanly</caption>
+    <thead><tr><th scope="col">Term</th><th scope="col">Plain Meaning</th><th scope="col">Real Counterpart in Repo</th></tr></thead>
+    <tbody><tr><th scope="row"><code>gateway</code></th><td>Single HTTP/3 QUIC, HTTP/2, or stdio server binary that agents call.</td><td><code>gap-cli</code> / <code>gap-server</code></td></tr>
+<tr><th scope="row"><code>branch</code></th><td>One upstream backend source (an API, DB, CLI, codebase, or MCP server).</td><td>Configured via <code>[[branches]]</code> in <code>gap.toml</code></td></tr>
+<tr><th scope="row"><code>connector (NGC)</code></th><td>Adapter projecting any backend into one typed protobuf + GraphQL schema.</td><td>6 shipped adapters under <code>adapters/gap-ngc-*</code></td></tr>
+<tr><th scope="row"><code>snapshot</code></th><td>Immutable compiled bundle of schemas, indexes, and Cedar rules pinned per request.</td><td><code>gap-snapshot</code> (<code>ArcSwap</code>)</td></tr>
+<tr><th scope="row"><code>principal</code></th><td>Authenticated human, agent, or service caller evaluated by Cedar default-deny policy.</td><td><code>gap-sec</code> + <code>policies/default.cedar</code></td></tr></tbody>
+  </table>
+</div>
+</section><section id="when-not-to-use" tabindex="-1" class="doc-section">
+  <h2>When Direct-MCP Is Still Simpler (Honest Crossover)</h2>
+  <aside class="callout callout-tradeoff">
+  <p class="callout-title">Transparent Benchmark Result (ADR-021)</p>
+  <div class="callout-body"><p>If your agent has <strong>50 or fewer simple read tools</strong> and your LLM provider keeps <strong>0.10x prompt prefix caching</strong> warm, Direct-MCP uses fewer tokens on single-step lookups (<code>547.2</code> vs. <code>4,691.9</code> tokens at <code>N=10</code>).</p>
+<p>Adopt GAP immediately once you exceed ~200 tools, need cross-backend joins, navigate code ASTs, or require zero-trust security guarantees (Cedar approvals, SSRF EgressGuard, rug-pull freeze). Explore exact numbers in the <a href="../lab/playground.html">Crossover Calculator</a>.</p></div>
+</aside>
+</section>
+
+        <nav class="doc-pager" aria-label="Article pagination"><a class="pager-card pager-prev" href="../index.html"><span class="pager-dir">&larr; Previous</span><span class="pager-title">GAP Documentation Hub</span></a><a class="pager-card pager-next" href="quickstart.html"><span class="pager-dir">Next &rarr;</span><span class="pager-title">10-Minute Quickstart</span></a></nav>
+      </article>
+
+      <footer class="doc-footer">
+        <p class="footer-note">Documentation portal grounded 100% in repository source code, specs 00-09, and ADR-021 measurements.</p>
+        <div class="footer-links">
+          <a href="../paper/gap-paper.html">Paper (HTML)</a>
+          <a href="../paper/gap-paper.pdf">PDF</a>
+          <a href="../llms.txt">llms.txt</a>
+          <a href="../vi/getting-started/what-is-gap.html" hreflang="vi" lang="vi">Tiếng Việt</a>
+        </div>
+      </footer>
+    </main>
+
+    <aside class="toc-right" aria-label="On this page">
+      <div class="toc-sticky scroller">
+        <p class="toc-title">On this page</p>
+        <nav id="on-this-page-nav" class="toc-links" aria-label="On this page">
+          <a class="toc-link" href="#the-four-problems">Why Flat Agent Tooling Hits a Wall</a><a class="toc-link" href="#key-terminology">Five Terms You Need to Know</a><a class="toc-link" href="#when-not-to-use">When Direct-MCP Is Still Simpler (Honest Crossover)</a>
+        </nav>
+      </div>
+    </aside>
+  </div>
+
+  <script src="../search-index.en.js"></script>
+  <script src="../app.js"></script>
+</body>
+</html>

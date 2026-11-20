@@ -1,68 +1,27 @@
-# GAP — Graph Agent Protocol
+# Graph Agent Protocol Multi-Page Documentation & Interactive Portal (English · [Tiếng Việt](README.vi.md))
 
-> **Languages:** **English** · [Tiếng Việt (README.vi.md)](README.vi.md)
+Topic-focused **26-page bilingual documentation site** (13 English pages + 13 Vietnamese mirror pages under [`vi/`](vi/index.html)) structured for step-by-step clarity:
 
-**Graph Agent Protocol (GAP)** is an Apache-2.0 (`Copyright 2026 Duy Đức Nguyễn (Infinite Agent Labs)`), strongly typed GraphQL-profile gateway and governance layer unifying heterogeneous AI agent backends (OpenAPI REST, GraphQL subgraphs, gRPC, SQL, CLI tools, AST code/doc graphs, external MCP servers, A2A peer tasks, and AG-UI v1.0 frontends) behind **progressive disclosure**, **batched federation**, **dual-stack HTTP/2 + HTTP/3 (QUIC) transport**, **multi-provider System-1 decision models (`Laya`, `Jev`, `gemini-decision-1`)**, **deterministic Cedar authorization**, and **wait-free immutable snapshots**.
+- **7 topic groups / 13 guides per language:** Start Here (What is GAP?, 10-Min Quickstart), Core Concepts (Three-Plane Architecture, Progressive Disclosure, GAP-QL & Joins), Native Graph Connectors (NGC), AI Agent Hosts & Routers (MCP/A2A/AG-UI + System-1 & HTTP/3 QUIC), Zero-Trust Governance, Interactive Lab (Crossover Calculator, Live `gap serve`, 6-Level Checklist, Quiz), and Reference (15 CLI Commands, 9 Runbooks, 32 Crates, 20 Invariants, ASD-STE100, Academic Paper).
+- **Clean static output + agent index:** Built from [`web/site_src/`](site_src/nav.py) via `python3 web/build_site.py`, including [`llms.txt`](llms.txt), cross-page search (`search-index.en.js` / `search-index.vi.js`), copyable Markdown & code blocks, responsive 3-column shell with right-hand scrollspy, and [`vi.html`](vi.html) redirecting to [`vi/index.html`](vi/index.html).
 
-**Status (`0.1.0-rc.1` · `2026-11-20`):** **87 / 87 work packages complete (`main`)**, verified end-to-end (`362` spec requirements / `89` MUST / `2,516` test markers, `136/136` conformance tests with `graphql-js 16.13.2`, `32` Rust workspace crates, `0` `RUSTSEC` advisories via owned AVL `OrdMap`). Canonical repo: [`github.com/vnknowledge2014/GraphProtocol`](https://github.com/vnknowledge2014/GraphProtocol) · Live Portal (EN / VI), Promo Videos & Paper: [English Portal](https://vnknowledge2014.github.io/GraphProtocol/) · [Vietnamese Portal](https://vnknowledge2014.github.io/GraphProtocol/vi.html) · [`/paper/`](https://vnknowledge2014.github.io/GraphProtocol/paper/) · [English Video](web/media/gap-promo-en.mp4) · [Vietnamese Video](web/media/gap-promo-vi.mp4).
+Live portals on GitHub Pages:
+- **English:** [https://vnknowledge2014.github.io/GraphProtocol/](https://vnknowledge2014.github.io/GraphProtocol/) (`web/index.html` + 12 topic subpages)
+- **Tiếng Việt:** [https://vnknowledge2014.github.io/GraphProtocol/vi/](https://vnknowledge2014.github.io/GraphProtocol/vi/) (also [`/vi.html`](https://vnknowledge2014.github.io/GraphProtocol/vi.html))
 
----
-
-## Measured Highlights (`0.1.0-rc.1`, `ADR-021`)
-
-| Dimension | Measured Value | Evidence Artifact |
-|---|---|---|
-| Static MCP `2026-07-28` schema cost | **`651` tokens** constant for `N in {10..1,000}` (vs `203,421` Direct-MCP at `N=1,000`) | [`docs/benchmarks/REPORT.md`](docs/benchmarks/REPORT.md) |
-| Cross-branch join token reduction (`N=1,000`) | **`99.0%`** uncached (`95.34x`) · **`93.5%`** cached (`15.42x`) · turns `4 -> 2` | [`bench/results/gapbench/baseline.json`](bench/results/gapbench/baseline.json) |
-| Code-graph traversal (`24` symbols) | **`119.32x`** uncached · **`208.68x`** cached · turns `11 -> 1` | [`bench/results/gapbench/baseline.json`](bench/results/gapbench/baseline.json) |
-| Honest negative crossover (`ADR-017`) | Direct-MCP wins flat `N=10` cached (`547` vs `4,692` tokens) and `N=50` cached (`2,385` vs `4,728`) | [`docs/benchmarks/REPORT.md`](docs/benchmarks/REPORT.md) |
-| Deterministic router vs System-1 (`G-S1`) | Baseline **`95.24%`** test / **`97.22%`** held-out top-1 at **`0.887 ms`** p95 (`INV-17` fallback) | [`docs/decisions/G-S1.md`](docs/decisions/G-S1.md) |
-| Bit-reproducible `--locked` release binary | **`28.1 MB`** (`28,084,064` B), identical double-build SHA-256 (`d3220637...ee965d4c2`), **`0` RUSTSEC advisories** | [`bench/results/ga_local/report.json`](bench/results/ga_local/report.json) |
-| Live cold start / RSS / TCP + HTTP/3 QUIC / `SIGKILL` | **`1,055 ms`** boot · **`9.32 MiB`** idle · **`1,064 req/s`** TCP (`11.54 ms` p95) · **`5,013 req/s`** HTTP/3 QUIC (`2.36 ms` p95, `0-RTT` off, `0` errs) · **`28.86 ms`** `kill -9` recover | [`bench/results/ga_local/report.json`](bench/results/ga_local/report.json) |
-
----
-
-## Quickstart & Local Verification
+## 1. Rebuild & Validate Static Site
 
 ```bash
-# 1. Run 5-minute walking skeleton (REST shop + MCP notes + GraphQL/MCP gateway)
-./target/dist/gap config check examples/walking-skeleton/gap.toml
-python3 examples/walking-skeleton/fixtures/rest_fixture.py --port 9101 &
-python3 examples/walking-skeleton/fixtures/mcp_fixture.py --port 9102 &
-./target/dist/gap serve --config examples/walking-skeleton/gap.toml
-
-# 2. Reproduce GAP-Bench & live GA local runtime/SIGKILL/reproducibility drills
-./bench/results/gapbench/reproduce.sh
-python3 dist/verify-ga-local.py
-
-# 3. Validate specs, workspace layering, traceability matrix, and paper bundle
-python3 tools/wp.py validate && python3 tools/check_layers.py && python3 tools/spec_trace.py --strict
-./paper/build-arxiv-bundle.sh
+python3 web/build_site.py
+python3 web/build_site.py --check
 ```
 
----
+## 2. Run the Live Interactive Lab (`gap serve` + Real MCP/GraphQL Requests)
 
-## Documentation, Specification & Academic Paper
-
-| Resource | Location |
-|---|---|
-| **Interactive Learning Portal & Promo Videos (EN / VI)** | [`web/README.md`](web/README.md) · [`web/index.html`](web/index.html) (EN) · [`web/vi.html`](web/vi.html) (VI) · [`gap-promo-en.mp4`](web/media/gap-promo-en.mp4) · [`gap-promo-vi.mp4`](web/media/gap-promo-vi.mp4) · `python3 web/serve.py --port 8787` |
-| **Academic Paper (LaTeX / HTML / PDF / Markdown)** | [`paper/main.tex`](paper/main.tex) · [`paper/gap-paper.pdf`](paper/gap-paper.pdf) · [`docs/paper/GAP-PAPER.md`](docs/paper/GAP-PAPER.md) |
-| **ASD-STE100 Aircraft Manual (Karpathy Style + Linter)** | [`docs/ste100/README.md`](docs/ste100/README.md) · `python3 dist/check-ste100.py` |
-| **arXiv / Zenodo DOI Publication & Linux GA Playbook** | [`docs/paper/PUBLICATION-AND-GA-PLAYBOOK.md`](docs/paper/PUBLICATION-AND-GA-PLAYBOOK.md) · [`dist/set-author.py`](dist/set-author.py) |
-| **1.0-RC Release Gates & Traceability Matrix** | [`docs/gates/RC.md`](docs/gates/RC.md) · [`docs/traceability.md`](docs/traceability.md) |
-| **Quickstart, Concepts, Connector & Security Guides** | [`docs/guides/quickstart.md`](docs/guides/quickstart.md) · [`docs/guides/concepts.md`](docs/guides/concepts.md) · [`docs/guides/connector-authoring.md`](docs/guides/connector-authoring.md) · [`docs/guides/security-hardening.md`](docs/guides/security-hardening.md) |
-| **Normative Specification (`00`–`09`), ADRs & Design Review** | [`spec/`](spec/) · [`docs/01-DECISIONS.md`](docs/01-DECISIONS.md) · [`docs/00-REVIEW.md`](docs/00-REVIEW.md) |
-| **Wire Contracts & Work Packages (`87/87` complete)** | [`proto/`](proto/) · [`work/work-packages.toml`](work/work-packages.toml) · [`work/status.toml`](work/status.toml) |
-
----
-
-## How to Cite GAP
-
-Standard software and paper citation metadata lives in [`CITATION.cff`](CITATION.cff) and [`.zenodo.json`](.zenodo.json). Author identity & repository URL are managed reproducibly across all citation, LaTeX, and notice files via:
+From the repository root:
 
 ```bash
-python3 dist/set-author.py --check
+python3 web/serve.py --port 8787
 ```
 
-`Copyright 2026 Duy Đức Nguyễn (Infinite Agent Labs)` · License: [Apache-2.0](LICENSE) · Provenance & Third-Party Notices: [`NOTICE`](NOTICE)
+Then open `http://127.0.0.1:8787/` (English) or `http://127.0.0.1:8787/vi/` (Vietnamese), or browse directly to `/lab/playground.html` (`/vi/lab/playground.html`) and click **Start Live Lab (`gap serve`)** to spawn the local Walking Skeleton gateway and send live GraphQL/MCP `2026-07-28` requests or inspect `--help` from `./target/dist/gap`.
