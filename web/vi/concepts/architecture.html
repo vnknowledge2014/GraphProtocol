@@ -198,23 +198,38 @@ GAP tách hệ thống thành 3 mặt phẳng không chồng chéo (cưỡng ch�
   <h2 id="learn-heading">Bạn sẽ nắm được gì</h2>
   <ul><li>Cách 3 mặt phẳng Thực thi, Khám phá và Kiểm soát phân tách ranh giới cứng.</li><li>Vì sao mọi request giữ nguyên một snapshot bất biến qua <code>ArcSwap</code> và AVL <code>OrdMap</code> thuần Rust.</li><li>Tra cứu chi tiết từng thành phần qua Sơ đồ Tương tác 10 Khối.</li></ul>
 </section>
+        <details class="toc-inline"><summary>Trong trang này</summary><nav class="toc-inline-links" aria-label="Mục lục bài viết"><a class="toc-inline-link" href="#three-planes-diagram">Phân tách Cứng 3 Mặt phẳng</a><a class="toc-inline-link" href="#interactive-inspector">Sơ đồ Tương tác 10 Khối Kiến trúc</a><a class="toc-inline-link" href="#lock-free-snapshots">Ghim Snapshot Không khóa &amp; Tự động Rollback</a></nav></details>
 
         <section id="three-planes-diagram" tabindex="-1" class="doc-section">
   <h2>Phân tách Cứng 3 Mặt phẳng</h2>
   <figure class="diagram-frame">
-  <svg role="img" aria-label="Kiến trúc 3 Mặt phẳng tách biệt hoàn toàn trong GAP" viewBox="0 0 760 278" width="760" height="278" xmlns="http://www.w3.org/2000/svg">
+  <svg role="img" aria-label="Kiến trúc 3 Mặt phẳng tách biệt hoàn toàn trong GAP" viewBox="0 0 760 296" width="760" height="296" xmlns="http://www.w3.org/2000/svg">
     <title>Kiến trúc 3 Mặt phẳng tách biệt hoàn toàn trong GAP</title>
-    <rect x="14" y="14" width="732" height="72" rx="10" fill="var(--surface-alt)" stroke="var(--accent)" stroke-width="1.5"/>
-    <text x="32" y="42" fill="var(--accent)" font-size="14" font-weight="700">Mặt phẳng 2: Khám phá Lũy tiến</text>
-    <text x="32" y="66" fill="var(--text)" font-size="12.5">L0/L1/L2 · Visibility Bitset (INV-05) · Baseline / S1 tùy chọn (INV-17)</text>
+    <defs>
+      <marker id="tp-arr-accent" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+        <path d="M 0 1.5 L 9 5 L 0 8.5 z" fill="var(--accent)"/>
+      </marker>
+      <marker id="tp-arr-warn" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+        <path d="M 0 1.5 L 9 5 L 0 8.5 z" fill="var(--warn)"/>
+      </marker>
+    </defs>
+    <rect x="14" y="10" width="732" height="72" rx="10" fill="var(--surface-alt)" stroke="var(--accent)" stroke-width="1.5"/>
+    <text x="32" y="38" fill="var(--accent)" font-size="14" font-weight="700">Mặt phẳng 2: Khám phá Lũy tiến</text>
+    <text x="32" y="62" fill="var(--text)" font-size="12.5">L0/L1/L2 · Visibility Bitset (INV-05) · Baseline / S1 tùy chọn (INV-17)</text>
 
-    <rect x="14" y="102" width="732" height="76" rx="10" fill="var(--surface-alt)" stroke="var(--ok)" stroke-width="2"/>
-    <text x="32" y="131" fill="var(--ok)" font-size="14" font-weight="700">Mặt phẳng 1: Thực thi Tất định (CẤM ML — ARC-002)</text>
-    <text x="32" y="156" fill="var(--text)" font-size="12.5">AuthN + Cedar Policy -&gt; PlanCache (TenantId) -&gt; ArcSwap Snapshot -&gt; BatchJoin -&gt; EgressGuard</text>
+    <line x1="380" y1="82" x2="380" y2="108" stroke="var(--accent)" stroke-width="2" marker-end="url(#tp-arr-accent)"/>
+    <text x="392" y="99" fill="var(--accent)" font-size="11.5" font-weight="600">Truy vấn đã chọn</text>
 
-    <rect x="14" y="194" width="732" height="72" rx="10" fill="var(--surface-alt)" stroke="var(--warn)" stroke-width="1.5"/>
-    <text x="32" y="222" fill="var(--warn)" font-size="14" font-weight="700">Mặt phẳng 3: Kiểm soát &amp; Ingest Zero-Trust</text>
-    <text x="32" y="246" fill="var(--text)" font-size="12.5">Propose-Not-Activate · Kiểm chứng @join · DriftMonitor (desc_hash) · Auto RollbackWatcher</text>
+    <rect x="14" y="110" width="732" height="76" rx="10" fill="var(--surface-alt)" stroke="var(--ok)" stroke-width="2"/>
+    <text x="32" y="139" fill="var(--ok)" font-size="14" font-weight="700">Mặt phẳng 1: Thực thi Tất định (CẤM ML — ARC-002)</text>
+    <text x="32" y="164" fill="var(--text)" font-size="12.5">AuthN + Cedar Policy -&gt; PlanCache (TenantId) -&gt; ArcSwap Snapshot -&gt; BatchJoin -&gt; EgressGuard</text>
+
+    <line x1="380" y1="214" x2="380" y2="188" stroke="var(--warn)" stroke-width="2" marker-end="url(#tp-arr-warn)"/>
+    <text x="392" y="205" fill="var(--warn)" font-size="11.5" font-weight="600">Đổi ArcSwap (nguyên tử)</text>
+
+    <rect x="14" y="214" width="732" height="72" rx="10" fill="var(--surface-alt)" stroke="var(--warn)" stroke-width="1.5"/>
+    <text x="32" y="242" fill="var(--warn)" font-size="14" font-weight="700">Mặt phẳng 3: Kiểm soát &amp; Ingest Zero-Trust</text>
+    <text x="32" y="266" fill="var(--text)" font-size="12.5">Propose-Not-Activate · Kiểm chứng @join · DriftMonitor (desc_hash) · Auto RollbackWatcher</text>
   </svg>
 </figure><p>Ranh giới biên dịch này được kiểm tra bắt buộc ở CI bằng <code>tools/check_layers.py</code>: năm crate thuộc đường thực thi nóng (<code>gap-exec</code>, <code>gap-plan</code>, <code>gap-transport</code>, <code>gap-snapshot</code>, <code>gap-balance</code>) sẽ báo lỗi ngay nếu bất kỳ thư viện ML nào lọt vào cây phụ thuộc.</p>
 </section><section id="interactive-inspector" tabindex="-1" class="doc-section">

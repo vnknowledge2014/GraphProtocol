@@ -188,7 +188,7 @@
 
 Một gateway GAP duy nhất đồng thời phục vụ:
 1. **MCP `2026-07-28` (`gap-mcp`):** 5 static tools cố định (`651` tokens) qua HTTP hoặc `--stdio`.
-2. **A2A `v1.0` (`gap-a2a`):** Agent Card `/.well-known/agent-card.json`, SQLite task leases (`INV-13`) và chống vòng lặp (`INV-20`).
+2. **A2A `v1.0` (`gap-a2a`):** AgentCard 8 trạng thái, SQLite task leases (`INV-13`) và chống vòng lặp (`INV-20`).
 3. **AG-UI `v1.0` (`gap-agui`):** `POST /ag-ui` SSE, `StateDelta`, human-in-the-loop interrupts và thẻ `&lt;gap:untrusted&gt;`.</textarea>
 
         <h1 id="article-title" tabindex="-1">Tích hợp MCP, A2A &amp; AG-UI</h1>
@@ -198,33 +198,42 @@ Một gateway GAP duy nhất đồng thời phục vụ:
   <h2 id="learn-heading">Bạn sẽ nắm được gì</h2>
   <ul><li>Cách 5 công cụ MCP tĩnh ánh xạ xuống quy trình khám phá lũy tiến và đột biến được kiểm duyệt.</li><li>Xuất Agent Card chuẩn A2A v1.0 với lưu trữ SQLite bền vững và chống vòng lặp hop (<code>INV-20</code>).</li><li>Phát luồng sự kiện AG-UI <code>v1.0</code> (<code>/ag-ui</code> SSE) kèm tạm dừng xin phê duyệt con người.</li></ul>
 </section>
+        <details class="toc-inline"><summary>Trong trang này</summary><nav class="toc-inline-links" aria-label="Mục lục bài viết"><a class="toc-inline-link" href="#three-axis-flow">Kiến trúc Tương tác 3 Trục</a><a class="toc-inline-link" href="#mcp-facade">Facade Công cụ Dọc: MCP 2026-07-28 (<code>651</code> Tokens)</a><a class="toc-inline-link" href="#a2a-and-agui">Liên thông A2A v1.0 &amp; Luồng Giao diện AG-UI v1.0</a></nav></details>
 
         <section id="three-axis-flow" tabindex="-1" class="doc-section">
   <h2>Kiến trúc Tương tác 3 Trục</h2>
   <figure class="diagram-frame">
   <svg role="img" aria-label="Luồng kết nối AI Host qua MCP 2026-07-28, A2A v1.0, AG-UI v1.0 và NGC" viewBox="0 0 760 190" width="760" height="190" xmlns="http://www.w3.org/2000/svg">
     <title>Luồng kết nối AI Host qua MCP 2026-07-28, A2A v1.0, AG-UI v1.0 và NGC</title>
+    <defs>
+      <marker id="ff-arr-accent" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+        <path d="M 0 1.5 L 9 5 L 0 8.5 z" fill="var(--accent)"/>
+      </marker>
+      <marker id="ff-arr-ok" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+        <path d="M 0 1.5 L 9 5 L 0 8.5 z" fill="var(--ok)"/>
+      </marker>
+    </defs>
     <rect x="10" y="28" width="165" height="130" rx="10" fill="var(--surface-alt)" stroke="var(--border)"/>
     <text x="92" y="64" text-anchor="middle" fill="var(--text)" font-size="13.5" font-weight="700">AI Hosts &amp; UI</text>
     <text x="92" y="92" text-anchor="middle" fill="var(--muted)" font-size="11.5">Claude</text>
     <text x="92" y="112" text-anchor="middle" fill="var(--muted)" font-size="11.5">Cursor  ·  Antigravity</text>
     <text x="92" y="132" text-anchor="middle" fill="var(--accent)" font-size="11.5" font-weight="600">Web AG-UI</text>
 
-    <line x1="175" y1="93" x2="210" y2="93" stroke="var(--accent)" stroke-width="2"/>
+    <line x1="175" y1="93" x2="208" y2="93" stroke="var(--accent)" stroke-width="2" marker-end="url(#ff-arr-accent)"/>
     <rect x="210" y="28" width="165" height="130" rx="10" fill="var(--surface-alt)" stroke="var(--accent)"/>
     <text x="292" y="64" text-anchor="middle" fill="var(--accent)" font-size="13.5" font-weight="700">HTTP/2 + HTTP/3 QUIC</text>
     <text x="292" y="92" text-anchor="middle" fill="var(--text)" font-size="11.5">TLS 1.3 (tắt 0-RTT)</text>
     <text x="292" y="112" text-anchor="middle" fill="var(--muted)" font-size="11.5">/graphql · /mcp</text>
     <text x="292" y="132" text-anchor="middle" fill="var(--muted)" font-size="11.5">/ag-ui · A2A v1.0</text>
 
-    <line x1="375" y1="93" x2="410" y2="93" stroke="var(--ok)" stroke-width="2"/>
+    <line x1="375" y1="93" x2="408" y2="93" stroke="var(--ok)" stroke-width="2" marker-end="url(#ff-arr-ok)"/>
     <rect x="410" y="28" width="165" height="130" rx="10" fill="var(--surface-alt)" stroke="var(--ok)" stroke-width="2"/>
     <text x="492" y="64" text-anchor="middle" fill="var(--ok)" font-size="13.5" font-weight="700">Cổng GAP (gap-server)</text>
     <text x="492" y="94" text-anchor="middle" fill="var(--text)" font-size="11.5">Cedar  ·  ArcSwap</text>
     <text x="492" y="116" text-anchor="middle" fill="var(--text)" font-size="11.5">DataLoader  ·  BLAKE3</text>
     <text x="492" y="138" text-anchor="middle" fill="var(--muted)" font-size="11.5">5,013 req/s H3 · 28.86ms</text>
 
-    <line x1="575" y1="93" x2="605" y2="93" stroke="var(--border)" stroke-width="2"/>
+    <line x1="575" y1="93" x2="603" y2="93" stroke="var(--ok)" stroke-width="2" marker-end="url(#ff-arr-ok)"/>
     <rect x="605" y="28" width="145" height="130" rx="10" fill="var(--surface-alt)" stroke="var(--border)"/>
     <text x="677" y="64" text-anchor="middle" fill="var(--text)" font-size="13.5" font-weight="700">6 NGC Connectors</text>
     <text x="677" y="94" text-anchor="middle" fill="var(--muted)" font-size="11.5">OpenAPI · SQL</text>
@@ -234,9 +243,9 @@ Một gateway GAP duy nhất đồng thời phục vụ:
 </figure><p>Hãy hình dung các facade của GAP như tầng phiên dịch đặt trước một động cơ lõi duy nhất: AI host dọc dùng MCP, mạng tác vụ ngang hàng dùng A2A và giao diện web tương tác dùng AG-UI — tất cả dùng chung bản snapshot bất biến và luật kiểm soát Cedar.</p>
 </section><section id="mcp-facade" tabindex="-1" class="doc-section">
   <h2>Facade Công cụ Dọc: MCP 2026-07-28 (<code>651</code> Tokens)</h2>
-  <div tabindex="0" role="region" aria-label="5 meta-tool MCP tĩnh trong adapters/gap-mcp" class="table-wrapper">
-  <table class="data-table">
-    <caption>5 meta-tool MCP tĩnh trong adapters/gap-mcp</caption>
+  <div tabindex="0" role="region" aria-labelledby="cap-f5a15930" class="table-wrapper">
+  <table class="data-table" style="--col-2: &quot;Chức năng&quot;; --col-3: &quot;Cơ chế Bảo vệ / Chính sách&quot;;">
+    <caption id="cap-f5a15930">5 meta-tool MCP tĩnh trong adapters/gap-mcp</caption>
     <thead><tr><th scope="col">Tên Tool</th><th scope="col">Chức năng</th><th scope="col">Cơ chế Bảo vệ / Chính sách</th></tr></thead>
     <tbody><tr><th scope="row"><code>gap_search</code></th><td>Tìm kiếm lai BM25 + HNSW xuyên suốt các nhánh (<code>L1</code>).</td><td>Lọc sẵn theo visibility bitset từ Cedar (<code>INV-05</code>).</td></tr>
 <tr><th scope="row"><code>gap_describe</code></th><td>Xem tổng quan nhánh (<code>L0</code>) hoặc bung SDL chi tiết (<code>L2</code>).</td><td>Chỉ trả về mô tả khớp <code>desc_hash</code> đã duyệt (<code>INV-08</code>).</td></tr>
@@ -244,17 +253,20 @@ Một gateway GAP duy nhất đồng thời phục vụ:
 <tr><th scope="row"><code>gap_mutate</code></th><td>Thực thi thao tác ghi/thay đổi trạng thái.</td><td>Bắt buộc <code>@sideEffect</code> + duyệt 2 người trên Cedar nếu không thể hoàn tác.</td></tr>
 <tr><th scope="row"><code>gap_task</code></th><td>Khởi tạo, theo dõi hoặc hủy tác vụ A2A dài hạn.</td><td>Lưu chuyển trạng thái FSM vào SQLite trước khi phát sự kiện (<code>INV-13</code>).</td></tr></tbody>
   </table>
-</div><p>Cấu hình Claude Desktop, Cursor hoặc Antigravity dùng chế độ stdio (<code>gap serve --stdio</code>) hoặc Streamable HTTP (<code>POST /mcp</code> kèm header <code>MCP-Protocol-Version: 2026-07-28</code>):</p><figure class="code-figure">
+</div><p>Cấu hình Claude Desktop, Cursor hoặc Antigravity dùng chế độ stdio (<code>gap serve --stdio</code>) hoặc gọi trực tiếp qua HTTP (<code>POST /mcp</code>):</p><figure class="code-figure">
   <div class="code-toolbar">
-    <span class="code-lang">json</span>
+    <div class="code-meta">
+      <span class="code-lang">json</span>
+      <span class="code-title">mcp_servers.json — Cấu hình Client Stdio</span>
+    </div>
     <span class="copy">
-      <button type="button" class="copy-button" command="--copy" commandfor="host-mcp-stdio" aria-label="Sao chép đoạn mã json (host-mcp-stdio)">
+      <button type="button" class="copy-button" command="--copy" commandfor="host-mcp-stdio" aria-label="Sao chép đoạn mã json (mcp_servers.json — Cấu hình Client Stdio)">
         <span class="icon" aria-hidden="true"></span>
       </button>
       <span class="tip" role="status"></span>
     </span>
   </div>
-  <pre role="region" aria-label="Đoạn mã json" tabindex="0"><code id="host-mcp-stdio" class="language-json">{
+  <pre role="region" aria-label="mcp_servers.json — Cấu hình Client Stdio" tabindex="0"><code id="host-mcp-stdio" class="language-json">{
   &quot;mcpServers&quot;: {
     &quot;gap-gateway&quot;: {
       &quot;command&quot;: &quot;/usr/local/bin/gap&quot;,
@@ -262,13 +274,69 @@ Một gateway GAP duy nhất đồng thời phục vụ:
     }
   }
 }</code></pre>
+</figure><figure class="code-figure">
+  <div class="code-toolbar">
+    <div class="code-meta">
+      <span class="code-lang">terminal</span>
+      <span class="code-title">Terminal — Gọi MCP 2026-07-28 qua HTTP</span>
+    </div>
+    <span class="copy">
+      <button type="button" class="copy-button" command="--copy" commandfor="host-mcp-http" aria-label="Sao chép đoạn mã terminal (Terminal — Gọi MCP 2026-07-28 qua HTTP)">
+        <span class="icon" aria-hidden="true"></span>
+      </button>
+      <span class="tip" role="status"></span>
+    </span>
+  </div>
+  <pre role="region" aria-label="Terminal — Gọi MCP 2026-07-28 qua HTTP" tabindex="0"><code id="host-mcp-http" class="language-terminal">curl -sS -X POST http://127.0.0.1:8080/mcp \
+  -H &quot;Content-Type: application/json&quot; \
+  -H &quot;Accept: application/json, text/event-stream&quot; \
+  -H &quot;MCP-Protocol-Version: 2026-07-28&quot; \
+  -H &quot;Mcp-Method: tools/call&quot; \
+  -H &quot;Mcp-Name: gap_query&quot; \
+  -H &quot;Authorization: Bearer gap_dev_skeleton_key_01&quot; \
+  -d &#x27;{&quot;jsonrpc&quot;:&quot;2.0&quot;,&quot;id&quot;:1,&quot;method&quot;:&quot;tools/call&quot;,&quot;params&quot;:{&quot;_meta&quot;:{&quot;io.modelcontextprotocol/protocolVersion&quot;:&quot;2026-07-28&quot;,&quot;io.modelcontextprotocol/clientCapabilities&quot;:{}},&quot;name&quot;:&quot;gap_query&quot;,&quot;arguments&quot;:{&quot;query&quot;:&quot;{ customer(id: 2) { id name } customer_notes(customer_id: 2) }&quot;}}}&#x27;</code></pre>
 </figure>
 </section><section id="a2a-and-agui" tabindex="-1" class="doc-section">
   <h2>Liên thông A2A v1.0 &amp; Luồng Giao diện AG-UI v1.0</h2>
   <ul>
-  <li><strong>Chuẩn ngang hàng A2A v1.0 (<code>adapters/gap-a2a</code>):</strong> Cung cấp <code>/.well-known/agent-card.json</code> và quản lý vòng đời tác vụ 8 trạng thái trên SQLite kèm bộ đếm hop tăng đơn điệu, ngắt ngay vòng lặp chuyển tiếp (<code>GAP_LOOP_DETECTED</code>, <code>INV-20</code>).</li>
-  <li><strong>Luồng sự kiện AG-UI v1.0 (<code>adapters/gap-agui</code>):</strong> Mở <code>POST /ag-ui</code> SSE phát chuẩn <code>RunStarted</code>, <code>StepStarted</code>, <code>TextMessage*</code>, <code>ToolCall*</code>, <code>StateDelta</code>, <code>RunFinished</code>, <code>RunError</code>. Khi Cedar yêu cầu con người duyệt mutation <code>IRREVERSIBLE</code>, luồng dừng lại qua <code>RUN_FINISHED</code> interrupt và chạy tiếp khi có xác nhận.</li>
-</ul>
+  <li><strong>Chuẩn ngang hàng A2A v1.0 (<code>adapters/gap-a2a</code>):</strong> Quản lý vòng đời tác vụ 8 trạng thái trên SQLite kèm bộ đếm hop tăng đơn điệu, ngắt ngay vòng lặp chuyển tiếp (<code>GAP_LOOP_DETECTED</code>, <code>INV-20</code>).</li>
+  <li><strong>Luồng sự kiện AG-UI v1.0 (<code>adapters/gap-agui</code>):</strong> Mở <code>POST /ag-ui</code> SSE phát chuẩn <code>RUN_STARTED</code>, <code>STEP_STARTED</code>, <code>TOOL_CALL_*</code>, <code>STATE_SNAPSHOT</code>, <code>RUN_FINISHED</code>. Khi Cedar yêu cầu con người duyệt mutation <code>IRREVERSIBLE</code>, luồng dừng lại qua <code>RUN_FINISHED</code> interrupt và chạy tiếp khi có xác nhận.</li>
+</ul><figure class="code-figure">
+  <div class="code-toolbar">
+    <div class="code-meta">
+      <span class="code-lang">terminal</span>
+      <span class="code-title">Terminal — Nhận Luồng SSE AG-UI v1.0</span>
+    </div>
+    <span class="copy">
+      <button type="button" class="copy-button" command="--copy" commandfor="host-agui-curl" aria-label="Sao chép đoạn mã terminal (Terminal — Nhận Luồng SSE AG-UI v1.0)">
+        <span class="icon" aria-hidden="true"></span>
+      </button>
+      <span class="tip" role="status"></span>
+    </span>
+  </div>
+  <pre role="region" aria-label="Terminal — Nhận Luồng SSE AG-UI v1.0" tabindex="0"><code id="host-agui-curl" class="language-terminal">curl -sS -N -X POST http://127.0.0.1:8080/ag-ui \
+  -H &quot;Content-Type: application/json&quot; \
+  -H &quot;Accept: text/event-stream&quot; \
+  -H &quot;Authorization: Bearer gap_dev_skeleton_key_01&quot; \
+  -d &#x27;{&quot;threadId&quot;:&quot;demo-1&quot;,&quot;runId&quot;:&quot;r-1&quot;,&quot;messages&quot;:[],&quot;forwardedProps&quot;:{&quot;graphql&quot;:{&quot;query&quot;:&quot;{ customer(id: 1) { id name tier } customer_notes(customer_id: 1) }&quot;}}}&#x27;</code></pre>
+</figure><figure class="code-figure">
+  <div class="code-toolbar">
+    <div class="code-meta">
+      <span class="code-lang">text</span>
+      <span class="code-title">Chuỗi Sự kiện SSE Mong đợi</span>
+    </div>
+    <span class="copy">
+      <button type="button" class="copy-button" command="--copy" commandfor="host-agui-out" aria-label="Sao chép đoạn mã text (Chuỗi Sự kiện SSE Mong đợi)">
+        <span class="icon" aria-hidden="true"></span>
+      </button>
+      <span class="tip" role="status"></span>
+    </span>
+  </div>
+  <pre role="region" aria-label="Chuỗi Sự kiện SSE Mong đợi" tabindex="0"><code id="host-agui-out" class="language-text">data: {&quot;type&quot;:&quot;RUN_STARTED&quot;,&quot;threadId&quot;:&quot;demo-1&quot;,&quot;runId&quot;:&quot;r-1&quot;,&quot;metadata&quot;:{&quot;generation&quot;:1,&quot;tenant&quot;:&quot;default&quot;}}
+data: {&quot;type&quot;:&quot;TOOL_CALL_RESULT&quot;,&quot;toolCallName&quot;:&quot;gap_query&quot;,...}
+data: {&quot;type&quot;:&quot;STATE_SNAPSHOT&quot;,&quot;snapshot&quot;:{&quot;generation&quot;:1,&quot;lastData&quot;:{&quot;customer&quot;:{&quot;id&quot;:1,&quot;name&quot;:&quot;Ada Lovelace&quot;,&quot;tier&quot;:&quot;vip&quot;},...}}}
+data: {&quot;type&quot;:&quot;RUN_FINISHED&quot;,&quot;outcome&quot;:{&quot;type&quot;:&quot;success&quot;}}</code></pre>
+</figure>
 </section>
 
         <nav class="doc-pager" aria-label="Chuyển bài trước / tiếp"><a class="pager-card pager-prev" href="../connectors/overview.html"><span class="pager-dir">&larr; Bài trước</span><span class="pager-title">Kết nối Dữ liệu (NGC)</span></a><a class="pager-card pager-next" href="routers-and-http3.html"><span class="pager-dir">Tiếp theo &rarr;</span><span class="pager-title">Định tuyến System-1 &amp; HTTP/3 QUIC</span></a></nav>

@@ -394,7 +394,7 @@ window.GAP_DATA = {
       id: "mcp-l0-describe",
       label: "2. MCP L0: gap_describe (overview: true)",
       endpoint: "POST /mcp",
-      note: "Level L0 returns compact branch summaries instead of serializing hundreds of thousands of schema tokens upfront.",
+      note: "Level L0 returns compact branch summaries (capped <= 24 tokens/branch) instead of serializing hundreds of thousands of schema tokens upfront.",
       liveSupported: true,
       requestJson: {
         jsonrpc: "2.0",
@@ -413,12 +413,19 @@ window.GAP_DATA = {
         jsonrpc: "2.0",
         id: 1,
         result: {
-          content: [
-            {
-              type: "text",
-              text: "branches: shop (openapi, T1, 4 ops), notes (mcp, T1, 1 op); generation: 1"
+          isError: false,
+          resultType: "complete",
+          structuredContent: {
+            data: {
+              overview: {
+                generation: 1,
+                branches: [
+                  { id: "notes", protocol: "MCP", trust: "T1", status: "ACTIVE", operationCount: 1 },
+                  { id: "shop", protocol: "REST", trust: "T1", status: "ACTIVE", operationCount: 4 }
+                ]
+              }
             }
-          ]
+          }
         }
       }
     },
@@ -445,19 +452,28 @@ window.GAP_DATA = {
         jsonrpc: "2.0",
         id: 2,
         result: {
-          matches: [
-            { branch: "shop", operation: "customer", kind: "QUERY", score: 0.96 },
-            { branch: "shop", operation: "orders", kind: "QUERY", score: 0.91 },
-            { branch: "notes", operation: "customer_notes", kind: "QUERY", score: 0.89 }
-          ]
+          isError: false,
+          resultType: "complete",
+          structuredContent: {
+            data: {
+              __search: {
+                abstained: false,
+                hits: [
+                  { branch: "shop", kind: "QUERY", name: "customer", path: "Query.customer", score: 0.96 },
+                  { branch: "shop", kind: "QUERY", name: "orders", path: "Query.orders", score: 0.91 },
+                  { branch: "notes", kind: "QUERY", name: "customer_notes", path: "Query.customer_notes", score: 0.89 }
+                ]
+              }
+            }
+          }
         }
       }
     },
     {
       id: "mcp-l2-type",
-      label: "4. MCP L2: gap_describe (names: ['Customer'])",
+      label: "4. MCP L2: gap_describe (types: ['shop_CustomersResult', 'shop_OrdersResult'])",
       endpoint: "POST /mcp",
-      note: "Level L2 hydrates exact GraphQL SDL only for the specific types selected by the agent.",
+      note: "Level L2 hydrates exact composed GraphQL SDL only for the selected OpenAPI result types (`shop_CustomersResult`, `shop_OrdersResult`).",
       liveSupported: true,
       requestJson: {
         jsonrpc: "2.0",
@@ -469,20 +485,52 @@ window.GAP_DATA = {
             "io.modelcontextprotocol/clientCapabilities": {}
           },
           name: "gap_describe",
-          arguments: { names: ["Customer"] }
+          arguments: { types: ["shop_CustomersResult", "shop_OrdersResult"] }
         }
       },
       simulatedResponse: {
         jsonrpc: "2.0",
         id: 3,
         result: {
-          sdl: "type Customer { id: Int! name: String! tier: String! }"
+          isError: false,
+          resultType: "complete",
+          structuredContent: {
+            data: {
+              sdl: "type shop_CustomersResult { id: Int! name: String! tier: shop_CustomersResultTier! }\ntype shop_OrdersResult { customer_id: Int! id: Int! status: shop_OrdersResultStatus! total_cents: Int! }"
+            }
+          }
         }
       }
     },
     {
+      id: "agui-sse-stream",
+      label: "5. AG-UI v1.0: POST /ag-ui Live SSE Stream",
+      endpoint: "POST /ag-ui",
+      note: "Streams structured AG-UI v1.0 events (`RUN_STARTED`, `STEP_STARTED`, `TOOL_CALL_*`, `STATE_SNAPSHOT`, `RUN_FINISHED`) directly from `gap serve`.",
+      liveSupported: true,
+      requestJson: {
+        threadId: "playground-thread",
+        runId: "playground-run-1",
+        messages: [],
+        forwardedProps: {
+          graphql: {
+            query: "{ customer(id: 1) { id name tier } customer_notes(customer_id: 1) }"
+          }
+        }
+      },
+      simulatedResponse: {
+        sse_event_count: 10,
+        events: [
+          { type: "RUN_STARTED", threadId: "playground-thread", runId: "playground-run-1", metadata: { generation: 1, tenant: "default" } },
+          { type: "STEP_STARTED", stepName: "gap.execute" },
+          { type: "STATE_SNAPSHOT", snapshot: { generation: 1, lastData: { customer: { id: 1, name: "Ada Lovelace", tier: "vip" }, customer_notes: { customer_id: 1, notes: [{ customer_id: 1, note_id: "n-1", summary: "Prefers consolidated monthly invoice" }] } } } },
+          { type: "RUN_FINISHED", outcome: { type: "success" } }
+        ]
+      }
+    },
+    {
       id: "sec-t2-untrusted",
-      label: "5. Security: T2 Envelope <gap:untrusted> Escaping (Simulated)",
+      label: "6. Security: T2 Envelope <gap:untrusted> Escaping (Simulated)",
       endpoint: "Simulated SEC-080 / CMP-007",
       note: "If an untrusted upstream tries to close `</gap:untrusted>` early to inject instructions, GAP HTML-escapes internal tags deterministically.",
       liveSupported: false,
@@ -499,9 +547,9 @@ window.GAP_DATA = {
     },
     {
       id: "sec-cedar-deny",
-      label: "6. Security: Cedar Denies IRREVERSIBLE Mutation (Simulated)",
+      label: "7. Security: Cedar Denies IRREVERSIBLE Mutation (Simulated)",
       endpoint: "Simulated INV-04 / ADR-023",
-      note: "Mutations lacking second-person approval (`approverIsDifferent=true`) fail deterministically with `GAP_FORBIDDEN` before any connector call.",
+      note: "Cedar policy `@id(\"forbid-mutate-irreversible-or-unknown-unapproved\")` blocks `Action::\"Mutate\"` unless `context.approved && context.approverIsDifferent`.",
       liveSupported: false,
       requestJson: {
         mutation: "mutation { wipe_customer_ledger(id: 1) }"
@@ -509,7 +557,7 @@ window.GAP_DATA = {
       simulatedResponse: {
         errors: [
           {
-            message: "authorization denied by Cedar policy: IRREVERSIBLE mutation requires approverIsDifferent=true",
+            message: "authorization denied by Cedar policy: IRREVERSIBLE mutation requires context.approved && context.approverIsDifferent",
             extensions: {
               code: "GAP_FORBIDDEN",
               invariant: "INV-04",
@@ -577,9 +625,9 @@ window.GAP_DATA = {
 
   runbooks: [
     { id: "SwapStuck", severity: "page", trigger: "Snapshot swap p99 > 1s or queued ingest stale for 15 minutes without generation advance", action: "Inspect long-lived pinned requests, check worker backlog, and run `gap snapshot show`." },
-    { id: "AutoRollback", severity: "page", trigger: "`gap_snapshot_rollbacks_total` increments > 0", action: "RollbackWatcher reverted to the prior generation; inspect `gap snapshot diff` before re-approving." },
+    { id: "AutoRollback", severity: "page", trigger: "`gap_snapshot_rollbacks_total` increments > 0", action: "RollbackWatcher reverted to the prior generation; inspect `gap snapshot diff --before <old.toml> --after <new.toml>` before re-approving." },
     { id: "BreakerFlapping", severity: "ticket", trigger: "Circuit breaker transitions >= 4 times within 15 minutes", action: "Check upstream health on the failing branch and review hysteresis thresholds." },
-    { id: "BranchDrift", severity: "ticket", trigger: "EWMA error rate > 0.15 or schema probe mismatch detected", action: "Run `gap proposals list && gap ingest once && gap snapshot diff` to review and isolate drift." },
+    { id: "BranchDrift", severity: "ticket", trigger: "EWMA error rate > 0.15 or schema probe mismatch detected", action: "Run `gap proposals list && gap ingest once && gap snapshot diff --before <old.toml> --after <new.toml>` to review and isolate drift." },
     { id: "S1Drift", severity: "ticket", trigger: "Online ECE > 0.05 or S1 fallback rate > 10%", action: "Run `gap calibrate` against fresh traffic logs or switch `[router]` back to baseline mode." },
     { id: "IngestBacklog", severity: "ticket", trigger: "Ingestion queue > 100 or gate validation failure spike", action: "Inspect per-tenant worker pool saturation and CISG/join rejection logs." },
     { id: "AuditVerifyFail", severity: "page", trigger: "`gap_audit_verify_failures_total` > 0", action: "CRITICAL ALERT: execute `gap audit verify --nightly` immediately to isolate any BLAKE3 ledger break." },

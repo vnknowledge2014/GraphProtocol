@@ -202,6 +202,7 @@ GAP mang lại một cổng vào duy nhất, định kiểu chặt chẽ cho RES
   <h2 id="learn-heading">Bạn sẽ nắm được gì</h2>
   <ul><li>Vì sao cách nạp phẳng toàn bộ schema công cụ vào LLM sẽ vỡ trận khi mở rộng quy mô.</li><li>5 thuật ngữ cốt lõi trong GAP: Gateway, Branch, Connector, Snapshot và Principal.</li><li>Ngưỡng giao cắt thực tế: khi nào Direct-MCP gọn hơn và khi nào GAP áp đảo.</li></ul>
 </section>
+        <details class="toc-inline"><summary>Trong trang này</summary><nav class="toc-inline-links" aria-label="Mục lục bài viết"><a class="toc-inline-link" href="#the-four-problems">Vì sao Mô hình Tool Phẳng Gặp Giới hạn</a><a class="toc-inline-link" href="#key-terminology">5 Khái niệm Cốt lõi Cần Nắm</a><a class="toc-inline-link" href="#when-not-to-use">Khi nào Direct-MCP vẫn Ít Token hơn (Đối chứng Trung thực)</a></nav></details>
 
         <section id="the-four-problems" tabindex="-1" class="doc-section">
   <h2>Vì sao Mô hình Tool Phẳng Gặp Giới hạn</h2>
@@ -214,13 +215,21 @@ GAP mang lại một cổng vào duy nhất, định kiểu chặt chẽ cho RES
 </ul><figure class="diagram-frame">
   <svg role="img" aria-label="So sánh Direct-MCP phẳng và Cổng GAP hợp nhất" viewBox="0 0 760 270" width="760" height="270" xmlns="http://www.w3.org/2000/svg">
     <title>So sánh Direct-MCP phẳng và Cổng GAP hợp nhất</title>
+    <defs>
+      <marker id="mm-arr-warn" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+        <path d="M 0 1.5 L 9 5 L 0 8.5 z" fill="var(--warn)"/>
+      </marker>
+      <marker id="mm-arr-ok" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+        <path d="M 0 1.5 L 9 5 L 0 8.5 z" fill="var(--ok)"/>
+      </marker>
+    </defs>
     <rect x="8" y="8" width="356" height="254" rx="12" fill="var(--surface-alt)" stroke="var(--warn)" stroke-width="1.5"/>
     <text x="26" y="36" fill="var(--warn)" font-size="14" font-weight="700">Cách cũ (Direct-MCP phẳng)</text>
     <rect x="26" y="54" width="320" height="52" rx="8" fill="var(--surface)" stroke="var(--border)"/>
     <text x="186" y="77" text-anchor="middle" fill="var(--text)" font-size="13" font-weight="700">Prompt 203.421 tokens</text>
     <text x="186" y="96" text-anchor="middle" fill="var(--muted)" font-size="12">1.000 JSON tool tải sẵn</text>
-    <line x1="186" y1="106" x2="186" y2="146" stroke="var(--warn)" stroke-width="2" stroke-dasharray="4 3"/>
-    <text x="186" y="131" text-anchor="middle" fill="var(--warn)" font-size="12" font-weight="600">Vòng lặp N+1 qua LLM (4 lượt)</text>
+    <line x1="186" y1="106" x2="186" y2="146" stroke="var(--warn)" stroke-width="2" stroke-dasharray="4 3" marker-end="url(#mm-arr-warn)"/>
+    <text x="196" y="131" text-anchor="start" fill="var(--warn)" font-size="11.5" font-weight="600">Vòng lặp N+1 qua LLM (4 lượt)</text>
     <rect x="26" y="150" width="320" height="90" rx="8" fill="var(--surface)" stroke="var(--border)"/>
     <text x="186" y="185" text-anchor="middle" fill="var(--text)" font-size="13" font-weight="600">Mô tả tự sửa (Rug-Pull) + 0 Cedar</text>
     <text x="186" y="214" text-anchor="middle" fill="var(--muted)" font-size="12">REST  |  SQL  |  gRPC  |  MCP  |  Code AST</text>
@@ -230,8 +239,8 @@ GAP mang lại một cổng vào duy nhất, định kiểu chặt chẽ cho RES
     <rect x="414" y="54" width="320" height="52" rx="8" fill="var(--surface)" stroke="var(--accent)"/>
     <text x="574" y="77" text-anchor="middle" fill="var(--accent)" font-size="13" font-weight="700">5 MCP Tools tĩnh (651 tok)</text>
     <text x="574" y="96" text-anchor="middle" fill="var(--muted)" font-size="12">Khám phá L0 -&gt; L1 -&gt; L2 + Cedar</text>
-    <line x1="574" y1="106" x2="574" y2="146" stroke="var(--ok)" stroke-width="2"/>
-    <text x="574" y="131" text-anchor="middle" fill="var(--ok)" font-size="12" font-weight="600">DataLoader Batch + ArcSwap (2 lượt)</text>
+    <line x1="574" y1="106" x2="574" y2="146" stroke="var(--ok)" stroke-width="2" marker-end="url(#mm-arr-ok)"/>
+    <text x="584" y="131" text-anchor="start" fill="var(--ok)" font-size="11.5" font-weight="600">DataLoader Batch + ArcSwap (2 lượt)</text>
     <rect x="414" y="150" width="320" height="90" rx="8" fill="var(--surface)" stroke="var(--ok)"/>
     <text x="574" y="185" text-anchor="middle" fill="var(--ok)" font-size="13" font-weight="700">6 NGC Adapters · Chặn SSRF &amp; Drift</text>
     <text x="574" y="214" text-anchor="middle" fill="var(--muted)" font-size="12">HTTP/3 QUIC  ·  MCP  ·  A2A v1.0  ·  AG-UI</text>
@@ -239,9 +248,9 @@ GAP mang lại một cổng vào duy nhất, định kiểu chặt chẽ cho RES
 </figure>
 </section><section id="key-terminology" tabindex="-1" class="doc-section">
   <h2>5 Khái niệm Cốt lõi Cần Nắm</h2>
-  <div tabindex="0" role="region" aria-label="Thuật ngữ chuẩn và ánh xạ mã nguồn trong Graph Agent Protocol" class="table-wrapper">
-  <table class="data-table">
-    <caption>Thuật ngữ chuẩn và ánh xạ mã nguồn trong Graph Agent Protocol</caption>
+  <div tabindex="0" role="region" aria-labelledby="cap-b8a6c572" class="table-wrapper">
+  <table class="data-table" style="--col-2: &quot;Ý nghĩa dễ hiểu&quot;; --col-3: &quot;Thành phần trong Kho mã nguồn&quot;;">
+    <caption id="cap-b8a6c572">Thuật ngữ chuẩn và ánh xạ mã nguồn trong Graph Agent Protocol</caption>
     <thead><tr><th scope="col">Thuật ngữ</th><th scope="col">Ý nghĩa dễ hiểu</th><th scope="col">Thành phần trong Kho mã nguồn</th></tr></thead>
     <tbody><tr><th scope="row"><code>gateway</code></th><td>Binary máy chủ duy nhất lắng nghe HTTP/3 QUIC, HTTP/2 hoặc stdio cho agent gọi vào.</td><td><code>gap-cli</code> / <code>gap-server</code></td></tr>
 <tr><th scope="row"><code>branch</code></th><td>Một nguồn backend đã đăng ký (API REST, CSDL SQL, CLI, mã nguồn hoặc MCP server).</td><td>Khai báo qua <code>[[branches]]</code> trong <code>gap.toml</code></td></tr>

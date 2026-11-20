@@ -201,12 +201,13 @@
   <h2 id="learn-heading">Bạn sẽ nắm được gì</h2>
   <ul><li>Vì sao GAP vận hành mặc định với <code>BASELINE_FALLBACK</code> thay vì mô hình neural chưa tinh chỉnh (<code>G-S1</code>).</li><li>Cách bật nhà cung cấp <code>[router]</code> có kiểm soát egress và che bí mật.</li><li>Cấu hình HTTP/3 QUIC (<code>RFC 9114</code>) an toàn với chế độ <code>prod</code> fail-closed TLS.</li></ul>
 </section>
+        <details class="toc-inline"><summary>Trong trang này</summary><nav class="toc-inline-links" aria-label="Mục lục bài viết"><a class="toc-inline-link" href="#baseline-vs-s1">Định tuyến System-1 &amp; Cổng Kiểm định <code>G-S1</code></a><a class="toc-inline-link" href="#http3-dual-stack">Dual-Stack HTTP/2 + HTTP/3 trên QUIC (<code>OPS-005</code>, <code>ADR-026</code>)</a></nav></details>
 
         <section id="baseline-vs-s1" tabindex="-1" class="doc-section">
   <h2>Định tuyến System-1 &amp; Cổng Kiểm định <code>G-S1</code></h2>
-  <p>Một mô hình neural nhỏ chỉ hữu ích khi vượt qua được bộ tìm kiếm từ vựng + cấu trúc cực nhanh. Kết quả đo trên bộ chuẩn <code>routebench</code> (<code>docs/decisions/G-S1.md</code>):</p><div tabindex="0" role="region" aria-label="So sánh Thực nghiệm trên RouteBench (G-S1)" class="table-wrapper">
-  <table class="data-table">
-    <caption>So sánh Thực nghiệm trên RouteBench (G-S1)</caption>
+  <p>Một mô hình neural nhỏ chỉ hữu ích khi vượt qua được bộ tìm kiếm từ vựng + cấu trúc cực nhanh. Kết quả đo trên bộ chuẩn <code>routebench</code> (<code>docs/decisions/G-S1.md</code>):</p><div tabindex="0" role="region" aria-labelledby="cap-7303ff8e" class="table-wrapper">
+  <table class="data-table" style="--col-2: &quot;Top-1 (Held-Out / Test)&quot;; --col-3: &quot;Top-1 Debiased&quot;; --col-4: &quot;Độ trễ p95&quot;; --col-5: &quot;Trạng thái Mặc định&quot;;">
+    <caption id="cap-7303ff8e">So sánh Thực nghiệm trên RouteBench (G-S1)</caption>
     <thead><tr><th scope="col">Bộ định tuyến</th><th scope="col">Top-1 (Held-Out / Test)</th><th scope="col">Top-1 Debiased</th><th scope="col">Độ trễ p95</th><th scope="col">Trạng thái Mặc định</th></tr></thead>
     <tbody><tr><th scope="row"><strong>Baseline (BM25 + Cấu trúc)</strong></th><td><strong>97,22% / 95,24%</strong></td><td>Mốc chuẩn</td><td><strong>0,887 ms</strong></td><td><strong>Bật mặc định</strong></td></tr>
 <tr><th scope="row"><code>laya-candle:f32</code> (zero-shot)</th><td>Không đạt cổng G-S1</td><td>14,29%</td><td>73,85 ms</td><td>Chỉ bật khi chọn trong <code>[router]</code> (<code>INV-17</code>)</td></tr></tbody>
@@ -216,33 +217,41 @@
   <div class="callout-body"><p>Nếu bất kỳ provider System-1 nào (<code>@receptron/laya</code>, TypeSafe <code>jev</code> <code>/v1/systemone</code> hoặc Google <code>gemini_decision_1</code>) bị tắt, quá hạn hay trả định dạng lỗi, hệ thống tự động rơi về bộ định tuyến nền tất định mà không bao giờ làm sập request hay ảnh hưởng Cedar.</p></div>
 </aside><figure class="code-figure">
   <div class="code-toolbar">
-    <span class="code-lang">toml</span>
+    <div class="code-meta">
+      <span class="code-lang">toml</span>
+      <span class="code-title">gap.toml — Cấu hình [router] Tùy chọn</span>
+    </div>
     <span class="copy">
-      <button type="button" class="copy-button" command="--copy" commandfor="rt-s1-toml" aria-label="Sao chép đoạn mã toml (rt-s1-toml)">
+      <button type="button" class="copy-button" command="--copy" commandfor="rt-s1-toml" aria-label="Sao chép đoạn mã toml (gap.toml — Cấu hình [router] Tùy chọn)">
         <span class="icon" aria-hidden="true"></span>
       </button>
       <span class="tip" role="status"></span>
     </span>
   </div>
-  <pre role="region" aria-label="Đoạn mã toml" tabindex="0"><code id="rt-s1-toml" class="language-toml">[router]
-provider = &quot;gemini_decision_1&quot;   # none | laya_candle | laya_http | jev | gemini_decision_1
+  <pre role="region" aria-label="gap.toml — Cấu hình [router] Tùy chọn" tabindex="0"><code id="rt-s1-toml" class="language-toml">[router]
+# disabled | laya_candle | laya_ort | http_sidecar | receptron_laya | jev | gemini_decision_1
+provider = &quot;gemini_decision_1&quot;
 endpoint = &quot;https://generativelanguage.googleapis.com&quot;
+model = &quot;gemini-decision-1&quot;
 api_key_secret = &quot;env://GEMINI_API_KEY&quot;
-timeout_ms = 250</code></pre>
+timeout_ms = 400</code></pre>
 </figure>
 </section><section id="http3-dual-stack" tabindex="-1" class="doc-section">
   <h2>Dual-Stack HTTP/2 + HTTP/3 trên QUIC (<code>OPS-005</code>, <code>ADR-026</code>)</h2>
   <p>Khi khai báo trong <code>gap.toml</code>, crate <code>gap-transport</code> mở song song TCP HTTPS (<code>HTTP/1.1</code> + <code>HTTP/2</code> kèm header <code>Alt-Svc: h3=":8443"; ma=86400</code>) và UDP QUIC (<code>quinn</code> + <code>h3</code>, TLS 1.3 ALPN <code>h3</code>):</p><figure class="code-figure">
   <div class="code-toolbar">
-    <span class="code-lang">toml</span>
+    <div class="code-meta">
+      <span class="code-lang">toml</span>
+      <span class="code-title">gap.toml — Dual-Stack HTTP/2 + HTTP/3</span>
+    </div>
     <span class="copy">
-      <button type="button" class="copy-button" command="--copy" commandfor="rt-h3-toml" aria-label="Sao chép đoạn mã toml (rt-h3-toml)">
+      <button type="button" class="copy-button" command="--copy" commandfor="rt-h3-toml" aria-label="Sao chép đoạn mã toml (gap.toml — Dual-Stack HTTP/2 + HTTP/3)">
         <span class="icon" aria-hidden="true"></span>
       </button>
       <span class="tip" role="status"></span>
     </span>
   </div>
-  <pre role="region" aria-label="Đoạn mã toml" tabindex="0"><code id="rt-h3-toml" class="language-toml">profile = &quot;prod&quot;
+  <pre role="region" aria-label="gap.toml — Dual-Stack HTTP/2 + HTTP/3" tabindex="0"><code id="rt-h3-toml" class="language-toml">profile = &quot;prod&quot;
 
 [server]
 listen = &quot;0.0.0.0:8443&quot;
@@ -251,7 +260,7 @@ tls_cert_secret = &quot;file:///etc/gap/cert.pem&quot;
 tls_key_secret = &quot;file:///etc/gap/key.pem&quot;</code></pre>
 </figure><ul>
   <li><strong>Chống Replay Attack:</strong> Thiết lập <code>max_early_data_size = 0</code> để tắt hoàn toàn TLS 1.3 <code>0-RTT</code> trên QUIC, ngăn chặn phát lại các thao tác thay đổi dữ liệu.</li>
-  <li><strong>Fail-Closed ở <code>prod</code>:</strong> Nếu chạy <code>profile = "prod"</code> có <code>http3_listen</code> nhưng thiếu chứng chỉ <code>tls_cert_secret</code> / <code>tls_key_secret</code>, cổng từ chối khởi động (<code>tls_self_signed_dev = true</code> chỉ cho phép trong <code>dev</code>).</li>
+  <li><strong>Fail-Closed ở <code>prod</code>:</strong> Nếu chạy <code>profile = "prod"</code> có <code>http3_listen</code> nhưng thiếu chứng chỉ <code>tls_cert_secret</code> / <code>tls_key_secret</code>, cổng từ chối khởi động ngay; ở <code>profile = "dev"</code>, hệ thống tự sinh chứng chỉ TLS 1.3 tự ký tạm thời nếu chưa truyền file chứng chỉ.</li>
   <li><strong>Hiệu năng đo thực tế:</strong> Đạt <strong>5.013,1 req/s</strong> qua kết nối QUIC đa luồng (<strong>1,626 ms</strong> p50 / <strong>2,364 ms</strong> p95 / <code>0</code> lỗi) song hành cùng <strong>1.063,6 req/s</strong> qua TCP HTTP/1.1+2 (<code>11,544 ms</code> p95).</li>
 </ul>
 </section>

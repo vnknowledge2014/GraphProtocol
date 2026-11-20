@@ -701,25 +701,65 @@ dialog.Drawer::backdrop {
   max-inline-size: 1480px;
   margin-inline: auto;
   display: grid;
-  grid-template-columns: 264px minmax(0, 1fr) 232px;
-  gap: 1.75rem;
-  padding: 1.25rem;
+  grid-template-columns: 252px minmax(0, 1fr) 216px;
+  gap: 2rem;
+  padding: 1.5rem 1.25rem;
   align-items: start;
 }
 
-@media (width < 1240px) {
+.toc-inline {
+  display: none;
+  margin: 0 0 1.4rem 0;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-alt);
+  padding: 0.65rem 0.9rem;
+}
+
+.toc-inline summary {
+  cursor: pointer;
+  font-weight: 700;
+  font-size: 0.88rem;
+  color: var(--accent);
+}
+
+.toc-inline-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.85rem;
+  margin-top: 0.55rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--border);
+}
+
+.toc-inline-link {
+  font-size: 0.84rem;
+  color: var(--muted);
+  text-decoration: none;
+}
+
+.toc-inline-link:hover {
+  color: var(--accent);
+  text-decoration: underline;
+}
+
+@media (width < 1280px) {
   .docs-shell {
-    grid-template-columns: 256px minmax(0, 1fr);
+    grid-template-columns: 248px minmax(0, 1fr);
+    gap: 1.5rem;
   }
   .toc-right {
     display: none;
+  }
+  .toc-inline {
+    display: block;
   }
 }
 
 @media (width < 1024px) {
   .docs-shell {
     grid-template-columns: minmax(0, 1fr);
-    padding: 0.9rem;
+    padding: 0.9rem 1rem;
   }
   aside.sidebar {
     display: none;
@@ -732,7 +772,8 @@ aside.sidebar {
   inset-block-start: 4.5rem;
   max-block-size: calc(100vh - 5.25rem);
   overflow-y: auto;
-  padding-inline-end: 0.45rem;
+  padding-inline-end: 0.85rem;
+  border-inline-end: 1px solid var(--border);
 }
 
 .nav-group {
@@ -810,18 +851,17 @@ main.doc-main {
 }
 
 article.doc-article {
-  max-inline-size: 84ch;
+  max-inline-size: 880px;
   margin-inline: auto;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 14px;
-  padding: 1.75rem 2rem;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  padding: 0.25rem 0 1.5rem 0;
 }
 
 @media (width < 680px) {
   article.doc-article {
-    padding: 1.15rem 1rem;
-    border-radius: 10px;
+    padding: 0.1rem 0 1rem 0;
   }
 }
 
@@ -1244,7 +1284,7 @@ video.promo-video {
 /* Lab & Crossover Calculator */
 .lab-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 360px), 1fr));
   gap: 1rem;
 }
 
@@ -1253,6 +1293,7 @@ video.promo-video {
   border: 1px solid var(--border);
   border-radius: 10px;
   padding: 1rem;
+  min-inline-size: 0;
 }
 
 .subcard h3 {
@@ -1271,6 +1312,12 @@ video.promo-video {
 .control-row select,
 .control-row input[type="range"] {
   font-size: 0.88rem;
+  padding: 0.36rem 0.6rem;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  max-inline-size: 100%;
 }
 
 .bar-row {
@@ -1431,12 +1478,12 @@ video.promo-video {
 
 /* Responsive Data Table (modern-web-guidance: responsive-table) */
 .table-wrapper {
-  overflow: auto;
+  overflow-x: auto;
   max-inline-size: 100%;
-  max-block-size: min(460px, 70vh);
+  margin: 1rem 0 1.25rem 0;
   container-type: inline-size;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: 10px;
   background: var(--surface);
 }
 
@@ -1444,36 +1491,46 @@ table.data-table {
   inline-size: 100%;
   border-collapse: separate;
   border-spacing: 0;
-  font-size: 0.86rem;
+  font-size: 0.87rem;
+}
+
+table.data-table caption {
+  caption-side: top;
+  text-align: start;
+  padding: 0.6rem 0.85rem;
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: var(--text);
+  background: var(--surface-alt);
+  border-bottom: 1px solid var(--border);
 }
 
 table.data-table th,
 table.data-table td {
-  padding: 0.55rem 0.7rem;
+  padding: 0.6rem 0.75rem;
   border-bottom: 1px solid var(--border);
   text-align: start;
   vertical-align: top;
 }
 
 table.data-table thead th {
-  position: sticky;
-  inset-block-start: 0;
-  z-index: 2;
   background: var(--surface-alt);
   color: var(--text);
-  font-weight: 700;
-}
-
-table.data-table tbody th {
-  position: sticky;
-  inset-inline-start: 0;
-  z-index: 1;
-  background: var(--surface);
   font-weight: 700;
   white-space: nowrap;
 }
 
-@container (width < 640px) {
+table.data-table tbody th {
+  background: var(--surface);
+  font-weight: 700;
+}
+
+table.data-table tbody tr:last-child th,
+table.data-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+@container (width < 460px) {
   table.data-table,
   table.data-table thead,
   table.data-table tbody,
@@ -1523,22 +1580,32 @@ table.data-table tbody th {
     --col-3: "Prohibited Synonyms";
   }
 
-  table.data-table.inv-table td:nth-child(2)::before,
-  table.data-table.dict-table td:nth-child(2)::before {
+  table.data-table td:nth-child(2)::before {
     content: var(--col-2) ": ";
     font-weight: 700;
     color: var(--muted);
   }
 
-  table.data-table.inv-table td:nth-child(3)::before,
-  table.data-table.dict-table td:nth-child(3)::before {
+  table.data-table td:nth-child(3)::before {
     content: var(--col-3) ": ";
     font-weight: 700;
     color: var(--muted);
   }
 
-  table.data-table.inv-table td:nth-child(4)::before {
+  table.data-table td:nth-child(4)::before {
     content: var(--col-4) ": ";
+    font-weight: 700;
+    color: var(--muted);
+  }
+
+  table.data-table td:nth-child(5)::before {
+    content: var(--col-5) ": ";
+    font-weight: 700;
+    color: var(--muted);
+  }
+
+  table.data-table td:nth-child(6)::before {
+    content: var(--col-6) ": ";
     font-weight: 700;
     color: var(--muted);
   }
@@ -1728,11 +1795,32 @@ table.data-table tbody th {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0.35rem 0.7rem;
+  gap: 0.5rem;
+  padding: 0.38rem 0.75rem;
   background: #0b1222;
   color: #cbd5e1;
   border-bottom: 1px solid #1e293b;
   font-size: 0.76rem;
+}
+
+.code-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  min-inline-size: 0;
+  flex-wrap: wrap;
+}
+
+.code-title {
+  color: #94a3b8;
+  font-weight: 500;
+}
+
+.code-toolbar code {
+  background: transparent;
+  border: 0;
+  padding: 0;
+  color: #e2e8f0;
 }
 
 .code-lang {

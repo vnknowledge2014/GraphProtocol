@@ -197,35 +197,48 @@ All backends—OpenAPI, SQL, GraphQL, gRPC, CLI, and Code AST—implement `proto
   <h2 id="learn-heading">What you&#x27;ll learn</h2>
   <ul><li>Walk through connecting an OpenAPI REST endpoint declaratively using <code>x-gap-in-param</code>.</li><li>Compare all 6 shipped NGC adapters and their batching/sandbox behavior.</li><li>How Propose-Not-Activate validates joins before any live traffic sees a new schema.</li></ul>
 </section>
+        <details class="toc-inline"><summary>On this page</summary><nav class="toc-inline-links" aria-label="On this page"><a class="toc-inline-link" href="#rest-to-gap-walkthrough">How a REST API Becomes a Graph Branch</a><a class="toc-inline-link" href="#six-connectors">All 6 Shipped NGC Adapters</a><a class="toc-inline-link" href="#propose-not-activate">Safe Activation: Propose-Not-Activate &amp; @join Verification</a></nav></details>
 
         <section id="rest-to-gap-walkthrough" tabindex="-1" class="doc-section">
   <h2>How a REST API Becomes a Graph Branch</h2>
-  <p>Given an upstream REST endpoint <code>GET /orders?customer_id=...</code> or batch endpoint <code>GET /orders?customer_ids=1,2,3</code> returning JSON:</p><figure class="code-figure">
+  <p>Given an upstream REST endpoint like <code>GET /customers/{id}</code> paired with list batching <code>GET /customers?ids=1,2,3</code>, declare the <code>"x-gap-in-param"</code> extension inside your OpenAPI operation (verbatim from <code>examples/walking-skeleton/shop.openapi.json</code>):</p><figure class="code-figure">
   <div class="code-toolbar">
-    <span class="code-lang">json</span>
+    <div class="code-meta">
+      <span class="code-lang">json</span>
+      <span class="code-title">examples/walking-skeleton/shop.openapi.json</span>
+    </div>
     <span class="copy">
-      <button type="button" class="copy-button" command="--copy" commandfor="ngc-json" aria-label="Copy json code snippet (ngc-json)">
+      <button type="button" class="copy-button" command="--copy" commandfor="ngc-json" aria-label="Copy json code snippet (examples/walking-skeleton/shop.openapi.json)">
         <span class="icon" aria-hidden="true"></span>
       </button>
       <span class="tip" role="status"></span>
     </span>
   </div>
-  <pre role="region" aria-label="json code block" tabindex="0"><code id="ngc-json" class="language-json">{
-  &quot;orders&quot;: [
-    { &quot;id&quot;: 101, &quot;customer_id&quot;: 1, &quot;total_cents&quot;: 4200, &quot;status&quot;: &quot;paid&quot; }
-  ]
+  <pre role="region" aria-label="examples/walking-skeleton/shop.openapi.json" tabindex="0"><code id="ngc-json" class="language-json">&quot;/customers/{id}&quot;: {
+  &quot;get&quot;: {
+    &quot;operationId&quot;: &quot;customer&quot;,
+    &quot;x-gap-in-param&quot;: {
+      &quot;path&quot;: &quot;/customers&quot;,
+      &quot;param&quot;: &quot;ids&quot;,
+      &quot;key_field&quot;: &quot;id&quot;,
+      &quot;max_batch_size&quot;: 50
+    }
+  }
 }</code></pre>
-</figure><p>Declare the branch in <code>gap.toml</code> and mark the OpenAPI parameter <code>x-gap-in-param</code> in your OpenAPI spec so the executor automatically batches multi-customer joins:</p><figure class="code-figure">
+</figure><p>Then wire the OpenAPI file into <code>gap.toml</code>:</p><figure class="code-figure">
   <div class="code-toolbar">
-    <span class="code-lang">toml</span>
+    <div class="code-meta">
+      <span class="code-lang">toml</span>
+      <span class="code-title">gap.toml — OpenAPI Branch</span>
+    </div>
     <span class="copy">
-      <button type="button" class="copy-button" command="--copy" commandfor="ngc-toml" aria-label="Copy toml code snippet (ngc-toml)">
+      <button type="button" class="copy-button" command="--copy" commandfor="ngc-toml" aria-label="Copy toml code snippet (gap.toml — OpenAPI Branch)">
         <span class="icon" aria-hidden="true"></span>
       </button>
       <span class="tip" role="status"></span>
     </span>
   </div>
-  <pre role="region" aria-label="toml code block" tabindex="0"><code id="ngc-toml" class="language-toml">[[branches]]
+  <pre role="region" aria-label="gap.toml — OpenAPI Branch" tabindex="0"><code id="ngc-toml" class="language-toml">[[branches]]
 id = &quot;shop&quot;
 protocol = &quot;openapi&quot;
 trust = &quot;T1&quot;
@@ -234,14 +247,14 @@ trust = &quot;T1&quot;
 spec = &quot;shop.openapi.json&quot;
 base_url = &quot;http://127.0.0.1:9101&quot;</code></pre>
 </figure><ul>
-  <li><strong><code>id = "shop"</code>:</strong> Stable branch identifier scoping generated GraphQL fields and audit logs.</li>
+  <li><strong><code>id = "shop"</code>:</strong> Stable branch identifier scoping generated GraphQL types (<code>shop_CustomersResult</code>, <code>shop_OrdersResult</code>) and audit logs.</li>
   <li><strong><code>trust = "T1"</code>:</strong> Admin-approved branch whose OpenAPI <code>spec_hash</code> and operation <code>desc_hash</code> are cryptographically pinned against silent mutations.</li>
 </ul>
 </section><section id="six-connectors" tabindex="-1" class="doc-section">
   <h2>All 6 Shipped NGC Adapters</h2>
-  <div tabindex="0" role="region" aria-label="Capabilities of the 6 reference Native Graph Connectors" class="table-wrapper">
-  <table class="data-table">
-    <caption>Capabilities of the 6 reference Native Graph Connectors</caption>
+  <div tabindex="0" role="region" aria-labelledby="cap-76634303" class="table-wrapper">
+  <table class="data-table" style="--col-2: &quot;Backend Source&quot;; --col-3: &quot;Batching &amp; Safety Mechanism&quot;;">
+    <caption id="cap-76634303">Capabilities of the 6 reference Native Graph Connectors</caption>
     <thead><tr><th scope="col">Adapter Crate</th><th scope="col">Backend Source</th><th scope="col">Batching &amp; Safety Mechanism</th></tr></thead>
     <tbody><tr><th scope="row"><code>gap-ngc-openapi</code></th><td>OpenAPI 3.0 / REST JSON</td><td>Supports <code>x-gap-in-param</code> key batching + <code>EgressGuard</code> IP pinning.</td></tr>
 <tr><th scope="row"><code>gap-ngc-sql</code></th><td>SQLite / PostgreSQL schemas</td><td>Projects foreign keys into joinable graph edges with <code>IN (...)</code> parameterized batches.</td></tr>
@@ -255,17 +268,21 @@ base_url = &quot;http://127.0.0.1:9101&quot;</code></pre>
   <h2>Safe Activation: Propose-Not-Activate &amp; @join Verification</h2>
   <p>Newly ingested schemas never auto-publish directly into request execution. Instead, <code>gap ingest once</code> compiles a Candidate Intermediate Schema Graph (CISG), runs sample data verification on proposed <code>@join</code> edges (checking containment &amp; null rates, never LLM guesswork), and queues a Proposal for operator review:</p><figure class="code-figure">
   <div class="code-toolbar">
-    <span class="code-lang">terminal</span>
+    <div class="code-meta">
+      <span class="code-lang">terminal</span>
+      <span class="code-title">Terminal — Ingest, Diff &amp; Proposal Approval</span>
+    </div>
     <span class="copy">
-      <button type="button" class="copy-button" command="--copy" commandfor="ngc-propose" aria-label="Copy terminal code snippet (ngc-propose)">
+      <button type="button" class="copy-button" command="--copy" commandfor="ngc-propose" aria-label="Copy terminal code snippet (Terminal — Ingest, Diff &amp; Proposal Approval)">
         <span class="icon" aria-hidden="true"></span>
       </button>
       <span class="tip" role="status"></span>
     </span>
   </div>
-  <pre role="region" aria-label="terminal code block" tabindex="0"><code id="ngc-propose" class="language-terminal">./target/dist/gap ingest once --config gap.toml --tenant default
+  <pre role="region" aria-label="Terminal — Ingest, Diff &amp; Proposal Approval" tabindex="0"><code id="ngc-propose" class="language-terminal">./target/dist/gap ingest once --config examples/walking-skeleton/gap.toml --tenant default
 ./target/dist/gap proposals list
-./target/dist/gap snapshot diff
+./target/dist/gap snapshot show --config examples/walking-skeleton/gap.toml
+./target/dist/gap snapshot diff --before gap.toml --after gap.next.toml
 ./target/dist/gap proposals approve &lt;proposal-id&gt;</code></pre>
 </figure>
 </section>

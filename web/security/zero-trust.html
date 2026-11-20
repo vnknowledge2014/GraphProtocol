@@ -199,6 +199,7 @@ GAP enforces defense in depth across 17 protocol attack vectors (`spec/07-securi
   <h2 id="learn-heading">What you&#x27;ll learn</h2>
   <ul><li>Classify backends into <code>T0</code>, <code>T1</code>, and <code>T2</code> trust tiers and inspect Cedar two-person mutation policies.</li><li>Prevent MCP rug pulls with <code>DriftMonitor</code> and prompt smuggling with <code>&lt;gap:untrusted&gt;</code> envelopes.</li><li>Stop DNS-rebinding / cloud-metadata SSRF (<code>169.254.169.254</code>) using <code>EgressGuard</code>.</li></ul>
 </section>
+        <details class="toc-inline"><summary>On this page</summary><nav class="toc-inline-links" aria-label="On this page"><a class="toc-inline-link" href="#trust-tiers-cedar">Trust Tiers &amp; Cedar Access Rules (<code>INV-04</code>, <code>INV-11</code>)</a><a class="toc-inline-link" href="#anti-rugpull-ssrf">Anti-Rug-Pull Pinning, Untrusted Envelopes &amp; SSRF Defense</a></nav></details>
 
         <section id="trust-tiers-cedar" tabindex="-1" class="doc-section">
   <h2>Trust Tiers &amp; Cedar Access Rules (<code>INV-04</code>, <code>INV-11</code>)</h2>
@@ -210,30 +211,49 @@ GAP enforces defense in depth across 17 protocol attack vectors (`spec/07-securi
 </ul>
 <p>Access decisions are pure functions evaluated in Cedar (<code>policies/default.cedar</code>) where <code>forbid</code> always beats <code>permit</code>:</p><figure class="code-figure">
   <div class="code-toolbar">
-    <span class="code-lang">cedar</span>
+    <div class="code-meta">
+      <span class="code-lang">cedar</span>
+      <span class="code-title">policies/default.cedar — Two-Person Approval Rule</span>
+    </div>
     <span class="copy">
-      <button type="button" class="copy-button" command="--copy" commandfor="sec-cedar" aria-label="Copy cedar code snippet (sec-cedar)">
+      <button type="button" class="copy-button" command="--copy" commandfor="sec-cedar" aria-label="Copy cedar code snippet (policies/default.cedar — Two-Person Approval Rule)">
         <span class="icon" aria-hidden="true"></span>
       </button>
       <span class="tip" role="status"></span>
     </span>
   </div>
-  <pre role="region" aria-label="cedar code block" tabindex="0"><code id="sec-cedar" class="language-cedar">forbid (
-  principal,
-  action == Gap::Action::&quot;mutate&quot;,
-  resource
+  <pre role="region" aria-label="policies/default.cedar — Two-Person Approval Rule" tabindex="0"><code id="sec-cedar" class="language-cedar">@id(&quot;forbid-mutate-irreversible-or-unknown-unapproved&quot;)
+forbid (
+    principal,
+    action == Action::&quot;Mutate&quot;,
+    resource
 ) when {
-  resource.sideEffect == &quot;IRREVERSIBLE&quot; &amp;&amp;
-  !(context has approverIsDifferent &amp;&amp; context.approverIsDifferent == true)
+    (resource.sideEffect == &quot;IRREVERSIBLE&quot; || resource.sideEffect == &quot;UNKNOWN&quot;)
+        &amp;&amp; !(context.approved &amp;&amp; context.approverIsDifferent)
 };</code></pre>
+</figure><figure class="code-figure">
+  <div class="code-toolbar">
+    <div class="code-meta">
+      <span class="code-lang">terminal</span>
+      <span class="code-title">Terminal — Verify Cedar Policies &amp; BLAKE3 Chain</span>
+    </div>
+    <span class="copy">
+      <button type="button" class="copy-button" command="--copy" commandfor="sec-cli-verify" aria-label="Copy terminal code snippet (Terminal — Verify Cedar Policies &amp; BLAKE3 Chain)">
+        <span class="icon" aria-hidden="true"></span>
+      </button>
+      <span class="tip" role="status"></span>
+    </span>
+  </div>
+  <pre role="region" aria-label="Terminal — Verify Cedar Policies &amp; BLAKE3 Chain" tabindex="0"><code id="sec-cli-verify" class="language-terminal">./target/dist/gap policy check --dir policies
+./target/dist/gap audit verify --nightly</code></pre>
 </figure><ul>
   <li><strong>Zero model involvement:</strong> No LLM confidence score can relax Cedar enforcement (<code>INV-04</code>), and spoofed MCP annotations like <code>readOnlyHint: true</code> are ignored.</li>
 </ul>
 </section><section id="anti-rugpull-ssrf" tabindex="-1" class="doc-section">
   <h2>Anti-Rug-Pull Pinning, Untrusted Envelopes &amp; SSRF Defense</h2>
-  <div tabindex="0" role="region" aria-label="Protocol-level security mechanisms verified in tests/security/" class="table-wrapper">
-  <table class="data-table">
-    <caption>Protocol-level security mechanisms verified in tests/security/</caption>
+  <div tabindex="0" role="region" aria-labelledby="cap-d37a5de5" class="table-wrapper">
+  <table class="data-table" style="--col-2: &quot;GAP Control&quot;; --col-3: &quot;Deterministic Failure / Isolation Behavior&quot;;">
+    <caption id="cap-d37a5de5">Protocol-level security mechanisms verified in tests/security/</caption>
     <thead><tr><th scope="col">Threat Vector</th><th scope="col">GAP Control</th><th scope="col">Deterministic Failure / Isolation Behavior</th></tr></thead>
     <tbody><tr><th scope="row"><strong>MCP Tool Rug Pull</strong></th><td><code>DriftMonitor</code> (<code>SEC-082</code>, <code>INV-08</code>)</td><td>Recomputes JCS BLAKE3 <code>desc_hash</code>; mismatch freezes branch in <code>BranchStatus::Drift</code> while serving only pinned text.</td></tr>
 <tr><th scope="row"><strong>Indirect Prompt Injection</strong></th><td><code>&lt;gap:untrusted&gt;</code> (<code>SEC-080</code>)</td><td>Wraps T1/T2 payloads and HTML-escapes any fake closing tags inside upstream output.</td></tr>

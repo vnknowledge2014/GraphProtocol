@@ -198,61 +198,170 @@ GAP giữ MCP `tools/list` cố định ở 651 tokens từ 10 đến 1.000 côn
   <h2 id="learn-heading">Bạn sẽ nắm được gì</h2>
   <ul><li>Cách hoạt động lần lượt của L0 (<code>__metaGraph</code>), L1 (<code>__search</code>) và L2 (<code>__type</code>).</li><li>Vì sao bước lọc quyền hạn diễn ra TRƯỚC khi chấm điểm tìm kiếm (<code>INV-05</code>).</li><li>Kích thước gói tin thực tế ở từng tầng khám phá.</li></ul>
 </section>
+        <details class="toc-inline"><summary>Trong trang này</summary><nav class="toc-inline-links" aria-label="Mục lục bài viết"><a class="toc-inline-link" href="#three-levels-walkthrough">Quy trình 3 Tầng Từ Ý định Đến Truy vấn</a><a class="toc-inline-link" href="#visibility-before-rank">Bảo đảm Không Rò rỉ Sự tồn tại (<code>INV-05</code>)</a></nav></details>
 
         <section id="three-levels-walkthrough" tabindex="-1" class="doc-section">
   <h2>Quy trình 3 Tầng Từ Ý định Đến Truy vấn</h2>
-  <ol class="steps-list">
+  <figure class="diagram-frame">
+  <svg role="img" aria-label="Quy trình Khám phá Lũy tiến 3 tầng (651 tokens) so với tải phẳng" viewBox="0 0 760 130" width="760" height="130" xmlns="http://www.w3.org/2000/svg">
+    <title>Quy trình Khám phá Lũy tiến 3 tầng (651 tokens) so với tải phẳng</title>
+    <defs>
+      <marker id="pl-arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+        <path d="M 0 1.5 L 9 5 L 0 8.5 z" fill="var(--accent)"/>
+      </marker>
+    </defs>
+    <rect x="8" y="22" width="128" height="82" rx="8" fill="var(--surface-alt)" stroke="var(--accent)" stroke-width="1.5"/>
+    <text x="72" y="54" text-anchor="middle" fill="var(--accent)" font-size="12" font-weight="700">tools/list tĩnh</text>
+    <text x="72" y="78" text-anchor="middle" fill="var(--muted)" font-size="10.5">5 tool (651 tok)</text>
+    <line x1="136" y1="63" x2="156" y2="63" stroke="var(--accent)" stroke-width="2" marker-end="url(#pl-arr)"/>
+
+    <rect x="158" y="22" width="134" height="82" rx="8" fill="var(--surface-alt)" stroke="var(--border)"/>
+    <text x="225" y="54" text-anchor="middle" fill="var(--text)" font-size="12" font-weight="700">L0: gap_describe</text>
+    <text x="225" y="78" text-anchor="middle" fill="var(--muted)" font-size="10">overview: true (&lt;=24 tok/nhánh)</text>
+    <line x1="292" y1="63" x2="312" y2="63" stroke="var(--accent)" stroke-width="2" marker-end="url(#pl-arr)"/>
+
+    <rect x="314" y="22" width="136" height="82" rx="8" fill="var(--surface-alt)" stroke="var(--warn)" stroke-width="1.5"/>
+    <text x="382" y="54" text-anchor="middle" fill="var(--warn)" font-size="12" font-weight="700">L1: gap_search</text>
+    <text x="382" y="78" text-anchor="middle" fill="var(--muted)" font-size="10">BM25 + Cedar Bitset (INV-05)</text>
+    <line x1="450" y1="63" x2="470" y2="63" stroke="var(--accent)" stroke-width="2" marker-end="url(#pl-arr)"/>
+
+    <rect x="472" y="22" width="134" height="82" rx="8" fill="var(--surface-alt)" stroke="var(--border)"/>
+    <text x="539" y="54" text-anchor="middle" fill="var(--text)" font-size="12" font-weight="700">L2: gap_describe</text>
+    <text x="539" y="78" text-anchor="middle" fill="var(--muted)" font-size="10">types: [&quot;shop_CustomersResult&quot;]</text>
+    <line x1="606" y1="63" x2="626" y2="63" stroke="var(--accent)" stroke-width="2" marker-end="url(#pl-arr)"/>
+
+    <rect x="628" y="22" width="124" height="82" rx="8" fill="var(--surface-alt)" stroke="var(--ok)" stroke-width="2"/>
+    <text x="690" y="54" text-anchor="middle" fill="var(--ok)" font-size="12" font-weight="700">gap_query / mutate</text>
+    <text x="690" y="78" text-anchor="middle" fill="var(--muted)" font-size="10">Thực thi GraphQL có batch</text>
+  </svg>
+</figure><ol class="steps-list">
 <li class="step-item">
   <div class="step-badge" aria-hidden="true">1</div>
   <div class="step-content">
-    <h3>Tầng L0 — Tổng quan Nhánh (<code>__metaGraph</code> / <code>gap_describe</code>)</h3>
-    <p>Agent xem danh mục tóm tắt các nhánh hiện có, giới hạn &lt;= 24 token mỗi nhánh:</p><figure class="code-figure">
+    <h3>Tầng L0 — Tổng quan Nhánh (<code>gap_describe{overview: true}</code> / <code>__metaGraph</code>)</h3>
+    <p>Agent xem danh mục tóm tắt các nhánh hiện có qua MCP <code>POST /mcp</code>, giới hạn &lt;= 24 token mỗi nhánh (đối chiếu cấu trúc <code>MetaGraph</code> trong <code>spec/02-gap-ql.md</code>):</p><figure class="code-figure">
   <div class="code-toolbar">
-    <span class="code-lang">graphql</span>
+    <div class="code-meta">
+      <span class="code-lang">json</span>
+      <span class="code-title">MCP 2026-07-28 — Gọi Tổng quan L0</span>
+    </div>
     <span class="copy">
-      <button type="button" class="copy-button" command="--copy" commandfor="pd-l0" aria-label="Sao chép đoạn mã graphql (pd-l0)">
+      <button type="button" class="copy-button" command="--copy" commandfor="pd-l0" aria-label="Sao chép đoạn mã json (MCP 2026-07-28 — Gọi Tổng quan L0)">
         <span class="icon" aria-hidden="true"></span>
       </button>
       <span class="tip" role="status"></span>
     </span>
   </div>
-  <pre role="region" aria-label="Đoạn mã graphql" tabindex="0"><code id="pd-l0" class="language-graphql">query { __metaGraph { id kind opCount summary } }</code></pre>
-</figure><ul><li><strong>Kết quả trả về gọn nhẹ:</strong> <code>shop (openapi, 4 ops)</code>, <code>notes (mcp, 1 op)</code> — dù hệ thống có hàng trăm backend vẫn gói gọn chỉ trong vài trăm tokens.</li></ul>
+  <pre role="region" aria-label="MCP 2026-07-28 — Gọi Tổng quan L0" tabindex="0"><code id="pd-l0" class="language-json">{
+  &quot;jsonrpc&quot;: &quot;2.0&quot;,
+  &quot;id&quot;: 1,
+  &quot;method&quot;: &quot;tools/call&quot;,
+  &quot;params&quot;: {
+    &quot;name&quot;: &quot;gap_describe&quot;,
+    &quot;arguments&quot;: { &quot;overview&quot;: true }
+  }
+}</code></pre>
+</figure><figure class="code-figure">
+  <div class="code-toolbar">
+    <div class="code-meta">
+      <span class="code-lang">graphql</span>
+      <span class="code-title">Tham chiếu Đặc tả GAP-QL (spec/02-gap-ql.md)</span>
+    </div>
+    <span class="copy">
+      <button type="button" class="copy-button" command="--copy" commandfor="pd-l0-sdl" aria-label="Sao chép đoạn mã graphql (Tham chiếu Đặc tả GAP-QL (spec/02-gap-ql.md))">
+        <span class="icon" aria-hidden="true"></span>
+      </button>
+      <span class="tip" role="status"></span>
+    </span>
+  </div>
+  <pre role="region" aria-label="Tham chiếu Đặc tả GAP-QL (spec/02-gap-ql.md)" tabindex="0"><code id="pd-l0-sdl" class="language-graphql"># Hợp đồng MetaGraph trong spec/02-gap-ql.md:
+query { __metaGraph { generation groupCount tokensEstimate branches { id protocol trust status synopsis operationCount } } }</code></pre>
+</figure><ul><li><strong>Kết quả trả về gọn nhẹ:</strong> <code>shop (REST, T1, 4 ops)</code>, <code>notes (MCP, T1, 1 op)</code> — dù hệ thống có hàng trăm backend vẫn gói gọn chỉ trong vài trăm tokens.</li></ul>
   </div>
 </li>
 <li class="step-item">
   <div class="step-badge" aria-hidden="true">2</div>
   <div class="step-content">
-    <h3>Tầng L1 — Tìm kiếm Lọc sẵn Quyền (<code>__search</code> / <code>gap_search</code>)</h3>
+    <h3>Tầng L1 — Tìm kiếm Lọc sẵn Quyền (<code>gap_search</code> / <code>__search</code>)</h3>
     <p>Agent tìm top-k thao tác phù hợp bằng chỉ mục lai BM25 + vector HNSW. GAP áp dụng Cedar visibility bitset của người gọi <strong>trước khi xếp hạng</strong> (<code>INV-05</code>), nên công cụ không có quyền hoàn toàn biến mất khỏi kết quả:</p><figure class="code-figure">
   <div class="code-toolbar">
-    <span class="code-lang">graphql</span>
+    <div class="code-meta">
+      <span class="code-lang">json</span>
+      <span class="code-title">MCP 2026-07-28 — Tìm kiếm Có Lọc quyền L1</span>
+    </div>
     <span class="copy">
-      <button type="button" class="copy-button" command="--copy" commandfor="pd-l1" aria-label="Sao chép đoạn mã graphql (pd-l1)">
+      <button type="button" class="copy-button" command="--copy" commandfor="pd-l1" aria-label="Sao chép đoạn mã json (MCP 2026-07-28 — Tìm kiếm Có Lọc quyền L1)">
         <span class="icon" aria-hidden="true"></span>
       </button>
       <span class="tip" role="status"></span>
     </span>
   </div>
-  <pre role="region" aria-label="Đoạn mã graphql" tabindex="0"><code id="pd-l1" class="language-graphql">query { __search(query: &quot;customer order notes&quot;, limit: 5) { branch operation kind score } }</code></pre>
+  <pre role="region" aria-label="MCP 2026-07-28 — Tìm kiếm Có Lọc quyền L1" tabindex="0"><code id="pd-l1" class="language-json">{
+  &quot;jsonrpc&quot;: &quot;2.0&quot;,
+  &quot;id&quot;: 2,
+  &quot;method&quot;: &quot;tools/call&quot;,
+  &quot;params&quot;: {
+    &quot;name&quot;: &quot;gap_search&quot;,
+    &quot;arguments&quot;: { &quot;query&quot;: &quot;customer order notes&quot;, &quot;limit&quot;: 5 }
+  }
+}</code></pre>
+</figure><figure class="code-figure">
+  <div class="code-toolbar">
+    <div class="code-meta">
+      <span class="code-lang">graphql</span>
+      <span class="code-title">Cấu trúc SearchResult SDL (spec/02-gap-ql.md)</span>
+    </div>
+    <span class="copy">
+      <button type="button" class="copy-button" command="--copy" commandfor="pd-l1-sdl" aria-label="Sao chép đoạn mã graphql (Cấu trúc SearchResult SDL (spec/02-gap-ql.md))">
+        <span class="icon" aria-hidden="true"></span>
+      </button>
+      <span class="tip" role="status"></span>
+    </span>
+  </div>
+  <pre role="region" aria-label="Cấu trúc SearchResult SDL (spec/02-gap-ql.md)" tabindex="0"><code id="pd-l1-sdl" class="language-graphql">query { __search(query: &quot;customer order notes&quot;, first: 5) { tokensEstimate abstained hits { score kind name path branch sdl } } }</code></pre>
 </figure>
   </div>
 </li>
 <li class="step-item">
   <div class="step-badge" aria-hidden="true">3</div>
   <div class="step-content">
-    <h3>Tầng L2 — Mở Chi tiết Kiểu Dữ liệu (<code>__type</code>)</h3>
-    <p>Chỉ sau khi chọn đúng thao tác cần gọi, agent mới tải định nghĩa trường SDL cho đúng các kiểu liên quan:</p><figure class="code-figure">
+    <h3>Tầng L2 — Mở Chi tiết Kiểu Dữ liệu (<code>gap_describe{types: [...]}</code> / <code>__type</code>)</h3>
+    <p>Chỉ sau khi chọn đúng thao tác cần gọi, agent mới tải định nghĩa SDL cho đúng các kiểu OpenAPI đã biên dịch trong supergraph (với Walking Skeleton là <code>shop_CustomersResult</code>, <code>shop_OrdersResult</code>):</p><figure class="code-figure">
   <div class="code-toolbar">
-    <span class="code-lang">graphql</span>
+    <div class="code-meta">
+      <span class="code-lang">json</span>
+      <span class="code-title">MCP 2026-07-28 — Mở Kiểu Supergraph L2</span>
+    </div>
     <span class="copy">
-      <button type="button" class="copy-button" command="--copy" commandfor="pd-l2" aria-label="Sao chép đoạn mã graphql (pd-l2)">
+      <button type="button" class="copy-button" command="--copy" commandfor="pd-l2" aria-label="Sao chép đoạn mã json (MCP 2026-07-28 — Mở Kiểu Supergraph L2)">
         <span class="icon" aria-hidden="true"></span>
       </button>
       <span class="tip" role="status"></span>
     </span>
   </div>
-  <pre role="region" aria-label="Đoạn mã graphql" tabindex="0"><code id="pd-l2" class="language-graphql">query { __type(name: &quot;Customer&quot;) { name fields { name type { name kind } } } }</code></pre>
+  <pre role="region" aria-label="MCP 2026-07-28 — Mở Kiểu Supergraph L2" tabindex="0"><code id="pd-l2" class="language-json">{
+  &quot;jsonrpc&quot;: &quot;2.0&quot;,
+  &quot;id&quot;: 3,
+  &quot;method&quot;: &quot;tools/call&quot;,
+  &quot;params&quot;: {
+    &quot;name&quot;: &quot;gap_describe&quot;,
+    &quot;arguments&quot;: { &quot;types&quot;: [&quot;shop_CustomersResult&quot;, &quot;shop_OrdersResult&quot;], &quot;depth&quot;: 1 }
+  }
+}</code></pre>
+</figure><figure class="code-figure">
+  <div class="code-toolbar">
+    <div class="code-meta">
+      <span class="code-lang">graphql</span>
+      <span class="code-title">Cấu trúc Introspection GAP-QL (spec/02-gap-ql.md)</span>
+    </div>
+    <span class="copy">
+      <button type="button" class="copy-button" command="--copy" commandfor="pd-l2-sdl" aria-label="Sao chép đoạn mã graphql (Cấu trúc Introspection GAP-QL (spec/02-gap-ql.md))">
+        <span class="icon" aria-hidden="true"></span>
+      </button>
+      <span class="tip" role="status"></span>
+    </span>
+  </div>
+  <pre role="region" aria-label="Cấu trúc Introspection GAP-QL (spec/02-gap-ql.md)" tabindex="0"><code id="pd-l2-sdl" class="language-graphql">query { __type(name: &quot;shop_CustomersResult&quot;) { name fields { name type { name kind } } } }</code></pre>
 </figure>
   </div>
 </li>

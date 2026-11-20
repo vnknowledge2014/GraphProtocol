@@ -157,6 +157,7 @@ def render_page(slug: str, lang: str, page_data: dict) -> str:
     # Main content sections + Right TOC entries
     section_blocks = []
     toc_links = []
+    toc_inline_links = []
     for sec in page_data["sections"]:
         sid = sec["id"]
         h2_raw = sec["h2"]
@@ -168,6 +169,13 @@ def render_page(slug: str, lang: str, page_data: dict) -> str:
             f"</section>"
         )
         toc_links.append(f'<a class="toc-link" href="#{esc(sid)}">{h2_html}</a>')
+        toc_inline_links.append(f'<a class="toc-inline-link" href="#{esc(sid)}">{h2_html}</a>')
+
+    toc_inline_html = (
+        f'<details class="toc-inline"><summary>{esc(c["on_this_page"])}</summary>'
+        f'<nav class="toc-inline-links" aria-label="{esc(c["toc_aria"])}">{"".join(toc_inline_links)}</nav>'
+        f"</details>"
+    )
 
     # Prev / Next pagination cards
     prev_slug, next_slug = prev_next(slug)
@@ -308,6 +316,7 @@ def render_page(slug: str, lang: str, page_data: dict) -> str:
         <p class="article-lead">{inline_code(page_data['lead'])}</p>
 
         {learn_card}
+        {toc_inline_html}
 
         {"".join(section_blocks)}
 
@@ -613,6 +622,15 @@ def validate_site() -> list[str]:
     for aux in ("search-index.en.js", "search-index.vi.js", "llms.txt"):
         if not (WEB_DIR / aux).is_file():
             errors.append(f"Missing generated asset: web/{aux}")
+
+    # Verify exported Markdown blocks do not contain broken relative *.md links (docs pages use *.html)
+    data_en = build_en_part1() | build_en_part2()
+    data_vi = build_vi_part1() | build_vi_part2()
+    for lcode, dset in (("en", data_en), ("vi", data_vi)):
+        for slug, pdata in dset.items():
+            md = pdata.get("markdown", "")
+            for m in re.finditer(r"\]\((?!https?://|docs/|spec/|examples/)([^)]+\.md)\)", md):
+                errors.append(f"{lcode}/{slug} markdown has non-HTML relative link {m.group(1)!r}")
 
     return errors
 

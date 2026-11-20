@@ -196,10 +196,10 @@ Graph Agent Protocol (GAP) is an open-source (Apache-2.0), typed GraphQL-profile
 - Crash resilience &amp; footprint: **28.86 ms** SIGKILL recovery, **9.32 MiB** idle RSS, **28.1 MB** bit-reproducible binary, **0** RUSTSEC advisories
 
 ## Start Here
-- [What is GAP?](getting-started/what-is-gap.md)
-- [10-Minute Quickstart](getting-started/quickstart.md)
-- [Three-Plane Architecture](concepts/architecture.md)
-- [Progressive Disclosure (651 Tokens)](concepts/progressive-disclosure.md)</textarea>
+- [What is GAP?](getting-started/what-is-gap.html)
+- [10-Minute Quickstart](getting-started/quickstart.html)
+- [Three-Plane Architecture](concepts/architecture.html)
+- [Progressive Disclosure (651 Tokens)](concepts/progressive-disclosure.html)</textarea>
 
         <h1 id="article-title" tabindex="-1">GAP Documentation Hub</h1>
         <p class="article-lead">Graph Agent Protocol (GAP) is an open-source, typed GraphQL-profile gateway and zero-trust governance runtime built in Rust across 32 layered crates. Unify OpenAPI REST services, SQL databases, GraphQL subgraphs, gRPC services, CLI tools, codebases, MCP servers, and A2A peers behind one progressive interface.</p>
@@ -208,6 +208,7 @@ Graph Agent Protocol (GAP) is an open-source (Apache-2.0), typed GraphQL-profile
   <h2 id="learn-heading">What you&#x27;ll learn</h2>
   <ul><li>Connect heterogeneous tools without dumping 200k+ schema tokens into every LLM prompt.</li><li>Eliminate agent N+1 round-trips using DataLoader join batching and wait-free ArcSwap snapshots.</li><li>Enforce default-deny Cedar authorization, rug-pull description pinning, and SSRF egress guards.</li></ul>
 </section>
+        <details class="toc-inline"><summary>On this page</summary><nav class="toc-inline-links" aria-label="On this page"><a class="toc-inline-link" href="#get-started-paths">Choose Your Starting Path</a><a class="toc-inline-link" href="#core-capabilities">Explore Core Platform Capabilities</a><a class="toc-inline-link" href="#measured-highlights">Measured Performance &amp; Security Highlights</a><a class="toc-inline-link" href="#launch-videos">Product Walkthrough Videos (1080p)</a></nav></details>
 
         <section id="get-started-paths" tabindex="-1" class="doc-section">
   <h2>Choose Your Starting Path</h2>
@@ -272,7 +273,23 @@ Graph Agent Protocol (GAP) is an open-source (Apache-2.0), typed GraphQL-profile
   <a class="btn" href="paper/gap-paper.html" target="_blank" rel="noopener">Read Academic Paper (HTML)</a>
   <a class="btn" href="paper/gap-paper.pdf" target="_blank" rel="noopener">Download Camera-Ready PDF</a>
   <a class="btn" href="https://github.com/vnknowledge2014/GraphProtocol" target="_blank" rel="noopener">GitHub Repository</a>
-</div>
+</div><figure class="code-figure">
+  <div class="code-toolbar">
+    <div class="code-meta">
+      <span class="code-lang">terminal</span>
+      <span class="code-title">Try GAP in 30 seconds — Scaffold &amp; Doctor</span>
+    </div>
+    <span class="copy">
+      <button type="button" class="copy-button" command="--copy" commandfor="home-init" aria-label="Copy terminal code snippet (Try GAP in 30 seconds — Scaffold &amp; Doctor)">
+        <span class="icon" aria-hidden="true"></span>
+      </button>
+      <span class="tip" role="status"></span>
+    </span>
+  </div>
+  <pre role="region" aria-label="Try GAP in 30 seconds — Scaffold &amp; Doctor" tabindex="0"><code id="home-init" class="language-terminal">./target/dist/gap init my-gateway
+./target/dist/gap config check my-gateway/gap.toml
+./target/dist/gap doctor --config my-gateway/gap.toml</code></pre>
+</figure>
 </section><section id="launch-videos" tabindex="-1" class="doc-section">
   <h2>Product Walkthrough Videos (1080p)</h2>
   <div class="lab-grid videos-grid">
