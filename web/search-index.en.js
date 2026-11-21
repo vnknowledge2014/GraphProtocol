@@ -8,25 +8,25 @@ window.GAP_SEARCH_INDEX = [
     "keywords": "GAP Documentation Hub Unified typed GraphQL-profile gateway, progressive discovery, and zero-trust runtime governance for AI agents. Graph Agent Protocol (GAP) is an open-source, typed GraphQL-profile gateway and zero-trust governance runtime built in Rust across 32 layered crates. Unify OpenAPI REST services, SQL databases, GraphQL subgraphs, gRPC services, CLI tools, codebases, MCP servers, and A2A peers behind one progressive interface."
   },
   {
-    "title": "Choose Your Starting Path — GAP Documentation Hub",
+    "title": "Choose Your Learning Track — GAP Documentation Hub",
     "section": "Start Here",
     "href": "index.html#get-started-paths",
-    "snippet": "Pick the path that fits your goal today. Each guide explains one focused concept cleanly before showing real commands from the repository. Learn Basics · 8 min New to GraphQL or GAP? Start H",
-    "keywords": "Choose Your Starting Path GAP Documentation Hub Pick the path that fits your goal today. Each guide explains one focused concept cleanly before showing real commands from the repository. Learn Basics · 8 min New to GraphQL or GAP? Start Here Zero-jargon foundations: Supergraph analogy, Types &amp; Scalars, ! guarantees, and interactive Query-to-JSON Builder. Academy · 4 Courses GAP Academy (16 Lessons) Hands-on Odyssey-style courses: Lift-Off Supergraph, MCP/AG-UI Assistants, REST/SQL Batching"
+    "snippet": "651 tokens constant (vs 203,421 Direct-MCP) 99% token reduction at N=1,000 tools 5,013 req/s QUIC throughput 28.86 ms recovery after SIGKILL 32 layered Rust crates, zero ML on hot path Pick ",
+    "keywords": "Choose Your Learning Track GAP Documentation Hub 651 tokens constant (vs 203,421 Direct-MCP) 99% token reduction at N=1,000 tools 5,013 req/s QUIC throughput 28.86 ms recovery after SIGKILL 32 layered Rust crates, zero ML on hot path Pick the track that fits your goal. Each path is self-contained—theory first, then real repo commands. Beginner · 8 min Learn GraphQL &amp; GAP Basics Zero-jargon foundations: Supergraph analogy, Types &amp; Scalars, ! guarantees, and an interactive Query-to-JSON B"
   },
   {
-    "title": "Explore Core Platform Capabilities — GAP Documentation Hub",
+    "title": "The 4 Problems GAP Solves — GAP Documentation Hub",
     "section": "Start Here",
     "href": "index.html#core-capabilities",
-    "snippet": "Three-Plane Architecture Zero-ML hot execution ( 15 ns ArcSwap pinning, own pure-Rust AVL OrdMap ) separated cleanly from discovery and control. Progressive Disclosure (651 Tokens) Replace l",
-    "keywords": "Explore Core Platform Capabilities GAP Documentation Hub Three-Plane Architecture Zero-ML hot execution ( 15 ns ArcSwap pinning, own pure-Rust AVL OrdMap ) separated cleanly from discovery and control. Progressive Disclosure (651 Tokens) Replace linear schema growth ( 203,421 tokens at N=1,000 ) with constant 5-tool MCP discovery ( L0 -&gt; L1 -&gt; L2 ). 6 Native Graph Connectors Declarative OpenAPI, SQL, GraphQL, gRPC, sandboxed CLI, and tree-sitter Code AST adapters gated by Propose-Not-Activate. MC"
+    "snippet": "📦 Context Explosion 1,000 flat JSON tools = 203,421 tokens before the user asks anything. GAP holds constant at 651 tokens . 🔁 N+1 Agent Waterfalls Without a join planner, agents loop per-ro",
+    "keywords": "The 4 Problems GAP Solves GAP Documentation Hub 📦 Context Explosion 1,000 flat JSON tools = 203,421 tokens before the user asks anything. GAP holds constant at 651 tokens . 🔁 N+1 Agent Waterfalls Without a join planner, agents loop per-row: fetch customer → loop orders → fetch notes. Each loop burns latency and tokens. 🎭 Mutable Descriptions (Rug Pulls) Upstream edits a tool description after approval to inject hidden instructions. Flat clients forward poisoned text to the LLM. 🔓 Probabilistic"
   },
   {
     "title": "Measured Performance & Security Highlights — GAP Documentation Hub",
     "section": "Start Here",
     "href": "index.html#measured-highlights",
-    "snippet": "Per ADR-021 , every metric below comes directly from committed workspace test suites, bench/results/gapbench/baseline.json , and bench/results/ga_local/report.json . 651 tokens Constant MCP ",
-    "keywords": "Measured Performance & Security Highlights GAP Documentation Hub Per ADR-021 , every metric below comes directly from committed workspace test suites, bench/results/gapbench/baseline.json , and bench/results/ga_local/report.json . 651 tokens Constant MCP tools/list schema from N=10 to 1,000 tools (vs. 203,421 Direct-MCP) 99.0% / 208.7x Cross-branch join token savings at N=1,000 uncached &amp; 24-symbol code-graph efficiency 5,013 req/s HTTP/3 QUIC throughput (2.36 ms p95, 0 errors, 0-RTT off) alongside 1,064 r"
+    "snippet": "❌ Without GAP (Direct-MCP) 203,421 tokens just to list 1,000 tools Agent loops N+1 per customer/order/note Tool descriptions mutable after approval Neural classifier on the auth hot-path ✅ W",
+    "keywords": "Measured Performance & Security Highlights GAP Documentation Hub ❌ Without GAP (Direct-MCP) 203,421 tokens just to list 1,000 tools Agent loops N+1 per customer/order/note Tool descriptions mutable after approval Neural classifier on the auth hot-path ✅ With GAP 651 tokens constant (5 static tools) Declarative @join + DataLoader batching BLAKE3 desc_hash pinning freezes drift Deterministic Cedar default-deny policies Per ADR-021 , every metric below comes directly from committed workspace test suites, bench/re"
   },
   {
     "title": "Product Walkthrough Videos (1080p) — GAP Documentation Hub",
@@ -46,8 +46,8 @@ window.GAP_SEARCH_INDEX = [
     "title": "Why Flat Agent Tooling Hits a Wall — What is GAP?",
     "section": "Start Here",
     "href": "getting-started/what-is-gap.html#the-four-problems",
-    "snippet": "Most agent integrations connect an LLM directly to individual Model Context Protocol (MCP) or HTTP endpoints. That works cleanly for 5–10 small tools, then fails in four predictable ways in ",
-    "keywords": "Why Flat Agent Tooling Hits a Wall What is GAP? Most agent integrations connect an LLM directly to individual Model Context Protocol (MCP) or HTTP endpoints. That works cleanly for 5–10 small tools, then fails in four predictable ways in production: Context Explosion: Serializing 1,000 flat JSON Schema tools up front consumes 203,421 tokens before the user even asks a question. N+1 Agent Waterfalls: Without a shared join planner, the model fetches a customer, loops through orders turn-by-turn,"
+    "snippet": "What you'll understand after this page Why loading full tool catalogs into every prompt breaks at scale (the 203,421-token wall) Four production failure modes: token explosion, N+1 waterfall",
+    "keywords": "Why Flat Agent Tooling Hits a Wall What is GAP? What you'll understand after this page Why loading full tool catalogs into every prompt breaks at scale (the 203,421-token wall) Four production failure modes: token explosion, N+1 waterfalls, rug-pull injections, probabilistic auth Exact crossover: when Direct-MCP is simpler vs. when GAP dominates Most agent integrations connect an LLM directly to individual MCP or HTTP endpoints. That works cleanly for 5–10 small tools, then fails in four predi"
   },
   {
     "title": "Five Terms You Need to Know — What is GAP?",
@@ -165,8 +165,8 @@ window.GAP_SEARCH_INDEX = [
     "title": "Choose Your Hands-On Course (4 Tracks · 16 Lessons) — GAP Academy — Hands-On Courses",
     "section": "GAP Academy (Courses)",
     "href": "academy/index.html#course-catalog",
-    "snippet": "Beginner · 20 min · 4 lessons 0 / 4 lessons Course 1: Lift-Off — Build Your First Supergraph Scaffold a workspace with gap init , connect OpenAPI shop and MCP notes fixtures, verify health w",
-    "keywords": "Choose Your Hands-On Course (4 Tracks · 16 Lessons) GAP Academy — Hands-On Courses Beginner · 20 min · 4 lessons 0 / 4 lessons Course 1: Lift-Off — Build Your First Supergraph Scaffold a workspace with gap init , connect OpenAPI shop and MCP notes fixtures, verify health with gap doctor , and execute a cross-branch GraphQL query. Start Course 1 &rarr; AI Agents · 20 min · 4 lessons 0 / 4 lessons Course 2: MCP, AG-UI &amp; AI Assistants Replace 203,421 -token tool dumps with 651 -token progressive discovery ( L0 -&gt; L1 -&gt; L"
+    "snippet": "Course 1: Lift-Off Beginner · 20 min · 4 lessons Scaffold a workspace with gap init , connect OpenAPI shop and MCP notes fixtures, verify health with gap doctor , and execute a cross-branch ",
+    "keywords": "Choose Your Hands-On Course (4 Tracks · 16 Lessons) GAP Academy — Hands-On Courses Course 1: Lift-Off Beginner · 20 min · 4 lessons Scaffold a workspace with gap init , connect OpenAPI shop and MCP notes fixtures, verify health with gap doctor , and execute a cross-branch GraphQL query. Start Course 1 &rarr; Beginner 0 / 4 lessons Course 2: MCP, AG-UI &amp; AI Assistants AI Agents · 20 min · 4 lessons Replace 203,421 -token tool dumps with 651 -token progressive discovery ( L0→L1→L2 ), wire Claude/Cursor --stdio , and stream AG"
   },
   {
     "title": "Course 1: Lift-Off — First Supergraph",

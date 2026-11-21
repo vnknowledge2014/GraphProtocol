@@ -2495,3 +2495,324 @@ details.going-deeper .details-body {
   border-color: var(--ok);
   color: var(--accent-ink);
 }
+
+/* ───────────────────────────────────────────────────────────────
+   LEARNING PLATFORM REDESIGN — Apollo/GraphQL.com style
+   ─────────────────────────────────────────────────────────────── */
+
+/* Learning Tracks (3-column, like Apollo's "choose a track") */
+.track-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 1.5rem;
+  margin: 2rem 0;
+}
+
+.track-card {
+  border-radius: 12px;
+  padding: 1.75rem;
+  text-decoration: none;
+  display: block;
+  border: 2px solid transparent;
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+
+.track-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+}
+
+.track-card--beginner {
+  background: linear-gradient(135deg, #ecfdf5, #d1fae5);
+  border-color: #34d399;
+}
+
+.track-card--intermediate {
+  background: linear-gradient(135deg, #eff6ff, #dbeafe);
+  border-color: #60a5fa;
+}
+
+.track-card--expert {
+  background: linear-gradient(135deg, #faf5ff, #ede9fe);
+  border-color: #a78bfa;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .track-card--beginner {
+    background: linear-gradient(135deg, rgba(6,78,59,.13), rgba(52,211,153,.13));
+    border-color: #34d399;
+  }
+  :root:not([data-theme="light"]) .track-card--intermediate {
+    background: linear-gradient(135deg, rgba(30,58,95,.13), rgba(96,165,250,.13));
+    border-color: #60a5fa;
+  }
+  :root:not([data-theme="light"]) .track-card--expert {
+    background: linear-gradient(135deg, rgba(46,16,101,.13), rgba(167,139,250,.13));
+    border-color: #a78bfa;
+  }
+}
+
+:root[data-theme="dark"] .track-card--beginner {
+  background: linear-gradient(135deg, rgba(6,78,59,.13), rgba(52,211,153,.13));
+  border-color: #34d399;
+}
+:root[data-theme="dark"] .track-card--intermediate {
+  background: linear-gradient(135deg, rgba(30,58,95,.13), rgba(96,165,250,.13));
+  border-color: #60a5fa;
+}
+:root[data-theme="dark"] .track-card--expert {
+  background: linear-gradient(135deg, rgba(46,16,101,.13), rgba(167,139,250,.13));
+  border-color: #a78bfa;
+}
+
+.track-badge {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  padding: 0.25rem 0.6rem;
+  border-radius: 20px;
+  display: inline-block;
+  margin-bottom: 0.75rem;
+}
+
+.track-badge--beginner { background: #34d399; color: #064e3b; }
+.track-badge--intermediate { background: #60a5fa; color: #1e3a5f; }
+.track-badge--expert { background: #a78bfa; color: #2e1065; }
+
+.track-card h3 {
+  font-size: 1.1rem;
+  font-weight: 700;
+  margin: 0 0 0.5rem;
+  color: var(--text);
+}
+
+.track-card p {
+  font-size: 0.9rem;
+  color: var(--muted);
+  margin: 0;
+}
+
+/* Problem / Solution cards */
+.problem-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 1.25rem;
+  margin: 2rem 0;
+}
+
+.problem-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 1.5rem;
+  border-left: 4px solid var(--danger);
+}
+
+.problem-card .prob-icon { font-size: 1.75rem; margin-bottom: 0.75rem; }
+.problem-card h3 { font-size: 1rem; font-weight: 700; color: var(--danger); margin: 0 0 0.5rem; }
+.problem-card p { font-size: 0.88rem; color: var(--muted); margin: 0; }
+
+.solution-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 1.5rem;
+  border-left: 4px solid var(--ok);
+}
+
+.solution-card .sol-icon { font-size: 1.75rem; margin-bottom: 0.75rem; }
+.solution-card h3 { font-size: 1rem; font-weight: 700; color: var(--ok); margin: 0 0 0.5rem; }
+.solution-card p { font-size: 0.88rem; color: var(--muted); margin: 0; }
+
+/* Before/After comparison */
+.compare-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  margin: 2rem 0;
+}
+
+@media (max-width: 600px) {
+  .compare-row { grid-template-columns: 1fr; }
+}
+
+.compare-before {
+  background: #fff1f2;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  padding: 1.25rem;
+}
+
+.compare-after {
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  border-radius: 8px;
+  padding: 1.25rem;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .compare-before {
+    background: rgba(63,10,10,.27);
+    border-color: #f87171;
+  }
+  :root:not([data-theme="light"]) .compare-after {
+    background: rgba(5,46,22,.27);
+    border-color: #34d399;
+  }
+}
+
+:root[data-theme="dark"] .compare-before { background: rgba(63,10,10,.27); border-color: #f87171; }
+:root[data-theme="dark"] .compare-after { background: rgba(5,46,22,.27); border-color: #34d399; }
+
+.compare-before h3, .compare-before h4 { color: #b91c1c; font-size: 0.85rem; font-weight: 700; text-transform: uppercase; margin: 0 0 0.75rem; }
+.compare-after h3, .compare-after h4 { color: #047857; font-size: 0.85rem; font-weight: 700; text-transform: uppercase; margin: 0 0 0.75rem; }
+
+/* Academy course cards (Apollo-style colorful) */
+.academy-course-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1.5rem;
+  margin: 2rem 0;
+}
+
+.ac-card {
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  text-decoration: none;
+  display: block;
+  transition: transform 0.15s, box-shadow 0.15s;
+  color: var(--text);
+}
+
+.ac-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+}
+
+.ac-card-header { padding: 1.5rem; }
+.ac-card--1 .ac-card-header { background: linear-gradient(135deg, #667eea, #764ba2); }
+.ac-card--2 .ac-card-header { background: linear-gradient(135deg, #f093fb, #f5576c); }
+.ac-card--3 .ac-card-header { background: linear-gradient(135deg, #4facfe, #00c6ff); }
+.ac-card--4 .ac-card-header { background: linear-gradient(135deg, #43e97b, #38f9d7); }
+
+.ac-card-header h3 { color: white; font-size: 1.1rem; font-weight: 700; margin: 0 0 0.5rem; }
+.ac-card-header .ac-lessons { color: rgba(255,255,255,0.85); font-size: 0.85rem; }
+
+.ac-card-body { padding: 1.25rem; background: var(--surface); }
+.ac-card-body p { font-size: 0.9rem; color: var(--muted); margin: 0 0 1rem; }
+
+.ac-card-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.ac-card-btn { font-size: 0.8rem; font-weight: 600; color: var(--accent); }
+.ac-difficulty {
+  font-size: 0.7rem;
+  padding: 0.2rem 0.5rem;
+  border-radius: 10px;
+  background: var(--surface-alt);
+  color: var(--muted);
+  font-weight: 600;
+}
+
+/* What you'll learn box */
+.will-learn {
+  background: var(--surface-alt);
+  border-radius: 10px;
+  padding: 1.25rem 1.5rem;
+  margin: 1.5rem 0;
+}
+
+.will-learn h3, .will-learn h4 {
+  font-size: 0.9rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--accent);
+  margin: 0 0 0.75rem;
+}
+
+.will-learn ul { margin: 0; padding-left: 1.25rem; }
+.will-learn li { font-size: 0.92rem; margin-bottom: 0.4rem; }
+
+/* Goal and checkpoint banners */
+.lesson-goal {
+  background: linear-gradient(135deg, #eff6ff, #dbeafe);
+  border-left: 4px solid #3b82f6;
+  border-radius: 0 8px 8px 0;
+  padding: 1rem 1.5rem;
+  margin: 1.5rem 0;
+}
+
+.lesson-goal h4 {
+  color: #1d4ed8;
+  font-size: 0.9rem;
+  font-weight: 700;
+  margin: 0 0 0.4rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.lesson-goal p { margin: 0; font-size: 0.92rem; }
+
+.lesson-checkpoint {
+  background: linear-gradient(135deg, #f0fdf4, #dcfce7);
+  border-left: 4px solid #22c55e;
+  border-radius: 0 8px 8px 0;
+  padding: 1rem 1.5rem;
+  margin: 1.5rem 0;
+}
+
+.lesson-checkpoint h4 {
+  color: #15803d;
+  font-size: 0.9rem;
+  font-weight: 700;
+  margin: 0 0 0.4rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.lesson-checkpoint p { margin: 0; font-size: 0.92rem; }
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .lesson-goal { background: rgba(30,58,95,.2); }
+  :root:not([data-theme="light"]) .lesson-goal h4 { color: #60a5fa; }
+  :root:not([data-theme="light"]) .lesson-checkpoint { background: rgba(5,46,22,.2); }
+  :root:not([data-theme="light"]) .lesson-checkpoint h4 { color: #34d399; }
+}
+
+:root[data-theme="dark"] .lesson-goal { background: rgba(30,58,95,.2); }
+:root[data-theme="dark"] .lesson-goal h4 { color: #60a5fa; }
+:root[data-theme="dark"] .lesson-checkpoint { background: rgba(5,46,22,.2); }
+:root[data-theme="dark"] .lesson-checkpoint h4 { color: #34d399; }
+
+/* Stat strip (key numbers, visual) */
+.stat-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 1rem;
+  padding: 2rem;
+  background: var(--surface-alt);
+  border-radius: 12px;
+  margin: 2rem 0;
+}
+
+.stat-item { text-align: center; }
+
+.stat-num {
+  font-size: 2rem;
+  font-weight: 800;
+  color: var(--accent);
+  display: block;
+}
+
+.stat-label {
+  font-size: 0.78rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}

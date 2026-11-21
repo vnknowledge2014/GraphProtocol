@@ -8,25 +8,25 @@ window.GAP_SEARCH_INDEX = [
     "keywords": "Trang chủ Tài liệu GAP Cổng gateway GraphQL định kiểu chặt chẽ, khám phá lũy tiến và quản trị zero-trust cho AI Agent. Graph Agent Protocol (GAP) là cổng gateway GraphQL định kiểu chặt chẽ kèm tầng quản trị zero-trust viết bằng Rust (32 crates phân tầng). Hợp nhất OpenAPI REST, SQL, GraphQL, gRPC, CLI, đồ thị mã nguồn AST, MCP server và agent A2A sau một giao diện lũy tiến thống nhất."
   },
   {
-    "title": "Chọn Lộ trình Bắt đầu — Trang chủ Tài liệu GAP",
+    "title": "Chọn Lộ trình Học của Bạn — Trang chủ Tài liệu GAP",
     "section": "Bắt đầu",
     "href": "vi/index.html#get-started-paths",
-    "snippet": "Chọn điểm khởi đầu phù hợp với nhu cầu của bạn. Mỗi trang con chỉ tập trung giải thích thấu đáo đúng một chủ đề kèm ví dụ chạy được ngay từ kho mã nguồn. Kiến thức Nền · 8 phút Mới học Graph",
-    "keywords": "Chọn Lộ trình Bắt đầu Trang chủ Tài liệu GAP Chọn điểm khởi đầu phù hợp với nhu cầu của bạn. Mỗi trang con chỉ tập trung giải thích thấu đáo đúng một chủ đề kèm ví dụ chạy được ngay từ kho mã nguồn. Kiến thức Nền · 8 phút Mới học GraphQL &amp; GAP? Giải thích trực giác từ gốc: ẩn dụ Supergraph, Kiểu &amp; Scalar, quy tắc ! và Bộ dựng Truy vấn 1:1. Học viện · 4 Khóa học Học viện GAP (16 Bài thực chiến) Lộ trình bài bản theo dự án: Siêu đồ thị đầu tiên, MCP/AG-UI, Gom lô REST/SQL N+1 và Bảo m"
+    "snippet": "651 tokens cố định (thay vì 203.421 Direct-MCP) 99% giảm token ở N=1.000 tools 5.013 req/s QUIC thực nghiệm 28,86 ms phục hồi sau SIGKILL 32 crates Rust phân tầng, zero ML trên hot path Chọn",
+    "keywords": "Chọn Lộ trình Học của Bạn Trang chủ Tài liệu GAP 651 tokens cố định (thay vì 203.421 Direct-MCP) 99% giảm token ở N=1.000 tools 5.013 req/s QUIC thực nghiệm 28,86 ms phục hồi sau SIGKILL 32 crates Rust phân tầng, zero ML trên hot path Chọn điểm khởi đầu phù hợp với nhu cầu. Mỗi lộ trình tập trung lý thuyết trước, thực hành sau với lệnh chạy được ngay từ kho mã nguồn. Người mới · 8 phút Học GraphQL &amp; GAP Cơ bản Trực giác từ gốc: ẩn dụ Supergraph, Kiểu &amp; Scalar, quy tắc ! và Bộ dựng Truy "
   },
   {
-    "title": "Khám phá Các Trụ cột Kỹ thuật — Trang chủ Tài liệu GAP",
+    "title": "4 Vấn đề GAP Giải quyết — Trang chủ Tài liệu GAP",
     "section": "Bắt đầu",
     "href": "vi/index.html#core-capabilities",
-    "snippet": "Kiến trúc 3 Mặt phẳng Đường thực thi nóng không ML ( 15 ns ghim ArcSwap , AVL OrdMap tự chủ) tách bạch hoàn toàn khỏi khám phá và kiểm soát. Khám phá Lũy tiến (651 Tokens) Thay thế việc tải ",
-    "keywords": "Khám phá Các Trụ cột Kỹ thuật Trang chủ Tài liệu GAP Kiến trúc 3 Mặt phẳng Đường thực thi nóng không ML ( 15 ns ghim ArcSwap , AVL OrdMap tự chủ) tách bạch hoàn toàn khỏi khám phá và kiểm soát. Khám phá Lũy tiến (651 Tokens) Thay thế việc tải tuyến tính 203.421 token bằng đúng 5 MCP tool tĩnh qua 3 tầng ( L0 -&gt; L1 -&gt; L2 ). 6 Native Graph Connectors Ánh xạ khai báo OpenAPI, SQL, GraphQL, gRPC, CLI sandbox và Code AST qua cổng duyệt Propose-Not-Activate. Facade MCP, A2A &amp; AG-UI Phục vụ đồng"
+    "snippet": "📦 Bùng nổ Ngữ cảnh Prompt 1.000 tools JSON = 203.421 tokens trước khi người dùng kịp đặt câu hỏi. GAP giữ cố định ở 651 tokens . 🔁 Vòng lặp N+1 Thác nước Không có bộ lập kế hoạch gom khóa, a",
+    "keywords": "4 Vấn đề GAP Giải quyết Trang chủ Tài liệu GAP 📦 Bùng nổ Ngữ cảnh Prompt 1.000 tools JSON = 203.421 tokens trước khi người dùng kịp đặt câu hỏi. GAP giữ cố định ở 651 tokens . 🔁 Vòng lặp N+1 Thác nước Không có bộ lập kế hoạch gom khóa, agent lặp từng hàng: lấy khách → lặp đơn hàng → lấy ghi chú. Lãng phí latency và tokens. 🎭 Mô tả Tool Biến đổi (Rug Pull) MCP server bên ngoài sửa mô tả sau khi admin duyệt để gài lệnh độc hại. Client phẳng chuyển thẳng cho LLM. 🔓 Phân quyền Xác suất Kém An toà"
   },
   {
     "title": "Số liệu Thực nghiệm Đã Kiểm chứng (ADR-021) — Trang chủ Tài liệu GAP",
     "section": "Bắt đầu",
     "href": "vi/index.html#measured-highlights",
-    "snippet": "Toàn bộ thông số dưới đây trích trực tiếp từ các bộ test trong kho mã nguồn, bench/results/gapbench/baseline.json và bench/results/ga_local/report.json . 651 tokens Schema MCP tools/list cố ",
-    "keywords": "Số liệu Thực nghiệm Đã Kiểm chứng (ADR-021) Trang chủ Tài liệu GAP Toàn bộ thông số dưới đây trích trực tiếp từ các bộ test trong kho mã nguồn, bench/results/gapbench/baseline.json và bench/results/ga_local/report.json . 651 tokens Schema MCP tools/list cố định từ N=10 tới 1.000 tools (Direct-MCP: 203.421) 99,0% / 208,7x Tiết kiệm token join liên nhánh ở N=1.000 &amp; duyệt Code Graph (24 symbols) 5.013 req/s HTTP/3 QUIC đa luồng (2,36 ms p95, 0 lỗi, tắt 0-RTT) kèm 1.064 req/s TCP HTTP/2 28,86 ms Phục hồi /ready"
+    "snippet": "❌ Không có GAP (Direct-MCP) 203.421 tokens chỉ để liệt kê 1.000 tools Agent lặp N+1 cho từng khách hàng/đơn hàng/ghi chú Mô tả tool có thể bị sửa đổi sau khi duyệt Neural classifier trên đườ",
+    "keywords": "Số liệu Thực nghiệm Đã Kiểm chứng (ADR-021) Trang chủ Tài liệu GAP ❌ Không có GAP (Direct-MCP) 203.421 tokens chỉ để liệt kê 1.000 tools Agent lặp N+1 cho từng khách hàng/đơn hàng/ghi chú Mô tả tool có thể bị sửa đổi sau khi duyệt Neural classifier trên đường phân quyền hot-path ✅ Với GAP 651 tokens cố định (5 tool tĩnh) Khai báo @join + gom lô DataLoader BLAKE3 desc_hash pinning đóng băng drift Cedar default-deny tất định, không xác suất Toàn bộ thông số dưới đây trích trực tiếp từ các bộ test trong kho mã nguồ"
   },
   {
     "title": "Video Giới thiệu Dự án (1080p) — Trang chủ Tài liệu GAP",
@@ -46,8 +46,8 @@ window.GAP_SEARCH_INDEX = [
     "title": "Vì sao Mô hình Tool Phẳng Gặp Giới hạn — GAP là gì?",
     "section": "Bắt đầu",
     "href": "vi/getting-started/what-is-gap.html#the-four-problems",
-    "snippet": "Phần lớn hệ thống agent hiện tại nối thẳng LLM tới hàng loạt máy chủ MCP hoặc API rời rạc. Cách này chạy ổn với 5–10 công cụ, nhưng nhanh chóng gặp 4 điểm nghẽn khi đưa vào vận hành thật: Bù",
-    "keywords": "Vì sao Mô hình Tool Phẳng Gặp Giới hạn GAP là gì? Phần lớn hệ thống agent hiện tại nối thẳng LLM tới hàng loạt máy chủ MCP hoặc API rời rạc. Cách này chạy ổn với 5–10 công cụ, nhưng nhanh chóng gặp 4 điểm nghẽn khi đưa vào vận hành thật: Bùng nổ Ngữ cảnh Prompt: Tải sẵn 1.000 mô tả JSON Schema tốn tới 203.421 tokens ngay trước khi người dùng kịp đặt câu hỏi. Vòng lặp Thác nước N+1: Thiếu bộ lập kế hoạch gom khóa, LLM tự gọi lấy danh sách khách hàng rồi lại lặp tuần tự từng lượt cho đơn hàng và g"
+    "snippet": "Sau trang này bạn sẽ hiểu được Vì sao nạp toàn bộ schema công cụ vào mỗi prompt sẽ vỡ trận ở quy mô sản xuất (tường 203.421 tokens) Bốn điểm nghẽn thực tế: bùng nổ token, vòng lặp N+1, rug-p",
+    "keywords": "Vì sao Mô hình Tool Phẳng Gặp Giới hạn GAP là gì? Sau trang này bạn sẽ hiểu được Vì sao nạp toàn bộ schema công cụ vào mỗi prompt sẽ vỡ trận ở quy mô sản xuất (tường 203.421 tokens) Bốn điểm nghẽn thực tế: bùng nổ token, vòng lặp N+1, rug-pull injection, phân quyền xác suất Ngưỡng giao cắt: khi nào Direct-MCP gọn hơn và khi nào GAP áp đảo Phần lớn hệ thống agent hiện tại nối thẳng LLM tới hàng loạt MCP hoặc HTTP endpoint rời rạc. Cách này chạy ổn với 5–10 công cụ, nhưng nhanh chóng gặp 4 điểm ng"
   },
   {
     "title": "5 Khái niệm Cốt lõi Cần Nắm — GAP là gì?",
@@ -165,8 +165,8 @@ window.GAP_SEARCH_INDEX = [
     "title": "Chọn Khóa học Thực chiến (4 Chặng · 16 Bài học) — Học viện GAP — Khóa học Thực chiến",
     "section": "Học viện GAP (Thực chiến)",
     "href": "vi/academy/index.html#course-catalog",
-    "snippet": "Cơ bản · 20 phút · 4 bài 0 / 4 bài Khóa 1: Lift-Off — Siêu đồ thị Đầu tiên Khởi tạo dự án bằng gap init , gắn nhánh OpenAPI shop và MCP notes , kiểm tra qua gap doctor và thực thi câu truy v",
-    "keywords": "Chọn Khóa học Thực chiến (4 Chặng · 16 Bài học) Học viện GAP — Khóa học Thực chiến Cơ bản · 20 phút · 4 bài 0 / 4 bài Khóa 1: Lift-Off — Siêu đồ thị Đầu tiên Khởi tạo dự án bằng gap init , gắn nhánh OpenAPI shop và MCP notes , kiểm tra qua gap doctor và thực thi câu truy vấn gộp đầu tiên. Bắt đầu Khóa 1 &rarr; AI Agent · 20 phút · 4 bài 0 / 4 bài Khóa 2: MCP, AG-UI &amp; Trợ lý AI Thay thế khối schema phình to 203.421 token bằng 651 token khám phá lũy tiến ( L0 -&gt; L1 -&gt; L2 ), kết nối Claude/Cursor --stdio và phát SSE AG-U"
+    "snippet": "Khóa 1: Lift-Off Cơ bản · 20 phút · 4 bài học Khởi tạo dự án bằng gap init , gắn nhánh OpenAPI shop và MCP notes , kiểm tra qua gap doctor và thực thi câu truy vấn gộp đầu tiên. Bắt đầu Khóa",
+    "keywords": "Chọn Khóa học Thực chiến (4 Chặng · 16 Bài học) Học viện GAP — Khóa học Thực chiến Khóa 1: Lift-Off Cơ bản · 20 phút · 4 bài học Khởi tạo dự án bằng gap init , gắn nhánh OpenAPI shop và MCP notes , kiểm tra qua gap doctor và thực thi câu truy vấn gộp đầu tiên. Bắt đầu Khóa 1 &rarr; Người mới 0 / 4 bài Khóa 2: MCP, AG-UI &amp; Trợ lý AI AI Agent · 20 phút · 4 bài học Thay thế schema phình to 203.421 token bằng 651 token khám phá lũy tiến ( L0→L1→L2 ), kết nối Claude/Cursor --stdio và phát SSE AG-UI v1.0 . Bắt đầu Khóa 2 &rarr; T"
   },
   {
     "title": "Khóa 1: Lift-Off — Siêu đồ thị Đầu tiên",

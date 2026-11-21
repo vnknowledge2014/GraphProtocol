@@ -35,37 +35,63 @@ def build_vi_part1() -> dict[str, dict]:
         "sections": [
             {
                 "id": "get-started-paths",
-                "h2": "Chọn Lộ trình Bắt đầu",
+                "h2": "Chọn Lộ trình Học của Bạn",
                 "subheadings": [],
-                "html": f"""<p>Chọn điểm khởi đầu phù hợp với nhu cầu của bạn. Mỗi trang con chỉ tập trung giải thích thấu đáo đúng một chủ đề kèm ví dụ chạy được ngay từ kho mã nguồn.</p>
-<div class="path-cards-grid">
-  <a class="path-card" href="{esc(u('learn-graphql-and-gap'))}">
-    <span class="path-tag">Kiến thức Nền · 8 phút</span>
-    <h3>Mới học GraphQL &amp; GAP?</h3>
-    <p>Giải thích trực giác từ gốc: ẩn dụ Supergraph, Kiểu &amp; Scalar, quy tắc <code>!</code> và Bộ dựng Truy vấn 1:1.</p>
+                "html": f"""<div class="stat-strip">
+  <div class="stat-item"><span class="stat-num">651</span><span class="stat-label">tokens cố định (thay vì 203.421 Direct-MCP)</span></div>
+  <div class="stat-item"><span class="stat-num">99%</span><span class="stat-label">giảm token ở N=1.000 tools</span></div>
+  <div class="stat-item"><span class="stat-num">5.013</span><span class="stat-label">req/s QUIC thực nghiệm</span></div>
+  <div class="stat-item"><span class="stat-num">28,86 ms</span><span class="stat-label">phục hồi sau SIGKILL</span></div>
+  <div class="stat-item"><span class="stat-num">32</span><span class="stat-label">crates Rust phân tầng, zero ML trên hot path</span></div>
+</div>
+<p>Chọn điểm khởi đầu phù hợp với nhu cầu. Mỗi lộ trình tập trung lý thuyết trước, thực hành sau với lệnh chạy được ngay từ kho mã nguồn.</p>
+<div class="track-grid">
+  <a class="track-card track-card--beginner" href="{esc(u('learn-graphql-and-gap'))}">
+    <span class="track-badge track-badge--beginner">Người mới · 8 phút</span>
+    <h3>Học GraphQL &amp; GAP Cơ bản</h3>
+    <p>Trực giác từ gốc: ẩn dụ Supergraph, Kiểu &amp; Scalar, quy tắc <code>!</code> và Bộ dựng Truy vấn tương tác 1:1.</p>
   </a>
-  <a class="path-card" href="{esc(u('academy-hub'))}">
-    <span class="path-tag">Học viện · 4 Khóa học</span>
+  <a class="track-card track-card--intermediate" href="{esc(u('academy-hub'))}">
+    <span class="track-badge track-badge--intermediate">Trung cấp · 4 Khóa học</span>
     <h3>Học viện GAP (16 Bài thực chiến)</h3>
-    <p>Lộ trình bài bản theo dự án: Siêu đồ thị đầu tiên, MCP/AG-UI, Gom lô REST/SQL N+1 và Bảo mật Zero-Trust.</p>
+    <p>Siêu đồ thị đầu tiên, MCP/AG-UI, Gom lô REST/SQL N+1 và Bảo mật Zero-Trust Enterprise.</p>
   </a>
-  <a class="path-card" href="{esc(u('quickstart'))}">
-    <span class="path-tag">Thực hành · 10 phút</span>
-    <h3>Khởi chạy Nhanh trong 10 phút</h3>
-    <p>Kiểm tra <code>gap.toml</code>, bật Walking Skeleton REST + MCP và gửi truy vấn gộp liên nhánh đầu tiên.</p>
+  <a class="track-card track-card--expert" href="{esc(u('architecture'))}">
+    <span class="track-badge track-badge--expert">Chuyên sâu · Kiến trúc</span>
+    <h3>Kiến trúc &amp; Đặc tả Kỹ thuật</h3>
+    <p>Ba mặt phẳng nội bộ, ArcSwap snapshot zero-copy, Cedar zero-trust, HTTP/3 QUIC và 20 bất biến.</p>
   </a>
-  <a class="path-card" href="{esc(u('playground'))}">
-    <span class="path-tag">Phòng Lab Trực tiếp</span>
-    <h3>Bộ tính Crossover &amp; Playground</h3>
-    <p>Thử nghiệm trực quan số liệu thật <code>GAP-Bench</code>, chạy thử <code>gap serve</code> và làm bài kiểm tra 6 câu.</p>
-  </a>
-</div>""",
+</div>
+<p style="margin-top:0.5rem;">Đã nắm cơ bản? Nhảy thẳng vào <a href="{esc(u('quickstart'))}">Khởi chạy Nhanh 10 phút</a> hoặc <a href="{esc(u('playground'))}">Phòng Lab &amp; Bộ tính Crossover</a>.</p>""",
             },
             {
                 "id": "core-capabilities",
-                "h2": "Khám phá Các Trụ cột Kỹ thuật",
+                "h2": "4 Vấn đề GAP Giải quyết",
                 "subheadings": [],
-                "html": f"""<div class="pillar-grid">
+                "html": f"""<div class="problem-grid">
+  <div class="problem-card">
+    <div class="prob-icon">📦</div>
+    <h3>Bùng nổ Ngữ cảnh Prompt</h3>
+    <p>1.000 tools JSON = <strong>203.421 tokens</strong> trước khi người dùng kịp đặt câu hỏi. GAP giữ cố định ở <strong>651 tokens</strong>.</p>
+  </div>
+  <div class="problem-card">
+    <div class="prob-icon">🔁</div>
+    <h3>Vòng lặp N+1 Thác nước</h3>
+    <p>Không có bộ lập kế hoạch gom khóa, agent lặp từng hàng: lấy khách → lặp đơn hàng → lấy ghi chú. Lãng phí latency và tokens.</p>
+  </div>
+  <div class="problem-card">
+    <div class="prob-icon">🎭</div>
+    <h3>Mô tả Tool Biến đổi (Rug Pull)</h3>
+    <p>MCP server bên ngoài sửa mô tả sau khi admin duyệt để gài lệnh độc hại. Client phẳng chuyển thẳng cho LLM.</p>
+  </div>
+  <div class="problem-card">
+    <div class="prob-icon">🔓</div>
+    <h3>Phân quyền Xác suất Kém An toàn</h3>
+    <p>Neural classifier trên đường phân quyền luôn tiềm ẩn rủi ro qua mặt. Phân quyền bắt buộc phải là mã tất định.</p>
+  </div>
+</div>
+<h3 style="margin:2rem 0 1rem;font-size:1.1rem;">Các Trụ cột Kỹ thuật Cốt lõi</h3>
+<div class="pillar-grid">
   <a class="pillar-card" href="{esc(u('architecture'))}">
     <h3>Kiến trúc 3 Mặt phẳng</h3>
     <p>Đường thực thi nóng không ML (<code>15 ns</code> ghim <code>ArcSwap</code>, AVL <code>OrdMap</code> tự chủ) tách bạch hoàn toàn khỏi khám phá và kiểm soát.</p>
@@ -96,7 +122,27 @@ def build_vi_part1() -> dict[str, dict]:
                 "id": "measured-highlights",
                 "h2": "Số liệu Thực nghiệm Đã Kiểm chứng (`ADR-021`)",
                 "subheadings": [],
-                "html": f"""<p>Toàn bộ thông số dưới đây trích trực tiếp từ các bộ test trong kho mã nguồn, <code>bench/results/gapbench/baseline.json</code> và <code>bench/results/ga_local/report.json</code>.</p>
+                "html": f"""<div class="compare-row">
+  <div class="compare-before">
+    <h3>❌ Không có GAP (Direct-MCP)</h3>
+    <ul style="margin:0;padding-left:1.25rem;font-size:0.9rem;">
+      <li><strong>203.421 tokens</strong> chỉ để liệt kê 1.000 tools</li>
+      <li>Agent lặp N+1 cho từng khách hàng/đơn hàng/ghi chú</li>
+      <li>Mô tả tool có thể bị sửa đổi sau khi duyệt</li>
+      <li>Neural classifier trên đường phân quyền hot-path</li>
+    </ul>
+  </div>
+  <div class="compare-after">
+    <h3>✅ Với GAP</h3>
+    <ul style="margin:0;padding-left:1.25rem;font-size:0.9rem;">
+      <li><strong>651 tokens</strong> cố định (5 tool tĩnh)</li>
+      <li>Khai báo <code>@join</code> + gom lô DataLoader</li>
+      <li>BLAKE3 <code>desc_hash</code> pinning đóng băng drift</li>
+      <li>Cedar default-deny tất định, không xác suất</li>
+    </ul>
+  </div>
+</div>
+<p>Toàn bộ thông số dưới đây trích trực tiếp từ các bộ test trong kho mã nguồn, <code>bench/results/gapbench/baseline.json</code> và <code>bench/results/ga_local/report.json</code>.</p>
 <div class="kpi-grid">
   <div class="kpi"><div class="val">651 tokens</div><div class="lbl">Schema MCP <code>tools/list</code> cố định từ N=10 tới 1.000 tools (Direct-MCP: 203.421)</div></div>
   <div class="kpi"><div class="val">99,0% / 208,7x</div><div class="lbl">Tiết kiệm token join liên nhánh ở N=1.000 &amp; duyệt Code Graph (24 symbols)</div></div>
@@ -169,13 +215,37 @@ Graph Agent Protocol (GAP) là cổng gateway GraphQL định kiểu chặt ch�
                 "id": "the-four-problems",
                 "h2": "Vì sao Mô hình Tool Phẳng Gặp Giới hạn",
                 "subheadings": [],
-                "html": """<p>Phần lớn hệ thống agent hiện tại nối thẳng LLM tới hàng loạt máy chủ MCP hoặc API rời rạc. Cách này chạy ổn với 5–10 công cụ, nhưng nhanh chóng gặp 4 điểm nghẽn khi đưa vào vận hành thật:</p>
-<ul>
-  <li><strong>Bùng nổ Ngữ cảnh Prompt:</strong> Tải sẵn 1.000 mô tả JSON Schema tốn tới <strong>203.421 tokens</strong> ngay trước khi người dùng kịp đặt câu hỏi.</li>
-  <li><strong>Vòng lặp Thác nước N+1:</strong> Thiếu bộ lập kế hoạch gom khóa, LLM tự gọi lấy danh sách khách hàng rồi lại lặp tuần tự từng lượt cho đơn hàng và ghi chú — vừa chậm vừa tốn token.</li>
-  <li><strong>Mô tả Tool Biến đổi (Rug Pull):</strong> Nếu một MCP server bên ngoài lén sửa mô tả công cụ sau khi admin đã duyệt để gài lệnh độc, client phẳng sẽ chuyển thẳng chuỗi đó cho mô hình.</li>
-  <li><strong>Phân quyền Xác suất Kém An toàn:</strong> Để mô hình ML hay LLM quyết định quyền truy cập ngay trên đường nóng luôn tiềm ẩn rủi ro qua mặt; phân quyền bắt buộc phải là mã nguồn tất định.</li>
-</ul>""" + svg_mental_model("vi"),
+                "html": """<div class="will-learn">
+  <h3>Sau trang này bạn sẽ hiểu được</h3>
+  <ul>
+    <li>Vì sao nạp toàn bộ schema công cụ vào mỗi prompt sẽ vỡ trận ở quy mô sản xuất (tường 203.421 tokens)</li>
+    <li>Bốn điểm nghẽn thực tế: bùng nổ token, vòng lặp N+1, rug-pull injection, phân quyền xác suất</li>
+    <li>Ngưỡng giao cắt: khi nào Direct-MCP gọn hơn và khi nào GAP áp đảo</li>
+  </ul>
+</div>
+<p>Phần lớn hệ thống agent hiện tại nối thẳng LLM tới hàng loạt MCP hoặc HTTP endpoint rời rạc. Cách này chạy ổn với 5–10 công cụ, nhưng nhanh chóng gặp 4 điểm nghẽn khi đưa vào vận hành thật:</p>
+<div class="problem-grid">
+  <div class="problem-card">
+    <div class="prob-icon">📦</div>
+    <h3>Bùng nổ Ngữ cảnh Prompt</h3>
+    <p>Tải sẵn 1.000 mô tả JSON Schema tốn tới <strong>203.421 tokens</strong> ngay trước khi người dùng kịp đặt câu hỏi.</p>
+  </div>
+  <div class="problem-card">
+    <div class="prob-icon">🔁</div>
+    <h3>Vòng lặp Thác nước N+1</h3>
+    <p>Thiếu bộ lập kế hoạch gom khóa, LLM lặp tuần tự từng lượt cho đơn hàng và ghi chú — vừa chậm vừa tốn token.</p>
+  </div>
+  <div class="problem-card">
+    <div class="prob-icon">🎭</div>
+    <h3>Mô tả Tool Biến đổi (Rug Pull)</h3>
+    <p>MCP server bên ngoài lén sửa mô tả công cụ sau khi admin đã duyệt để gài lệnh độc hại vào prompt LLM.</p>
+  </div>
+  <div class="problem-card">
+    <div class="prob-icon">🔓</div>
+    <h3>Phân quyền Xác suất Kém An toàn</h3>
+    <p>Để ML hay LLM quyết định quyền truy cập trên hot-path luôn tiềm ẩn rủi ro qua mặt. Phân quyền phải là mã tất định.</p>
+  </div>
+</div>""" + svg_mental_model("vi"),
             },
             {
                 "id": "key-terminology",

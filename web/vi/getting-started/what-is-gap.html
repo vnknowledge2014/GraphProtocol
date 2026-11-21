@@ -230,13 +230,37 @@ GAP mang lại một cổng vào duy nhất, định kiểu chặt chẽ cho RES
 
         <section id="the-four-problems" tabindex="-1" class="doc-section">
   <h2>Vì sao Mô hình Tool Phẳng Gặp Giới hạn</h2>
-  <p>Phần lớn hệ thống agent hiện tại nối thẳng LLM tới hàng loạt máy chủ MCP hoặc API rời rạc. Cách này chạy ổn với 5–10 công cụ, nhưng nhanh chóng gặp 4 điểm nghẽn khi đưa vào vận hành thật:</p>
-<ul>
-  <li><strong>Bùng nổ Ngữ cảnh Prompt:</strong> Tải sẵn 1.000 mô tả JSON Schema tốn tới <strong>203.421 tokens</strong> ngay trước khi người dùng kịp đặt câu hỏi.</li>
-  <li><strong>Vòng lặp Thác nước N+1:</strong> Thiếu bộ lập kế hoạch gom khóa, LLM tự gọi lấy danh sách khách hàng rồi lại lặp tuần tự từng lượt cho đơn hàng và ghi chú — vừa chậm vừa tốn token.</li>
-  <li><strong>Mô tả Tool Biến đổi (Rug Pull):</strong> Nếu một MCP server bên ngoài lén sửa mô tả công cụ sau khi admin đã duyệt để gài lệnh độc, client phẳng sẽ chuyển thẳng chuỗi đó cho mô hình.</li>
-  <li><strong>Phân quyền Xác suất Kém An toàn:</strong> Để mô hình ML hay LLM quyết định quyền truy cập ngay trên đường nóng luôn tiềm ẩn rủi ro qua mặt; phân quyền bắt buộc phải là mã nguồn tất định.</li>
-</ul><figure class="diagram-frame">
+  <div class="will-learn">
+  <h3>Sau trang này bạn sẽ hiểu được</h3>
+  <ul>
+    <li>Vì sao nạp toàn bộ schema công cụ vào mỗi prompt sẽ vỡ trận ở quy mô sản xuất (tường 203.421 tokens)</li>
+    <li>Bốn điểm nghẽn thực tế: bùng nổ token, vòng lặp N+1, rug-pull injection, phân quyền xác suất</li>
+    <li>Ngưỡng giao cắt: khi nào Direct-MCP gọn hơn và khi nào GAP áp đảo</li>
+  </ul>
+</div>
+<p>Phần lớn hệ thống agent hiện tại nối thẳng LLM tới hàng loạt MCP hoặc HTTP endpoint rời rạc. Cách này chạy ổn với 5–10 công cụ, nhưng nhanh chóng gặp 4 điểm nghẽn khi đưa vào vận hành thật:</p>
+<div class="problem-grid">
+  <div class="problem-card">
+    <div class="prob-icon">📦</div>
+    <h3>Bùng nổ Ngữ cảnh Prompt</h3>
+    <p>Tải sẵn 1.000 mô tả JSON Schema tốn tới <strong>203.421 tokens</strong> ngay trước khi người dùng kịp đặt câu hỏi.</p>
+  </div>
+  <div class="problem-card">
+    <div class="prob-icon">🔁</div>
+    <h3>Vòng lặp Thác nước N+1</h3>
+    <p>Thiếu bộ lập kế hoạch gom khóa, LLM lặp tuần tự từng lượt cho đơn hàng và ghi chú — vừa chậm vừa tốn token.</p>
+  </div>
+  <div class="problem-card">
+    <div class="prob-icon">🎭</div>
+    <h3>Mô tả Tool Biến đổi (Rug Pull)</h3>
+    <p>MCP server bên ngoài lén sửa mô tả công cụ sau khi admin đã duyệt để gài lệnh độc hại vào prompt LLM.</p>
+  </div>
+  <div class="problem-card">
+    <div class="prob-icon">🔓</div>
+    <h3>Phân quyền Xác suất Kém An toàn</h3>
+    <p>Để ML hay LLM quyết định quyền truy cập trên hot-path luôn tiềm ẩn rủi ro qua mặt. Phân quyền phải là mã tất định.</p>
+  </div>
+</div><figure class="diagram-frame">
   <svg role="img" aria-label="So sánh Direct-MCP phẳng và Cổng GAP hợp nhất" viewBox="0 0 860 304" width="860" height="304" xmlns="http://www.w3.org/2000/svg">
     <title>So sánh Direct-MCP phẳng và Cổng GAP hợp nhất</title>
     <defs>

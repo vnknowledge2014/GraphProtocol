@@ -232,36 +232,62 @@ Graph Agent Protocol (GAP) is an open-source (Apache-2.0), typed GraphQL-profile
   <h2 id="learn-heading">What you&#x27;ll learn</h2>
   <ul><li>Connect heterogeneous tools without dumping 200k+ schema tokens into every LLM prompt.</li><li>Eliminate agent N+1 round-trips using DataLoader join batching and wait-free ArcSwap snapshots.</li><li>Enforce default-deny Cedar authorization, rug-pull description pinning, and SSRF egress guards.</li></ul>
 </section>
-        <details class="toc-inline"><summary>On this page</summary><nav class="toc-inline-links" aria-label="On this page"><a class="toc-inline-link" href="#get-started-paths">Choose Your Starting Path</a><a class="toc-inline-link" href="#core-capabilities">Explore Core Platform Capabilities</a><a class="toc-inline-link" href="#measured-highlights">Measured Performance &amp; Security Highlights</a><a class="toc-inline-link" href="#launch-videos">Product Walkthrough Videos (1080p)</a></nav></details>
+        <details class="toc-inline"><summary>On this page</summary><nav class="toc-inline-links" aria-label="On this page"><a class="toc-inline-link" href="#get-started-paths">Choose Your Learning Track</a><a class="toc-inline-link" href="#core-capabilities">The 4 Problems GAP Solves</a><a class="toc-inline-link" href="#measured-highlights">Measured Performance &amp; Security Highlights</a><a class="toc-inline-link" href="#launch-videos">Product Walkthrough Videos (1080p)</a></nav></details>
 
         <section id="get-started-paths" tabindex="-1" class="doc-section">
-  <h2>Choose Your Starting Path</h2>
-  <p>Pick the path that fits your goal today. Each guide explains one focused concept cleanly before showing real commands from the repository.</p>
-<div class="path-cards-grid">
-  <a class="path-card" href="learn/graphql-and-gap-basics.html">
-    <span class="path-tag">Learn Basics · 8 min</span>
-    <h3>New to GraphQL or GAP? Start Here</h3>
-    <p>Zero-jargon foundations: Supergraph analogy, Types &amp; Scalars, <code>!</code> guarantees, and interactive Query-to-JSON Builder.</p>
+  <h2>Choose Your Learning Track</h2>
+  <div class="stat-strip">
+  <div class="stat-item"><span class="stat-num">651</span><span class="stat-label">tokens constant (vs 203,421 Direct-MCP)</span></div>
+  <div class="stat-item"><span class="stat-num">99%</span><span class="stat-label">token reduction at N=1,000 tools</span></div>
+  <div class="stat-item"><span class="stat-num">5,013</span><span class="stat-label">req/s QUIC throughput</span></div>
+  <div class="stat-item"><span class="stat-num">28.86 ms</span><span class="stat-label">recovery after SIGKILL</span></div>
+  <div class="stat-item"><span class="stat-num">32</span><span class="stat-label">layered Rust crates, zero ML on hot path</span></div>
+</div>
+<p>Pick the track that fits your goal. Each path is self-contained—theory first, then real repo commands.</p>
+<div class="track-grid">
+  <a class="track-card track-card--beginner" href="learn/graphql-and-gap-basics.html">
+    <span class="track-badge track-badge--beginner">Beginner · 8 min</span>
+    <h3>Learn GraphQL &amp; GAP Basics</h3>
+    <p>Zero-jargon foundations: Supergraph analogy, Types &amp; Scalars, <code>!</code> guarantees, and an interactive Query-to-JSON Builder.</p>
   </a>
-  <a class="path-card" href="academy/index.html">
-    <span class="path-tag">Academy · 4 Courses</span>
+  <a class="track-card track-card--intermediate" href="academy/index.html">
+    <span class="track-badge track-badge--intermediate">Intermediate · 4 Courses</span>
     <h3>GAP Academy (16 Lessons)</h3>
     <p>Hands-on Odyssey-style courses: Lift-Off Supergraph, MCP/AG-UI Assistants, REST/SQL Batching, and Enterprise Zero-Trust.</p>
   </a>
-  <a class="path-card" href="getting-started/quickstart.html">
-    <span class="path-tag">Tutorial · 10 min</span>
-    <h3>10-Minute Quickstart</h3>
-    <p>Validate <code>gap.toml</code>, run the Walking Skeleton REST + MCP fixtures, and execute your first federated query.</p>
-  </a>
-  <a class="path-card" href="lab/playground.html">
-    <span class="path-tag">Hands-On Lab</span>
-    <h3>Interactive Lab &amp; Calculator</h3>
-    <p>Test real <code>GAP-Bench</code> token tradeoffs, send live GraphQL/MCP requests via <code>serve.py</code>, and take the 6-question quiz.</p>
+  <a class="track-card track-card--expert" href="concepts/architecture.html">
+    <span class="track-badge track-badge--expert">Expert · Deep Dive</span>
+    <h3>Architecture &amp; Specification</h3>
+    <p>Three-plane internals, ArcSwap zero-copy snapshots, Cedar zero-trust, HTTP/3 QUIC, and all 20 invariants.</p>
   </a>
 </div>
+<p style="margin-top:0.5rem;">Already know the basics? Jump straight to the <a href="getting-started/quickstart.html">10-minute Quickstart</a> or the <a href="lab/playground.html">Interactive Lab &amp; Calculator</a>.</p>
 </section><section id="core-capabilities" tabindex="-1" class="doc-section">
-  <h2>Explore Core Platform Capabilities</h2>
-  <div class="pillar-grid">
+  <h2>The 4 Problems GAP Solves</h2>
+  <div class="problem-grid">
+  <div class="problem-card">
+    <div class="prob-icon">📦</div>
+    <h3>Context Explosion</h3>
+    <p>1,000 flat JSON tools = <strong>203,421 tokens</strong> before the user asks anything. GAP holds constant at <strong>651 tokens</strong>.</p>
+  </div>
+  <div class="problem-card">
+    <div class="prob-icon">🔁</div>
+    <h3>N+1 Agent Waterfalls</h3>
+    <p>Without a join planner, agents loop per-row: fetch customer → loop orders → fetch notes. Each loop burns latency and tokens.</p>
+  </div>
+  <div class="problem-card">
+    <div class="prob-icon">🎭</div>
+    <h3>Mutable Descriptions (Rug Pulls)</h3>
+    <p>Upstream edits a tool description after approval to inject hidden instructions. Flat clients forward poisoned text to the LLM.</p>
+  </div>
+  <div class="problem-card">
+    <div class="prob-icon">🔓</div>
+    <h3>Probabilistic Auth Leaks</h3>
+    <p>Neural classifiers on the access-control path introduce bypass risk. Authorization must be deterministic code, not ML.</p>
+  </div>
+</div>
+<h3 style="margin:2rem 0 1rem;font-size:1.1rem;">Core Platform Capabilities</h3>
+<div class="pillar-grid">
   <a class="pillar-card" href="concepts/architecture.html">
     <h3>Three-Plane Architecture</h3>
     <p>Zero-ML hot execution (<code>15 ns</code> ArcSwap pinning, own pure-Rust AVL <code>OrdMap</code>) separated cleanly from discovery and control.</p>
@@ -289,7 +315,27 @@ Graph Agent Protocol (GAP) is an open-source (Apache-2.0), typed GraphQL-profile
 </div>
 </section><section id="measured-highlights" tabindex="-1" class="doc-section">
   <h2>Measured Performance &amp; Security Highlights</h2>
-  <p>Per <code>ADR-021</code>, every metric below comes directly from committed workspace test suites, <code>bench/results/gapbench/baseline.json</code>, and <code>bench/results/ga_local/report.json</code>.</p>
+  <div class="compare-row">
+  <div class="compare-before">
+    <h3>❌ Without GAP (Direct-MCP)</h3>
+    <ul style="margin:0;padding-left:1.25rem;font-size:0.9rem;">
+      <li><strong>203,421 tokens</strong> just to list 1,000 tools</li>
+      <li>Agent loops N+1 per customer/order/note</li>
+      <li>Tool descriptions mutable after approval</li>
+      <li>Neural classifier on the auth hot-path</li>
+    </ul>
+  </div>
+  <div class="compare-after">
+    <h3>✅ With GAP</h3>
+    <ul style="margin:0;padding-left:1.25rem;font-size:0.9rem;">
+      <li><strong>651 tokens</strong> constant (5 static tools)</li>
+      <li>Declarative <code>@join</code> + DataLoader batching</li>
+      <li>BLAKE3 <code>desc_hash</code> pinning freezes drift</li>
+      <li>Deterministic Cedar default-deny policies</li>
+    </ul>
+  </div>
+</div>
+<p>Per <code>ADR-021</code>, every metric below comes directly from committed workspace test suites, <code>bench/results/gapbench/baseline.json</code>, and <code>bench/results/ga_local/report.json</code>.</p>
 <div class="kpi-grid">
   <div class="kpi"><div class="val">651 tokens</div><div class="lbl">Constant MCP <code>tools/list</code> schema from N=10 to 1,000 tools (vs. 203,421 Direct-MCP)</div></div>
   <div class="kpi"><div class="val">99.0% / 208.7x</div><div class="lbl">Cross-branch join token savings at N=1,000 uncached &amp; 24-symbol code-graph efficiency</div></div>
@@ -357,7 +403,7 @@ Graph Agent Protocol (GAP) is an open-source (Apache-2.0), typed GraphQL-profile
       <div class="toc-sticky scroller">
         <p class="toc-title">On this page</p>
         <nav id="on-this-page-nav" class="toc-links" aria-label="On this page">
-          <a class="toc-link" href="#get-started-paths">Choose Your Starting Path</a><a class="toc-link" href="#core-capabilities">Explore Core Platform Capabilities</a><a class="toc-link" href="#measured-highlights">Measured Performance &amp; Security Highlights</a><a class="toc-link" href="#launch-videos">Product Walkthrough Videos (1080p)</a>
+          <a class="toc-link" href="#get-started-paths">Choose Your Learning Track</a><a class="toc-link" href="#core-capabilities">The 4 Problems GAP Solves</a><a class="toc-link" href="#measured-highlights">Measured Performance &amp; Security Highlights</a><a class="toc-link" href="#launch-videos">Product Walkthrough Videos (1080p)</a>
         </nav>
       </div>
     </aside>

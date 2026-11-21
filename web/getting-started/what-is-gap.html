@@ -233,13 +233,37 @@ At N &lt;= 50 flat lookups with prompt caching warm, Direct-MCP uses fewer raw t
 
         <section id="the-four-problems" tabindex="-1" class="doc-section">
   <h2>Why Flat Agent Tooling Hits a Wall</h2>
-  <p>Most agent integrations connect an LLM directly to individual Model Context Protocol (MCP) or HTTP endpoints. That works cleanly for 5–10 small tools, then fails in four predictable ways in production:</p>
-<ul>
-  <li><strong>Context Explosion:</strong> Serializing 1,000 flat JSON Schema tools up front consumes <strong>203,421 tokens</strong> before the user even asks a question.</li>
-  <li><strong>N+1 Agent Waterfalls:</strong> Without a shared join planner, the model fetches a customer, loops through orders turn-by-turn, then queries notes separately—wasting latency and tokens.</li>
-  <li><strong>Mutable Descriptions (Rug Pulls):</strong> If an untrusted upstream edits a tool description after approval to inject hidden instructions, flat clients forward the poisoned text straight to the LLM.</li>
-  <li><strong>Probabilistic Authorization Leaks:</strong> Letting an LLM or neural classifier enforce access control introduces bypass risk. Access decisions must be deterministic code.</li>
-</ul><figure class="diagram-frame">
+  <div class="will-learn">
+  <h3>What you'll understand after this page</h3>
+  <ul>
+    <li>Why loading full tool catalogs into every prompt breaks at scale (the 203,421-token wall)</li>
+    <li>Four production failure modes: token explosion, N+1 waterfalls, rug-pull injections, probabilistic auth</li>
+    <li>Exact crossover: when Direct-MCP is simpler vs. when GAP dominates</li>
+  </ul>
+</div>
+<p>Most agent integrations connect an LLM directly to individual MCP or HTTP endpoints. That works cleanly for 5–10 small tools, then fails in four predictable ways in production:</p>
+<div class="problem-grid">
+  <div class="problem-card">
+    <div class="prob-icon">📦</div>
+    <h3>Context Explosion</h3>
+    <p>Serializing 1,000 flat JSON Schema tools up front consumes <strong>203,421 tokens</strong> before the user even asks a question.</p>
+  </div>
+  <div class="problem-card">
+    <div class="prob-icon">🔁</div>
+    <h3>N+1 Agent Waterfalls</h3>
+    <p>Without a shared join planner, the model fetches customer → loops orders turn-by-turn → queries notes separately, wasting latency.</p>
+  </div>
+  <div class="problem-card">
+    <div class="prob-icon">🎭</div>
+    <h3>Mutable Descriptions (Rug Pulls)</h3>
+    <p>If an untrusted upstream edits a tool description after approval to inject hidden instructions, flat clients forward poisoned text straight to the LLM.</p>
+  </div>
+  <div class="problem-card">
+    <div class="prob-icon">🔓</div>
+    <h3>Probabilistic Auth Leaks</h3>
+    <p>Letting an LLM or neural classifier enforce access control introduces bypass risk. Access decisions must be deterministic code.</p>
+  </div>
+</div><figure class="diagram-frame">
   <svg role="img" aria-label="Comparison of flat Direct-MCP vs Unified GAP Supergraph" viewBox="0 0 860 304" width="860" height="304" xmlns="http://www.w3.org/2000/svg">
     <title>Comparison of flat Direct-MCP vs Unified GAP Supergraph</title>
     <defs>

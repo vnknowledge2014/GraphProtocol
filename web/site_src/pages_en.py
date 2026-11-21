@@ -37,37 +37,63 @@ def build_en_part1() -> dict[str, dict]:
         "sections": [
             {
                 "id": "get-started-paths",
-                "h2": "Choose Your Starting Path",
+                "h2": "Choose Your Learning Track",
                 "subheadings": [],
-                "html": f"""<p>Pick the path that fits your goal today. Each guide explains one focused concept cleanly before showing real commands from the repository.</p>
-<div class="path-cards-grid">
-  <a class="path-card" href="{esc(u('learn-graphql-and-gap'))}">
-    <span class="path-tag">Learn Basics · 8 min</span>
-    <h3>New to GraphQL or GAP? Start Here</h3>
-    <p>Zero-jargon foundations: Supergraph analogy, Types &amp; Scalars, <code>!</code> guarantees, and interactive Query-to-JSON Builder.</p>
+                "html": f"""<div class="stat-strip">
+  <div class="stat-item"><span class="stat-num">651</span><span class="stat-label">tokens constant (vs 203,421 Direct-MCP)</span></div>
+  <div class="stat-item"><span class="stat-num">99%</span><span class="stat-label">token reduction at N=1,000 tools</span></div>
+  <div class="stat-item"><span class="stat-num">5,013</span><span class="stat-label">req/s QUIC throughput</span></div>
+  <div class="stat-item"><span class="stat-num">28.86 ms</span><span class="stat-label">recovery after SIGKILL</span></div>
+  <div class="stat-item"><span class="stat-num">32</span><span class="stat-label">layered Rust crates, zero ML on hot path</span></div>
+</div>
+<p>Pick the track that fits your goal. Each path is self-contained—theory first, then real repo commands.</p>
+<div class="track-grid">
+  <a class="track-card track-card--beginner" href="{esc(u('learn-graphql-and-gap'))}">
+    <span class="track-badge track-badge--beginner">Beginner · 8 min</span>
+    <h3>Learn GraphQL &amp; GAP Basics</h3>
+    <p>Zero-jargon foundations: Supergraph analogy, Types &amp; Scalars, <code>!</code> guarantees, and an interactive Query-to-JSON Builder.</p>
   </a>
-  <a class="path-card" href="{esc(u('academy-hub'))}">
-    <span class="path-tag">Academy · 4 Courses</span>
+  <a class="track-card track-card--intermediate" href="{esc(u('academy-hub'))}">
+    <span class="track-badge track-badge--intermediate">Intermediate · 4 Courses</span>
     <h3>GAP Academy (16 Lessons)</h3>
     <p>Hands-on Odyssey-style courses: Lift-Off Supergraph, MCP/AG-UI Assistants, REST/SQL Batching, and Enterprise Zero-Trust.</p>
   </a>
-  <a class="path-card" href="{esc(u('quickstart'))}">
-    <span class="path-tag">Tutorial · 10 min</span>
-    <h3>10-Minute Quickstart</h3>
-    <p>Validate <code>gap.toml</code>, run the Walking Skeleton REST + MCP fixtures, and execute your first federated query.</p>
+  <a class="track-card track-card--expert" href="{esc(u('architecture'))}">
+    <span class="track-badge track-badge--expert">Expert · Deep Dive</span>
+    <h3>Architecture &amp; Specification</h3>
+    <p>Three-plane internals, ArcSwap zero-copy snapshots, Cedar zero-trust, HTTP/3 QUIC, and all 20 invariants.</p>
   </a>
-  <a class="path-card" href="{esc(u('playground'))}">
-    <span class="path-tag">Hands-On Lab</span>
-    <h3>Interactive Lab &amp; Calculator</h3>
-    <p>Test real <code>GAP-Bench</code> token tradeoffs, send live GraphQL/MCP requests via <code>serve.py</code>, and take the 6-question quiz.</p>
-  </a>
-</div>""",
+</div>
+<p style="margin-top:0.5rem;">Already know the basics? Jump straight to the <a href="{esc(u('quickstart'))}">10-minute Quickstart</a> or the <a href="{esc(u('playground'))}">Interactive Lab &amp; Calculator</a>.</p>""",
             },
             {
                 "id": "core-capabilities",
-                "h2": "Explore Core Platform Capabilities",
+                "h2": "The 4 Problems GAP Solves",
                 "subheadings": [],
-                "html": f"""<div class="pillar-grid">
+                "html": f"""<div class="problem-grid">
+  <div class="problem-card">
+    <div class="prob-icon">📦</div>
+    <h3>Context Explosion</h3>
+    <p>1,000 flat JSON tools = <strong>203,421 tokens</strong> before the user asks anything. GAP holds constant at <strong>651 tokens</strong>.</p>
+  </div>
+  <div class="problem-card">
+    <div class="prob-icon">🔁</div>
+    <h3>N+1 Agent Waterfalls</h3>
+    <p>Without a join planner, agents loop per-row: fetch customer → loop orders → fetch notes. Each loop burns latency and tokens.</p>
+  </div>
+  <div class="problem-card">
+    <div class="prob-icon">🎭</div>
+    <h3>Mutable Descriptions (Rug Pulls)</h3>
+    <p>Upstream edits a tool description after approval to inject hidden instructions. Flat clients forward poisoned text to the LLM.</p>
+  </div>
+  <div class="problem-card">
+    <div class="prob-icon">🔓</div>
+    <h3>Probabilistic Auth Leaks</h3>
+    <p>Neural classifiers on the access-control path introduce bypass risk. Authorization must be deterministic code, not ML.</p>
+  </div>
+</div>
+<h3 style="margin:2rem 0 1rem;font-size:1.1rem;">Core Platform Capabilities</h3>
+<div class="pillar-grid">
   <a class="pillar-card" href="{esc(u('architecture'))}">
     <h3>Three-Plane Architecture</h3>
     <p>Zero-ML hot execution (<code>15 ns</code> ArcSwap pinning, own pure-Rust AVL <code>OrdMap</code>) separated cleanly from discovery and control.</p>
@@ -98,7 +124,27 @@ def build_en_part1() -> dict[str, dict]:
                 "id": "measured-highlights",
                 "h2": "Measured Performance & Security Highlights",
                 "subheadings": [],
-                "html": f"""<p>Per <code>ADR-021</code>, every metric below comes directly from committed workspace test suites, <code>bench/results/gapbench/baseline.json</code>, and <code>bench/results/ga_local/report.json</code>.</p>
+                "html": f"""<div class="compare-row">
+  <div class="compare-before">
+    <h3>❌ Without GAP (Direct-MCP)</h3>
+    <ul style="margin:0;padding-left:1.25rem;font-size:0.9rem;">
+      <li><strong>203,421 tokens</strong> just to list 1,000 tools</li>
+      <li>Agent loops N+1 per customer/order/note</li>
+      <li>Tool descriptions mutable after approval</li>
+      <li>Neural classifier on the auth hot-path</li>
+    </ul>
+  </div>
+  <div class="compare-after">
+    <h3>✅ With GAP</h3>
+    <ul style="margin:0;padding-left:1.25rem;font-size:0.9rem;">
+      <li><strong>651 tokens</strong> constant (5 static tools)</li>
+      <li>Declarative <code>@join</code> + DataLoader batching</li>
+      <li>BLAKE3 <code>desc_hash</code> pinning freezes drift</li>
+      <li>Deterministic Cedar default-deny policies</li>
+    </ul>
+  </div>
+</div>
+<p>Per <code>ADR-021</code>, every metric below comes directly from committed workspace test suites, <code>bench/results/gapbench/baseline.json</code>, and <code>bench/results/ga_local/report.json</code>.</p>
 <div class="kpi-grid">
   <div class="kpi"><div class="val">651 tokens</div><div class="lbl">Constant MCP <code>tools/list</code> schema from N=10 to 1,000 tools (vs. 203,421 Direct-MCP)</div></div>
   <div class="kpi"><div class="val">99.0% / 208.7x</div><div class="lbl">Cross-branch join token savings at N=1,000 uncached &amp; 24-symbol code-graph efficiency</div></div>
@@ -177,13 +223,37 @@ Graph Agent Protocol (GAP) is an open-source (Apache-2.0), typed GraphQL-profile
                 "id": "the-four-problems",
                 "h2": "Why Flat Agent Tooling Hits a Wall",
                 "subheadings": [],
-                "html": """<p>Most agent integrations connect an LLM directly to individual Model Context Protocol (MCP) or HTTP endpoints. That works cleanly for 5–10 small tools, then fails in four predictable ways in production:</p>
-<ul>
-  <li><strong>Context Explosion:</strong> Serializing 1,000 flat JSON Schema tools up front consumes <strong>203,421 tokens</strong> before the user even asks a question.</li>
-  <li><strong>N+1 Agent Waterfalls:</strong> Without a shared join planner, the model fetches a customer, loops through orders turn-by-turn, then queries notes separately—wasting latency and tokens.</li>
-  <li><strong>Mutable Descriptions (Rug Pulls):</strong> If an untrusted upstream edits a tool description after approval to inject hidden instructions, flat clients forward the poisoned text straight to the LLM.</li>
-  <li><strong>Probabilistic Authorization Leaks:</strong> Letting an LLM or neural classifier enforce access control introduces bypass risk. Access decisions must be deterministic code.</li>
-</ul>""" + svg_mental_model("en"),
+                "html": """<div class="will-learn">
+  <h3>What you'll understand after this page</h3>
+  <ul>
+    <li>Why loading full tool catalogs into every prompt breaks at scale (the 203,421-token wall)</li>
+    <li>Four production failure modes: token explosion, N+1 waterfalls, rug-pull injections, probabilistic auth</li>
+    <li>Exact crossover: when Direct-MCP is simpler vs. when GAP dominates</li>
+  </ul>
+</div>
+<p>Most agent integrations connect an LLM directly to individual MCP or HTTP endpoints. That works cleanly for 5–10 small tools, then fails in four predictable ways in production:</p>
+<div class="problem-grid">
+  <div class="problem-card">
+    <div class="prob-icon">📦</div>
+    <h3>Context Explosion</h3>
+    <p>Serializing 1,000 flat JSON Schema tools up front consumes <strong>203,421 tokens</strong> before the user even asks a question.</p>
+  </div>
+  <div class="problem-card">
+    <div class="prob-icon">🔁</div>
+    <h3>N+1 Agent Waterfalls</h3>
+    <p>Without a shared join planner, the model fetches customer → loops orders turn-by-turn → queries notes separately, wasting latency.</p>
+  </div>
+  <div class="problem-card">
+    <div class="prob-icon">🎭</div>
+    <h3>Mutable Descriptions (Rug Pulls)</h3>
+    <p>If an untrusted upstream edits a tool description after approval to inject hidden instructions, flat clients forward poisoned text straight to the LLM.</p>
+  </div>
+  <div class="problem-card">
+    <div class="prob-icon">🔓</div>
+    <h3>Probabilistic Auth Leaks</h3>
+    <p>Letting an LLM or neural classifier enforce access control introduces bypass risk. Access decisions must be deterministic code.</p>
+  </div>
+</div>""" + svg_mental_model("en"),
             },
             {
                 "id": "key-terminology",

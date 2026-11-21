@@ -241,45 +241,65 @@
 </div>
 </section><section id="course-catalog" tabindex="-1" class="doc-section">
   <h2>Choose Your Hands-On Course (4 Tracks · 16 Lessons)</h2>
-  <div class="course-grid">
-  <article class="course-card">
-    <div class="course-meta">
-      <span class="path-tag">Beginner · 20 min · 4 lessons</span>
-      <span class="pill" data-course-progress="liftoff">0 / 4 lessons</span>
+  <div class="academy-course-cards">
+  <article class="ac-card ac-card--1">
+    <div class="ac-card-header">
+      <h3>Course 1: Lift-Off</h3>
+      <div class="ac-lessons">Beginner · 20 min · 4 lessons</div>
     </div>
-    <h3>Course 1: Lift-Off — Build Your First Supergraph</h3>
-    <p>Scaffold a workspace with <code>gap init</code>, connect OpenAPI <code>shop</code> and MCP <code>notes</code> fixtures, verify health with <code>gap doctor</code>, and execute a cross-branch GraphQL query.</p>
-    <a class="btn btn-primary" href="liftoff-first-supergraph.html">Start Course 1 &rarr;</a>
+    <div class="ac-card-body">
+      <p>Scaffold a workspace with <code>gap init</code>, connect OpenAPI <code>shop</code> and MCP <code>notes</code> fixtures, verify health with <code>gap doctor</code>, and execute a cross-branch GraphQL query.</p>
+      <div class="ac-card-footer">
+        <a class="ac-card-btn" href="liftoff-first-supergraph.html">Start Course 1 &rarr;</a>
+        <span class="ac-difficulty">Beginner</span>
+      </div>
+      <span class="pill" data-course-progress="liftoff" style="display:block;margin-top:0.75rem;">0 / 4 lessons</span>
+    </div>
   </article>
 
-  <article class="course-card">
-    <div class="course-meta">
-      <span class="path-tag">AI Agents · 20 min · 4 lessons</span>
-      <span class="pill" data-course-progress="mcp">0 / 4 lessons</span>
+  <article class="ac-card ac-card--2">
+    <div class="ac-card-header">
+      <h3>Course 2: MCP, AG-UI &amp; AI Assistants</h3>
+      <div class="ac-lessons">AI Agents · 20 min · 4 lessons</div>
     </div>
-    <h3>Course 2: MCP, AG-UI &amp; AI Assistants</h3>
-    <p>Replace <code>203,421</code>-token tool dumps with <code>651</code>-token progressive discovery (<code>L0 -&gt; L1 -&gt; L2</code>), wire Claude/Cursor <code>--stdio</code>, and stream AG-UI <code>v1.0</code> SSE interrupts.</p>
-    <a class="btn btn-primary" href="mcp-and-ai-assistants.html">Start Course 2 &rarr;</a>
+    <div class="ac-card-body">
+      <p>Replace <code>203,421</code>-token tool dumps with <code>651</code>-token progressive discovery (<code>L0→L1→L2</code>), wire Claude/Cursor <code>--stdio</code>, and stream AG-UI <code>v1.0</code> SSE interrupts.</p>
+      <div class="ac-card-footer">
+        <a class="ac-card-btn" href="mcp-and-ai-assistants.html">Start Course 2 &rarr;</a>
+        <span class="ac-difficulty">Intermediate</span>
+      </div>
+      <span class="pill" data-course-progress="mcp" style="display:block;margin-top:0.75rem;">0 / 4 lessons</span>
+    </div>
   </article>
 
-  <article class="course-card">
-    <div class="course-meta">
-      <span class="path-tag">Federation · 25 min · 4 lessons</span>
-      <span class="pill" data-course-progress="batch">0 / 4 lessons</span>
+  <article class="ac-card ac-card--3">
+    <div class="ac-card-header">
+      <h3>Course 3: REST, SQL &amp; N+1 Batching</h3>
+      <div class="ac-lessons">Federation · 25 min · 4 lessons</div>
     </div>
-    <h3>Course 3: REST, SQL &amp; N+1 Batching</h3>
-    <p>Eliminate LLM N+1 loops using declarative OpenAPI <code>x-gap-in-param</code> (<code>INV-18</code>), SQL &amp; <code>tree-sitter</code> Code AST branches, and Propose-Not-Activate rollouts.</p>
-    <a class="btn btn-primary" href="connectors-and-batching.html">Start Course 3 &rarr;</a>
+    <div class="ac-card-body">
+      <p>Eliminate LLM N+1 loops using declarative OpenAPI <code>x-gap-in-param</code> (<code>INV-18</code>), SQL &amp; <code>tree-sitter</code> Code AST branches, and Propose-Not-Activate rollouts.</p>
+      <div class="ac-card-footer">
+        <a class="ac-card-btn" href="connectors-and-batching.html">Start Course 3 &rarr;</a>
+        <span class="ac-difficulty">Intermediate</span>
+      </div>
+      <span class="pill" data-course-progress="batch" style="display:block;margin-top:0.75rem;">0 / 4 lessons</span>
+    </div>
   </article>
 
-  <article class="course-card">
-    <div class="course-meta">
-      <span class="path-tag">Production · 25 min · 4 lessons</span>
-      <span class="pill" data-course-progress="sec">0 / 4 lessons</span>
+  <article class="ac-card ac-card--4">
+    <div class="ac-card-header">
+      <h3>Course 4: Zero-Trust, Cedar &amp; HTTP/3</h3>
+      <div class="ac-lessons">Production · 25 min · 4 lessons</div>
     </div>
-    <h3>Course 4: Zero-Trust, Cedar &amp; HTTP/3</h3>
-    <p>Harden your gateway with <code>T0/T1/T2</code> isolation, two-person Cedar rules, anti-rug-pull <code>DriftMonitor</code>, SSRF <code>EgressGuard</code>, HTTP/3 QUIC, and BLAKE3 audits.</p>
-    <a class="btn btn-primary" href="enterprise-zero-trust.html">Start Course 4 &rarr;</a>
+    <div class="ac-card-body">
+      <p>Harden your gateway with <code>T0/T1/T2</code> isolation, two-person Cedar rules, anti-rug-pull <code>DriftMonitor</code>, SSRF <code>EgressGuard</code>, HTTP/3 QUIC, and BLAKE3 audits.</p>
+      <div class="ac-card-footer">
+        <a class="ac-card-btn" href="enterprise-zero-trust.html">Start Course 4 &rarr;</a>
+        <span class="ac-difficulty">Advanced</span>
+      </div>
+      <span class="pill" data-course-progress="sec" style="display:block;margin-top:0.75rem;">0 / 4 lessons</span>
+    </div>
   </article>
 </div>
 </section>
