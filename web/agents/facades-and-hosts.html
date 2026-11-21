@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="color-scheme" content="light dark" />
+  <script>
+    try {
+      var s = localStorage.getItem("gap-color-scheme");
+      if (s === "light" || s === "dark") {
+        document.querySelector('meta[name="color-scheme"]').content = s;
+      }
+    } catch (_e) {}
+  </script>
+  <title>MCP, A2A &amp; AG-UI Facades — GAP Docs</title>
+  <meta name="description" content="Expose one gateway simultaneously over MCP 2026-07-28, A2A v1.0 Agent Cards, and AG-UI v1.0 interactive SSE approvals." />
+  <link rel="canonical" href="https://vnknowledge2014.github.io/GraphProtocol/agents/facades-and-hosts.html" />
+  <link rel="alternate" hreflang="en" href="facades-and-hosts.html" />
+  <link rel="alternate" hreflang="vi" href="../vi/agents/facades-and-hosts.html" />
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns=&#x27;http://www.w3.org/2000/svg&#x27; viewBox=&#x27;0 0 32 32&#x27;%3E%3Crect width=&#x27;32&#x27; height=&#x27;32&#x27; rx=&#x27;8&#x27; fill=&#x27;%230f4c81&#x27;/%3E%3Ctext x=&#x27;16&#x27; y=&#x27;22&#x27; text-anchor=&#x27;middle&#x27; font-family=&#x27;system-ui,sans-serif&#x27; font-weight=&#x27;800&#x27; font-size=&#x27;18&#x27; fill=&#x27;%23ffffff&#x27;%3EG%3C/text%3E%3C/svg%3E" />
+  <link rel="stylesheet" href="../styles.css" />
+</head>
+<body data-slug="facades-and-hosts" data-lang="en" data-section="agents" data-web-root="../">
+  <a class="skip-link" href="#article-title">Skip to article content</a>
+
+  <header class="topbar">
+    <div class="topbar-inner">
+      <div class="topbar-left">
+        <button type="button" id="drawer-open" class="drawer-open-btn" aria-label="Open documentation menu" aria-controls="docs-drawer">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+            <path d="M4 6h16M4 12h16M4 18h16" />
+          </svg>
+        </button>
+        <a class="brand-link" href="../index.html">
+          <span class="brand-mark" aria-hidden="true">G</span>
+          <span class="brand-text"><strong>GAP</strong> <span class="brand-sub">GAP Docs</span></span>
+          <span class="badge-ver">v0.1.0-rc.1</span>
+        </a>
+      </div>
+
+      <nav class="top-nav" aria-label="Primary sections">
+        <a href="../getting-started/what-is-gap.html" class="top-link">Get Started</a><a href="../learn/graphql-and-gap-basics.html" class="top-link">Learn</a><a href="../academy/index.html" class="top-link">Academy</a><a href="../concepts/architecture.html" class="top-link">Architecture</a><a href="../security/zero-trust.html" class="top-link">Security</a><a href="../lab/playground.html" class="top-link">Lab</a><a href="../reference/cli-and-ops.html" class="top-link">Reference</a>
+      </nav>
+
+      <div class="topbar-controls">
+        <search class="search-wrap">
+          <label class="visually-hidden" for="global-search">Search GAP documentation across all guides</label>
+          <input id="global-search" type="search" placeholder="Search docs, Academy, INV... [/]" autocomplete="off" />
+          <div id="search-results" class="search-results scroller" role="region" aria-live="polite" hidden></div>
+        </search>
+        <nav class="lang-switch" aria-label="Language">
+          <span class="lang-current" aria-current="true">EN</span>
+          <a class="lang-alt" href="../vi/agents/facades-and-hosts.html" hreflang="vi" lang="vi">VI</a>
+        </nav>
+        <button type="button" id="theme-toggle-btn" class="theme-toggle" aria-label="Toggle Light / Dark theme">
+          <span class="icon-to-dark" aria-hidden="true">☽</span>
+          <span class="icon-to-light" aria-hidden="true">☀</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <dialog class="Drawer scroller" id="docs-drawer" aria-label="Documentation navigation drawer">
+    <nav class="Drawer-nav scroller" aria-label="Documentation sections">
+      <div class="Drawer-head">
+        <span class="Drawer-brand"><strong>GAP</strong> GAP Docs</span>
+        <button type="button" id="drawer-close" class="drawer-close-btn" aria-label="Close documentation menu">&times;</button>
+      </div>
+      <div class="nav-group" data-section-id="start-here">
+  <p class="nav-group-title" id="drawer-start-here">Start Here</p>
+  <ul aria-labelledby="drawer-start-here">
+    <li><a class="nav-link" href="../index.html">GAP Documentation Hub</a></li><li><a class="nav-link" href="../getting-started/what-is-gap.html">What is GAP?</a></li><li><a class="nav-link" href="../getting-started/quickstart.html">10-Minute Quickstart</a></li>
+  </ul>
+</div>
+<div class="nav-group" data-section-id="learn">
+  <p class="nav-group-title" id="drawer-learn">Learn Basics</p>
+  <ul aria-labelledby="drawer-learn">
+    <li><a class="nav-link" href="../learn/graphql-and-gap-basics.html">GraphQL &amp; GAP Basics</a></li><li><a class="nav-link" href="../learn/queries-mutations-joins.html">Arguments, Mutations &amp; Joins</a></li>
+  </ul>
+</div>
+<div class="nav-group" data-section-id="academy">
+  <p class="nav-group-title" id="drawer-academy">GAP Academy (Courses)</p>
+  <ul aria-labelledby="drawer-academy">
+    <li><a class="nav-link" href="../academy/index.html">GAP Academy — Hands-On Courses</a></li><li><a class="nav-link" href="../academy/liftoff-first-supergraph.html">Course 1: Lift-Off — First Supergraph</a></li><li><a class="nav-link" href="../academy/mcp-and-ai-assistants.html">Course 2: MCP, AG-UI &amp; AI Assistants</a></li><li><a class="nav-link" href="../academy/connectors-and-batching.html">Course 3: REST, SQL &amp; N+1 Batching</a></li><li><a class="nav-link" href="../academy/enterprise-zero-trust.html">Course 4: Zero-Trust, Cedar &amp; HTTP/3</a></li>
+  </ul>
+</div>
+<div class="nav-group" data-section-id="concepts">
+  <p class="nav-group-title" id="drawer-concepts">Core Concepts</p>
+  <ul aria-labelledby="drawer-concepts">
+    <li><a class="nav-link" href="../concepts/architecture.html">Three-Plane Architecture</a></li><li><a class="nav-link" href="../concepts/progressive-disclosure.html">Progressive Disclosure (651 Tokens)</a></li><li><a class="nav-link" href="../concepts/gap-ql-and-joins.html">GAP-QL &amp; Batched Joins</a></li>
+  </ul>
+</div>
+<div class="nav-group" data-section-id="connectors">
+  <p class="nav-group-title" id="drawer-connectors">Connect Data &amp; Tools (NGC)</p>
+  <ul aria-labelledby="drawer-connectors">
+    <li><a class="nav-link" href="../connectors/overview.html">Native Graph Connectors (NGC)</a></li>
+  </ul>
+</div>
+<div class="nav-group" data-section-id="agents">
+  <p class="nav-group-title" id="drawer-agents">AI Agent Hosts &amp; Routers</p>
+  <ul aria-labelledby="drawer-agents">
+    <li><a class="nav-link is-active" href="facades-and-hosts.html" aria-current="page">MCP, A2A &amp; AG-UI Facades</a></li><li><a class="nav-link" href="routers-and-http3.html">System-1 Routers &amp; HTTP/3 QUIC</a></li>
+  </ul>
+</div>
+<div class="nav-group" data-section-id="security">
+  <p class="nav-group-title" id="drawer-security">Zero-Trust Governance</p>
+  <ul aria-labelledby="drawer-security">
+    <li><a class="nav-link" href="../security/zero-trust.html">Zero-Trust Governance &amp; Cedar</a></li>
+  </ul>
+</div>
+<div class="nav-group" data-section-id="lab">
+  <p class="nav-group-title" id="drawer-lab">Interactive Lab</p>
+  <ul aria-labelledby="drawer-lab">
+    <li><a class="nav-link" href="../lab/playground.html">Interactive Lab &amp; Calculator</a></li>
+  </ul>
+</div>
+<div class="nav-group" data-section-id="reference">
+  <p class="nav-group-title" id="drawer-reference">Operations &amp; Reference</p>
+  <ul aria-labelledby="drawer-reference">
+    <li><a class="nav-link" href="../reference/cli-and-ops.html">CLI, Runbooks &amp; 32 Crates</a></li><li><a class="nav-link" href="../reference/invariants-and-glossary.html">20 Invariants, STE-100 &amp; Paper</a></li>
+  </ul>
+</div>
+    </nav>
+    <button type="button" id="drawer-backdrop-close" class="Drawer-backdrop" aria-label="Close documentation menu"></button>
+  </dialog>
+
+  <div class="docs-shell">
+    <aside class="sidebar scroller" aria-label="Documentation sections">
+      <nav aria-label="Documentation sections">
+        <div class="nav-group" data-section-id="start-here">
+  <p class="nav-group-title" id="side-start-here">Start Here</p>
+  <ul aria-labelledby="side-start-here">
+    <li><a class="nav-link" href="../index.html">GAP Documentation Hub</a></li><li><a class="nav-link" href="../getting-started/what-is-gap.html">What is GAP?</a></li><li><a class="nav-link" href="../getting-started/quickstart.html">10-Minute Quickstart</a></li>
+  </ul>
+</div>
+<div class="nav-group" data-section-id="learn">
+  <p class="nav-group-title" id="side-learn">Learn Basics</p>
+  <ul aria-labelledby="side-learn">
+    <li><a class="nav-link" href="../learn/graphql-and-gap-basics.html">GraphQL &amp; GAP Basics</a></li><li><a class="nav-link" href="../learn/queries-mutations-joins.html">Arguments, Mutations &amp; Joins</a></li>
+  </ul>
+</div>
+<div class="nav-group" data-section-id="academy">
+  <p class="nav-group-title" id="side-academy">GAP Academy (Courses)</p>
+  <ul aria-labelledby="side-academy">
+    <li><a class="nav-link" href="../academy/index.html">GAP Academy — Hands-On Courses</a></li><li><a class="nav-link" href="../academy/liftoff-first-supergraph.html">Course 1: Lift-Off — First Supergraph</a></li><li><a class="nav-link" href="../academy/mcp-and-ai-assistants.html">Course 2: MCP, AG-UI &amp; AI Assistants</a></li><li><a class="nav-link" href="../academy/connectors-and-batching.html">Course 3: REST, SQL &amp; N+1 Batching</a></li><li><a class="nav-link" href="../academy/enterprise-zero-trust.html">Course 4: Zero-Trust, Cedar &amp; HTTP/3</a></li>
+  </ul>
+</div>
+<div class="nav-group" data-section-id="concepts">
+  <p class="nav-group-title" id="side-concepts">Core Concepts</p>
+  <ul aria-labelledby="side-concepts">
+    <li><a class="nav-link" href="../concepts/architecture.html">Three-Plane Architecture</a></li><li><a class="nav-link" href="../concepts/progressive-disclosure.html">Progressive Disclosure (651 Tokens)</a></li><li><a class="nav-link" href="../concepts/gap-ql-and-joins.html">GAP-QL &amp; Batched Joins</a></li>
+  </ul>
+</div>
+<div class="nav-group" data-section-id="connectors">
+  <p class="nav-group-title" id="side-connectors">Connect Data &amp; Tools (NGC)</p>
+  <ul aria-labelledby="side-connectors">
+    <li><a class="nav-link" href="../connectors/overview.html">Native Graph Connectors (NGC)</a></li>
+  </ul>
+</div>
+<div class="nav-group" data-section-id="agents">
+  <p class="nav-group-title" id="side-agents">AI Agent Hosts &amp; Routers</p>
+  <ul aria-labelledby="side-agents">
+    <li><a class="nav-link is-active" href="facades-and-hosts.html" aria-current="page">MCP, A2A &amp; AG-UI Facades</a></li><li><a class="nav-link" href="routers-and-http3.html">System-1 Routers &amp; HTTP/3 QUIC</a></li>
+  </ul>
+</div>
+<div class="nav-group" data-section-id="security">
+  <p class="nav-group-title" id="side-security">Zero-Trust Governance</p>
+  <ul aria-labelledby="side-security">
+    <li><a class="nav-link" href="../security/zero-trust.html">Zero-Trust Governance &amp; Cedar</a></li>
+  </ul>
+</div>
+<div class="nav-group" data-section-id="lab">
+  <p class="nav-group-title" id="side-lab">Interactive Lab</p>
+  <ul aria-labelledby="side-lab">
+    <li><a class="nav-link" href="../lab/playground.html">Interactive Lab &amp; Calculator</a></li>
+  </ul>
+</div>
+<div class="nav-group" data-section-id="reference">
+  <p class="nav-group-title" id="side-reference">Operations &amp; Reference</p>
+  <ul aria-labelledby="side-reference">
+    <li><a class="nav-link" href="../reference/cli-and-ops.html">CLI, Runbooks &amp; 32 Crates</a></li><li><a class="nav-link" href="../reference/invariants-and-glossary.html">20 Invariants, STE-100 &amp; Paper</a></li>
+  </ul>
+</div>
+      </nav>
+      <div class="sidebar-status" role="status" aria-live="polite">
+        <span id="server-status-dot" class="status-dot" aria-hidden="true"></span>
+        <span id="server-status-text">Static Docs Mode</span>
+      </div>
+    </aside>
+
+    <main id="main-content" class="doc-main">
+      <article class="doc-article">
+        <nav class="breadcrumb" aria-label="Breadcrumbs">
+  <ol>
+    <li><a href="../index.html">Docs</a></li>
+    <li><a href="facades-and-hosts.html">AI Agent Hosts &amp; Routers</a></li>
+    <li><a href="facades-and-hosts.html" aria-current="page">MCP, A2A &amp; AG-UI Facades</a></li>
+  </ol>
+</nav>
+        <div class="article-meta-bar">
+          <span class="read-time">8 min</span>
+          <span class="copy copy-md-wrap">
+            <button type="button" class="copy-button copy-md-btn" command="--copy" commandfor="page-markdown-src">
+              <span class="icon" aria-hidden="true"></span>
+              <span class="btn-label">Copy as Markdown</span>
+            </button>
+            <span class="tip" role="status"></span>
+          </span>
+        </div>
+
+        <textarea id="page-markdown-src" class="visually-hidden" readonly tabindex="-1" aria-hidden="true"># MCP, A2A &amp; AG-UI Facades
+
+GAP simultaneously exposes:
+1. **MCP `2026-07-28` (`gap-mcp`):** 5 static tools (`gap_search`, `gap_describe`, `gap_query`, `gap_mutate`, `gap_task`) at 651 tokens over HTTP or `--stdio`.
+2. **A2A `v1.0` (`gap-a2a`):** 8-state AgentCard &amp; durable SQLite task leases (`INV-13`), plus cycle prevention (`INV-20`).
+3. **AG-UI `v1.0` (`gap-agui`):** `POST /ag-ui` SSE streams, compact `StateDelta`, human-in-the-loop interrupts, and escaped `&lt;gap:untrusted&gt;` envelopes.</textarea>
+
+        <h1 id="article-title" tabindex="-1">MCP, A2A &amp; AG-UI Facades</h1>
+        <p class="article-lead">One running GAP gateway simultaneously serves three open AI interoperability protocols—MCP 2026-07-28, Agent2Agent (A2A v1.0), and AG-UI v1.0 SSE—without asking existing host clients to rewrite their protocol stacks.</p>
+
+        <section class="learn-card" aria-labelledby="learn-heading">
+  <h2 id="learn-heading">What you&#x27;ll learn</h2>
+  <ul><li>How all 5 static MCP meta-tools map onto progressive GAP-QL discovery and guarded mutations.</li><li>Expose an A2A Agent Card with durable SQLite task leases and cycle detection (<code>INV-20</code>).</li><li>Stream structured AG-UI <code>v1.0</code> events and Cedar human-in-the-loop approval interrupts over SSE.</li></ul>
+</section>
+        <details class="toc-inline"><summary>On this page</summary><nav class="toc-inline-links" aria-label="On this page"><a class="toc-inline-link" href="#three-axis-flow">Three-Axis Interoperability Stack</a><a class="toc-inline-link" href="#mcp-facade">Vertical Tool Facade: MCP 2026-07-28 (<code>651</code> Tokens)</a><a class="toc-inline-link" href="#a2a-and-agui">Horizontal A2A v1.0 &amp; Frontend AG-UI v1.0</a></nav></details>
+
+        <section id="three-axis-flow" tabindex="-1" class="doc-section">
+  <h2>Three-Axis Interoperability Stack</h2>
+  <figure class="diagram-frame">
+  <svg role="img" aria-label="AI Host Integration via MCP 2026-07-28, A2A v1.0, AG-UI v1.0, and NGC" viewBox="0 0 860 206" width="860" height="206" xmlns="http://www.w3.org/2000/svg">
+    <title>AI Host Integration via MCP 2026-07-28, A2A v1.0, AG-UI v1.0, and NGC</title>
+    <defs>
+      <marker id="ff-arr-accent" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+        <path d="M 0 1.5 L 9 5 L 0 8.5 z" fill="var(--accent)"/>
+      </marker>
+      <marker id="ff-arr-ok" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+        <path d="M 0 1.5 L 9 5 L 0 8.5 z" fill="var(--ok)"/>
+      </marker>
+    </defs>
+    <rect x="12" y="20" width="192" height="162" rx="10" fill="var(--surface-alt)" stroke="var(--border)"/>
+    <text x="108" y="54" text-anchor="middle" fill="var(--text)" font-size="13.5" font-weight="700">AI Hosts &amp; UI</text>
+    <text x="108" y="90" text-anchor="middle" fill="var(--muted)" font-size="12">Claude · Cursor</text>
+    <text x="108" y="114" text-anchor="middle" fill="var(--muted)" font-size="12">Antigravity</text>
+    <text x="108" y="138" text-anchor="middle" fill="var(--accent)" font-size="12" font-weight="600">AG-UI Clients</text>
+
+    <line x1="204" y1="101" x2="224" y2="101" stroke="var(--accent)" stroke-width="2" marker-end="url(#ff-arr-accent)"/>
+    <rect x="226" y="20" width="192" height="162" rx="10" fill="var(--surface-alt)" stroke="var(--accent)"/>
+    <text x="322" y="54" text-anchor="middle" fill="var(--accent)" font-size="13.5" font-weight="700">HTTP/2 + HTTP/3 QUIC</text>
+    <text x="322" y="90" text-anchor="middle" fill="var(--text)" font-size="12">TLS 1.3 (0-RTT off)</text>
+    <text x="322" y="114" text-anchor="middle" fill="var(--muted)" font-size="12">/graphql · /mcp</text>
+    <text x="322" y="138" text-anchor="middle" fill="var(--muted)" font-size="12">/ag-ui · A2A v1.0</text>
+
+    <line x1="418" y1="101" x2="438" y2="101" stroke="var(--ok)" stroke-width="2" marker-end="url(#ff-arr-ok)"/>
+    <rect x="440" y="20" width="192" height="162" rx="10" fill="var(--surface-alt)" stroke="var(--ok)" stroke-width="2"/>
+    <text x="536" y="48" text-anchor="middle" fill="var(--ok)" font-size="13.5" font-weight="700">GAP Gateway</text>
+    <text x="536" y="66" text-anchor="middle" fill="var(--ok)" font-size="11.5" font-weight="600">(gap-server)</text>
+    <text x="536" y="98" text-anchor="middle" fill="var(--text)" font-size="12">Cedar · ArcSwap</text>
+    <text x="536" y="122" text-anchor="middle" fill="var(--text)" font-size="12">DataLoader · BLAKE3</text>
+    <text x="536" y="148" text-anchor="middle" fill="var(--muted)" font-size="11.5">5,013 req/s H3 · 28.86ms</text>
+
+    <line x1="632" y1="101" x2="654" y2="101" stroke="var(--ok)" stroke-width="2" marker-end="url(#ff-arr-ok)"/>
+    <rect x="656" y="20" width="192" height="162" rx="10" fill="var(--surface-alt)" stroke="var(--border)"/>
+    <text x="752" y="54" text-anchor="middle" fill="var(--text)" font-size="13.5" font-weight="700">6 NGC Connectors</text>
+    <text x="752" y="90" text-anchor="middle" fill="var(--muted)" font-size="12">OpenAPI · SQL</text>
+    <text x="752" y="114" text-anchor="middle" fill="var(--muted)" font-size="12">GraphQL · gRPC</text>
+    <text x="752" y="138" text-anchor="middle" fill="var(--muted)" font-size="12">CLI · Code AST</text>
+  </svg>
+  <figcaption class="diagram-caption">AI Host Integration via MCP 2026-07-28, A2A v1.0, AG-UI v1.0, and NGC</figcaption>
+</figure><p>Think of GAP's facades as compatibility translators in front of one core engine: vertical tool hosts speak MCP, peer agent networks speak A2A, and browser/copilots speak AG-UI—all sharing the exact same immutable snapshot and Cedar policy checks.</p>
+</section><section id="mcp-facade" tabindex="-1" class="doc-section">
+  <h2>Vertical Tool Facade: MCP 2026-07-28 (<code>651</code> Tokens)</h2>
+  <div tabindex="0" role="region" aria-labelledby="cap-993dfda7" class="table-wrapper">
+  <table class="data-table" style="--col-2: &quot;Behavior&quot;; --col-3: &quot;Policy / Safety Effect&quot;;">
+    <caption id="cap-993dfda7">Five static MCP meta-tools exposed by adapters/gap-mcp</caption>
+    <thead><tr><th scope="col">Tool Name</th><th scope="col">Behavior</th><th scope="col">Policy / Safety Effect</th></tr></thead>
+    <tbody><tr><th scope="row"><code>gap_search</code></th><td>Hybrid BM25 + HNSW search across active branches (<code>L1</code>).</td><td>Pre-filtered by Cedar visibility bitset (<code>INV-05</code>).</td></tr>
+<tr><th scope="row"><code>gap_describe</code></th><td>Branch overview (<code>L0</code>) or exact SDL type hydration (<code>L2</code>).</td><td>Serves only approved <code>desc_hash</code> text (<code>INV-08</code>).</td></tr>
+<tr><th scope="row"><code>gap_query</code></th><td>Executes read-only batched <code>GAP-QL</code> queries.</td><td>Enforces read-only annotation + PlanCache <code>TenantId</code> key.</td></tr>
+<tr><th scope="row"><code>gap_mutate</code></th><td>Executes state-changing mutations.</td><td>Requires <code>@sideEffect</code> + Cedar two-person approval when irreversible.</td></tr>
+<tr><th scope="row"><code>gap_task</code></th><td>Submits, polls, or cancels long-running A2A tasks.</td><td>Persists FSM transitions in SQLite before emission (<code>INV-13</code>).</td></tr></tbody>
+  </table>
+</div><p>Configure Claude Desktop, Cursor, or Antigravity via stdio (<code>gap serve --stdio</code>) or call Streamable HTTP (<code>POST /mcp</code>) directly:</p><figure class="code-figure">
+  <div class="code-toolbar">
+    <div class="code-meta">
+      <span class="code-lang">json</span>
+      <span class="code-title">mcp_servers.json — Stdio Client Config</span>
+    </div>
+    <span class="copy">
+      <button type="button" class="copy-button" command="--copy" commandfor="host-mcp-stdio" aria-label="Copy json code snippet (mcp_servers.json — Stdio Client Config)">
+        <span class="icon" aria-hidden="true"></span>
+      </button>
+      <span class="tip" role="status"></span>
+    </span>
+  </div>
+  <pre role="region" aria-label="mcp_servers.json — Stdio Client Config" tabindex="0"><code id="host-mcp-stdio" class="language-json">{
+  &quot;mcpServers&quot;: {
+    &quot;gap-gateway&quot;: {
+      &quot;command&quot;: &quot;/usr/local/bin/gap&quot;,
+      &quot;args&quot;: [&quot;serve&quot;, &quot;--config&quot;, &quot;/etc/gap/gap.toml&quot;, &quot;--stdio&quot;]
+    }
+  }
+}</code></pre>
+</figure><figure class="code-figure">
+  <div class="code-toolbar">
+    <div class="code-meta">
+      <span class="code-lang">terminal</span>
+      <span class="code-title">Terminal — Live HTTP MCP 2026-07-28 Call</span>
+    </div>
+    <span class="copy">
+      <button type="button" class="copy-button" command="--copy" commandfor="host-mcp-http" aria-label="Copy terminal code snippet (Terminal — Live HTTP MCP 2026-07-28 Call)">
+        <span class="icon" aria-hidden="true"></span>
+      </button>
+      <span class="tip" role="status"></span>
+    </span>
+  </div>
+  <pre role="region" aria-label="Terminal — Live HTTP MCP 2026-07-28 Call" tabindex="0"><code id="host-mcp-http" class="language-terminal">curl -sS -X POST http://127.0.0.1:8080/mcp \
+  -H &quot;Content-Type: application/json&quot; \
+  -H &quot;Accept: application/json, text/event-stream&quot; \
+  -H &quot;MCP-Protocol-Version: 2026-07-28&quot; \
+  -H &quot;Mcp-Method: tools/call&quot; \
+  -H &quot;Mcp-Name: gap_query&quot; \
+  -H &quot;Authorization: Bearer gap_dev_skeleton_key_01&quot; \
+  -d &#x27;{&quot;jsonrpc&quot;:&quot;2.0&quot;,&quot;id&quot;:1,&quot;method&quot;:&quot;tools/call&quot;,&quot;params&quot;:{&quot;_meta&quot;:{&quot;io.modelcontextprotocol/protocolVersion&quot;:&quot;2026-07-28&quot;,&quot;io.modelcontextprotocol/clientCapabilities&quot;:{}},&quot;name&quot;:&quot;gap_query&quot;,&quot;arguments&quot;:{&quot;query&quot;:&quot;{ customer(id: 2) { id name } customer_notes(customer_id: 2) }&quot;}}}&#x27;</code></pre>
+</figure>
+</section><section id="a2a-and-agui" tabindex="-1" class="doc-section">
+  <h2>Horizontal A2A v1.0 &amp; Frontend AG-UI v1.0</h2>
+  <ul>
+  <li><strong>A2A v1.0 Task Binding (<code>adapters/gap-a2a</code>):</strong> Builds durable 8-state asynchronous task lifecycles backed by SQLite leases with monotonic hop counters that fail closed on delegation loops (<code>GAP_LOOP_DETECTED</code>, <code>INV-20</code>).</li>
+  <li><strong>AG-UI v1.0 Event Streaming (<code>adapters/gap-agui</code>):</strong> Exposes <code>POST /ag-ui</code> SSE streaming typed events (<code>RUN_STARTED</code>, <code>STEP_STARTED</code>, <code>TOOL_CALL_*</code>, <code>STATE_SNAPSHOT</code>, <code>RUN_FINISHED</code>). When Cedar requires human confirmation on an <code>IRREVERSIBLE</code> mutation, AG-UI pauses via a native <code>RUN_FINISHED</code> interrupt and resumes cleanly after approval.</li>
+</ul><figure class="code-figure">
+  <div class="code-toolbar">
+    <div class="code-meta">
+      <span class="code-lang">terminal</span>
+      <span class="code-title">Terminal — Stream AG-UI v1.0 SSE</span>
+    </div>
+    <span class="copy">
+      <button type="button" class="copy-button" command="--copy" commandfor="host-agui-curl" aria-label="Copy terminal code snippet (Terminal — Stream AG-UI v1.0 SSE)">
+        <span class="icon" aria-hidden="true"></span>
+      </button>
+      <span class="tip" role="status"></span>
+    </span>
+  </div>
+  <pre role="region" aria-label="Terminal — Stream AG-UI v1.0 SSE" tabindex="0"><code id="host-agui-curl" class="language-terminal">curl -sS -N -X POST http://127.0.0.1:8080/ag-ui \
+  -H &quot;Content-Type: application/json&quot; \
+  -H &quot;Accept: text/event-stream&quot; \
+  -H &quot;Authorization: Bearer gap_dev_skeleton_key_01&quot; \
+  -d &#x27;{&quot;threadId&quot;:&quot;demo-1&quot;,&quot;runId&quot;:&quot;r-1&quot;,&quot;messages&quot;:[],&quot;forwardedProps&quot;:{&quot;graphql&quot;:{&quot;query&quot;:&quot;{ customer(id: 1) { id name tier } customer_notes(customer_id: 1) }&quot;}}}&#x27;</code></pre>
+</figure><figure class="code-figure">
+  <div class="code-toolbar">
+    <div class="code-meta">
+      <span class="code-lang">text</span>
+      <span class="code-title">Expected SSE Event Stream</span>
+    </div>
+    <span class="copy">
+      <button type="button" class="copy-button" command="--copy" commandfor="host-agui-out" aria-label="Copy text code snippet (Expected SSE Event Stream)">
+        <span class="icon" aria-hidden="true"></span>
+      </button>
+      <span class="tip" role="status"></span>
+    </span>
+  </div>
+  <pre role="region" aria-label="Expected SSE Event Stream" tabindex="0"><code id="host-agui-out" class="language-text">data: {&quot;type&quot;:&quot;RUN_STARTED&quot;,&quot;threadId&quot;:&quot;demo-1&quot;,&quot;runId&quot;:&quot;r-1&quot;,&quot;metadata&quot;:{&quot;generation&quot;:1,&quot;tenant&quot;:&quot;default&quot;}}
+data: {&quot;type&quot;:&quot;TOOL_CALL_RESULT&quot;,&quot;toolCallName&quot;:&quot;gap_query&quot;,...}
+data: {&quot;type&quot;:&quot;STATE_SNAPSHOT&quot;,&quot;snapshot&quot;:{&quot;generation&quot;:1,&quot;lastData&quot;:{&quot;customer&quot;:{&quot;id&quot;:1,&quot;name&quot;:&quot;Ada Lovelace&quot;,&quot;tier&quot;:&quot;vip&quot;},...}}}
+data: {&quot;type&quot;:&quot;RUN_FINISHED&quot;,&quot;outcome&quot;:{&quot;type&quot;:&quot;success&quot;}}</code></pre>
+</figure>
+</section>
+
+        <nav class="doc-pager" aria-label="Article pagination"><a class="pager-card pager-prev" href="../connectors/overview.html"><span class="pager-dir">&larr; Previous</span><span class="pager-title">Native Graph Connectors (NGC)</span></a><a class="pager-card pager-next" href="routers-and-http3.html"><span class="pager-dir">Next &rarr;</span><span class="pager-title">System-1 Routers &amp; HTTP/3 QUIC</span></a></nav>
+      </article>
+
+      <footer class="doc-footer">
+        <p class="footer-note">Documentation, Learn &amp; Academy grounded 100% in repository source code, specs 00-09, and ADR-021 measurements.</p>
+        <div class="footer-links">
+          <a href="../paper/gap-paper.html">Paper (HTML)</a>
+          <a href="../paper/gap-paper.pdf">PDF</a>
+          <a href="../llms.txt">llms.txt</a>
+          <a href="../vi/agents/facades-and-hosts.html" hreflang="vi" lang="vi">Tiếng Việt</a>
+        </div>
+      </footer>
+    </main>
+
+    <aside class="toc-right" aria-label="On this page">
+      <div class="toc-sticky scroller">
+        <p class="toc-title">On this page</p>
+        <nav id="on-this-page-nav" class="toc-links" aria-label="On this page">
+          <a class="toc-link" href="#three-axis-flow">Three-Axis Interoperability Stack</a><a class="toc-link" href="#mcp-facade">Vertical Tool Facade: MCP 2026-07-28 (<code>651</code> Tokens)</a><a class="toc-link" href="#a2a-and-agui">Horizontal A2A v1.0 &amp; Frontend AG-UI v1.0</a>
+        </nav>
+      </div>
+    </aside>
+  </div>
+
+  <script src="../search-index.en.js"></script>
+  <script src="../app.js"></script>
+</body>
+</html>

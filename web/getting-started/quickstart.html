@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="color-scheme" content="light dark" />
+  <script>
+    try {
+      var s = localStorage.getItem("gap-color-scheme");
+      if (s === "light" || s === "dark") {
+        document.querySelector('meta[name="color-scheme"]').content = s;
+      }
+    } catch (_e) {}
+  </script>
+  <title>10-Minute Quickstart — GAP Docs</title>
+  <meta name="description" content="Validate gap.toml, boot the Walking Skeleton REST + MCP supergraph, run a joined query, and attach an AI host." />
+  <link rel="canonical" href="https://vnknowledge2014.github.io/GraphProtocol/getting-started/quickstart.html" />
+  <link rel="alternate" hreflang="en" href="quickstart.html" />
+  <link rel="alternate" hreflang="vi" href="../vi/getting-started/quickstart.html" />
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns=&#x27;http://www.w3.org/2000/svg&#x27; viewBox=&#x27;0 0 32 32&#x27;%3E%3Crect width=&#x27;32&#x27; height=&#x27;32&#x27; rx=&#x27;8&#x27; fill=&#x27;%230f4c81&#x27;/%3E%3Ctext x=&#x27;16&#x27; y=&#x27;22&#x27; text-anchor=&#x27;middle&#x27; font-family=&#x27;system-ui,sans-serif&#x27; font-weight=&#x27;800&#x27; font-size=&#x27;18&#x27; fill=&#x27;%23ffffff&#x27;%3EG%3C/text%3E%3C/svg%3E" />
+  <link rel="stylesheet" href="../styles.css" />
+</head>
+<body data-slug="quickstart" data-lang="en" data-section="start-here" data-web-root="../">
+  <a class="skip-link" href="#article-title">Skip to article content</a>
+
+  <header class="topbar">
+    <div class="topbar-inner">
+      <div class="topbar-left">
+        <button type="button" id="drawer-open" class="drawer-open-btn" aria-label="Open documentation menu" aria-controls="docs-drawer">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+            <path d="M4 6h16M4 12h16M4 18h16" />
+          </svg>
+        </button>
+        <a class="brand-link" href="../index.html">
+          <span class="brand-mark" aria-hidden="true">G</span>
+          <span class="brand-text"><strong>GAP</strong> <span class="brand-sub">GAP Docs</span></span>
+          <span class="badge-ver">v0.1.0-rc.1</span>
+        </a>
+      </div>
+
+      <nav class="top-nav" aria-label="Primary sections">
+        <a href="what-is-gap.html" aria-current="true" class="top-link is-active">Get Started</a><a href="../learn/graphql-and-gap-basics.html" class="top-link">Learn</a><a href="../academy/index.html" class="top-link">Academy</a><a href="../concepts/architecture.html" class="top-link">Architecture</a><a href="../security/zero-trust.html" class="top-link">Security</a><a href="../lab/playground.html" class="top-link">Lab</a><a href="../reference/cli-and-ops.html" class="top-link">Reference</a>
+      </nav>
+
+      <div class="topbar-controls">
+        <search class="search-wrap">
+          <label class="visually-hidden" for="global-search">Search GAP documentation across all guides</label>
+          <input id="global-search" type="search" placeholder="Search docs, Academy, INV... [/]" autocomplete="off" />
+          <div id="search-results" class="search-results scroller" role="region" aria-live="polite" hidden></div>
+        </search>
+        <nav class="lang-switch" aria-label="Language">
+          <span class="lang-current" aria-current="true">EN</span>
+          <a class="lang-alt" href="../vi/getting-started/quickstart.html" hreflang="vi" lang="vi">VI</a>
+        </nav>
+        <button type="button" id="theme-toggle-btn" class="theme-toggle" aria-label="Toggle Light / Dark theme">
+          <span class="icon-to-dark" aria-hidden="true">☽</span>
+          <span class="icon-to-light" aria-hidden="true">☀</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <dialog class="Drawer scroller" id="docs-drawer" aria-label="Documentation navigation drawer">
+    <nav class="Drawer-nav scroller" aria-label="Documentation sections">
+      <div class="Drawer-head">
+        <span class="Drawer-brand"><strong>GAP</strong> GAP Docs</span>
+        <button type="button" id="drawer-close" class="drawer-close-btn" aria-label="Close documentation menu">&times;</button>
+      </div>
+      <div class="nav-group" data-section-id="start-here">
+  <p class="nav-group-title" id="drawer-start-here">Start Here</p>
+  <ul aria-labelledby="drawer-start-here">
+    <li><a class="nav-link" href="../index.html">GAP Documentation Hub</a></li><li><a class="nav-link" href="what-is-gap.html">What is GAP?</a></li><li><a class="nav-link is-active" href="quickstart.html" aria-current="page">10-Minute Quickstart</a></li>
+  </ul>
+</div>
+<div class="nav-group" data-section-id="learn">
+  <p class="nav-group-title" id="drawer-learn">Learn Basics</p>
+  <ul aria-labelledby="drawer-learn">
+    <li><a class="nav-link" href="../learn/graphql-and-gap-basics.html">GraphQL &amp; GAP Basics</a></li><li><a class="nav-link" href="../learn/queries-mutations-joins.html">Arguments, Mutations &amp; Joins</a></li>
+  </ul>
+</div>
+<div class="nav-group" data-section-id="academy">
+  <p class="nav-group-title" id="drawer-academy">GAP Academy (Courses)</p>
+  <ul aria-labelledby="drawer-academy">
+    <li><a class="nav-link" href="../academy/index.html">GAP Academy — Hands-On Courses</a></li><li><a class="nav-link" href="../academy/liftoff-first-supergraph.html">Course 1: Lift-Off — First Supergraph</a></li><li><a class="nav-link" href="../academy/mcp-and-ai-assistants.html">Course 2: MCP, AG-UI &amp; AI Assistants</a></li><li><a class="nav-link" href="../academy/connectors-and-batching.html">Course 3: REST, SQL &amp; N+1 Batching</a></li><li><a class="nav-link" href="../academy/enterprise-zero-trust.html">Course 4: Zero-Trust, Cedar &amp; HTTP/3</a></li>
+  </ul>
+</div>
+<div class="nav-group" data-section-id="concepts">
+  <p class="nav-group-title" id="drawer-concepts">Core Concepts</p>
+  <ul aria-labelledby="drawer-concepts">
+    <li><a class="nav-link" href="../concepts/architecture.html">Three-Plane Architecture</a></li><li><a class="nav-link" href="../concepts/progressive-disclosure.html">Progressive Disclosure (651 Tokens)</a></li><li><a class="nav-link" href="../concepts/gap-ql-and-joins.html">GAP-QL &amp; Batched Joins</a></li>
+  </ul>
+</div>
+<div class="nav-group" data-section-id="connectors">
+  <p class="nav-group-title" id="drawer-connectors">Connect Data &amp; Tools (NGC)</p>
+  <ul aria-labelledby="drawer-connectors">
+    <li><a class="nav-link" href="../connectors/overview.html">Native Graph Connectors (NGC)</a></li>
+  </ul>
+</div>
+<div class="nav-group" data-section-id="agents">
+  <p class="nav-group-title" id="drawer-agents">AI Agent Hosts &amp; Routers</p>
+  <ul aria-labelledby="drawer-agents">
+    <li><a class="nav-link" href="../agents/facades-and-hosts.html">MCP, A2A &amp; AG-UI Facades</a></li><li><a class="nav-link" href="../agents/routers-and-http3.html">System-1 Routers &amp; HTTP/3 QUIC</a></li>
+  </ul>
+</div>
+<div class="nav-group" data-section-id="security">
+  <p class="nav-group-title" id="drawer-security">Zero-Trust Governance</p>
+  <ul aria-labelledby="drawer-security">
+    <li><a class="nav-link" href="../security/zero-trust.html">Zero-Trust Governance &amp; Cedar</a></li>
+  </ul>
+</div>
+<div class="nav-group" data-section-id="lab">
+  <p class="nav-group-title" id="drawer-lab">Interactive Lab</p>
+  <ul aria-labelledby="drawer-lab">
+    <li><a class="nav-link" href="../lab/playground.html">Interactive Lab &amp; Calculator</a></li>
+  </ul>
+</div>
+<div class="nav-group" data-section-id="reference">
+  <p class="nav-group-title" id="drawer-reference">Operations &amp; Reference</p>
+  <ul aria-labelledby="drawer-reference">
+    <li><a class="nav-link" href="../reference/cli-and-ops.html">CLI, Runbooks &amp; 32 Crates</a></li><li><a class="nav-link" href="../reference/invariants-and-glossary.html">20 Invariants, STE-100 &amp; Paper</a></li>
+  </ul>
+</div>
+    </nav>
+    <button type="button" id="drawer-backdrop-close" class="Drawer-backdrop" aria-label="Close documentation menu"></button>
+  </dialog>
+
+  <div class="docs-shell">
+    <aside class="sidebar scroller" aria-label="Documentation sections">
+      <nav aria-label="Documentation sections">
+        <div class="nav-group" data-section-id="start-here">
+  <p class="nav-group-title" id="side-start-here">Start Here</p>
+  <ul aria-labelledby="side-start-here">
+    <li><a class="nav-link" href="../index.html">GAP Documentation Hub</a></li><li><a class="nav-link" href="what-is-gap.html">What is GAP?</a></li><li><a class="nav-link is-active" href="quickstart.html" aria-current="page">10-Minute Quickstart</a></li>
+  </ul>
+</div>
+<div class="nav-group" data-section-id="learn">
+  <p class="nav-group-title" id="side-learn">Learn Basics</p>
+  <ul aria-labelledby="side-learn">
+    <li><a class="nav-link" href="../learn/graphql-and-gap-basics.html">GraphQL &amp; GAP Basics</a></li><li><a class="nav-link" href="../learn/queries-mutations-joins.html">Arguments, Mutations &amp; Joins</a></li>
+  </ul>
+</div>
+<div class="nav-group" data-section-id="academy">
+  <p class="nav-group-title" id="side-academy">GAP Academy (Courses)</p>
+  <ul aria-labelledby="side-academy">
+    <li><a class="nav-link" href="../academy/index.html">GAP Academy — Hands-On Courses</a></li><li><a class="nav-link" href="../academy/liftoff-first-supergraph.html">Course 1: Lift-Off — First Supergraph</a></li><li><a class="nav-link" href="../academy/mcp-and-ai-assistants.html">Course 2: MCP, AG-UI &amp; AI Assistants</a></li><li><a class="nav-link" href="../academy/connectors-and-batching.html">Course 3: REST, SQL &amp; N+1 Batching</a></li><li><a class="nav-link" href="../academy/enterprise-zero-trust.html">Course 4: Zero-Trust, Cedar &amp; HTTP/3</a></li>
+  </ul>
+</div>
+<div class="nav-group" data-section-id="concepts">
+  <p class="nav-group-title" id="side-concepts">Core Concepts</p>
+  <ul aria-labelledby="side-concepts">
+    <li><a class="nav-link" href="../concepts/architecture.html">Three-Plane Architecture</a></li><li><a class="nav-link" href="../concepts/progressive-disclosure.html">Progressive Disclosure (651 Tokens)</a></li><li><a class="nav-link" href="../concepts/gap-ql-and-joins.html">GAP-QL &amp; Batched Joins</a></li>
+  </ul>
+</div>
+<div class="nav-group" data-section-id="connectors">
+  <p class="nav-group-title" id="side-connectors">Connect Data &amp; Tools (NGC)</p>
+  <ul aria-labelledby="side-connectors">
+    <li><a class="nav-link" href="../connectors/overview.html">Native Graph Connectors (NGC)</a></li>
+  </ul>
+</div>
+<div class="nav-group" data-section-id="agents">
+  <p class="nav-group-title" id="side-agents">AI Agent Hosts &amp; Routers</p>
+  <ul aria-labelledby="side-agents">
+    <li><a class="nav-link" href="../agents/facades-and-hosts.html">MCP, A2A &amp; AG-UI Facades</a></li><li><a class="nav-link" href="../agents/routers-and-http3.html">System-1 Routers &amp; HTTP/3 QUIC</a></li>
+  </ul>
+</div>
+<div class="nav-group" data-section-id="security">
+  <p class="nav-group-title" id="side-security">Zero-Trust Governance</p>
+  <ul aria-labelledby="side-security">
+    <li><a class="nav-link" href="../security/zero-trust.html">Zero-Trust Governance &amp; Cedar</a></li>
+  </ul>
+</div>
+<div class="nav-group" data-section-id="lab">
+  <p class="nav-group-title" id="side-lab">Interactive Lab</p>
+  <ul aria-labelledby="side-lab">
+    <li><a class="nav-link" href="../lab/playground.html">Interactive Lab &amp; Calculator</a></li>
+  </ul>
+</div>
+<div class="nav-group" data-section-id="reference">
+  <p class="nav-group-title" id="side-reference">Operations &amp; Reference</p>
+  <ul aria-labelledby="side-reference">
+    <li><a class="nav-link" href="../reference/cli-and-ops.html">CLI, Runbooks &amp; 32 Crates</a></li><li><a class="nav-link" href="../reference/invariants-and-glossary.html">20 Invariants, STE-100 &amp; Paper</a></li>
+  </ul>
+</div>
+      </nav>
+      <div class="sidebar-status" role="status" aria-live="polite">
+        <span id="server-status-dot" class="status-dot" aria-hidden="true"></span>
+        <span id="server-status-text">Static Docs Mode</span>
+      </div>
+    </aside>
+
+    <main id="main-content" class="doc-main">
+      <article class="doc-article">
+        <nav class="breadcrumb" aria-label="Breadcrumbs">
+  <ol>
+    <li><a href="../index.html">Docs</a></li>
+    <li><a href="../index.html">Start Here</a></li>
+    <li><a href="quickstart.html" aria-current="page">10-Minute Quickstart</a></li>
+  </ol>
+</nav>
+        <div class="article-meta-bar">
+          <span class="read-time">10 min</span>
+          <span class="copy copy-md-wrap">
+            <button type="button" class="copy-button copy-md-btn" command="--copy" commandfor="page-markdown-src">
+              <span class="icon" aria-hidden="true"></span>
+              <span class="btn-label">Copy as Markdown</span>
+            </button>
+            <span class="tip" role="status"></span>
+          </span>
+        </div>
+
+        <textarea id="page-markdown-src" class="visually-hidden" readonly tabindex="-1" aria-hidden="true"># 10-Minute Quickstart
+
+Run the Walking Skeleton supergraph combining a REST OpenAPI backend (`shop`) and an MCP backend (`notes`).
+
+## 1. Validate Configuration
+```bash
+./target/dist/gap config check examples/walking-skeleton/gap.toml
+./target/dist/gap doctor --config examples/walking-skeleton/gap.toml
+```
+
+## 2. Start Upstream Fixtures &amp; Gateway
+```bash
+python3 examples/walking-skeleton/fixtures/rest_fixture.py --port 9101 &amp;
+python3 examples/walking-skeleton/fixtures/mcp_fixture.py --port 9102 &amp;
+./target/dist/gap serve --config examples/walking-skeleton/gap.toml
+```
+
+## 3. Run Cross-Branch Query
+Query `customer`, `orders` (OpenAPI) and `customer_notes` (MCP) in one HTTP call to `POST /graphql`.</textarea>
+
+        <h1 id="article-title" tabindex="-1">10-Minute Quickstart</h1>
+        <p class="article-lead">Follow these four steps to run the Walking Skeleton supergraph—combining a REST OpenAPI store (<code>shop</code>) and an MCP server (<code>notes</code>)—and query both in one typed request.</p>
+
+        <section class="learn-card" aria-labelledby="learn-heading">
+  <h2 id="learn-heading">What you&#x27;ll learn</h2>
+  <ul><li>Validate configuration files fail-closed with <code>gap config check</code> and <code>gap doctor</code>.</li><li>Boot the local REST + MCP sample fixtures alongside <code>gap serve</code>.</li><li>Send your first cross-branch GraphQL query joining both upstream sources.</li></ul>
+</section>
+        <details class="toc-inline"><summary>On this page</summary><nav class="toc-inline-links" aria-label="On this page"><a class="toc-inline-link" href="#prerequisites">Prerequisites</a><a class="toc-inline-link" href="#step-by-step">Step-by-Step Setup</a><a class="toc-inline-link" href="#connect-ai-host">Step 5: Connect MCP Hosts or Stream AG-UI Events</a></nav></details>
+
+        <section id="prerequisites" tabindex="-1" class="doc-section">
+  <h2>Prerequisites</h2>
+  <ul>
+  <li>Built <code>gap</code> binary (from release assets or <code>./dist/build-reproducible.sh --offline</code> at <code>./target/dist/gap</code>).</li>
+  <li>Python 3.10+ (for the built-in sample REST and MCP fixtures under <code>examples/walking-skeleton/fixtures/</code>).</li>
+</ul><aside class="callout callout-tip">
+  <p class="callout-title">Zero-Setup Browser Shortcut</p>
+  <div class="callout-body"><p>Already running <code>python3 web/serve.py --port 8787</code>? You can boot these exact fixtures with one click inside the <a href="../lab/playground.html">Interactive Lab</a>.</p></div>
+</aside><aside class="callout callout-note">
+  <p class="callout-title">Starting a Fresh Project?</p>
+  <div class="callout-body"><p>You can also scaffold a starter 5-file workspace anywhere using <code>./target/dist/gap init my-gateway</code> before customizing <code>gap.toml</code>.</p></div>
+</aside>
+</section><section id="step-by-step" tabindex="-1" class="doc-section">
+  <h2>Step-by-Step Setup</h2>
+  <ol class="steps-list">
+<li class="step-item">
+  <div class="step-badge" aria-hidden="true">1</div>
+  <div class="step-content">
+    <h3>Inspect and validate the configuration</h3>
+    <p>Run static validation against <code>examples/walking-skeleton/gap.toml</code> before starting listeners. Unknown keys, unreferenced inline secrets, or missing spec files fail closed immediately:</p><figure class="code-figure">
+  <div class="code-toolbar">
+    <div class="code-meta">
+      <span class="code-lang">terminal</span>
+      <span class="code-title">Terminal — Validate gap.toml</span>
+    </div>
+    <span class="copy">
+      <button type="button" class="copy-button" command="--copy" commandfor="qs-check" aria-label="Copy terminal code snippet (Terminal — Validate gap.toml)">
+        <span class="icon" aria-hidden="true"></span>
+      </button>
+      <span class="tip" role="status"></span>
+    </span>
+  </div>
+  <pre role="region" aria-label="Terminal — Validate gap.toml" tabindex="0"><code id="qs-check" class="language-terminal">./target/dist/gap config check examples/walking-skeleton/gap.toml
+./target/dist/gap doctor --config examples/walking-skeleton/gap.toml</code></pre>
+</figure><figure class="code-figure">
+  <div class="code-toolbar">
+    <div class="code-meta">
+      <span class="code-lang">text</span>
+      <span class="code-title">Expected Output (Exit 0 · OPS-044)</span>
+    </div>
+    <span class="copy">
+      <button type="button" class="copy-button" command="--copy" commandfor="qs-check-out" aria-label="Copy text code snippet (Expected Output (Exit 0 · OPS-044))">
+        <span class="icon" aria-hidden="true"></span>
+      </button>
+      <span class="tip" role="status"></span>
+    </span>
+  </div>
+  <pre role="region" aria-label="Expected Output (Exit 0 · OPS-044)" tabindex="0"><code id="qs-check-out" class="language-text">ok: `examples/walking-skeleton/gap.toml` valid (2 branches)
+[ok] config.parse: parsed examples/walking-skeleton/gap.toml (profile=dev)
+[ok] security.sandbox: OS sandbox operational
+[ok] security.egress_guard: egress SSRF self-test matrix passed
+[warn] models.s1: model cache incomplete offline; degrades safely to baseline (RTE-044)
+summary: 11 ok, 1 warn, 0 fail, 0 skip</code></pre>
+</figure><ul><li><strong>Notice:</strong> Both commands exit <code>0</code> (<code>OPS-044</code>), and the <code>dev-agent</code> API key is hashed with BLAKE3 in TOML—no plaintext secret is ever persisted.</li></ul>
+  </div>
+</li>
+<li class="step-item">
+  <div class="step-badge" aria-hidden="true">2</div>
+  <div class="step-content">
+    <h3>Start both upstream fixtures</h3>
+    <p>Open two terminal tabs (or run in background) to launch the mock REST API on port <code>9101</code> and the MCP server on port <code>9102</code>:</p><figure class="code-figure">
+  <div class="code-toolbar">
+    <div class="code-meta">
+      <span class="code-lang">terminal</span>
+      <span class="code-title">Terminal — Mock OpenAPI + MCP Upstreams</span>
+    </div>
+    <span class="copy">
+      <button type="button" class="copy-button" command="--copy" commandfor="qs-fixtures" aria-label="Copy terminal code snippet (Terminal — Mock OpenAPI + MCP Upstreams)">
+        <span class="icon" aria-hidden="true"></span>
+      </button>
+      <span class="tip" role="status"></span>
+    </span>
+  </div>
+  <pre role="region" aria-label="Terminal — Mock OpenAPI + MCP Upstreams" tabindex="0"><code id="qs-fixtures" class="language-terminal">python3 examples/walking-skeleton/fixtures/rest_fixture.py --port 9101 &amp;
+python3 examples/walking-skeleton/fixtures/mcp_fixture.py --port 9102 &amp;</code></pre>
+</figure>
+  </div>
+</li>
+<li class="step-item">
+  <div class="step-badge" aria-hidden="true">3</div>
+  <div class="step-content">
+    <h3>Boot the GAP Gateway</h3>
+    <p>Start <code>gap serve</code> pointing at the walking-skeleton configuration:</p><figure class="code-figure">
+  <div class="code-toolbar">
+    <div class="code-meta">
+      <span class="code-lang">terminal</span>
+      <span class="code-title">Terminal — Start Gateway</span>
+    </div>
+    <span class="copy">
+      <button type="button" class="copy-button" command="--copy" commandfor="qs-serve" aria-label="Copy terminal code snippet (Terminal — Start Gateway)">
+        <span class="icon" aria-hidden="true"></span>
+      </button>
+      <span class="tip" role="status"></span>
+    </span>
+  </div>
+  <pre role="region" aria-label="Terminal — Start Gateway" tabindex="0"><code id="qs-serve" class="language-terminal">./target/dist/gap serve --config examples/walking-skeleton/gap.toml</code></pre>
+</figure><ul><li><strong>Readiness probe:</strong> <code>GET http://127.0.0.1:8080/readyz</code> returns HTTP <code>200</code> (<code>{"status":"ready","generation":1}</code>) once snapshot generation <code>1</code> is pinned.</li></ul>
+  </div>
+</li>
+<li class="step-item">
+  <div class="step-badge" aria-hidden="true">4</div>
+  <div class="step-content">
+    <h3>Execute your first cross-branch query</h3>
+    <p>Fetch customer profile and order rows from OpenAPI <code>shop</code> alongside the JSON notes payload from MCP <code>notes</code> (note: <code>customer_notes</code> returns a <code>JSON</code> scalar leaf, so select it without subfields):</p><figure class="code-figure">
+  <div class="code-toolbar">
+    <div class="code-meta">
+      <span class="code-lang">terminal</span>
+      <span class="code-title">Terminal — Federated GraphQL Query</span>
+    </div>
+    <span class="copy">
+      <button type="button" class="copy-button" command="--copy" commandfor="qs-curl" aria-label="Copy terminal code snippet (Terminal — Federated GraphQL Query)">
+        <span class="icon" aria-hidden="true"></span>
+      </button>
+      <span class="tip" role="status"></span>
+    </span>
+  </div>
+  <pre role="region" aria-label="Terminal — Federated GraphQL Query" tabindex="0"><code id="qs-curl" class="language-terminal">curl -sS -X POST http://127.0.0.1:8080/graphql \
+  -H &quot;Content-Type: application/json&quot; \
+  -H &quot;Accept: application/graphql-response+json&quot; \
+  -H &quot;Authorization: Bearer gap_dev_skeleton_key_01&quot; \
+  -d &#x27;{&quot;query&quot;: &quot;{ customer(id: 1) { id name tier } orders(customer_id: 1) { id total_cents status } customer_notes(customer_id: 1) }&quot;}&#x27; | python3 -m json.tool</code></pre>
+</figure><figure class="code-figure">
+  <div class="code-toolbar">
+    <div class="code-meta">
+      <span class="code-lang">json</span>
+      <span class="code-title">Expected Output — HTTP 200 JSON</span>
+    </div>
+    <span class="copy">
+      <button type="button" class="copy-button" command="--copy" commandfor="qs-curl-out" aria-label="Copy json code snippet (Expected Output — HTTP 200 JSON)">
+        <span class="icon" aria-hidden="true"></span>
+      </button>
+      <span class="tip" role="status"></span>
+    </span>
+  </div>
+  <pre role="region" aria-label="Expected Output — HTTP 200 JSON" tabindex="0"><code id="qs-curl-out" class="language-json">{
+  &quot;data&quot;: {
+    &quot;customer&quot;: { &quot;id&quot;: 1, &quot;name&quot;: &quot;Ada Lovelace&quot;, &quot;tier&quot;: &quot;vip&quot; },
+    &quot;orders&quot;: [
+      { &quot;id&quot;: 101, &quot;total_cents&quot;: 4200, &quot;status&quot;: &quot;paid&quot; },
+      { &quot;id&quot;: 103, &quot;total_cents&quot;: 8500, &quot;status&quot;: &quot;pending&quot; }
+    ],
+    &quot;customer_notes&quot;: {
+      &quot;customer_id&quot;: 1,
+      &quot;notes&quot;: [{ &quot;note_id&quot;: &quot;n-1&quot;, &quot;customer_id&quot;: 1, &quot;summary&quot;: &quot;Prefers consolidated monthly invoice&quot; }]
+    }
+  },
+  &quot;extensions&quot;: {
+    &quot;gap&quot;: { &quot;cost&quot;: { &quot;actual&quot;: 7, &quot;planned&quot;: 306 }, &quot;generation&quot;: 1, &quot;partial&quot;: false }
+  }
+}</code></pre>
+</figure>
+  </div>
+</li>
+</ol>
+</section><section id="connect-ai-host" tabindex="-1" class="doc-section">
+  <h2>Step 5: Connect MCP Hosts or Stream AG-UI Events</h2>
+  <p>Rather than exposing every REST endpoint individually, attach your AI client to GAP's fixed 5-tool MCP <code>2026-07-28</code> server over stdio or HTTP, or stream AG-UI <code>v1.0</code> events over SSE. Read full host details on <a href="../agents/facades-and-hosts.html">MCP, A2A &amp; AG-UI Facades</a>.</p><figure class="code-figure">
+  <div class="code-toolbar">
+    <div class="code-meta">
+      <span class="code-lang">json</span>
+      <span class="code-title">mcp_servers.json — Stdio Client Config</span>
+    </div>
+    <span class="copy">
+      <button type="button" class="copy-button" command="--copy" commandfor="qs-mcp-cfg" aria-label="Copy json code snippet (mcp_servers.json — Stdio Client Config)">
+        <span class="icon" aria-hidden="true"></span>
+      </button>
+      <span class="tip" role="status"></span>
+    </span>
+  </div>
+  <pre role="region" aria-label="mcp_servers.json — Stdio Client Config" tabindex="0"><code id="qs-mcp-cfg" class="language-json">{
+  &quot;mcpServers&quot;: {
+    &quot;gap-gateway&quot;: {
+      &quot;command&quot;: &quot;/path/to/GraphProtocol/target/dist/gap&quot;,
+      &quot;args&quot;: [&quot;serve&quot;, &quot;--config&quot;, &quot;examples/walking-skeleton/gap.toml&quot;, &quot;--stdio&quot;]
+    }
+  }
+}</code></pre>
+</figure><figure class="code-figure">
+  <div class="code-toolbar">
+    <div class="code-meta">
+      <span class="code-lang">terminal</span>
+      <span class="code-title">Terminal — Live AG-UI v1.0 SSE Stream</span>
+    </div>
+    <span class="copy">
+      <button type="button" class="copy-button" command="--copy" commandfor="qs-agui-curl" aria-label="Copy terminal code snippet (Terminal — Live AG-UI v1.0 SSE Stream)">
+        <span class="icon" aria-hidden="true"></span>
+      </button>
+      <span class="tip" role="status"></span>
+    </span>
+  </div>
+  <pre role="region" aria-label="Terminal — Live AG-UI v1.0 SSE Stream" tabindex="0"><code id="qs-agui-curl" class="language-terminal">curl -sS -N -X POST http://127.0.0.1:8080/ag-ui \
+  -H &quot;Content-Type: application/json&quot; \
+  -H &quot;Accept: text/event-stream&quot; \
+  -H &quot;Authorization: Bearer gap_dev_skeleton_key_01&quot; \
+  -d &#x27;{&quot;threadId&quot;:&quot;t1&quot;,&quot;runId&quot;:&quot;r1&quot;,&quot;messages&quot;:[],&quot;forwardedProps&quot;:{&quot;graphql&quot;:{&quot;query&quot;:&quot;{ customer(id: 1) { id name } customer_notes(customer_id: 1) }&quot;}}}&#x27;</code></pre>
+</figure>
+</section>
+
+        <nav class="doc-pager" aria-label="Article pagination"><a class="pager-card pager-prev" href="what-is-gap.html"><span class="pager-dir">&larr; Previous</span><span class="pager-title">What is GAP?</span></a><a class="pager-card pager-next" href="../learn/graphql-and-gap-basics.html"><span class="pager-dir">Next &rarr;</span><span class="pager-title">GraphQL &amp; GAP Basics</span></a></nav>
+      </article>
+
+      <footer class="doc-footer">
+        <p class="footer-note">Documentation, Learn &amp; Academy grounded 100% in repository source code, specs 00-09, and ADR-021 measurements.</p>
+        <div class="footer-links">
+          <a href="../paper/gap-paper.html">Paper (HTML)</a>
+          <a href="../paper/gap-paper.pdf">PDF</a>
+          <a href="../llms.txt">llms.txt</a>
+          <a href="../vi/getting-started/quickstart.html" hreflang="vi" lang="vi">Tiếng Việt</a>
+        </div>
+      </footer>
+    </main>
+
+    <aside class="toc-right" aria-label="On this page">
+      <div class="toc-sticky scroller">
+        <p class="toc-title">On this page</p>
+        <nav id="on-this-page-nav" class="toc-links" aria-label="On this page">
+          <a class="toc-link" href="#prerequisites">Prerequisites</a><a class="toc-link" href="#step-by-step">Step-by-Step Setup</a><a class="toc-link" href="#connect-ai-host">Step 5: Connect MCP Hosts or Stream AG-UI Events</a>
+        </nav>
+      </div>
+    </aside>
+  </div>
+
+  <script src="../search-index.en.js"></script>
+  <script src="../app.js"></script>
+</body>
+</html>

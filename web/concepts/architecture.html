@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="color-scheme" content="light dark" />
+  <script>
+    try {
+      var s = localStorage.getItem("gap-color-scheme");
+      if (s === "light" || s === "dark") {
+        document.querySelector('meta[name="color-scheme"]').content = s;
+      }
+    } catch (_e) {}
+  </script>
+  <title>Three-Plane Architecture — GAP Docs</title>
+  <meta name="description" content="Why Execution, Discovery, and Control sit on strictly separated planes backed by lock-free ArcSwap snapshots and AVL OrdMap." />
+  <link rel="canonical" href="https://vnknowledge2014.github.io/GraphProtocol/concepts/architecture.html" />
+  <link rel="alternate" hreflang="en" href="architecture.html" />
+  <link rel="alternate" hreflang="vi" href="../vi/concepts/architecture.html" />
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns=&#x27;http://www.w3.org/2000/svg&#x27; viewBox=&#x27;0 0 32 32&#x27;%3E%3Crect width=&#x27;32&#x27; height=&#x27;32&#x27; rx=&#x27;8&#x27; fill=&#x27;%230f4c81&#x27;/%3E%3Ctext x=&#x27;16&#x27; y=&#x27;22&#x27; text-anchor=&#x27;middle&#x27; font-family=&#x27;system-ui,sans-serif&#x27; font-weight=&#x27;800&#x27; font-size=&#x27;18&#x27; fill=&#x27;%23ffffff&#x27;%3EG%3C/text%3E%3C/svg%3E" />
+  <link rel="stylesheet" href="../styles.css" />
+</head>
+<body data-slug="architecture" data-lang="en" data-section="concepts" data-web-root="../">
+  <a class="skip-link" href="#article-title">Skip to article content</a>
+
+  <header class="topbar">
+    <div class="topbar-inner">
+      <div class="topbar-left">
+        <button type="button" id="drawer-open" class="drawer-open-btn" aria-label="Open documentation menu" aria-controls="docs-drawer">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+            <path d="M4 6h16M4 12h16M4 18h16" />
+          </svg>
+        </button>
+        <a class="brand-link" href="../index.html">
+          <span class="brand-mark" aria-hidden="true">G</span>
+          <span class="brand-text"><strong>GAP</strong> <span class="brand-sub">GAP Docs</span></span>
+          <span class="badge-ver">v0.1.0-rc.1</span>
+        </a>
+      </div>
+
+      <nav class="top-nav" aria-label="Primary sections">
+        <a href="../getting-started/what-is-gap.html" class="top-link">Get Started</a><a href="../learn/graphql-and-gap-basics.html" class="top-link">Learn</a><a href="../academy/index.html" class="top-link">Academy</a><a href="architecture.html" aria-current="true" class="top-link is-active">Architecture</a><a href="../security/zero-trust.html" class="top-link">Security</a><a href="../lab/playground.html" class="top-link">Lab</a><a href="../reference/cli-and-ops.html" class="top-link">Reference</a>
+      </nav>
+
+      <div class="topbar-controls">
+        <search class="search-wrap">
+          <label class="visually-hidden" for="global-search">Search GAP documentation across all guides</label>
+          <input id="global-search" type="search" placeholder="Search docs, Academy, INV... [/]" autocomplete="off" />
+          <div id="search-results" class="search-results scroller" role="region" aria-live="polite" hidden></div>
+        </search>
+        <nav class="lang-switch" aria-label="Language">
+          <span class="lang-current" aria-current="true">EN</span>
+          <a class="lang-alt" href="../vi/concepts/architecture.html" hreflang="vi" lang="vi">VI</a>
+        </nav>
+        <button type="button" id="theme-toggle-btn" class="theme-toggle" aria-label="Toggle Light / Dark theme">
+          <span class="icon-to-dark" aria-hidden="true">☽</span>
+          <span class="icon-to-light" aria-hidden="true">☀</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <dialog class="Drawer scroller" id="docs-drawer" aria-label="Documentation navigation drawer">
+    <nav class="Drawer-nav scroller" aria-label="Documentation sections">
+      <div class="Drawer-head">
+        <span class="Drawer-brand"><strong>GAP</strong> GAP Docs</span>
+        <button type="button" id="drawer-close" class="drawer-close-btn" aria-label="Close documentation menu">&times;</button>
+      </div>
+      <div class="nav-group" data-section-id="start-here">
+  <p class="nav-group-title" id="drawer-start-here">Start Here</p>
+  <ul aria-labelledby="drawer-start-here">
+    <li><a class="nav-link" href="../index.html">GAP Documentation Hub</a></li><li><a class="nav-link" href="../getting-started/what-is-gap.html">What is GAP?</a></li><li><a class="nav-link" href="../getting-started/quickstart.html">10-Minute Quickstart</a></li>
+  </ul>
+</div>
+<div class="nav-group" data-section-id="learn">
+  <p class="nav-group-title" id="drawer-learn">Learn Basics</p>
+  <ul aria-labelledby="drawer-learn">
+    <li><a class="nav-link" href="../learn/graphql-and-gap-basics.html">GraphQL &amp; GAP Basics</a></li><li><a class="nav-link" href="../learn/queries-mutations-joins.html">Arguments, Mutations &amp; Joins</a></li>
+  </ul>
+</div>
+<div class="nav-group" data-section-id="academy">
+  <p class="nav-group-title" id="drawer-academy">GAP Academy (Courses)</p>
+  <ul aria-labelledby="drawer-academy">
+    <li><a class="nav-link" href="../academy/index.html">GAP Academy — Hands-On Courses</a></li><li><a class="nav-link" href="../academy/liftoff-first-supergraph.html">Course 1: Lift-Off — First Supergraph</a></li><li><a class="nav-link" href="../academy/mcp-and-ai-assistants.html">Course 2: MCP, AG-UI &amp; AI Assistants</a></li><li><a class="nav-link" href="../academy/connectors-and-batching.html">Course 3: REST, SQL &amp; N+1 Batching</a></li><li><a class="nav-link" href="../academy/enterprise-zero-trust.html">Course 4: Zero-Trust, Cedar &amp; HTTP/3</a></li>
+  </ul>
+</div>
+<div class="nav-group" data-section-id="concepts">
+  <p class="nav-group-title" id="drawer-concepts">Core Concepts</p>
+  <ul aria-labelledby="drawer-concepts">
+    <li><a class="nav-link is-active" href="architecture.html" aria-current="page">Three-Plane Architecture</a></li><li><a class="nav-link" href="progressive-disclosure.html">Progressive Disclosure (651 Tokens)</a></li><li><a class="nav-link" href="gap-ql-and-joins.html">GAP-QL &amp; Batched Joins</a></li>
+  </ul>
+</div>
+<div class="nav-group" data-section-id="connectors">
+  <p class="nav-group-title" id="drawer-connectors">Connect Data &amp; Tools (NGC)</p>
+  <ul aria-labelledby="drawer-connectors">
+    <li><a class="nav-link" href="../connectors/overview.html">Native Graph Connectors (NGC)</a></li>
+  </ul>
+</div>
+<div class="nav-group" data-section-id="agents">
+  <p class="nav-group-title" id="drawer-agents">AI Agent Hosts &amp; Routers</p>
+  <ul aria-labelledby="drawer-agents">
+    <li><a class="nav-link" href="../agents/facades-and-hosts.html">MCP, A2A &amp; AG-UI Facades</a></li><li><a class="nav-link" href="../agents/routers-and-http3.html">System-1 Routers &amp; HTTP/3 QUIC</a></li>
+  </ul>
+</div>
+<div class="nav-group" data-section-id="security">
+  <p class="nav-group-title" id="drawer-security">Zero-Trust Governance</p>
+  <ul aria-labelledby="drawer-security">
+    <li><a class="nav-link" href="../security/zero-trust.html">Zero-Trust Governance &amp; Cedar</a></li>
+  </ul>
+</div>
+<div class="nav-group" data-section-id="lab">
+  <p class="nav-group-title" id="drawer-lab">Interactive Lab</p>
+  <ul aria-labelledby="drawer-lab">
+    <li><a class="nav-link" href="../lab/playground.html">Interactive Lab &amp; Calculator</a></li>
+  </ul>
+</div>
+<div class="nav-group" data-section-id="reference">
+  <p class="nav-group-title" id="drawer-reference">Operations &amp; Reference</p>
+  <ul aria-labelledby="drawer-reference">
+    <li><a class="nav-link" href="../reference/cli-and-ops.html">CLI, Runbooks &amp; 32 Crates</a></li><li><a class="nav-link" href="../reference/invariants-and-glossary.html">20 Invariants, STE-100 &amp; Paper</a></li>
+  </ul>
+</div>
+    </nav>
+    <button type="button" id="drawer-backdrop-close" class="Drawer-backdrop" aria-label="Close documentation menu"></button>
+  </dialog>
+
+  <div class="docs-shell">
+    <aside class="sidebar scroller" aria-label="Documentation sections">
+      <nav aria-label="Documentation sections">
+        <div class="nav-group" data-section-id="start-here">
+  <p class="nav-group-title" id="side-start-here">Start Here</p>
+  <ul aria-labelledby="side-start-here">
+    <li><a class="nav-link" href="../index.html">GAP Documentation Hub</a></li><li><a class="nav-link" href="../getting-started/what-is-gap.html">What is GAP?</a></li><li><a class="nav-link" href="../getting-started/quickstart.html">10-Minute Quickstart</a></li>
+  </ul>
+</div>
+<div class="nav-group" data-section-id="learn">
+  <p class="nav-group-title" id="side-learn">Learn Basics</p>
+  <ul aria-labelledby="side-learn">
+    <li><a class="nav-link" href="../learn/graphql-and-gap-basics.html">GraphQL &amp; GAP Basics</a></li><li><a class="nav-link" href="../learn/queries-mutations-joins.html">Arguments, Mutations &amp; Joins</a></li>
+  </ul>
+</div>
+<div class="nav-group" data-section-id="academy">
+  <p class="nav-group-title" id="side-academy">GAP Academy (Courses)</p>
+  <ul aria-labelledby="side-academy">
+    <li><a class="nav-link" href="../academy/index.html">GAP Academy — Hands-On Courses</a></li><li><a class="nav-link" href="../academy/liftoff-first-supergraph.html">Course 1: Lift-Off — First Supergraph</a></li><li><a class="nav-link" href="../academy/mcp-and-ai-assistants.html">Course 2: MCP, AG-UI &amp; AI Assistants</a></li><li><a class="nav-link" href="../academy/connectors-and-batching.html">Course 3: REST, SQL &amp; N+1 Batching</a></li><li><a class="nav-link" href="../academy/enterprise-zero-trust.html">Course 4: Zero-Trust, Cedar &amp; HTTP/3</a></li>
+  </ul>
+</div>
+<div class="nav-group" data-section-id="concepts">
+  <p class="nav-group-title" id="side-concepts">Core Concepts</p>
+  <ul aria-labelledby="side-concepts">
+    <li><a class="nav-link is-active" href="architecture.html" aria-current="page">Three-Plane Architecture</a></li><li><a class="nav-link" href="progressive-disclosure.html">Progressive Disclosure (651 Tokens)</a></li><li><a class="nav-link" href="gap-ql-and-joins.html">GAP-QL &amp; Batched Joins</a></li>
+  </ul>
+</div>
+<div class="nav-group" data-section-id="connectors">
+  <p class="nav-group-title" id="side-connectors">Connect Data &amp; Tools (NGC)</p>
+  <ul aria-labelledby="side-connectors">
+    <li><a class="nav-link" href="../connectors/overview.html">Native Graph Connectors (NGC)</a></li>
+  </ul>
+</div>
+<div class="nav-group" data-section-id="agents">
+  <p class="nav-group-title" id="side-agents">AI Agent Hosts &amp; Routers</p>
+  <ul aria-labelledby="side-agents">
+    <li><a class="nav-link" href="../agents/facades-and-hosts.html">MCP, A2A &amp; AG-UI Facades</a></li><li><a class="nav-link" href="../agents/routers-and-http3.html">System-1 Routers &amp; HTTP/3 QUIC</a></li>
+  </ul>
+</div>
+<div class="nav-group" data-section-id="security">
+  <p class="nav-group-title" id="side-security">Zero-Trust Governance</p>
+  <ul aria-labelledby="side-security">
+    <li><a class="nav-link" href="../security/zero-trust.html">Zero-Trust Governance &amp; Cedar</a></li>
+  </ul>
+</div>
+<div class="nav-group" data-section-id="lab">
+  <p class="nav-group-title" id="side-lab">Interactive Lab</p>
+  <ul aria-labelledby="side-lab">
+    <li><a class="nav-link" href="../lab/playground.html">Interactive Lab &amp; Calculator</a></li>
+  </ul>
+</div>
+<div class="nav-group" data-section-id="reference">
+  <p class="nav-group-title" id="side-reference">Operations &amp; Reference</p>
+  <ul aria-labelledby="side-reference">
+    <li><a class="nav-link" href="../reference/cli-and-ops.html">CLI, Runbooks &amp; 32 Crates</a></li><li><a class="nav-link" href="../reference/invariants-and-glossary.html">20 Invariants, STE-100 &amp; Paper</a></li>
+  </ul>
+</div>
+      </nav>
+      <div class="sidebar-status" role="status" aria-live="polite">
+        <span id="server-status-dot" class="status-dot" aria-hidden="true"></span>
+        <span id="server-status-text">Static Docs Mode</span>
+      </div>
+    </aside>
+
+    <main id="main-content" class="doc-main">
+      <article class="doc-article">
+        <nav class="breadcrumb" aria-label="Breadcrumbs">
+  <ol>
+    <li><a href="../index.html">Docs</a></li>
+    <li><a href="architecture.html">Core Concepts</a></li>
+    <li><a href="architecture.html" aria-current="page">Three-Plane Architecture</a></li>
+  </ol>
+</nav>
+        <div class="article-meta-bar">
+          <span class="read-time">7 min</span>
+          <span class="copy copy-md-wrap">
+            <button type="button" class="copy-button copy-md-btn" command="--copy" commandfor="page-markdown-src">
+              <span class="icon" aria-hidden="true"></span>
+              <span class="btn-label">Copy as Markdown</span>
+            </button>
+            <span class="tip" role="status"></span>
+          </span>
+        </div>
+
+        <textarea id="page-markdown-src" class="visually-hidden" readonly tabindex="-1" aria-hidden="true"># Three-Plane Architecture
+
+GAP divides gateway execution into three non-overlapping planes enforced in CI via `tools/check_layers.py`:
+1. **Plane 1 — Deterministic Execution (Zero-ML, `ARC-002`):** AuthN, Cedar default-deny policies, tenant-keyed `PlanCache`, `ArcSwap` + pure-Rust AVL `OrdMap` immutable snapshots, `DataLoader` batching, `EgressGuard` SSRF defense.
+2. **Plane 2 — Progressive Discovery:** L0 `__metaGraph`, L1 `__search` (visibility-filtered BM25 + HNSW), L2 `__type`, plus optional calibrated System-1 routers with deterministic `BASELINE_FALLBACK` (`INV-17`).
+3. **Plane 3 — Zero-Trust Control:** Propose-Not-Activate ingestion, sampled `@join` data gates, `DriftMonitor` `desc_hash` rug-pull freeze, and auto `RollbackWatcher`.</textarea>
+
+        <h1 id="article-title" tabindex="-1">Three-Plane Architecture</h1>
+        <p class="article-lead">GAP guarantees sub-microsecond snapshot swaps and deterministic security by strictly prohibiting machine-learning dependencies on its execution plane (<code>ARC-002</code>).</p>
+
+        <section class="learn-card" aria-labelledby="learn-heading">
+  <h2 id="learn-heading">What you&#x27;ll learn</h2>
+  <ul><li>How Plane 1 (Execution), Plane 2 (Discovery), and Plane 3 (Control) isolate responsibilities.</li><li>Why every request stays pinned to one immutable snapshot via <code>ArcSwap</code> and pure-Rust AVL <code>OrdMap</code>.</li><li>Explore every component interactively using the 10-Node Architecture Inspector.</li></ul>
+</section>
+        <details class="toc-inline"><summary>On this page</summary><nav class="toc-inline-links" aria-label="On this page"><a class="toc-inline-link" href="#three-planes-diagram">Strict Plane Separation</a><a class="toc-inline-link" href="#interactive-inspector">Interactive 10-Node Architecture Explorer</a><a class="toc-inline-link" href="#lock-free-snapshots">Wait-Free Request Pinning &amp; Memory Control</a></nav></details>
+
+        <section id="three-planes-diagram" tabindex="-1" class="doc-section">
+  <h2>Strict Plane Separation</h2>
+  <figure class="diagram-frame">
+  <svg role="img" aria-label="GAP Three-Plane Strict Architectural Separation" viewBox="0 0 860 324" width="860" height="324" xmlns="http://www.w3.org/2000/svg">
+    <title>GAP Three-Plane Strict Architectural Separation</title>
+    <defs>
+      <marker id="tp-arr-accent" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+        <path d="M 0 1.5 L 9 5 L 0 8.5 z" fill="var(--accent)"/>
+      </marker>
+      <marker id="tp-arr-warn" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+        <path d="M 0 1.5 L 9 5 L 0 8.5 z" fill="var(--warn)"/>
+      </marker>
+    </defs>
+    <rect x="14" y="10" width="832" height="76" rx="10" fill="var(--surface-alt)" stroke="var(--accent)" stroke-width="1.5"/>
+    <text x="34" y="39" fill="var(--accent)" font-size="14" font-weight="700">Plane 2: Progressive Intent Discovery</text>
+    <text x="34" y="64" fill="var(--text)" font-size="12.5">L0/L1/L2 · Visibility Bitset (INV-05) · Baseline 95.24% / Optional S1 (INV-17)</text>
+
+    <line x1="250" y1="86" x2="250" y2="122" stroke="var(--accent)" stroke-width="2" marker-end="url(#tp-arr-accent)"/>
+    <rect x="266" y="92" width="210" height="24" rx="12" fill="var(--surface)" stroke="var(--accent)"/>
+    <text x="371" y="108" text-anchor="middle" fill="var(--accent)" font-size="11.5" font-weight="600">Selected query</text>
+
+    <rect x="14" y="124" width="832" height="78" rx="10" fill="var(--surface-alt)" stroke="var(--ok)" stroke-width="2"/>
+    <text x="34" y="153" fill="var(--ok)" font-size="14" font-weight="700">Plane 1: Zero-ML Deterministic Execution (ARC-002)</text>
+    <text x="34" y="179" fill="var(--text)" font-size="12.5">AuthN + Cedar Policy -&gt; PlanCache (TenantId) -&gt; ArcSwap Snapshot -&gt; BatchJoin -&gt; EgressGuard</text>
+
+    <line x1="250" y1="238" x2="250" y2="204" stroke="var(--warn)" stroke-width="2" marker-end="url(#tp-arr-warn)"/>
+    <rect x="266" y="209" width="230" height="24" rx="12" fill="var(--surface)" stroke="var(--warn)"/>
+    <text x="381" y="225" text-anchor="middle" fill="var(--warn)" font-size="11.5" font-weight="600">Atomic ArcSwap publish</text>
+
+    <rect x="14" y="240" width="832" height="74" rx="10" fill="var(--surface-alt)" stroke="var(--warn)" stroke-width="1.5"/>
+    <text x="34" y="268" fill="var(--warn)" font-size="14" font-weight="700">Plane 3: Zero-Trust Control &amp; Ingestion</text>
+    <text x="34" y="294" fill="var(--text)" font-size="12.5">Propose-Not-Activate · Sampled @join Gates · DriftMonitor (desc_hash) · Auto Rollback</text>
+  </svg>
+  <figcaption class="diagram-caption">GAP Three-Plane Strict Architectural Separation</figcaption>
+</figure><p>Notice the hard compiler boundary enforced by <code>tools/check_layers.py</code>: crates in the hot execution plane (<code>gap-exec</code>, <code>gap-plan</code>, <code>gap-transport</code>, <code>gap-snapshot</code>, <code>gap-balance</code>) fail CI immediately if any ML crate ever enters their dependency tree.</p>
+</section><section id="interactive-inspector" tabindex="-1" class="doc-section">
+  <h2>Interactive 10-Node Architecture Explorer</h2>
+  <p>Select any block below to inspect its exact invariants, measured latency, and owning Rust source modules:</p>
+<div id="planes-grid" class="planes-grid"></div>
+<div id="arch-inspector" class="inspector-panel" aria-live="polite"></div>
+</section><section id="lock-free-snapshots" tabindex="-1" class="doc-section">
+  <h2>Wait-Free Request Pinning &amp; Memory Control</h2>
+  <ul>
+  <li><strong>Zero Lock Across <code>.await</code> (INV-02):</strong> Inbound requests execute one atomic <code>ArcSwap::load</code> (~15 ns) and hold that immutable <code>Arc&lt;Snapshot&gt;</code> until completion.</li>
+  <li><strong>Owned Pure-Rust AVL <code>OrdMap</code>:</strong> Replaced the unmaintained <code>im</code> crate (<code>RUSTSEC-2026-0097</code> ecosystem risk), eliminating 100% of <code>unsafe</code> blocks in snapshot state structures and delivering <code>0</code> RUSTSEC advisories.</li>
+  <li><strong>Automatic 60s RollbackWatcher (INV-16):</strong> Publication swaps pre-warm top-100 plans, drop old snapshots on a background thread, and revert automatically if error rates spike across 200+ samples.</li>
+</ul>
+</section>
+
+        <nav class="doc-pager" aria-label="Article pagination"><a class="pager-card pager-prev" href="../academy/enterprise-zero-trust.html"><span class="pager-dir">&larr; Previous</span><span class="pager-title">Course 4: Zero-Trust, Cedar &amp; HTTP/3</span></a><a class="pager-card pager-next" href="progressive-disclosure.html"><span class="pager-dir">Next &rarr;</span><span class="pager-title">Progressive Disclosure (651 Tokens)</span></a></nav>
+      </article>
+
+      <footer class="doc-footer">
+        <p class="footer-note">Documentation, Learn &amp; Academy grounded 100% in repository source code, specs 00-09, and ADR-021 measurements.</p>
+        <div class="footer-links">
+          <a href="../paper/gap-paper.html">Paper (HTML)</a>
+          <a href="../paper/gap-paper.pdf">PDF</a>
+          <a href="../llms.txt">llms.txt</a>
+          <a href="../vi/concepts/architecture.html" hreflang="vi" lang="vi">Tiếng Việt</a>
+        </div>
+      </footer>
+    </main>
+
+    <aside class="toc-right" aria-label="On this page">
+      <div class="toc-sticky scroller">
+        <p class="toc-title">On this page</p>
+        <nav id="on-this-page-nav" class="toc-links" aria-label="On this page">
+          <a class="toc-link" href="#three-planes-diagram">Strict Plane Separation</a><a class="toc-link" href="#interactive-inspector">Interactive 10-Node Architecture Explorer</a><a class="toc-link" href="#lock-free-snapshots">Wait-Free Request Pinning &amp; Memory Control</a>
+        </nav>
+      </div>
+    </aside>
+  </div>
+
+  <script src="../search-index.en.js"></script>
+  <script src="../data.en.js"></script>
+  <script src="../app.js"></script>
+</body>
+</html>
